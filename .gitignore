@@ -1,0 +1,6 @@
+# Réglages et données propres à chaque serveur : jamais publiés
+.env
+donnees/
+__pycache__/
+*.pyc
+.DS_Store

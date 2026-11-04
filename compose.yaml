@@ -1,0 +1,22 @@
+services:
+  jabba-app:
+    build: .
+    image: jabba-app:local
+    container_name: jabba-app
+    env_file: .env
+    # Réseau de Jabba, mais écoute seulement sur 127.0.0.1:8090 :
+    # on n'y entre que par Tailscale (tailscale serve).
+    network_mode: host
+    # Pour lancer les actions sur Jabba (outils, disques, redémarrage).
+    pid: host
+    privileged: true
+    # Favoris et dossiers souvent ouverts (gardés sur le serveur).
+    volumes:
+      - ./donnees:/data
+      # Les dossiers du serveur, pour l'écran Fichiers quand Nextcloud est désactivé.
+      - type: bind
+        source: /srv
+        target: /srv
+        bind:
+          propagation: rslave
+    restart: unless-stopped

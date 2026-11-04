@@ -1,0 +1,35 @@
+[
+  {"version": "0.5.1", "date": "2026-11-04", "changements": [
+    "Alertes : correctif, les alertes arrivent sur le Mac et l'iPhone.",
+    "Historique des versions dans l'écran Système."
+  ]},
+  {"version": "0.5.0", "date": "2026-11-04", "changements": [
+    "Fichiers : recherche par nom partout, disques compris.",
+    "Fichiers : aperçus des photos et visionneuse (photos, vidéos, musique, PDF, textes).",
+    "Corbeille : ce qu'on supprime y reste 30 jours, avec Restaurer.",
+    "Disques : un disque USB branché est ajouté tout seul, en lecture seule, à Nextcloud et à Jellyfin.",
+    "Disques : « Oublier ce disque », et signalement des disques illisibles (APFS).",
+    "Alertes sur l'iPhone et le Mac, avec un interrupteur par type.",
+    "Courant : arrêt propre sous 15 % de batterie, alerte à la coupure et au retour.",
+    "Journal de ce qui se passe sur le serveur.",
+    "Mise à jour de l'appli en un clic, une fois reliée à GitHub."
+  ]},
+  {"version": "0.4.0", "date": "2026-11-04", "changements": [
+    "Mot de passe du serveur pour les actions sensibles, code de secours et changement du mot de passe.",
+    "Disques : réglage lecture seule ou écriture, et bouton Éjecter.",
+    "Glisser des fichiers sur un favori ou un dossier pour les y copier.",
+    "Fichiers : lecture directe des dossiers du serveur quand Nextcloud est désactivé.",
+    "File Browser retiré."
+  ]},
+  {"version": "0.3.0", "date": "2026-11-03", "changements": [
+    "Accueil : accès rapide aux dossiers essentiels, favoris et suggestions.",
+    "Logos des outils fournis par les outils eux-mêmes."
+  ]},
+  {"version": "0.2.0", "date": "2026-11-03", "changements": [
+    "Établi : un interrupteur par outil.",
+    "Ouverture des outils dans l'appli."
+  ]},
+  {"version": "0.1.0", "date": "2026-11-03", "changements": [
+    "Première version : état du serveur, outils, fichiers Nextcloud, disques, système."
+  ]}
+]

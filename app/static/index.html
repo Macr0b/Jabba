@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jabba</title>
+<meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121418" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jabba">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icone-192.png">
+<link rel="apple-touch-icon" href="/static/icone-180.png">
+<link rel="stylesheet" href="/static/style.css?v=0.5.1-h">
+</head>
+<body>
+<div class="appli">
+  <nav class="barre-laterale" aria-label="Navigation">
+    <div class="marque"><span class="logo">J</span><span>Jabba</span></div>
+    <a href="#/accueil" data-page="accueil">Accueil</a>
+    <a href="#/outils" data-page="outils">Établi</a>
+    <a href="#/disques" data-page="disques">Disques</a>
+    <a href="#/fichiers" data-page="fichiers">Fichiers</a>
+    <a href="#/systeme" data-page="systeme">Système</a>
+    <div class="espace"></div>
+    <div class="qui" id="qui"></div>
+  </nav>
+  <main id="contenu" tabindex="-1"></main>
+  <nav class="onglets" aria-label="Navigation">
+    <a href="#/accueil" data-page="accueil">Accueil</a>
+    <a href="#/outils" data-page="outils">Établi</a>
+    <a href="#/fichiers" data-page="fichiers">Fichiers</a>
+    <a href="#/plus" data-page="plus">Plus</a>
+  </nav>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<dialog id="visionneuse" class="visionneuse" aria-label="Visionneuse"></dialog>
+<dialog id="dialogue"><form method="dialog" id="dialogue-form"></form></dialog>
+<script src="/static/app.js?v=0.5.1-h"></script>
+</body>
+</html>
