@@ -1,4 +1,4 @@
-"""Mot de passe admin = mot de passe du compte du serveur (celui de sudo).
+"""Mot de passe du super admin principal = mot de passe du compte du serveur (celui de sudo).
 
 - vérifié contre /etc/shadow du serveur, jamais enregistré ;
 - une fois saisi, valable 10 minutes (jeton en mémoire) ;
@@ -95,22 +95,35 @@ def verifier_mot_de_passe(hote, utilisateur, mot_de_passe):
     return ok
 
 
-def nouveau_jeton():
+def nouveau_jeton(identifiant="serveur", rang="super", provisoire=False):
+    """Jeton valable 10 minutes, qui dit qui est connecté en admin et avec quel rang."""
     jeton = secrets.token_urlsafe(32)
     with _verrou:
         maintenant = time.time()
-        for j in [j for j, exp in _jetons.items() if exp < maintenant]:
+        for j in [j for j, v in _jetons.items() if v["exp"] < maintenant]:
             del _jetons[j]
-        _jetons[jeton] = maintenant + DUREE_JETON
+        _jetons[jeton] = {"exp": maintenant + DUREE_JETON, "identifiant": identifiant, "rang": rang, "provisoire": provisoire}
     return jeton
 
 
 def jeton_valide(jeton):
+    """Les infos du jeton (identifiant, rang, provisoire) s'il est valable, sinon None."""
     if not jeton:
-        return False
+        return None
     with _verrou:
-        exp = _jetons.get(jeton)
-        return bool(exp and exp > time.time())
+        v = _jetons.get(jeton)
+        return dict(v) if v and v["exp"] > time.time() else None
+
+
+def oublier_jetons(identifiant=None):
+    """Déconnecte un compte (ou tout le monde)."""
+    with _verrou:
+        for j in [j for j, v in _jetons.items() if identifiant is None or v["identifiant"] == identifiant]:
+            del _jetons[j]
+
+
+def echec():
+    _echec()
 
 
 def changer_mot_de_passe(hote_entree, utilisateur, nouveau):
@@ -121,8 +134,7 @@ def changer_mot_de_passe(hote_entree, utilisateur, nouveau):
     code, _, err = hote_entree(["chpasswd"], f"{utilisateur}:{nouveau}\n")
     if code != 0:
         raise RuntimeError("Le serveur a refusé le changement : " + err[:200])
-    with _verrou:
-        _jetons.clear()  # on redemande le mot de passe partout
+    oublier_jetons()  # on redemande le mot de passe partout
 
 
 # ---------------------------------------------------------------- code de secours

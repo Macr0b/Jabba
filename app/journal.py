@@ -12,7 +12,7 @@ MAX = 2000
 _VERROU = threading.Lock()
 
 # Familles d'événements (pour l'icône et le filtre dans l'appli).
-FAMILLES = {"outil", "admin", "disque", "courant", "fichier", "appli", "alerte", "systeme"}
+FAMILLES = {"outil", "admin", "disque", "courant", "fichier", "appli", "alerte", "systeme", "invite"}
 
 
 def noter(famille, texte, qui=None):

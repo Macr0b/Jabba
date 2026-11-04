@@ -1,35 +1,75 @@
 [
-  {"version": "0.5.1", "date": "2026-11-04", "changements": [
-    "Alertes : correctif, les alertes arrivent sur le Mac et l'iPhone.",
-    "Historique des versions dans l'écran Système."
-  ]},
-  {"version": "0.5.0", "date": "2026-11-04", "changements": [
-    "Fichiers : recherche par nom partout, disques compris.",
-    "Fichiers : aperçus des photos et visionneuse (photos, vidéos, musique, PDF, textes).",
-    "Corbeille : ce qu'on supprime y reste 30 jours, avec Restaurer.",
-    "Disques : un disque USB branché est ajouté tout seul, en lecture seule, à Nextcloud et à Jellyfin.",
-    "Disques : « Oublier ce disque », et signalement des disques illisibles (APFS).",
-    "Alertes sur l'iPhone et le Mac, avec un interrupteur par type.",
-    "Courant : arrêt propre sous 15 % de batterie, alerte à la coupure et au retour.",
-    "Journal de ce qui se passe sur le serveur.",
-    "Mise à jour de l'appli en un clic, une fois reliée à GitHub."
-  ]},
-  {"version": "0.4.0", "date": "2026-11-04", "changements": [
-    "Mot de passe du serveur pour les actions sensibles, code de secours et changement du mot de passe.",
-    "Disques : réglage lecture seule ou écriture, et bouton Éjecter.",
-    "Glisser des fichiers sur un favori ou un dossier pour les y copier.",
-    "Fichiers : lecture directe des dossiers du serveur quand Nextcloud est désactivé.",
-    "File Browser retiré."
-  ]},
-  {"version": "0.3.0", "date": "2026-11-03", "changements": [
-    "Accueil : accès rapide aux dossiers essentiels, favoris et suggestions.",
-    "Logos des outils fournis par les outils eux-mêmes."
-  ]},
-  {"version": "0.2.0", "date": "2026-11-03", "changements": [
-    "Établi : un interrupteur par outil.",
-    "Ouverture des outils dans l'appli."
-  ]},
-  {"version": "0.1.0", "date": "2026-11-03", "changements": [
-    "Première version : état du serveur, outils, fichiers Nextcloud, disques, système."
-  ]}
+  {
+    "version": "0.6.0",
+    "date": "2026-11-04",
+    "changements": [
+      "L'appli s'ouvre en mode invité ; avec son identifiant et son mot de passe, on a l'interface complète. La connexion reste mémorisée 30 jours sur l'appareil.",
+      "Les actions les plus sensibles redemandent le mot de passe (s'il a été saisi il y a plus de 10 minutes).",
+      "Comptes admin : chaque admin a son identifiant et son mot de passe ; deux rangs, super admin et admin. Le super admin principal reste le compte du serveur.",
+      "Espace Utilisateurs : ajouter, renommer, retirer un admin, changer son rang, le relier à son compte Tailscale ; ouvert à tous les admins ou réservé au super admin.",
+      "Mot de passe oublié : la demande part chez le super admin ; une fois acceptée, un mot de passe provisoire s'affiche sur l'appareil de la personne.",
+      "Qui se connecte, accès refusés, et appareils connectés (avec déconnexion à distance).",
+      "Accès invités sur le Wi-Fi : page sans compte ni appli, code à 4 chiffres ou QR code, dossiers choisis (lecture seule ou dépôt).",
+      "Outils sur le Wi-Fi : chaque outil est joignable ou non depuis le réseau local ; Tailscale n'est pas touché.",
+      "Alertes ciblées : chaque personne reçoit ce qui la concerne ; nouveau type d'alerte « Comptes ».",
+      "Mises à jour : les fichiers de l'appli restent au nom du propriétaire du dossier."
+    ]
+  },
+  {
+    "version": "0.5.1",
+    "date": "2026-11-04",
+    "changements": [
+      "Alertes : correctif, les alertes arrivent sur le Mac et l'iPhone.",
+      "Historique des versions dans l'écran Système."
+    ]
+  },
+  {
+    "version": "0.5.0",
+    "date": "2026-11-04",
+    "changements": [
+      "Fichiers : recherche par nom partout, disques compris.",
+      "Fichiers : aperçus des photos et visionneuse (photos, vidéos, musique, PDF, textes).",
+      "Corbeille : ce qu'on supprime y reste 30 jours, avec Restaurer.",
+      "Disques : un disque USB branché est ajouté tout seul, en lecture seule, à Nextcloud et à Jellyfin.",
+      "Disques : « Oublier ce disque », et signalement des disques illisibles (APFS).",
+      "Alertes sur l'iPhone et le Mac, avec un interrupteur par type.",
+      "Courant : arrêt propre sous 15 % de batterie, alerte à la coupure et au retour.",
+      "Journal de ce qui se passe sur le serveur.",
+      "Mise à jour de l'appli en un clic, une fois reliée à GitHub."
+    ]
+  },
+  {
+    "version": "0.4.0",
+    "date": "2026-11-04",
+    "changements": [
+      "Mot de passe du serveur pour les actions sensibles, code de secours et changement du mot de passe.",
+      "Disques : réglage lecture seule ou écriture, et bouton Éjecter.",
+      "Glisser des fichiers sur un favori ou un dossier pour les y copier.",
+      "Fichiers : lecture directe des dossiers du serveur quand Nextcloud est désactivé.",
+      "File Browser retiré."
+    ]
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-11-03",
+    "changements": [
+      "Accueil : accès rapide aux dossiers essentiels, favoris et suggestions.",
+      "Logos des outils fournis par les outils eux-mêmes."
+    ]
+  },
+  {
+    "version": "0.2.0",
+    "date": "2026-11-03",
+    "changements": [
+      "Établi : un interrupteur par outil.",
+      "Ouverture des outils dans l'appli."
+    ]
+  },
+  {
+    "version": "0.1.0",
+    "date": "2026-11-03",
+    "changements": [
+      "Première version : état du serveur, outils, fichiers Nextcloud, disques, système."
+    ]
+  }
 ]

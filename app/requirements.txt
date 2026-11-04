@@ -4,3 +4,4 @@ httpx==0.28.1
 python-multipart==0.0.20
 pywebpush==2.0.3
 pillow==11.0.0
+segno==1.6.1

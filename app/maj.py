@@ -50,6 +50,8 @@ def script(dossier, tag):
     """Commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli)."""
     if not re.fullmatch(r"/[\w./-]+", dossier) or not RE_VERSION.match(tag):
         raise ValueError("Paramètres inattendus")
-    return (f"cd '{dossier}' && git fetch --quiet --tags --force origin && "
-            f"git -c advice.detachedHead=false checkout --quiet --force 'refs/tags/{tag}' && "
+    # git tourne avec le compte propriétaire du dossier : les fichiers restent à son nom.
+    git = f"runuser -u \"$(stat -c %U '{dossier}')\" -- git"
+    return (f"cd '{dossier}' && {git} fetch --quiet --tags --force origin && "
+            f"{git} -c advice.detachedHead=false checkout --quiet --force 'refs/tags/{tag}' && "
             "docker compose up -d --build && docker image prune -f")

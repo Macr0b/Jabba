@@ -20,6 +20,9 @@ from urllib.parse import quote, unquote, urljoin
 import httpx
 
 import admin
+import comptes
+import invites
+import sessions
 import disque
 import disques_auto
 import journal
@@ -31,7 +34,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from xml.sax.saxutils import escape as xml_escape
 from fastapi.staticfiles import StaticFiles
 
-VERSION = "0.5.1"
+from version import VERSION  # noqa: E402
 DEMO = os.environ.get("JABBA_DEMO") == "1"
 UTILISATEURS = {u.strip().lower() for u in os.environ.get("TS_USERS", "").split(",") if u.strip()}
 NC_URL = os.environ.get("NC_URL", "http://127.0.0.1:8081").rstrip("/")
@@ -57,20 +60,36 @@ def lire_liens():
 LIENS = lire_liens()
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app.include_router(invites.routeur)   # pages invités : ouvertes tant qu'on n'est pas connecté en admin
 
 
 # ---------------------------------------------------------------- sécurité
 @app.middleware("http")
 async def garde(request: Request, call_next):
     if DEMO:
-        request.state.user = "demo@exemple.fr"
+        request.state.user = request.headers.get("x-demo-login", "demo@exemple.fr")
         request.state.nom = "Alex"
     else:
         login = (request.headers.get("tailscale-user-login") or "").lower()
-        if not login or login not in UTILISATEURS:
+        if not login or login not in logins_autorises():
+            if login and request.url.path.startswith("/api/"):
+                refus_acces(login, request)
             return JSONResponse({"erreur": "Accès réservé à tes appareils Tailscale."}, status_code=403)
         request.state.user = login
         request.state.nom = request.headers.get("tailscale-user-name") or login
+        if request.url.path == "/api/moi":
+            visite(login, request.state.nom, request)
+    request.state.via = "tailscale"
+    # Connexion admin mémorisée sur cet appareil (cookie), sinon : mode invité.
+    jeton = request.cookies.get(sessions.COOKIE)
+    session = sessions.lire(jeton)
+    request.state.session, request.state.jeton = session, jeton
+    chemin = request.url.path
+    if chemin.startswith("/api/") and not chemin.startswith(PUBLIC):
+        if not session:
+            return JSONResponse({"detail": {"admin": True, "message": "Connexion admin demandée."}}, status_code=401)
+        if session.get("provisoire") and chemin not in PROVISOIRE_OK:
+            return JSONResponse({"detail": {"admin": True, "changer": True, "message": "Choisis d'abord ton nouveau mot de passe."}}, status_code=401)
     # Anti-CSRF : toute action doit venir de l'appli (en-tête impossible à
     # ajouter depuis un autre site sans autorisation CORS, jamais accordée).
     if request.method not in ("GET", "HEAD") and request.headers.get("x-jabba") != "1":
@@ -80,6 +99,61 @@ async def garde(request: Request, call_next):
     reponse.headers["X-Content-Type-Options"] = "nosniff"
     reponse.headers["Referrer-Policy"] = "no-referrer"
     return reponse
+
+
+_CACHE_LOGINS = {"t": 0, "v": set()}
+
+
+def logins_autorises():
+    """Qui peut ouvrir l'appli : les comptes Tailscale du .env, et ceux reliés à un compte admin."""
+    if time.time() - _CACHE_LOGINS["t"] > 5:
+        _CACHE_LOGINS.update(t=time.time(), v=UTILISATEURS | comptes.logins_autorises())
+    return _CACHE_LOGINS["v"]
+
+
+_CACHE_APPAREILS = {"t": 0, "v": {}}
+
+
+def appareil_de(request):
+    """Nom de l'appareil Tailscale d'où vient la requête (d'après son adresse 100.x)."""
+    ip = request.client.host if request.client else ""
+    if time.time() - _CACHE_APPAREILS["t"] > 120:
+        noms = {}
+        try:
+            code, sortie, _ = hote(["tailscale", "status", "--json"], timeout=10)
+            if code == 0:
+                d = json.loads(sortie)
+                for p in list((d.get("Peer") or {}).values()) + [d.get("Self") or {}]:
+                    for a in p.get("TailscaleIPs") or []:
+                        noms[a] = p.get("HostName")
+        except (ValueError, OSError, subprocess.SubprocessError):
+            pass
+        _CACHE_APPAREILS.update(t=time.time(), v=noms)
+    return _CACHE_APPAREILS["v"].get(ip)
+
+
+def visite(login, nom, request):
+    try:
+        if comptes.noter_visite(login, nom, appareil_de(request)):
+            pass
+    except OSError:
+        pass
+
+
+def refus_acces(login, request):
+    try:
+        appareil = appareil_de(request)
+        if comptes.noter_refus(login, appareil):
+            notifs.envoyer("securite", "Accès refusé", f"{login}{' (' + appareil + ')' if appareil else ''} a essayé d'ouvrir l'appli.",
+                           "/#/utilisateurs", famille="admin", pour=pour_super())
+    except OSError:
+        pass
+
+
+# Ce qui reste ouvert sans connexion admin (pages invités, connexion, mot de passe oublié).
+PUBLIC = ("/api/moi", "/api/invite/", "/api/admin/connexion", "/api/admin/secours", "/api/comptes-oubli",
+          "/api/comptes-remise", "/api/icone/")
+PROVISOIRE_OK = {"/api/comptes-moi/mot-de-passe", "/api/admin/deconnexion"}
 
 
 # ---------------------------------------------------------------- hôte
@@ -94,19 +168,56 @@ def hote_entree(cmd, entree, timeout=30):
     return hote(cmd, timeout=timeout, entree=entree)
 
 
-# ---------------------------------------------------------------- mot de passe admin
-def exiger_admin(request: Request):
-    if admin.jeton_valide(request.headers.get("x-admin")):
-        return
-    raise HTTPException(401, {"admin": True, "message": "Mot de passe du serveur demandé."})
+# ---------------------------------------------------------------- comptes admin
+# Deux rangs : « super » (tout, dont la gestion des comptes) et « admin » (les
+# actions sensibles). Le super admin principal est le compte du serveur.
+def exiger_admin(request: Request, rang="admin", fort=False):
+    """La session admin (identifiant, rang). `fort` : mot de passe saisi il y a moins de 10 minutes."""
+    j = getattr(request.state, "session", None)
+    if not j:
+        raise HTTPException(401, {"admin": True, "message": "Connexion admin demandée."})
+    if j.get("provisoire"):
+        raise HTTPException(401, {"admin": True, "changer": True, "message": "Choisis d'abord ton nouveau mot de passe."})
+    if rang == "super" and j["rang"] != "super":
+        raise HTTPException(403, "Réservé au super admin.")
+    if fort and not sessions.confirme_recemment(j):
+        raise HTTPException(401, {"admin": True, "confirmer": True, "message": "Confirme ton mot de passe pour cette action."})
+    request.state.admin = j["identifiant"]
+    return j
+
+
+def exiger_super(request: Request, fort=False):
+    return exiger_admin(request, "super", fort)
+
+
+def exiger_compte_serveur(request: Request):
+    j = exiger_admin(request, "super", fort=True)
+    if j["identifiant"] != nom_hote():
+        raise HTTPException(403, "Réservé au compte du serveur.")
+    return j
 
 
 def admin_user():
-    """Le compte du serveur dont le mot de passe protège les actions admin (par défaut : le premier compte créé)."""
+    """Le compte du serveur dont le mot de passe est celui du super admin principal (par défaut : le premier compte créé)."""
     if ADMIN_USER or DEMO:
         return ADMIN_USER or "demo"
     _, sortie, _ = hote(["getent", "passwd", "1000"])
     return sortie.split(":", 1)[0] or "root"
+
+
+_NOM_HOTE = {}
+
+
+def nom_hote():
+    """Nom du serveur : c'est l'identifiant du super admin principal."""
+    if "v" not in _NOM_HOTE:
+        _NOM_HOTE["v"] = "serveur-demo" if DEMO else (hote(["hostname"])[1].strip().lower() or "serveur")
+    return _NOM_HOTE["v"]
+
+
+def identifiants_serveur():
+    """Identifiants qui désignent le compte du serveur."""
+    return {nom_hote(), admin_user().lower(), "serveur"}
 
 
 def verifier_admin(mot_de_passe):
@@ -115,28 +226,106 @@ def verifier_admin(mot_de_passe):
     return admin.verifier_mot_de_passe(hote, admin_user(), mot_de_passe)
 
 
+def pour_super():
+    """Comptes Tailscale des super admins (et appareils abonnés avant la v0.6)."""
+    return UTILISATEURS | comptes.logins_super() | {None}
+
+
+def verifier_identifiants(request, ident, mdp):
+    """Le compte si identifiant et mot de passe sont bons, sinon une erreur (et l'échec est compté)."""
+    if admin.bloque():
+        raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
+    ident = (ident or nom_hote()).strip().lower()
+    if ident in identifiants_serveur():
+        if verifier_admin(mdp):
+            return {"identifiant": nom_hote(), "nom": "Compte du serveur", "rang": "super", "provisoire": False}
+    else:
+        compte = comptes.verifier(ident, mdp)
+        if compte:
+            return compte
+        admin.echec()
+    echec_admin(request, ident)
+    raise HTTPException(403, "Identifiant ou mot de passe incorrect.")
+
+
+def poser_session(reponse, request, compte):
+    provisoire = bool(compte.get("provisoire"))
+    jeton = sessions.creer(compte["identifiant"], compte["rang"], provisoire, appareil_de(request), getattr(request.state, "user", None))
+    reponse.set_cookie(sessions.COOKIE, jeton, max_age=sessions.DUREE_PROVISOIRE if provisoire else sessions.DUREE,
+                       httponly=True, secure=True, samesite="strict")
+    return jeton
+
+
+def infos_session(compte):
+    return {"identifiant": compte["identifiant"], "rang": compte["rang"], "changer": bool(compte.get("provisoire")),
+            "compte_serveur": compte["identifiant"] == nom_hote()}
+
+
 @app.post("/api/admin/connexion")
 async def api_admin_connexion(request: Request):
     corps = await request.json()
-    if admin.bloque():
-        raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
-    if not verifier_admin(corps.get("mot_de_passe", "")):
-        echec_admin(request)
-        raise HTTPException(403, "Mot de passe incorrect.")
-    journal.noter("admin", "Mot de passe du serveur saisi", request.state.nom)
-    return {"jeton": admin.nouveau_jeton(), "duree": admin.DUREE_JETON}
+    compte = verifier_identifiants(request, corps.get("identifiant"), corps.get("mot_de_passe", ""))
+    provisoire = bool(compte.get("provisoire"))
+    journal.noter("admin", f"Connexion admin : {compte['identifiant']}" + (" (mot de passe provisoire)" if provisoire else ""), request.state.nom)
+    sessions.fermer(request.state.jeton)
+    r = JSONResponse(infos_session(compte))
+    poser_session(r, request, compte)
+    return r
 
 
-def echec_admin(request):
-    journal.noter("admin", "Mot de passe du serveur incorrect", request.state.nom)
+@app.post("/api/admin/confirmer")
+async def api_admin_confirmer(request: Request):
+    """Redemander le mot de passe avant une action sensible."""
+    j = exiger_admin(request)
+    verifier_identifiants(request, j["identifiant"], (await request.json()).get("mot_de_passe", ""))
+    sessions.confirmer(request.state.jeton)
+    return {"ok": True}
+
+
+@app.post("/api/admin/deconnexion")
+def api_admin_deconnexion(request: Request):
+    sessions.fermer(request.state.jeton)
+    r = JSONResponse({"ok": True})
+    r.delete_cookie(sessions.COOKIE, secure=True, httponly=True, samesite="strict")
+    return r
+
+
+@app.get("/api/sessions")
+def api_sessions(request: Request):
+    j = exiger_admin(request)
+    actuelle = j["id"]
+    toutes = sessions.lister()
+    if j["rang"] != "super":
+        toutes = [x for x in toutes if x["identifiant"] == j["identifiant"]]
+    return [{**x, "actuelle": x["id"] == actuelle} for x in toutes]
+
+
+@app.post("/api/sessions/{sid}/fermer")
+def api_sessions_fermer(sid: str, request: Request):
+    j = exiger_admin(request)
+    cible = next((x for x in sessions.lister() if x["id"] == sid), None)
+    if not cible:
+        raise HTTPException(404, "Appareil introuvable.")
+    if cible["identifiant"] != j["identifiant"] and j["rang"] != "super":
+        raise HTTPException(403, "Tu ne peux déconnecter que tes propres appareils.")
+    sessions.fermer_id(sid)
+    journal.noter("admin", f"Appareil déconnecté : {cible['identifiant']}{' (' + cible['appareil'] + ')' if cible.get('appareil') else ''}, par {j['identifiant']}", request.state.nom)
+    return {"ok": True}
+
+
+def echec_admin(request, ident=""):
+    journal.noter("admin", f"Connexion admin refusée{' : ' + ident if ident else ''}", request.state.nom)
     if admin.bloque():
         notifs.envoyer("securite", "Mot de passe raté 5 fois",
-                       f"Depuis l'appareil de {request.state.nom}. Les actions admin sont bloquées 10 minutes.", "/#/systeme")
+                       f"Depuis l'appareil de {request.state.nom}. Les connexions admin sont bloquées 10 minutes.", "/#/systeme",
+                       pour=pour_super())
 
 
 @app.get("/api/admin/etat")
-def api_admin_etat():
-    return {"code_existe": admin.code_existe(), "utilisateur": admin_user()}
+def api_admin_etat(request: Request):
+    j = request.state.session
+    return {"code_existe": admin.code_existe(), "utilisateur": admin_user(), "serveur": nom_hote(),
+            "connecte": {"identifiant": j["identifiant"], "rang": j["rang"]} if j else None}
 
 
 def _changer(nouveau):
@@ -154,20 +343,22 @@ def _changer(nouveau):
 
 @app.post("/api/admin/mot-de-passe")
 async def api_admin_mdp(request: Request):
+    """Mot de passe du compte du serveur (super admin principal) : c'est aussi celui de sudo."""
     corps = await request.json()
     if admin.bloque():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
     if not verifier_admin(corps.get("ancien", "")):
-        echec_admin(request)
+        echec_admin(request, nom_hote())
         raise HTTPException(403, "L'ancien mot de passe est incorrect.")
     _changer(corps.get("nouveau", ""))
-    notifs.envoyer("securite", "Mot de passe du serveur changé", f"Par {request.state.nom}.", "/#/systeme", famille="admin")
+    sessions.fermer_compte(nom_hote())   # ses appareils devront se reconnecter avec le nouveau
+    notifs.envoyer("securite", "Mot de passe du serveur changé", f"Par {request.state.nom}.", "/#/systeme", famille="admin", pour=pour_super())
     return {"ok": True}
 
 
 @app.post("/api/admin/code")
 def api_admin_code(request: Request):
-    exiger_admin(request)
+    exiger_compte_serveur(request)
     journal.noter("admin", "Nouveau code de secours créé", request.state.nom)
     return {"code": admin.generer_code()}
 
@@ -178,11 +369,158 @@ async def api_admin_secours(request: Request):
     if admin.bloque():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
     if not admin.verifier_code(corps.get("code", "")):
-        echec_admin(request)
+        echec_admin(request, "code de secours")
         raise HTTPException(403, "Code de secours incorrect.")
     _changer(corps.get("nouveau", ""))
-    notifs.envoyer("securite", "Mot de passe du serveur changé", f"Avec le code de secours, par {request.state.nom}.", "/#/systeme", famille="admin")
+    sessions.fermer_compte(nom_hote())
+    notifs.envoyer("securite", "Mot de passe du serveur changé", f"Avec le code de secours, par {request.state.nom}.", "/#/systeme",
+                   famille="admin", pour=pour_super())
     return {"ok": True, "code": admin.generer_code()}
+
+
+# ---------------------------------------------------------------- comptes : gestion
+def cmp(fonction):
+    try:
+        return fonction()
+    except comptes.Refus as e:
+        raise HTTPException(e.code, e.message)
+
+
+def exiger_espace(request: Request):
+    """L'espace Utilisateurs : tous les admins, ou le super admin seul selon le réglage."""
+    j = exiger_admin(request)
+    if j["rang"] != "super" and not comptes.espace_ouvert_aux_admins():
+        raise HTTPException(403, "L'espace Utilisateurs est réservé au super admin.")
+    return j
+
+
+@app.get("/api/comptes")
+def api_comptes(request: Request):
+    j = exiger_espace(request)
+    d = comptes.lister()
+    serveur = {"id": "serveur", "identifiant": nom_hote(), "nom": "Compte du serveur", "rang": "super",
+               "tailscale": None, "systeme": True}
+    return {"moi": {"identifiant": j["identifiant"], "rang": j["rang"]}, "comptes": [serveur] + d["comptes"],
+            "reglages": d["reglages"], "demandes": d["demandes"] if j["rang"] == "super" else [],
+            "demandes_n": len(d["demandes"]), "proprietaires": sorted(UTILISATEURS), **comptes.connexions()}
+
+
+@app.post("/api/comptes")
+async def api_comptes_creer(request: Request):
+    j = exiger_espace(request)
+    corps = await request.json()
+    compte, mdp = cmp(lambda: comptes.creer(corps.get("identifiant"), corps.get("nom"), corps.get("rang", "admin"),
+                                            corps.get("tailscale"), j["identifiant"], j["rang"], identifiants_serveur()))
+    journal.noter("admin", f"Compte ajouté : {compte['identifiant']} ({'super admin' if compte['rang'] == 'super' else 'admin'}), par {j['identifiant']}", request.state.nom)
+    notifs.envoyer("comptes", "Compte ajouté", f"{compte['nom']} ({compte['identifiant']}), par {j['identifiant']}.", "/#/utilisateurs",
+                   famille="admin", pour=pour_super(), noter=False)
+    if compte["tailscale"]:
+        notifs.envoyer("comptes", "Ton compte admin est prêt", "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.", "/",
+                       pour={compte["tailscale"]}, noter=False, forcer=True)
+        return {"compte": compte, "remis": True}
+    return {"compte": compte, "mot_de_passe": mdp}
+
+
+@app.post("/api/comptes/{cid}")
+async def api_comptes_modifier(cid: str, request: Request):
+    j = exiger_espace(request)
+    corps = await request.json()
+    action = corps.get("action")
+    if action in ("supprimer", "rang"):
+        exiger_admin(request, fort=True)
+    if action == "supprimer":
+        c = cmp(lambda: comptes.supprimer(cid, j["rang"]))
+        sessions.fermer_compte(c["identifiant"])
+        texte = f"Compte retiré : {c['identifiant']}"
+    elif action == "rang":
+        c = cmp(lambda: comptes.modifier(cid, j["rang"], rang=corps.get("rang")))
+        sessions.fermer_compte(c["identifiant"])
+        texte = f"{c['identifiant']} est maintenant {'super admin' if c['rang'] == 'super' else 'admin'}"
+    elif action == "tailscale":
+        c = cmp(lambda: comptes.modifier(cid, j["rang"], tailscale=corps.get("tailscale") or None))
+        texte = f"{c['identifiant']} : compte Tailscale {c['tailscale'] or 'retiré'}"
+    elif action == "nom":
+        c = cmp(lambda: comptes.modifier(cid, j["rang"], nom=corps.get("nom") or ""))
+        texte = f"{c['identifiant']} renommé « {c['nom']} »"
+    else:
+        raise HTTPException(400, "Action inconnue.")
+    journal.noter("admin", f"{texte}, par {j['identifiant']}", request.state.nom)
+    if action in ("supprimer", "rang"):
+        notifs.envoyer("comptes", "Comptes modifiés", f"{texte}, par {j['identifiant']}.", "/#/utilisateurs",
+                       famille="admin", pour=pour_super(), noter=False)
+    return {"ok": True, "compte": c}
+
+
+@app.post("/api/comptes-reglages")
+async def api_comptes_reglages(request: Request):
+    j = exiger_super(request, fort=True)
+    ouvert = bool((await request.json()).get("espace_admins"))
+    comptes.regler(ouvert)
+    journal.noter("admin", f"Espace Utilisateurs {'ouvert à tous les admins' if ouvert else 'réservé au super admin'}, par {j['identifiant']}", request.state.nom)
+    return {"ok": True}
+
+
+@app.post("/api/comptes-moi/mot-de-passe")
+async def api_comptes_mien(request: Request):
+    """Un admin (compte de l'appli) change son propre mot de passe. Accepté avec une session provisoire."""
+    j = request.state.session
+    if not j or j["identifiant"] == nom_hote():
+        raise HTTPException(401, {"admin": True, "message": "Connexion admin demandée."})
+    corps = await request.json()
+    if not j.get("provisoire") and not comptes.verifier(j["identifiant"], corps.get("ancien", "")):
+        raise HTTPException(403, "L'ancien mot de passe est incorrect.")
+    cmp(lambda: comptes.changer_mien(j["identifiant"], corps.get("nouveau", "")))
+    sessions.fermer_compte(j["identifiant"])   # déconnecte ses autres appareils
+    compte = comptes.trouver(j["identifiant"])
+    journal.noter("admin", f"{j['identifiant']} a choisi un nouveau mot de passe", request.state.nom)
+    r = JSONResponse(infos_session({**compte, "provisoire": False}))
+    poser_session(r, request, {**compte, "provisoire": False})
+    return r
+
+
+# ---------------------------------------------------------------- comptes : mot de passe oublié
+@app.post("/api/comptes-oubli")
+async def api_comptes_oubli(request: Request):
+    corps = await request.json()
+    if admin.bloque():
+        raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
+    ident = (corps.get("identifiant") or "").strip().lower()
+    if ident in identifiants_serveur():
+        return {"ok": True, "serveur": True}
+    c = comptes.demander(ident, request.state.user, request.state.nom)
+    if c:
+        journal.noter("admin", f"Mot de passe oublié : demande pour {c['identifiant']}", request.state.nom)
+        notifs.envoyer("comptes", "Demande de mot de passe", f"{c['nom']} ({c['identifiant']}) a oublié son mot de passe. Ouvre l'appli pour accepter ou refuser.",
+                       "/#/utilisateurs", famille="admin", pour=pour_super(), noter=False)
+    else:
+        admin.echec()
+    # Même réponse dans tous les cas : on ne dit pas si l'identifiant existe.
+    return {"ok": True}
+
+
+@app.post("/api/comptes-demandes/{did}")
+async def api_comptes_repondre(did: str, request: Request):
+    j = exiger_super(request, fort=True)
+    accepter = bool((await request.json()).get("accepter"))
+    dem, _ = cmp(lambda: comptes.repondre(did, accepter, j["identifiant"]))
+    sessions.fermer_compte(dem["identifiant"])
+    journal.noter("admin", f"Demande de {dem['identifiant']} {'acceptée' if accepter else 'refusée'}, par {j['identifiant']}", request.state.nom)
+    if accepter:
+        notifs.envoyer("comptes", "Demande acceptée", "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.", "/",
+                       pour={dem.get("remis_a") or dem["login"]}, noter=False, forcer=True)
+    else:
+        notifs.envoyer("comptes", "Demande refusée", "Vois avec le super admin.", "/", pour={dem["login"]}, noter=False, forcer=True)
+    return {"ok": True}
+
+
+@app.post("/api/comptes-remise")
+def api_comptes_remise(request: Request):
+    """Le mot de passe provisoire, une seule fois, sur l'appareil de la personne concernée."""
+    r = comptes.prendre_remise(request.state.user)
+    if not r:
+        raise HTTPException(404, "Rien à récupérer.")
+    journal.noter("admin", f"Mot de passe provisoire affiché pour {r['identifiant']}", request.state.nom)
+    return r
 
 
 def hote_sh(script, timeout=30):
@@ -285,7 +623,6 @@ def duree_marche():
 NOMS = {
     "jellyfin": ("Jellyfin", "Films et séries"),
     "nextcloud": ("Nextcloud", "Fichiers, photos, agenda"),
-    "filebrowser": ("File Browser", "Tous les dossiers du disque de données"),
     "dockge": ("Dockge", "Gestion avancée des outils"),
     "jabba-app": ("Appli Jabba", "Cette appli"),
     "adresses": ("Adresses", "Les adresses https des outils"),
@@ -297,11 +634,10 @@ ADRESSES = {
     "nextcloud": "adresse-nextcloud",
     "jellyfin": "adresse-jellyfin",
     "dockge": "adresse-dockge",
-    "filebrowser": "adresse-fichiers",
 }
 # Où chaque outil range son icône : l'appli affiche le logo servi par l'outil lui-même.
 # Port local de chaque outil : l'appli y va chercher le logo que l'outil fournit lui-même.
-PORTS = {"jellyfin": 8096, "nextcloud": 8081, "filebrowser": 8082, "dockge": 5001}
+PORTS = {"jellyfin": 8096, "nextcloud": 8081, "dockge": 5001}
 ICONES_SECOURS = ["/web/favicon.png", "/web/favicon.ico", "/favicon.ico", "/favicon.png",
                   "/static/img/icons/favicon-32x32.png", "/core/img/favicon.ico", "/icon.svg"]
 HORS_APPLI = {"nextcloud"}
@@ -443,7 +779,11 @@ def api_maj(pid: str, request: Request):
 @app.get("/api/moi")
 def api_moi(request: Request):
     serveur = "serveur-demo" if DEMO else hote(["hostname"])[1].strip()
-    return {"login": request.state.user, "nom": request.state.nom, "version": VERSION, "serveur": serveur}
+    j = request.state.session
+    return {"login": request.state.user, "nom": request.state.nom, "version": VERSION, "serveur": serveur,
+            "remise": comptes.remise_en_attente(request.state.user),
+            "mode": "admin" if j and not j.get("provisoire") else "invite",
+            "admin": {"identifiant": j["identifiant"], "rang": j["rang"], "provisoire": j.get("provisoire", False)} if j else None}
 
 
 @app.get("/api/etat")
@@ -505,7 +845,7 @@ def api_systeme():
 
 @app.post("/api/systeme/redemarrer")
 def api_reboot(request: Request):
-    exiger_admin(request)
+    exiger_admin(request, fort=True)
     if DEMO:
         return {"ok": True}
     journal.noter("systeme", "Redémarrage du serveur demandé", request.state.nom)
@@ -1084,7 +1424,7 @@ def api_disque_ejecter(nom: str, request: Request):
 
 @app.post("/api/disques/{nom}/oublier")
 def api_disque_oublier(nom: str, request: Request):
-    exiger_admin(request)
+    exiger_admin(request, fort=True)
     if DEMO:
         return {"ok": True}
     try:
@@ -1315,7 +1655,7 @@ async def api_corbeille_restaurer(request: Request):
 @app.post("/api/corbeille/effacer")
 async def api_corbeille_effacer(request: Request):
     """Effacer pour de bon : un élément, ou toute la corbeille. Demande le mot de passe du serveur."""
-    exiger_admin(request)
+    exiger_admin(request, fort=True)
     corps = await request.json()
     ident, src, tout = str(corps.get("id", "")), corps.get("source"), bool(corps.get("tout"))
     if DEMO and source() != "disque":
@@ -1364,7 +1704,7 @@ async def api_alertes_abonner(request: Request):
     origine = request.headers.get("origin") or ""
     contact = origine if origine.startswith("https://") else "mailto:jabba@example.org"
     try:
-        notifs.abonner(corps.get("abonnement"), contact, str(corps.get("appareil", "")))
+        notifs.abonner(corps.get("abonnement"), contact, str(corps.get("appareil", "")), request.state.user)
     except ValueError as e:
         raise HTTPException(400, str(e))
     journal.noter("alerte", "Alertes activées sur un appareil", request.state.nom)
@@ -1410,7 +1750,7 @@ def dossier_appli():
 def api_appli_maj(verifier: int = 0):
     if DEMO:
         return {"actuelle": VERSION, "depot": "exemple/jabba", "pret": True,
-                "derniere": {"version": "0.6.0", "tag": "v0.6.0", "notes": "- Correctifs\n- Aperçus plus rapides", "date": "2026-11-20T10:00:00Z"},
+                "derniere": {"version": "0.7.0", "tag": "v0.7.0", "notes": "- Correctifs\n- Aperçus plus rapides", "date": "2026-11-20T10:00:00Z"},
                 "disponible": True}
     d = dossier_appli()
     pret = bool(DEPOT and d and hote(["test", "-d", d + "/.git"])[0] == 0 and hote(["sh", "-c", "command -v git"])[0] == 0)
@@ -1431,7 +1771,7 @@ def api_appli_versions():
 
 @app.post("/api/appli/maj")
 def api_appli_installer(request: Request):
-    exiger_admin(request)
+    exiger_admin(request, fort=True)
     if DEMO:
         return {"ok": True}
     der = maj.derniere(DEPOT, forcer=True)
@@ -1445,6 +1785,179 @@ def api_appli_installer(request: Request):
     if code != 0:
         raise HTTPException(500, "Lancement impossible : " + err[:200])
     return {"ok": True, "version": der["version"]}
+
+
+# ---------------------------------------------------------------- invités : réglages (admin)
+def adresse_wifi():
+    """Interface et adresse IP du serveur sur le réseau local (celles de la route par défaut)."""
+    if DEMO:
+        return "eth0", "192.168.1.20"
+    _, sortie, _ = hote(["ip", "-o", "-4", "route", "get", "1.1.1.1"])
+    m = re.search(r"dev (\S+) .*src (\S+)", sortie)
+    return (m.group(1), m.group(2)) if m else (None, None)
+
+
+def synchroniser_outils_invites():
+    """Copie, pour la page invités, la liste des outils et leur état (la porte du Wi-Fi ne parle pas à Docker)."""
+    outils = []
+    for o in lister_outils():
+        if o["id"] in PORTS:
+            outils.append({"id": o["id"], "nom": o["nom"], "role": o["role"], "port": PORTS[o["id"]],
+                           "actif": o["etat"] != "arrêté", "lien_tailscale": o.get("lien")})
+    _, ip = adresse_wifi()
+
+    def f(d):
+        d["outils"], d["adresse"] = outils, ip
+    invites.modifier(f)
+
+
+CHAINE = "JABBA-WIFI"
+
+
+def regles_voulues(interface, d):
+    """Une règle par outil fermé au Wi-Fi : bloque son port pour ce qui arrive par la carte réseau du Wi-Fi."""
+    regles = []
+    for pid, port in sorted(PORTS.items()):
+        if not d["wifi"].get(pid):
+            regles.append(f"-A {CHAINE} -i {interface} -p tcp -m conntrack --ctorigdstport {port} --ctdir ORIGINAL -j DROP")
+    return regles
+
+
+def appliquer_pare_feu():
+    """Les outils non cochés « Sur le Wi-Fi » ne sont plus joignables depuis le réseau local (Tailscale n'est pas touché)."""
+    if DEMO:
+        return True
+    interface, _ = adresse_wifi()
+    if not interface or not re.fullmatch(r"[\w.-]+", interface):
+        return False
+    voulues = regles_voulues(interface, invites.lire())
+    ok = True
+    for outil_ipt in ("iptables", "ip6tables"):
+        if hote([outil_ipt, "-S", "DOCKER-USER"])[0] != 0:
+            continue
+        code, actuelles, _ = hote([outil_ipt, "-S", CHAINE])
+        if code == 0 and [l for l in actuelles.splitlines() if l.startswith("-A ")] == voulues and \
+                hote([outil_ipt, "-C", "DOCKER-USER", "-j", CHAINE])[0] == 0:
+            continue
+        script = f"{outil_ipt} -N {CHAINE} 2>/dev/null; {outil_ipt} -F {CHAINE}"
+        for r in voulues:
+            script += f" && {outil_ipt} {r}"
+        script += f" && ({outil_ipt} -C DOCKER-USER -j {CHAINE} 2>/dev/null || {outil_ipt} -I DOCKER-USER -j {CHAINE})"
+        code, _, err = hote_sh(script)
+        if code != 0:
+            ok = False
+            print("pare-feu :", outil_ipt, err[:200], flush=True)
+    return ok
+
+
+def url_invites(d):
+    ip = d.get("adresse") or adresse_wifi()[1]
+    return f"http://{ip}/?c={d['code']}" if ip else None
+
+
+@app.get("/api/invites")
+def api_invites(request: Request):
+    exiger_admin(request)
+    try:
+        synchroniser_outils_invites()
+    except HTTPException:
+        pass
+    d = invites.lire()
+    return {"actif": d["actif"], "code": d["code"], "url": url_invites(d), "nom_local": f"http://{nom_hote()}.local",
+            "dossiers": d["dossiers"], "wifi": d["wifi"],
+            "outils": [{**o, "wifi": bool(d["wifi"].get(o["id"]))} for o in d["outils"]]}
+
+
+@app.get("/api/invites/qr.svg")
+def api_invites_qr(request: Request):
+    exiger_admin(request)
+    import io
+    import segno
+    url = url_invites(invites.lire())
+    if not url:
+        raise HTTPException(404, "Adresse du serveur introuvable.")
+    tampon = io.BytesIO()
+    segno.make(url, error="m").save(tampon, kind="svg", scale=8, border=2, dark="#111418", light="#ffffff")
+    return Response(tampon.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/invites")
+async def api_invites_regler(request: Request):
+    j = exiger_admin(request)
+    corps = await request.json()
+    action = corps.get("action")
+    if action == "actif":
+        actif = bool(corps.get("actif"))
+        invites.modifier(lambda d: d.update(actif=actif))
+        if actif:
+            invites.preparer_dossier_invites()
+        texte = f"Accès invités {'ouvert' if actif else 'fermé'}"
+    elif action == "code":
+        invites.nouveau_code()
+        texte = "Nouveau code invités (les invités déjà entrés devront le ressaisir)"
+    elif action == "wifi":
+        pid, ouvert = corps.get("outil"), bool(corps.get("wifi"))
+        if pid not in PORTS:
+            raise HTTPException(400, "Outil inconnu.")
+        invites.modifier(lambda d: d["wifi"].update({pid: ouvert}))
+        if not appliquer_pare_feu():
+            raise HTTPException(500, "Le réglage est noté, mais le filtre réseau n'a pas pu être appliqué.")
+        texte = f"{NOMS.get(pid, (pid,))[0]} {'joignable' if ouvert else 'plus joignable'} depuis le Wi-Fi"
+    elif action == "ajouter_dossier":
+        virtuel, mode = chemin_propre(corps.get("chemin", "")), corps.get("mode", "lecture")
+        reel, _ = fs(lambda: disque.resoudre(virtuel, racines_partageables(), set()))
+        if not reel or not os.path.isdir(reel):
+            raise HTTPException(404, "Dossier introuvable.")
+        if mode not in ("lecture", "depot"):
+            raise HTTPException(400, "Mode inconnu.")
+        nom = virtuel.rstrip("/").rsplit("/", 1)[-1]
+
+        def f(d):
+            if any(x["chemin"] == reel for x in d["dossiers"]):
+                raise HTTPException(409, "Ce dossier est déjà partagé.")
+            d["dossiers"].append({"id": uuid.uuid4().hex[:8], "nom": nom, "chemin": reel, "mode": mode})
+        invites.modifier(f)
+        texte = f"Dossier « {nom} » partagé avec les invités ({'dépôt autorisé' if mode == 'depot' else 'lecture seule'})"
+    elif action in ("retirer_dossier", "mode_dossier"):
+        did = corps.get("id")
+        mode = corps.get("mode")
+
+        def f(d):
+            x = next((x for x in d["dossiers"] if x["id"] == did), None)
+            if not x:
+                raise HTTPException(404, "Dossier introuvable.")
+            if action == "retirer_dossier":
+                d["dossiers"] = [y for y in d["dossiers"] if y["id"] != did]
+            elif mode in ("lecture", "depot"):
+                x["mode"] = mode
+            return x["nom"]
+        nom = invites.modifier(f)
+        texte = f"Dossier « {nom} » " + ("retiré des invités" if action == "retirer_dossier" else f"en {'dépôt autorisé' if mode == 'depot' else 'lecture seule'} pour les invités")
+    else:
+        raise HTTPException(400, "Action inconnue.")
+    journal.noter("invite", f"{texte}, par {j['identifiant']}", request.state.nom)
+    return {"ok": True}
+
+
+@app.get("/api/invites/parcourir")
+def api_invites_parcourir(request: Request, chemin: str = "/"):
+    """Les dossiers du serveur, pour choisir ceux à partager (lecture directe du disque)."""
+    exiger_admin(request)
+    chemin = chemin_propre(chemin)
+    if chemin == "/":
+        invites.preparer_dossier_invites()
+        toutes = {**disque.racines(), **racines_partageables()}
+        elements = [{"nom": n, "chemin": "/" + n} for n, c in toutes.items() if os.path.isdir(c)]
+        return {"chemin": "/", "elements": elements}
+    d = fs(lambda: disque.lister(chemin, racines_partageables(), set()))
+    return {"chemin": chemin, "elements": [{"nom": e["nom"], "chemin": e["chemin"]} for e in d["elements"] if e["dossier"]]}
+
+
+def racines_partageables():
+    """Disques branchés et dossier Invités, en plus des dossiers du serveur."""
+    r = {n: c for n, c in disques_connus().items() if n in disques_branches()}
+    r["Invités"] = invites.DOSSIER_INVITES
+    return r
 
 
 # ---------------------------------------------------------------- surveillance (tourne en fond)
@@ -1560,7 +2073,7 @@ def surveiller():
     while True:
         etapes = [scruter_disques]
         if tour % 4 == 0:   # toutes les minutes
-            etapes += [surveiller_courant, surveiller_espace, surveiller_outils]
+            etapes += [surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
         if tour % 40 == 0:  # toutes les 10 minutes
             etapes += [relier_disques_nextcloud]
         if tour % 240 == 0:  # toutes les heures

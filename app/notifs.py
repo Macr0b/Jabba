@@ -25,7 +25,8 @@ TYPES = {
     "outil_panne": ("Outil en panne", "Quand un outil plante, puis quand il repart."),
     "nouveau_disque": ("Nouveau disque", "Quand un disque branché est ajouté tout seul, ou s'il est illisible."),
     "mises_a_jour": ("Mises à jour", "Nouvelle version de l'appli, ou redémarrage en attente."),
-    "securite": ("Sécurité", "Mot de passe du serveur raté 5 fois, mot de passe changé."),
+    "securite": ("Sécurité", "Mot de passe raté 5 fois, mot de passe changé, accès refusé à un inconnu."),
+    "comptes": ("Comptes", "Demande de mot de passe oublié, compte ajouté ou retiré, rang changé."),
 }
 
 
@@ -80,7 +81,7 @@ def etat():
     }
 
 
-def abonner(abonnement, contact, appareil=""):
+def abonner(abonnement, contact, appareil="", qui=None):
     if not isinstance(abonnement, dict) or not str(abonnement.get("endpoint", "")).startswith("https://"):
         raise ValueError("Abonnement invalide.")
     cles = abonnement.get("keys") or {}
@@ -90,7 +91,7 @@ def abonner(abonnement, contact, appareil=""):
         d = _lire()
         d["abonnements"] = [a for a in d["abonnements"] if a["endpoint"] != abonnement["endpoint"]]
         d["abonnements"].append({"endpoint": abonnement["endpoint"], "keys": {"p256dh": cles["p256dh"], "auth": cles["auth"]},
-                                 "contact": contact, "appareil": appareil[:80], "depuis": int(time.time())})
+                                 "contact": contact, "appareil": appareil[:80], "qui": qui, "depuis": int(time.time())})
         _ecrire(d)
 
 
@@ -110,16 +111,21 @@ def regler(type_, actif):
         _ecrire(d)
 
 
-def envoyer(type_, titre, texte, url="/", forcer=False, famille="alerte"):
-    """Note l'événement au journal, puis l'envoie aux appareils si ce type est activé."""
-    journal.noter(famille, f"{titre} — {texte}" if texte else titre)
+def envoyer(type_, titre, texte, url="/", forcer=False, famille="alerte", pour=None, noter=True):
+    """Note l'événement au journal, puis l'envoie aux appareils si ce type est activé.
+
+    `pour` : ensemble de comptes Tailscale ; seuls leurs appareils reçoivent l'alerte.
+    """
+    if noter:
+        journal.noter(famille, f"{titre} — {texte}" if texte else titre)
     d = _lire()
     if not forcer and not d["types"].get(type_, True):
         return 0
-    if not d["abonnements"]:
+    cibles = [a for a in d["abonnements"] if pour is None or a.get("qui") in pour]
+    if not cibles:
         return 0
-    threading.Thread(target=_pousser, args=(d["abonnements"], titre, texte, url), daemon=True).start()
-    return len(d["abonnements"])
+    threading.Thread(target=_pousser, args=(cibles, titre, texte, url), daemon=True).start()
+    return len(cibles)
 
 
 def contact_valide(contact):

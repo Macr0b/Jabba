@@ -6,11 +6,9 @@ const contenu = $("#contenu");
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ------------------------------------------------------------ outils
-let jetonAdmin = null, jetonExpire = 0;
-
+// La connexion admin est un cookie protégé, posé par le serveur et gardé 30 jours sur l'appareil.
 async function api(chemin, options = {}, deuxiemeEssai = false) {
-  const o = { ...options, headers: { "X-Jabba": "1", ...(options.headers || {}) } };
-  if (jetonAdmin && Date.now() < jetonExpire) o.headers["X-Admin"] = jetonAdmin;
+  const o = { credentials: "same-origin", ...options, headers: { "X-Jabba": "1", ...(options.headers || {}) } };
   if (o.json !== undefined) {
     o.body = JSON.stringify(o.json);
     o.headers["Content-Type"] = "application/json";
@@ -20,8 +18,10 @@ async function api(chemin, options = {}, deuxiemeEssai = false) {
   let corps = null;
   try { corps = await r.json(); } catch (_) { /* vide */ }
   if (r.status === 401 && corps && corps.detail && corps.detail.admin && !deuxiemeEssai) {
-    if (await connexionAdmin()) return api(chemin, options, true);
-    throw new Error("Action annulée : mot de passe du serveur non saisi.");
+    const d = corps.detail;
+    const ok = d.changer ? await choisirMonMotDePasse(true) : d.confirmer ? await confirmerMotDePasse() : await connexionAdmin();
+    if (ok) return api(chemin, options, true);
+    throw new Error("Action annulée : mot de passe non saisi.");
   }
   if (!r.ok) {
     const d = corps && (corps.detail || corps.erreur);
@@ -36,7 +36,9 @@ function formulaire({ titre, texte = "", champs, valider = "Valider", secondaire
     dform.innerHTML = `<h2>${esc(titre)}</h2>${texte ? `<p>${esc(texte)}</p>` : ""}
       ${champs.map((c) => c.cache
         ? `<input type="text" name="${c.nom}" value="${esc(c.valeur || "")}" autocomplete="${c.autocomplete || "off"}" hidden>`
-        : `<label class="champ"><span>${esc(c.label)}</span><input type="${c.type || "text"}" name="${c.nom}" autocomplete="${c.autocomplete || "off"}" autocapitalize="off" spellcheck="false"></label>`).join("")}
+        : c.options
+          ? `<label class="champ"><span>${esc(c.label)}</span><select name="${c.nom}">${c.options.map((o) => `<option value="${esc(o[0])}"${o[0] === c.valeur ? " selected" : ""}>${esc(o[1])}</option>`).join("")}</select></label>`
+          : `<label class="champ"><span>${esc(c.label)}</span><input type="${c.type || "text"}" name="${c.nom}" value="${esc(c.valeur || "")}" placeholder="${esc(c.indice || "")}" autocomplete="${c.autocomplete || "off"}" autocapitalize="off" spellcheck="false"></label>`).join("")}
       ${secondaire ? `<button class="lien" value="secondaire" type="submit">${esc(secondaire)}</button>` : ""}
       <div class="actions"><button class="btn" value="non" type="submit" formnovalidate>Annuler</button>
       <button class="btn btn-p" value="oui" type="submit">${esc(valider)}</button></div>`;
@@ -49,32 +51,125 @@ function formulaire({ titre, texte = "", champs, valider = "Valider", secondaire
     };
     dialogue.returnValue = "";
     dialogue.showModal();
-    const premier = dform.querySelector("input:not([hidden])");
+    const premier = [...dform.querySelectorAll("input:not([hidden])")].find((i) => !i.value) || dform.querySelector("input:not([hidden])");
     if (premier) premier.focus();
   });
 }
 
-let utilisateurAdmin = "serveur";
+let utilisateurAdmin = "serveur";   // nom du serveur = identifiant du super admin principal
+let adminConnecte = null;           // {identifiant, rang, compte_serveur}
+const lireIdentifiant = () => { try { return localStorage.getItem("jabba-identifiant") || utilisateurAdmin; } catch (_) { return utilisateurAdmin; } };
+const garderIdentifiant = (i) => { try { localStorage.setItem("jabba-identifiant", i); } catch (_) { /* rien */ } };
+
+function retenirJeton(r) {
+  const avant = adminConnecte;
+  adminConnecte = { identifiant: r.identifiant, rang: r.rang, compte_serveur: r.identifiant === utilisateurAdmin };
+  // On passait du mode invité au mode admin : on recharge l'interface complète.
+  if (!avant && moi && moi.mode === "invite" && !r.changer) setTimeout(() => location.reload(), 300);
+}
+
+// Redemander le mot de passe avant une action sensible (déjà connecté).
+async function confirmerMotDePasse() {
+  const v = await formulaire({
+    titre: "Confirme ton mot de passe",
+    texte: "Cette action est sensible : ton mot de passe est redemandé (valable ensuite 10 minutes).",
+    champs: [
+      { nom: "identifiant", cache: true, valeur: (adminConnecte && adminConnecte.identifiant) || lireIdentifiant(), autocomplete: "username" },
+      { nom: "mdp", type: "password", label: "Mot de passe", autocomplete: "current-password" },
+    ],
+    valider: "Confirmer",
+  });
+  if (!v || v === "secondaire") return false;
+  try { await api("/api/admin/confirmer", { method: "POST", json: { mot_de_passe: v.mdp } }, true); return true; }
+  catch (e) { toast(e.message, true); return false; }
+}
+
+async function deconnexion() {
+  try { await api("/api/admin/deconnexion", { method: "POST" }, true); } catch (_) { /* déjà déconnecté */ }
+  location.hash = "#/accueil";
+  location.reload();
+}
+
 async function connexionAdmin() {
+  let identifiant = lireIdentifiant();
   for (let essai = 0; essai < 3; essai++) {
     const v = await formulaire({
-      titre: "Mot de passe du serveur",
-      texte: "Cette action est réservée à l'admin. Le mot de passe reste valable 10 minutes.",
+      titre: "Connexion admin",
+      texte: `Identifiant « ${utilisateurAdmin} » = compte du serveur, avec son mot de passe. La connexion reste mémorisée 30 jours sur cet appareil.`,
       champs: [
-        { nom: "identifiant", cache: true, valeur: utilisateurAdmin, autocomplete: "username" },
+        { nom: "identifiant", label: "Identifiant", valeur: identifiant, autocomplete: "username" },
         { nom: "mdp", type: "password", label: "Mot de passe", autocomplete: "current-password" },
       ],
       valider: "Continuer", secondaire: "Mot de passe oublié ?",
     });
     if (v === null) return false;
-    if (v === "secondaire") { await recupererMotDePasse(); continue; }
+    if (v === "secondaire") { await motDePasseOublie(identifiant); continue; }
+    identifiant = v.identifiant.trim().toLowerCase();
     try {
-      const r = await api("/api/admin/connexion", { method: "POST", json: { mot_de_passe: v.mdp } }, true);
-      jetonAdmin = r.jeton; jetonExpire = Date.now() + (r.duree - 30) * 1000;
+      const r = await api("/api/admin/connexion", { method: "POST", json: { identifiant, mot_de_passe: v.mdp } }, true);
+      garderIdentifiant(identifiant);
+      retenirJeton(r);
+      if (r.changer) return choisirMonMotDePasse(true);
       return true;
     } catch (e) { toast(e.message, true); }
   }
   return false;
+}
+
+// Un admin (compte de l'appli) choisit son mot de passe : obligatoire après un mot de passe provisoire.
+async function choisirMonMotDePasse(force = false) {
+  const v = await formulaire({
+    titre: force ? "Choisis ton mot de passe" : "Changer mon mot de passe",
+    texte: force ? "Ton mot de passe actuel est provisoire. Choisis le tien (10 caractères minimum) : l'app Mots de passe proposera de l'enregistrer." : "",
+    champs: [
+      { nom: "identifiant", cache: true, valeur: (adminConnecte && adminConnecte.identifiant) || lireIdentifiant(), autocomplete: "username" },
+      ...(force ? [] : [{ nom: "ancien", type: "password", label: "Mot de passe actuel", autocomplete: "current-password" }]),
+      { nom: "nouveau", type: "password", label: "Nouveau mot de passe", autocomplete: "new-password" },
+      { nom: "confirmation", type: "password", label: "Nouveau mot de passe, encore une fois", autocomplete: "new-password" },
+    ],
+    valider: "Enregistrer",
+  });
+  if (!v || v === "secondaire") return false;
+  if (v.nouveau !== v.confirmation) { toast("Les deux mots de passe ne sont pas identiques.", true); return choisirMonMotDePasse(force); }
+  try {
+    const r = await api("/api/comptes-moi/mot-de-passe", { method: "POST", json: { ancien: v.ancien || "", nouveau: v.nouveau } }, true);
+    retenirJeton(r);
+    toast("Mot de passe enregistré");
+    return true;
+  } catch (e) { toast(e.message, true); return false; }
+}
+
+async function motDePasseOublie(identifiant) {
+  const v = await formulaire({
+    titre: "Mot de passe oublié",
+    texte: `Pour le compte du serveur (« ${utilisateurAdmin} »), tu utiliseras ton code de secours. Pour un autre compte, la demande part chez le super admin.`,
+    champs: [{ nom: "identifiant", label: "Ton identifiant", valeur: identifiant, autocomplete: "username" }],
+    valider: "Continuer",
+  });
+  if (!v || v === "secondaire") return;
+  try {
+    const r = await api("/api/comptes-oubli", { method: "POST", json: { identifiant: v.identifiant } }, true);
+    if (r.serveur) return recupererMotDePasse();
+    await demander({ titre: "Demande envoyée", texte: "Si cet identifiant existe, le super admin est prévenu. Dès qu'il accepte, tu reçois une alerte et ton mot de passe provisoire s'affiche ici, sur cet appareil.", valider: "OK" });
+  } catch (e) { toast(e.message, true); }
+}
+
+// Mot de passe provisoire remis à la personne concernée, une seule fois.
+async function afficherRemise() {
+  let r;
+  try { r = await api("/api/comptes-remise", { method: "POST" }); } catch (_) { return; }
+  await new Promise((resoudre) => {
+    dform.innerHTML = `<h2>Ton mot de passe provisoire</h2>
+      <p>Identifiant : <strong>${esc(r.identifiant)}</strong>. Ce mot de passe ne sera <strong>plus affiché</strong> : il sert une fois, dans les 24 h, puis tu choisis le tien.</p>
+      <p class="code-secours">${esc(r.mot_de_passe)}</p>
+      <div class="actions"><button class="btn" type="button" id="copier-code">Copier</button><button class="btn btn-p" value="ok" type="submit">Me connecter</button></div>`;
+    dialogue.onclose = () => resoudre();
+    dialogue.returnValue = "";
+    dialogue.showModal();
+    $("#copier-code").onclick = async () => { try { await navigator.clipboard.writeText(r.mot_de_passe); toast("Copié"); } catch (_) { toast("Copie impossible : sélectionne-le à la main.", true); } };
+  });
+  garderIdentifiant(r.identifiant);
+  await connexionAdmin();
 }
 
 async function montrerCode(code) {
@@ -446,10 +541,11 @@ pages.systeme = async () => {
           : "Pas encore mesuré"}</dd>
       </dl></section>
       <section class="carte pad" id="maj"><h2>Appli Jabba</h2><div class="squelette" style="margin-top:10px"></div></section>
-      <section class="carte pad"><h2>Sécurité</h2>
+      <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Utilisateurs</a></div>
+        <p class="note" id="connecte-admin">${a.connecte ? `Connecté en admin : <strong>${esc(a.connecte.identifiant)}</strong> · ${a.connecte.rang === "super" ? "super admin" : "admin"}` : "Pas connecté en admin."}</p>
         <p class="note" style="margin:8px 0 14px">Le mot de passe du serveur protège les actions sensibles : activer un outil, mettre à jour, redémarrer, régler ou oublier un disque, supprimer un dossier entier, effacer la corbeille.</p>
         ${a.code_existe ? "" : `<div class="bandeau" style="margin-bottom:12px"><span>Aucun code de secours : crée-le maintenant, il sert si tu oublies le mot de passe.</span></div>`}
-        <div class="actions"><button class="btn" id="changer-mdp">Changer le mot de passe</button>
+        <div class="actions"><button class="btn" id="changer-mdp">${a.connecte && a.connecte.identifiant !== a.serveur ? "Changer mon mot de passe" : "Changer le mot de passe du serveur"}</button>
         <button class="btn" id="code-secours">${a.code_existe ? "Nouveau code de secours" : "Créer le code de secours"}</button></div>
       </section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
@@ -464,6 +560,7 @@ pages.systeme = async () => {
   carteMaj().catch((e) => { const z = $("#maj"); if (z) z.innerHTML = `<h2>Appli Jabba</h2><p class="note">${esc(e.message)}</p>`; });
   api("/api/journal?n=8").then((evs) => { const z = $("#journal-court"); if (z) z.innerHTML = evs.map(ligneJournal).join("") || '<p class="note">Rien pour l\'instant.</p>'; }).catch(() => {});
   $("#changer-mdp").onclick = async () => {
+    if (a.connecte && a.connecte.identifiant !== a.serveur) { await choisirMonMotDePasse(false); return; }
     const v = await formulaire({
       titre: "Changer le mot de passe du serveur",
       texte: "C'est aussi le mot de passe de sudo dans le Terminal.",
@@ -477,7 +574,7 @@ pages.systeme = async () => {
     });
     if (!v || v === "secondaire") return;
     if (v.nouveau !== v.confirmation) return toast("Les deux mots de passe ne sont pas identiques.", true);
-    try { await api("/api/admin/mot-de-passe", { method: "POST", json: { ancien: v.ancien, nouveau: v.nouveau } }); jetonAdmin = null; toast("Mot de passe changé"); }
+    try { await api("/api/admin/mot-de-passe", { method: "POST", json: { ancien: v.ancien, nouveau: v.nouveau } }); toast("Mot de passe changé : reconnecte-toi"); setTimeout(() => location.reload(), 1500); }
     catch (e) { toast(e.message, true); }
   };
   $("#code-secours").onclick = async () => {
@@ -498,9 +595,13 @@ pages.plus = async () => {
       <a href="#/disques"><span>Disques</span><span>›</span></a>
       <a href="#/corbeille"><span>Corbeille</span><span>›</span></a>
       <a href="#/systeme"><span>Système et alertes</span><span>›</span></a>
+      <a href="#/utilisateurs"><span>Utilisateurs</span><span>›</span></a>
+      <a href="#/invites"><span>Invités</span><span>›</span></a>
+      <a href="#" id="sortir-mobile"><span>Se déconnecter</span><span>›</span></a>
       <a href="#/journal"><span>Journal</span><span>›</span></a>
     </section><p class="note" id="qui-mobile"></p>`;
-  if (moi) $("#qui-mobile").textContent = `Connecté : ${moi.nom} via Tailscale · version ${moi.version}`;
+  if (moi && moi.admin) $("#qui-mobile").textContent = `Connecté en ${moi.admin.rang === "super" ? "super admin" : "admin"} : ${moi.admin.identifiant} · version ${moi.version}`;
+  $("#sortir-mobile").onclick = (ev) => { ev.preventDefault(); deconnexion(); };
 };
 
 // ------------------------------------------------------------ fichiers
@@ -783,6 +884,126 @@ pages.corbeille = async () => {
   }));
 };
 
+// ------------------------------------------------------------ utilisateurs
+const RANG = { super: "Super admin", admin: "Admin" };
+const ilYa = (t) => (t ? quand(new Date(t * 1000).toISOString()) : "Jamais");
+
+pages.utilisateurs = async () => {
+  contenu.innerHTML = `<div class="entete"><div><h1>Utilisateurs</h1></div></div>${chargement(4)}`;
+  const d = await api("/api/comptes");
+  const superAdmin = d.moi.rang === "super";
+  const parLogin = Object.fromEntries(d.comptes.filter((c) => c.tailscale).map((c) => [c.tailscale, c]));
+  contenu.innerHTML = `
+    <div class="entete"><div><h1>Utilisateurs</h1><p class="sous-titre">Les admins de l'appli, et qui se connecte. Tu es <strong>${esc(d.moi.identifiant)}</strong> · ${RANG[d.moi.rang]}.</p></div>
+      <div class="actions"><button class="btn btn-p" id="ajouter">Ajouter un admin</button></div></div>
+    ${d.demandes.map((x) => `<div class="bandeau demande"><span><strong>${esc(x.nom)}</strong> (${esc(x.identifiant)}) a oublié son mot de passe · demandé par ${esc(x.demandeur)}, ${esc(ilYa(x.t))}.${x.autre_personne ? " <strong>Attention : demandé depuis le compte Tailscale de quelqu'un d'autre.</strong> Le mot de passe provisoire n'ira qu'à son compte à lui." : ""}</span>
+      <span class="actions"><button class="btn btn-petit btn-p" data-accepter="${esc(x.id)}">Accepter</button><button class="btn btn-petit" data-refuser="${esc(x.id)}">Refuser</button></span></div>`).join("")}
+    ${!superAdmin && d.demandes_n ? `<div class="bandeau"><span>${d.demandes_n} demande${d.demandes_n > 1 ? "s" : ""} de mot de passe en attente : seul un super admin peut y répondre.</span></div>` : ""}
+    <section class="carte tableau" aria-label="Comptes admin">
+      <div class="ligne titres"><span>Compte</span><span class="col-l">Rang</span><span class="col-l">Dernière connexion</span><span></span></div>
+      ${d.comptes.map((c, i) => `
+        <div class="ligne">
+          <span class="nom"><span class="avatar" aria-hidden="true">${esc((c.nom || c.identifiant)[0].toUpperCase())}</span>
+            <span>${esc(c.nom)}<span class="detail-chemin">${esc(c.identifiant)}${c.systeme ? " · mot de passe du serveur" : c.tailscale ? " · Tailscale : " + esc(c.tailscale) : " · sans compte Tailscale"}${c.provisoire ? " · mot de passe provisoire" : ""}</span>
+            <span class="mobile-detail">${RANG[c.rang]}</span></span></span>
+          <span class="col-l"><span class="pastille ${c.rang === "super" ? "p-alerte" : "p-gris"}">${RANG[c.rang]}</span></span>
+          <span class="gris col-l">${c.systeme ? "—" : esc(ilYa(c.derniere_connexion))}</span>
+          ${c.systeme ? "<span></span>" : `<button class="btn-menu" data-i="${i}" aria-label="Actions pour ${esc(c.nom)}">•••</button>`}
+        </div>`).join("")}
+    </section>
+    <section class="carte pad">
+      <label class="ligne-reglage"><span><strong>Espace ouvert à tous les admins</strong><br><span class="note">${d.reglages.espace_admins ? "Tous les admins peuvent ajouter des comptes. Seul un super admin peut nommer ou retirer un super admin." : "Seul un super admin peut ouvrir cet espace."}${superAdmin ? "" : " Réglé par le super admin."}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${d.reglages.espace_admins}" id="espace"${superAdmin ? "" : " disabled"}><span></span></button></label>
+    </section>
+    <section class="carte pad">
+      <h2>Qui se connecte</h2>
+      <p class="note" style="margin:6px 0 10px">Rempli tout seul par Tailscale : chaque personne qui ouvre l'appli, depuis quel appareil.</p>
+      <div class="journal">${d.visites.map((v) => `<div class="evenement">
+          <span class="famille">${d.proprietaires.includes(v.login) ? "Propriétaire" : parLogin[v.login] ? RANG[parLogin[v.login].rang] : "Accès"}</span>
+          <span class="texte-ev">${esc(v.nom)} <span class="note">· ${esc(v.login)}${v.appareil ? " · " + esc(v.appareil) : ""} · ${v.n || 1} visite${(v.n || 1) > 1 ? "s" : ""}</span></span>
+          <span class="note quand-ev">${esc(ilYa(v.derniere))}</span></div>`).join("") || '<p class="note">Personne pour l\'instant.</p>'}</div>
+      ${d.refus.length ? `<h2 style="margin-top:16px">Accès refusés</h2><div class="journal">${d.refus.map((r) => `<div class="evenement f-admin"><span class="famille">Refusé</span>
+          <span class="texte-ev">${esc(r.login)}${r.appareil ? ` <span class="note">· ${esc(r.appareil)}</span>` : ""}</span><span class="note quand-ev">${esc(ilYa(r.t))}</span></div>`).join("")}</div>` : ""}
+      <p class="note" style="margin-top:10px">Pour donner l'accès à quelqu'un : ajoute-le comme admin avec son compte Tailscale. Les propriétaires sont ceux du fichier de réglages du serveur.</p>
+    </section>
+    <section class="carte pad"><h2>Appareils connectés</h2>
+      <p class="note" style="margin:6px 0 10px">Chaque appareil reste connecté 30 jours. Déconnecte celui que tu as perdu ou prêté.${superAdmin ? "" : " Tu vois tes propres appareils."}</p>
+      <div class="journal" id="appareils"><div class="squelette"></div></div></section>`;
+  api("/api/sessions").then((ss) => {
+    const z = $("#appareils");
+    if (!z) return;
+    z.innerHTML = ss.map((x) => `<div class="evenement"><span class="famille">${esc(x.identifiant)}</span>
+      <span class="texte-ev">${esc(x.appareil || "Appareil inconnu")} <span class="note">· connecté ${esc(ilYa(x.cree))} · vu ${esc(ilYa(x.vu))}</span></span>
+      <span>${x.actuelle ? '<span class="pastille p-ok">Cet appareil</span>' : `<button class="btn btn-petit" data-session="${esc(x.id)}">Déconnecter</button>`}</span></div>`).join("") || '<p class="note">Aucun.</p>';
+    z.querySelectorAll("[data-session]").forEach((b) => b.addEventListener("click", async () => {
+      try { await api(`/api/sessions/${encodeURIComponent(b.dataset.session)}/fermer`, { method: "POST" }); toast("Appareil déconnecté"); } catch (e) { toast(e.message, true); }
+      pages.utilisateurs().catch(montrerErreur);
+    }));
+  }).catch(() => {});
+
+  const recharger = () => pages.utilisateurs().catch(montrerErreur);
+  contenu.querySelectorAll("[data-accepter],[data-refuser]").forEach((b) => b.addEventListener("click", async () => {
+    const accepter = !!b.dataset.accepter;
+    try { await api(`/api/comptes-demandes/${encodeURIComponent(b.dataset.accepter || b.dataset.refuser)}`, { method: "POST", json: { accepter } }); toast(accepter ? "Acceptée : le mot de passe provisoire s'affichera sur son appareil" : "Demande refusée"); }
+    catch (e) { toast(e.message, true); }
+    recharger();
+  }));
+  const espace = $("#espace");
+  if (espace && superAdmin) espace.onclick = async () => {
+    const ouvert = espace.getAttribute("aria-checked") !== "true";
+    try { await api("/api/comptes-reglages", { method: "POST", json: { espace_admins: ouvert } }); } catch (e) { toast(e.message, true); }
+    recharger();
+  };
+  $("#ajouter").onclick = async () => {
+    const v = await formulaire({
+      titre: "Ajouter un admin",
+      texte: "Un mot de passe provisoire est créé. Avec son compte Tailscale, il s'affiche sur l'appli de la personne ; sinon, ici, pour que tu le lui donnes.",
+      champs: [
+        { nom: "nom", label: "Nom affiché", indice: "Camille" },
+        { nom: "identifiant", label: "Identifiant de connexion", indice: "camille" },
+        { nom: "tailscale", label: "Compte Tailscale (facultatif)", indice: "adresse avec laquelle elle se connecte à Tailscale" },
+        ...(superAdmin ? [{ nom: "rang", label: "Rang", options: [["admin", "Admin"], ["super", "Super admin"]], valeur: "admin" }] : []),
+      ],
+      valider: "Ajouter",
+    });
+    if (!v || v === "secondaire") return;
+    try {
+      const r = await api("/api/comptes", { method: "POST", json: { nom: v.nom, identifiant: v.identifiant, tailscale: v.tailscale, rang: v.rang || "admin" } });
+      if (r.mot_de_passe) await montrerProvisoire(r.compte, r.mot_de_passe);
+      else toast(`${r.compte.nom} ajouté : son mot de passe provisoire s'affichera sur son appli`);
+    } catch (e) { toast(e.message, true); }
+    recharger();
+  };
+  contenu.querySelectorAll(".btn-menu").forEach((b) => b.addEventListener("click", async () => {
+    const c = d.comptes[+b.dataset.i];
+    const action = async (corps, ok) => { try { await api(`/api/comptes/${encodeURIComponent(c.id)}`, { method: "POST", json: corps }); toast(ok); } catch (e) { toast(e.message, true); } recharger(); };
+    const choix = [
+      { texte: "Renommer", f: async () => { const nom = await demander({ titre: "Nom affiché", champ: c.nom, valider: "Renommer" }); if (nom) action({ action: "nom", nom }, "Renommé"); } },
+      { texte: c.tailscale ? "Changer le compte Tailscale" : "Relier un compte Tailscale", f: async () => {
+        const t = await demander({ titre: "Compte Tailscale", texte: "L'adresse avec laquelle la personne se connecte à Tailscale. Vide = plus d'accès à l'appli par ce compte.", champ: c.tailscale || "", valider: "Enregistrer" });
+        if (t !== null) action({ action: "tailscale", tailscale: t }, "Enregistré");
+      } },
+    ];
+    if (superAdmin) choix.push({ texte: c.rang === "super" ? "Passer admin" : "Nommer super admin", f: () => action({ action: "rang", rang: c.rang === "super" ? "admin" : "super" }, "Rang changé") });
+    choix.push({ texte: "Retirer ce compte", danger: true, f: async () => {
+      if (await demander({ titre: `Retirer ${c.nom} ?`, texte: "Il ne pourra plus faire d'action admin" + (c.tailscale ? " ni ouvrir l'appli" : "") + ".", valider: "Retirer", danger: true })) action({ action: "supprimer" }, "Compte retiré");
+    } });
+    const x = await menu(`${c.nom} · ${RANG[c.rang]}`, choix);
+    if (x) setTimeout(x.f, 50);
+  }));
+};
+
+async function montrerProvisoire(compte, mdp) {
+  await new Promise((resoudre) => {
+    dform.innerHTML = `<h2>Mot de passe provisoire</h2>
+      <p>Donne-le à <strong>${esc(compte.nom)}</strong> (identifiant <strong>${esc(compte.identifiant)}</strong>). Il ne sera plus affiché, il sert une fois dans les 24 h, puis la personne choisit le sien.</p>
+      <p class="code-secours">${esc(mdp)}</p>
+      <div class="actions"><button class="btn btn-p" value="ok" type="submit">C'est noté</button></div>`;
+    dialogue.onclose = () => resoudre();
+    dialogue.showModal();
+  });
+}
+
 // ------------------------------------------------------------ journal
 const FAMILLES = { outil: "Outil", admin: "Admin", disque: "Disque", courant: "Courant", fichier: "Fichier", appli: "Appli", alerte: "Alerte", systeme: "Système" };
 const ligneJournal = (ev) => `<div class="evenement f-${esc(ev.famille)}">
@@ -905,16 +1126,165 @@ async function carteMaj(verifier = false) {
   };
 }
 
+// ------------------------------------------------------------ mode invité (sans connexion admin)
+const urlInvite = (d, chemin, voir = 0) => `/api/invite/fichier?d=${encodeURIComponent(d)}&chemin=${encodeURIComponent(chemin)}${voir ? "&voir=1" : ""}`;
+
+pages.invite = async (params) => {
+  const e = await api("/api/invite/etat");
+  const titre = moi && moi.serveur ? moi.serveur[0].toUpperCase() + moi.serveur.slice(1) : "Jabba";
+  const piedAdmin = e.lan
+    ? `<p class="note centre">Administration : depuis l'appli Jabba, par Tailscale.</p>`
+    : `<div class="centre"><button class="btn btn-p" id="connexion">Connexion admin</button></div>`;
+  if (!e.actif) {
+    contenu.innerHTML = `<div class="invite-accueil"><span class="logo grand">J</span><h1>${esc(titre)}</h1><p class="sous-titre">L'accès invités est fermé pour le moment.</p></div>${piedAdmin}`;
+  } else if (!e.entre) {
+    contenu.innerHTML = `<div class="invite-accueil"><span class="logo grand">J</span><h1>Bienvenue chez ${esc(titre)}</h1>
+        <p class="sous-titre">Tape le code d'accès à 4 chiffres (ou scanne le QR code).</p>
+        <form id="form-code" class="form-code"><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" aria-label="Code d'accès" placeholder="••••"><button class="btn btn-p" type="submit">Entrer</button></form></div>${piedAdmin}`;
+    $("#form-code").onsubmit = async (ev) => {
+      ev.preventDefault();
+      try { await api("/api/invite/entrer", { method: "POST", json: { code: ev.target.code.value } }); router(); }
+      catch (er) { toast(er.message, true); }
+    };
+    $("#form-code").code.focus();
+  } else if (params.get("d")) {
+    return pageDossierInvite(params.get("d"), params.get("chemin") || "/");
+  } else {
+    contenu.innerHTML = `<div class="entete"><div><h1>${esc(titre)}</h1><p class="sous-titre">${e.lan ? "Bienvenue ! Voici ce qui est partagé avec toi." : "Mode invité : ce que voient les invités. Connecte-toi pour tout le reste."}</p></div></div>
+      <section aria-label="Dossiers partagés"><h2 class="titre-section">Dossiers</h2>
+        <div class="tuiles">${e.dossiers.map((x) => `<a class="carte tuile" href="#/invite?d=${encodeURIComponent(x.id)}"><span class="ic-tuile dossier" aria-hidden="true"></span><span class="nom-tuile">${esc(x.nom)}</span><span class="note">${x.mode === "depot" ? "Lire et déposer" : "Lecture seule"}</span></a>`).join("") || '<p class="note">Aucun dossier partagé.</p>'}</div></section>
+      ${e.outils.length ? `<section aria-label="Outils"><h2 class="titre-section">Outils</h2><section class="carte liste-raccourcis">${e.outils.map((o) => `<a href="${esc(o.lien)}" target="_blank" rel="noopener"><span>${esc(o.nom)} <span class="note">· ${esc(o.role)}</span></span><span>↗</span></a>`).join("")}</section></section>` : ""}
+      ${piedAdmin}`;
+  }
+  const c = $("#connexion");
+  if (c) c.onclick = () => connexionAdmin();
+};
+
+async function pageDossierInvite(did, chemin) {
+  const d = await api(`/api/invite/fichiers?d=${encodeURIComponent(did)}&chemin=${encodeURIComponent(chemin)}`);
+  const lien = (c) => `#/invite?d=${encodeURIComponent(did)}&chemin=${encodeURIComponent(c)}`;
+  const morceaux = chemin.split("/").filter(Boolean);
+  const fil = [`<a href="#/invite">Accueil</a>`, morceaux.length ? `<a href="${lien("/")}">${esc(d.dossier.nom)}</a>` : `<strong>${esc(d.dossier.nom)}</strong>`]
+    .concat(morceaux.map((m, i) => i === morceaux.length - 1 ? `<strong>${esc(m)}</strong>` : `<a href="${lien("/" + morceaux.slice(0, i + 1).join("/"))}">${esc(m)}</a>`)).join('<span class="sep">/</span>');
+  const depot = d.dossier.mode === "depot";
+  contenu.innerHTML = `
+    <div class="entete"><div><h1>${esc(morceaux.length ? morceaux[morceaux.length - 1] : d.dossier.nom)}${depot ? "" : '<span class="lecture-seule">Lecture seule</span>'}</h1></div>
+      ${depot ? `<div class="actions"><button class="btn btn-p" id="envoyer">Déposer des fichiers</button></div>` : ""}</div>
+    <nav class="fil" aria-label="Emplacement">${fil}</nav>
+    <section class="carte tableau">
+      ${d.elements.length ? d.elements.map((e) => `<div class="ligne">
+        <span class="nom">${e.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : VIGNETTES.includes(ext(e.nom)) ? `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="${urlInvite(did, e.chemin, 1)}" onerror="this.parentNode.className='ic-fichier';this.remove()"></span>` : `<span class="ic-fichier${genre(e.nom) ? " " + genre(e.nom) : ""}" aria-hidden="true"></span>`}
+          <span>${e.dossier ? `<a href="${lien(e.chemin)}">${esc(e.nom)}</a>` : `<a href="${urlInvite(did, e.chemin)}">${esc(e.nom)}</a>`}<span class="mobile-detail">${e.dossier ? "" : octets(e.taille)}</span></span></span>
+        <span class="gris col-l">${e.dossier ? "" : octets(e.taille)}</span><span class="gris col-l">${quand(e.modifie)}</span>
+        ${e.dossier ? "<span></span>" : `<a class="btn btn-petit" href="${urlInvite(did, e.chemin)}" aria-label="Télécharger ${esc(e.nom)}">↓</a>`}</div>`).join("") : '<div class="vide">Ce dossier est vide.</div>'}
+      ${depot ? `<div class="depot" id="depot">Glisse des fichiers ici pour les déposer</div>` : ""}
+    </section><input type="file" id="choix" multiple hidden>`;
+  if (!depot) return;
+  const envoyer = async (fichiers) => {
+    fichiers = fichiers.filter((f) => f.size || f.type);
+    if (!fichiers.length) return;
+    const fd = new FormData();
+    fichiers.forEach((f) => fd.append("fichiers", f, f.name));
+    toast(`Envoi de ${fichiers.length} fichier${fichiers.length > 1 ? "s" : ""}…`);
+    try { const r = await api(`/api/invite/envoyer?d=${encodeURIComponent(did)}&chemin=${encodeURIComponent(chemin)}`, { method: "POST", body: fd }); toast(`${r.envoyes.length} fichier${r.envoyes.length > 1 ? "s déposés" : " déposé"}, merci !`); }
+    catch (er) { toast(er.message, true); }
+    pageDossierInvite(did, chemin).catch(montrerErreur);
+  };
+  const choix = $("#choix");
+  $("#envoyer").onclick = () => choix.click();
+  choix.onchange = () => envoyer([...choix.files]);
+  const zone = $(".tableau"), dep = $("#depot");
+  ["dragenter", "dragover"].forEach((t) => zone.addEventListener(t, (ev) => { ev.preventDefault(); dep.classList.add("survol"); }));
+  ["dragleave", "drop"].forEach((t) => zone.addEventListener(t, (ev) => { ev.preventDefault(); if (t === "drop" || !zone.contains(ev.relatedTarget)) dep.classList.remove("survol"); }));
+  zone.addEventListener("drop", (ev) => envoyer([...ev.dataTransfer.files]));
+}
+
+// ------------------------------------------------------------ invités : réglages (admin)
+pages.invites = async () => {
+  contenu.innerHTML = `<div class="entete"><div><h1>Invités</h1></div></div>${chargement(4)}`;
+  const d = await api("/api/invites");
+  contenu.innerHTML = `
+    <div class="entete"><div><h1>Invités</h1><p class="sous-titre">Ce que voient les personnes connectées à ton Wi-Fi, sans compte ni application.</p></div></div>
+    <section class="carte pad">
+      <label class="ligne-reglage"><span><strong>Accès invités</strong><br><span class="note">${d.actif ? "Ouvert : avec le code, un invité sur ton Wi-Fi voit les dossiers ci-dessous." : "Fermé : la page invités n'affiche rien."}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${d.actif}" id="actif"><span></span></button></label>
+    </section>
+    ${d.actif ? `<section class="carte pad acces-invites">
+      <div class="qr"><img src="/api/invites/qr.svg?c=${esc(d.code)}" alt="QR code de l'accès invités" width="180" height="180"></div>
+      <div><h2>Code d'accès : <span class="code-invite">${esc(d.code)}</span></h2>
+        <p class="note">Les invités scannent le QR code, connectés à ton Wi-Fi principal (pas le Wi-Fi invités de la box, isolé du serveur). Sans téléphone : ouvrir <strong>${esc(d.url ? d.url.split("/?")[0] : d.nom_local)}</strong> ou <strong>${esc(d.nom_local)}</strong>, puis taper le code.</p>
+        <p class="note">Un appareil reste reconnu 7 jours. Changer le code fait sortir tout le monde.</p>
+        <div class="actions"><button class="btn" id="code">Nouveau code</button><button class="btn" id="imprimer">Imprimer</button></div></div>
+    </section>` : ""}
+    <h2 class="titre-section">Dossiers partagés</h2>
+    <section class="carte tableau">
+      ${d.dossiers.map((x) => `<div class="ligne"><span class="nom"><span class="ic-dossier" aria-hidden="true"></span><span>${esc(x.nom)}<span class="detail-chemin">${esc(x.chemin)}</span></span></span>
+        <span class="col-l"><select data-mode="${esc(x.id)}" aria-label="Droits sur ${esc(x.nom)}"><option value="lecture"${x.mode === "lecture" ? " selected" : ""}>Lecture seule</option><option value="depot"${x.mode === "depot" ? " selected" : ""}>Lire et déposer</option></select></span>
+        <span></span><button class="btn-menu" data-retirer="${esc(x.id)}" aria-label="Retirer ${esc(x.nom)}">✕</button></div>`).join("") || '<div class="vide">Aucun dossier partagé.</div>'}
+      <div class="depot"><button class="btn" id="ajouter-dossier">Partager un dossier</button></div>
+    </section>
+    <h2 class="titre-section">Outils sur le Wi-Fi</h2>
+    <section class="carte pad">
+      <p class="note" style="margin:0 0 12px">Un outil coché est joignable depuis ton Wi-Fi (par les invités, la télé…) et apparaît sur leur page. Décoché, il n'est joignable que par Tailscale. Chaque outil garde son propre mot de passe.</p>
+      ${d.outils.map((o) => `<label class="ligne-reglage" style="margin-bottom:12px"><span><strong>${esc(o.nom)}</strong> <span class="note">· port ${o.port}${o.actif ? "" : " · désactivé dans l'établi"}</span><br><span class="note">${esc(o.role)}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${o.wifi}" data-wifi="${esc(o.id)}"><span></span></button></label>`).join("") || '<p class="note">Aucun outil.</p>'}
+    </section>`;
+  const recharger = () => pages.invites().catch(montrerErreur);
+  const envoyer = async (corps, ok) => { try { await api("/api/invites", { method: "POST", json: corps }); if (ok) toast(ok); } catch (e) { toast(e.message, true); } recharger(); };
+  $("#actif").onclick = () => envoyer({ action: "actif", actif: !d.actif }, d.actif ? "Accès invités fermé" : "Accès invités ouvert");
+  const code = $("#code");
+  if (code) code.onclick = async () => { if (await demander({ titre: "Nouveau code ?", texte: "Les invités déjà entrés devront saisir le nouveau code, et l'ancien QR code ne marchera plus.", valider: "Changer le code" })) envoyer({ action: "code" }, "Nouveau code créé"); };
+  const imp = $("#imprimer");
+  if (imp) imp.onclick = () => {
+    const w = window.open("", "_blank");
+    if (!w) return toast("Autorise les fenêtres pour imprimer.", true);
+    w.document.write(`<title>Accès invités</title><body style="font-family:-apple-system,sans-serif;text-align:center;padding:40px"><h1>Wi-Fi : fichiers partagés</h1><img src="${location.origin}/api/invites/qr.svg" width="320"><p style="font-size:22px">Code : <b>${esc(d.code)}</b></p><p>${esc(d.url ? d.url.split("/?")[0] : d.nom_local)}</p><script>onload=()=>print()<\/script></body>`);
+    w.document.close();
+  };
+  contenu.querySelectorAll("[data-mode]").forEach((sel) => sel.addEventListener("change", () => envoyer({ action: "mode_dossier", id: sel.dataset.mode, mode: sel.value }, "Enregistré")));
+  contenu.querySelectorAll("[data-retirer]").forEach((b) => b.addEventListener("click", async () => {
+    if (await demander({ titre: "Ne plus partager ce dossier ?", texte: "Les invités ne le verront plus. Son contenu n'est pas touché.", valider: "Retirer" })) envoyer({ action: "retirer_dossier", id: b.dataset.retirer }, "Dossier retiré");
+  }));
+  contenu.querySelectorAll("[data-wifi]").forEach((b) => b.addEventListener("click", () => envoyer({ action: "wifi", outil: b.dataset.wifi, wifi: b.getAttribute("aria-checked") !== "true" }, "Enregistré")));
+  $("#ajouter-dossier").onclick = async () => {
+    const chemin = await choisirDossier();
+    if (!chemin) return;
+    const c = await menu(`Partager « ${chemin.split("/").pop()} »`, [{ texte: "En lecture seule", mode: "lecture" }, { texte: "Lire et déposer", mode: "depot" }]);
+    if (c) envoyer({ action: "ajouter_dossier", chemin, mode: c.mode }, "Dossier partagé");
+  };
+};
+
+// Petite fenêtre pour choisir un dossier du serveur.
+function choisirDossier(chemin = "/") {
+  return new Promise(async (resoudre) => {
+    let d;
+    try { d = await api("/api/invites/parcourir?chemin=" + encodeURIComponent(chemin)); } catch (e) { toast(e.message, true); return resoudre(null); }
+    const parent = chemin === "/" ? null : chemin.split("/").slice(0, -1).join("/") || "/";
+    dform.innerHTML = `<h2>Choisir un dossier</h2><p class="note">${esc(chemin === "/" ? "Dossiers du serveur" : chemin)}</p>
+      <div class="liste-dossiers">${parent !== null ? `<button class="btn" type="button" data-aller="${esc(parent)}">‹ Retour</button>` : ""}
+      ${d.elements.map((e) => `<button class="btn" type="button" data-aller="${esc(e.chemin)}"><span class="ic-dossier" aria-hidden="true"></span> ${esc(e.nom)}</button>`).join("") || '<p class="note">Pas de sous-dossier.</p>'}</div>
+      <div class="actions"><button class="btn" value="non" type="submit">Annuler</button>${chemin !== "/" ? `<button class="btn btn-p" value="oui" type="submit">Choisir ce dossier</button>` : ""}</div>`;
+    dialogue.onclose = () => resoudre(dialogue.returnValue === "oui" ? chemin : null);
+    dialogue.returnValue = "";
+    if (!dialogue.open) dialogue.showModal();
+    dform.querySelectorAll("[data-aller]").forEach((b) => b.addEventListener("click", () => {
+      dialogue.onclose = null; dialogue.close();
+      choisirDossier(b.dataset.aller).then(resoudre);
+    }));
+  });
+}
+
 // ------------------------------------------------------------ navigation
 let moi = null;
 function montrerErreur(e) { contenu.innerHTML = `<div class="entete"><div><h1>Oups</h1></div></div>${erreur(e)}`; }
 
 async function router() {
-  const [chemin, requete] = (location.hash.slice(2) || "accueil").split("?");
-  const page = pages[chemin] ? chemin : "accueil";
+  const [chemin, requete] = (location.hash.slice(2) || (moi && moi.mode === "invite" ? "invite" : "accueil")).split("?");
+  let page = pages[chemin] ? chemin : "accueil";
+  if (moi && moi.mode === "invite") page = "invite";   // sans connexion admin : seulement la page invités
   if (page !== "ouvrir") document.body.classList.remove("plein-ecran");
   document.querySelectorAll("[data-page]").forEach((a) => {
-    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && page === "journal");
+    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs"].includes(page));
     a.classList.toggle("actif", actif);
     if (actif) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
@@ -927,9 +1297,23 @@ window.addEventListener("hashchange", router);
 (async () => {
   try {
     moi = await api("/api/moi");
-    if (moi.serveur) utilisateurAdmin = moi.serveur;
-    $("#qui").innerHTML = `Connecté : ${esc(moi.nom)}<br>via Tailscale · v${esc(moi.version)}`;
+    if (moi.serveur) utilisateurAdmin = moi.serveur.toLowerCase();
+    if (moi.admin && !moi.admin.provisoire) adminConnecte = { identifiant: moi.admin.identifiant, rang: moi.admin.rang, compte_serveur: moi.admin.identifiant === utilisateurAdmin };
+    document.body.classList.toggle("mode-invite", moi.mode === "invite");
+    $("#qui").innerHTML = moi.mode === "invite"
+      ? `Mode invité · v${esc(moi.version)}`
+      : `${esc(moi.admin.identifiant)} · ${moi.admin.rang === "super" ? "super admin" : "admin"}<br>v${esc(moi.version)} · <a href="#" id="sortir">Se déconnecter</a>`;
+    const sortir = $("#sortir");
+    if (sortir) sortir.onclick = (ev) => { ev.preventDefault(); deconnexion(); };
+    // QR code invité : http://<serveur>/?c=1234 → on entre tout seul, puis on retire le code de l'adresse.
+    const code = new URLSearchParams(location.search).get("c");
+    if (code && moi.mode === "invite") {
+      history.replaceState(null, "", location.pathname + "#/invite");
+      try { await api("/api/invite/entrer", { method: "POST", json: { code } }); } catch (e) { toast(e.message, true); }
+    }
   } catch (e) { montrerErreur(e); return; }
-  router();
+  await router();
+  if (moi.remise) afficherRemise();
+  else if (moi.admin && moi.admin.provisoire) choisirMonMotDePasse(true).then((ok) => ok && location.reload());
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 })();

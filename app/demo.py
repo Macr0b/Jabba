@@ -11,7 +11,6 @@ ETAT = {
 OUTILS = [
     {"id": "adresses", "nom": "Adresses", "role": "Les adresses https des outils", "etat": "actif", "lien": None, "dossier": "/opt/stacks/adresses", "conteneurs": [{"nom": "adresse-jellyfin", "etat": "running", "statut": "Up 1 hour"}], "modifiable": True, "systeme": True, "icone": False, "dans_appli": True},
     {"id": "dockge", "nom": "Dockge", "role": "Gestion avancée des outils", "etat": "actif", "lien": "https://jabba.exemple.ts.net:10000", "dossier": "/opt/dockge", "conteneurs": [{"nom": "dockge", "etat": "running", "statut": "Up 3 days"}], "modifiable": True, "systeme": False, "icone": False, "dans_appli": True},
-    {"id": "filebrowser", "nom": "File Browser", "role": "Tous les dossiers du disque de données", "etat": "arrêté", "lien": "http://jabba.exemple.ts.net:8082", "dossier": "/opt/stacks/filebrowser", "conteneurs": [{"nom": "filebrowser", "etat": "running", "statut": "Up 3 days (healthy)"}], "modifiable": True, "systeme": False, "icone": False, "dans_appli": True},
     {"id": "jabba-app", "nom": "Appli Jabba", "role": "Cette appli", "etat": "actif", "lien": None, "dossier": "/opt/stacks/jabba-app", "conteneurs": [{"nom": "jabba-app", "etat": "running", "statut": "Up 2 minutes"}], "modifiable": False, "systeme": True, "icone": False, "dans_appli": True},
     {"id": "jellyfin", "nom": "Jellyfin", "role": "Films et séries", "etat": "actif", "lien": "https://jabba.exemple.ts.net:8443", "dossier": "/opt/stacks/jellyfin", "conteneurs": [{"nom": "jellyfin", "etat": "running", "statut": "Up 3 days (healthy)"}], "modifiable": True, "systeme": False, "icone": False, "dans_appli": True},
     {"id": "nextcloud", "nom": "Nextcloud", "role": "Fichiers, photos, agenda", "etat": "actif", "lien": "https://jabba.exemple.ts.net", "dossier": "/opt/stacks/nextcloud", "conteneurs": [{"nom": "nextcloud", "etat": "running", "statut": "Up 3 days"}, {"nom": "nextcloud-db", "etat": "running", "statut": "Up 3 days"}, {"nom": "nextcloud-redis", "etat": "running", "statut": "Up 3 days"}], "modifiable": True, "systeme": False, "icone": False, "dans_appli": False},
@@ -21,7 +20,7 @@ SYSTEME = {
     "nom": "jabba", "os": "Debian GNU/Linux 13 (trixie)", "noyau": "6.12.48-amd64", "duree": 3 * 86400 + 4 * 3600,
     "redemarrage_requis": False, "derniere_maj_auto": "2026-11-03 06:12",
     "appareils": [{"nom": "macbook", "os": "macOS", "en_ligne": True}, {"nom": "iphone", "os": "iOS", "en_ligne": True}],
-    "version_appli": "0.5.1", "courant": {"secteur": True, "batterie": 100, "etat": "Full", "arret_prevu": False},
+    "version_appli": "0.6.0", "courant": {"secteur": True, "batterie": 100, "etat": "Full", "arret_prevu": False},
 }
 
 DISQUES = [
