@@ -43,11 +43,16 @@ function formulaire({ titre, texte = "", champs, valider = "Valider", secondaire
       <div class="actions"><button class="btn" value="non" type="submit" formnovalidate>Annuler</button>
       <button class="btn btn-p" value="oui" type="submit">${esc(valider)}</button></div>`;
     dialogue.onclose = () => {
+      dform.onkeydown = null;
       if (dialogue.returnValue === "secondaire") return resoudre("secondaire");
       if (dialogue.returnValue !== "oui") return resoudre(null);
       const v = {};
       champs.forEach((c) => (v[c.nom] = dform[c.nom].value));
       resoudre(v);
+    };
+    // Entrée dans un champ = le bouton principal (sinon le navigateur prend le premier bouton : « Mot de passe oublié ? »).
+    dform.onkeydown = (e) => {
+      if (e.key === "Enter" && !e.isComposing && e.target.tagName === "INPUT") { e.preventDefault(); dialogue.close("oui"); }
     };
     dialogue.returnValue = "";
     dialogue.showModal();

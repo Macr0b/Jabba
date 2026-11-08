@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.1",
+    "date": "2026-11-08",
+    "changements": [
+      "Connexion : la touche Entrée valide le formulaire, au lieu d'ouvrir « Mot de passe oublié »."
+    ]
+  },
+  {
     "version": "0.6.0",
     "date": "2026-11-04",
     "changements": [
