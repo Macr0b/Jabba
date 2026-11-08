@@ -1,0 +1,33 @@
+# Crée la release GitHub dès qu'une nouvelle version arrive sur main.
+# Le numéro vient de app/version.py ; s'il a déjà sa release, rien ne se passe.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [app/version.py]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Créer la release si elle n'existe pas
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)
+          [ -n "$V" ] || { echo "Version introuvable"; exit 1; }
+          if gh release view "v$V" >/dev/null 2>&1; then
+            echo "v$V existe déjà"; exit 0
+          fi
+          NOTES=$(python3 -c "
+          import json
+          v = json.load(open('app/versions.json'))[0]
+          print('\n'.join('- ' + c for c in v['changements']) if v['version'] == '$V' else '')
+          ")
+          gh release create "v$V" --target "$GITHUB_SHA" --title "Jabba $V" --notes "$NOTES" --latest
