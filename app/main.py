@@ -1026,7 +1026,20 @@ def reveiller_disques():
         return
     for nom, chemin in disques_connus().items():
         if re.fullmatch(r"/[\w./-]+", chemin) and not ejecte_recemment(nom) and disque_present(chemin):
-            hote(["ls", chemin], timeout=10)
+            ouvrir_disque(chemin)
+
+
+def ouvrir_disque(chemin):
+    """Ouvre un disque branché. Si l'ouverture automatique n'est pas armée (réglage
+    modifié sans redémarrage, disque rebranché…), l'appli la réarme elle-même."""
+    hote(["ls", chemin], timeout=10)
+    if hote(["mountpoint", "-q", chemin], timeout=10)[0] == 0:
+        return True
+    _, unite, _ = hote(["systemd-escape", "--path", "--suffix=automount", chemin])
+    unite = unite.strip()
+    hote(["sh", "-c", f"systemctl daemon-reload; systemctl reset-failed '{unite[:-10]}.mount' 2>/dev/null; "
+                      f"systemctl restart '{unite}'; ls '{chemin}' >/dev/null 2>&1"], timeout=30)
+    return hote(["mountpoint", "-q", chemin], timeout=10)[0] == 0
 
 
 def mode_ecriture(chemin):
@@ -1143,9 +1156,7 @@ def disques_branches():
     for nom, chemin in disques_connus().items():
         if not re.fullmatch(r"/[\w./-]+", chemin) or ejecte_recemment(nom) or not disque_present(chemin):
             continue
-        hote(["ls", chemin], timeout=10)  # réveille l'ouverture automatique
-        code, _, _ = hote(["mountpoint", "-q", chemin], timeout=10)
-        if code == 0:
+        if ouvrir_disque(chemin):
             branches.add(nom)
     return branches
 
@@ -2053,6 +2064,7 @@ def surveiller_maj():
 
 
 def scruter_disques():
+    reveiller_disques()   # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
     disques_auto.scruter(hote, hote_entree, lambda: source() == "nextcloud",
                          lambda t, ti, tx, u: notifs.envoyer(t, ti, tx, u, famille="disque"),
                          lambda: list(disques_env()) + list(disque.racines()))

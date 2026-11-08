@@ -12,7 +12,8 @@
       "Accès invités sur le Wi-Fi : page sans compte ni appli, code à 4 chiffres ou QR code, dossiers choisis (lecture seule ou dépôt).",
       "Outils sur le Wi-Fi : chaque outil est joignable ou non depuis le réseau local ; Tailscale n'est pas touché.",
       "Alertes ciblées : chaque personne reçoit ce qui la concerne ; nouveau type d'alerte « Comptes ».",
-      "Mises à jour : les fichiers de l'appli restent au nom du propriétaire du dossier."
+      "Mises à jour : les fichiers de l'appli restent au nom du propriétaire du dossier.",
+      "Disques : un disque rebranché est ouvert tout seul en moins de 15 secondes, sans rien taper ; l'appli réarme elle-même l'ouverture automatique si besoin."
     ]
   },
   {
