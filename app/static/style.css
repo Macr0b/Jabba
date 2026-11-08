@@ -82,6 +82,11 @@ main { flex: 1; min-width: 0; padding: 36px 44px 48px; display: flex; flex-direc
 .outil .role { color: var(--texte-3); font-size: 14px; margin-top: 2px; }
 .outil .conteneurs { font-size: 13px; color: var(--texte-3); }
 
+.ligne-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: 4px 0 14px; }
+.ligne-nav .fil { margin: 0; }
+.nav-fichiers { display: flex; flex-wrap: wrap; gap: 6px; }
+.nav-fichiers .btn[disabled] { opacity: .35; cursor: default; }
+#nav-prec, #nav-suiv { min-width: 40px; font-size: 18px; line-height: 1; }
 .fil { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 15px; }
 .fil a { font-weight: 500; }
 .fil span.sep { color: var(--texte-4); }

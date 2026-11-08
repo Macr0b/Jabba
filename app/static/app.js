@@ -718,9 +718,43 @@ async function pageRecherche(q) {
   contenu.querySelectorAll("[data-ouvrir]").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); ouvrirElement(el, +a.dataset.ouvrir); }));
 }
 
+// Historique de navigation dans Fichiers : Précédent / Suivant, comme dans le Finder.
+const navFichiers = { pile: [], pos: -1, saut: null };
+function noterDossier(chemin) {
+  const n = navFichiers;
+  if (n.saut !== null && n.pile[n.saut] === chemin) n.pos = n.saut;
+  else if (n.pile[n.pos - 1] === chemin) n.pos -= 1;        // retour du navigateur ou de la souris
+  else if (n.pile[n.pos + 1] === chemin) n.pos += 1;
+  else if (n.pile[n.pos] !== chemin) { n.pile = n.pile.slice(0, n.pos + 1).concat(chemin).slice(-100); n.pos = n.pile.length - 1; }
+  n.saut = null;
+}
+function allerDansHistorique(sens) {
+  const n = navFichiers, cible = n.pos + sens;
+  if (cible < 0 || cible >= n.pile.length) return;
+  n.saut = cible;
+  location.hash = "#/fichiers?chemin=" + encodeURIComponent(n.pile[cible]);
+}
+function barreNavigation(chemin, lien, racine) {
+  const n = navFichiers, parent = "/" + chemin.split("/").filter(Boolean).slice(0, -1).join("/");
+  return `<div class="nav-fichiers" role="group" aria-label="Navigation">
+    <button class="btn btn-petit" id="nav-prec" title="Précédent (⌘[)" aria-label="Précédent"${n.pos > 0 ? "" : " disabled"}>‹</button>
+    <button class="btn btn-petit" id="nav-suiv" title="Suivant (⌘])" aria-label="Suivant"${n.pos < n.pile.length - 1 ? "" : " disabled"}>›</button>
+    ${chemin !== "/" ? `<a class="btn btn-petit" href="${lien(parent)}" title="Dossier parent (⌘↑)">↑ Dossier parent</a>
+    <a class="btn btn-petit" href="${lien("/")}" title="Revenir au début">⌂ ${esc(racine)}</a>` : ""}
+  </div>`;
+}
+document.addEventListener("keydown", (e) => {
+  if (!location.hash.startsWith("#/fichiers") || location.hash.includes("q=") || dialogue.open || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  const cmd = e.metaKey || e.ctrlKey;
+  if ((cmd && e.key === "[") || (e.altKey && e.key === "ArrowLeft")) { e.preventDefault(); allerDansHistorique(-1); }
+  else if ((cmd && e.key === "]") || (e.altKey && e.key === "ArrowRight")) { e.preventDefault(); allerDansHistorique(1); }
+  else if (cmd && e.key === "ArrowUp") { e.preventDefault(); const h = $("#nav-fichiers-parent"); if (h) location.hash = h.getAttribute("href"); }
+});
+
 pages.fichiers = async (params) => {
   if (params.get("q")) return pageRecherche(params.get("q"));
   const chemin = params.get("chemin") || "/";
+  noterDossier(chemin);
   contenu.innerHTML = `<div class="entete"><div><h1>Fichiers</h1></div></div>${chargement(5)}`;
   const d = await api("/api/fichiers?chemin=" + encodeURIComponent(chemin));
   const morceaux = chemin.split("/").filter(Boolean);
@@ -743,7 +777,8 @@ pages.fichiers = async (params) => {
       </div>
     </div>
     ${barreRecherche()}
-    <nav class="fil" aria-label="Emplacement">${fil}</nav>
+    <div class="ligne-nav">${barreNavigation(chemin, lien, d.source === "disque" ? "Serveur" : "Nextcloud")}
+    <nav class="fil" aria-label="Emplacement">${fil}</nav></div>
     <section class="carte tableau" aria-label="Contenu du dossier">
       <div class="ligne titres"><span>Nom</span><span class="col-l">Taille</span><span class="col-l">Modifié</span><span></span></div>
       ${d.elements.length ? d.elements.map((e, i) => `
@@ -760,6 +795,10 @@ pages.fichiers = async (params) => {
     <input type="file" id="choix" multiple hidden>`;
 
   const recharger = () => pages.fichiers(params).catch(montrerErreur);
+  $("#nav-prec").onclick = () => allerDansHistorique(-1);
+  $("#nav-suiv").onclick = () => allerDansHistorique(1);
+  const lienParent = contenu.querySelector(".nav-fichiers a");
+  if (lienParent) lienParent.id = "nav-fichiers-parent";
   brancherRecherche();
   contenu.querySelectorAll("[data-ouvrir]").forEach((a) => a.addEventListener("click", (ev) => {
     const e = d.elements[+a.dataset.ouvrir];
