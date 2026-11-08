@@ -276,3 +276,14 @@ body.mode-invite main { margin: 0 auto; }
 .liste-dossiers { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
 .liste-dossiers .btn { justify-content: flex-start; display: flex; gap: 10px; align-items: center; text-align: left; }
 .tableau select { width: auto; padding: 6px 8px; font-size: 14px; }
+
+/* Serveur injoignable et Aide */
+.pistes h2 { font-size: 17px; margin: 0 0 12px; }
+.pistes ol { margin: 0; padding-left: 22px; display: grid; gap: 14px; }
+.pistes li strong { display: block; margin-bottom: 2px; }
+.pistes li span { color: var(--texte-2); }
+.aide details { border-top: 1px solid var(--bord); padding: 0 20px; }
+.aide details:first-child { border-top: 0; }
+.aide summary { cursor: pointer; font-weight: 600; padding: 16px 0; list-style-position: inside; }
+.aide ul { margin: 0 0 16px; padding-left: 20px; display: grid; gap: 8px; color: var(--texte-2); }
+.barre-laterale .lien-aide { margin-bottom: 8px; }

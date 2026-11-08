@@ -3,6 +3,8 @@
     "version": "0.6.1",
     "date": "2026-11-08",
     "changements": [
+      "Serveur injoignable : au lieu d'une page blanche, Jabba le dit, propose les pistes dans l'ordre et se recharge toute seule dès que le serveur répond.",
+      "Aide : une page de pistes et solutions aux soucis courants, accessible même quand le serveur ne répond pas.",
       "Fichiers : boutons Précédent et Suivant, Dossier parent et retour au début ; raccourcis ⌘[ ⌘] et ⌘↑ comme dans le Finder.",
       "Disques : quand un disque est branché, Nextcloud relit son contenu tout seul et reprend son réglage lecture seule.",
       "Connexion : la touche Entrée valide le formulaire, au lieu d'ouvrir « Mot de passe oublié »."
