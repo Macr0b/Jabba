@@ -1098,7 +1098,7 @@ def noter_visite(chemin):
 
 def disques_env():
     res = {}
-    for morceau in os.environ.get("DISQUES", "R2-D2=/srv/externe").split(","):
+    for morceau in os.environ.get("DISQUES", "").split(","):
         if "=" in morceau:
             nom, chemin = morceau.split("=", 1)
             res[nom.strip()] = chemin.strip()

@@ -30,7 +30,7 @@ DISQUES = [
     {"nom": "sda", "modele": "HDD 1 To", "taille": 10 ** 12, "externe": False, "partitions": [
         {"nom": "sda1", "taille": 10 ** 12, "type": "ext4", "etiquette": "data", "montage": "/srv/data", "role": "Données", "usage": {"total": 916 * G, "utilise": 12 * G}}]},
     {"nom": "sdc", "modele": "R2-D2", "taille": 2 * 10 ** 12, "externe": True, "partitions": [
-        {"nom": "sdc1", "taille": 2 * 10 ** 12, "type": "exfat", "etiquette": "R2-D2", "montage": "/srv/externe", "role": "Disque externe", "usage": {"total": 1863 * G, "utilise": 1210 * G}, "disque_jabba": {"nom": "R2-D2", "ecriture": False, "auto": False}}]},
+        {"nom": "sdc1", "taille": 2 * 10 ** 12, "type": "exfat", "etiquette": "R2-D2", "montage": "/srv/disques/R2-D2", "role": "Disque externe", "usage": {"total": 1863 * G, "utilise": 1210 * G}, "disque_jabba": {"nom": "R2-D2", "ecriture": False, "auto": False}}]},
     {"nom": "sdd", "modele": "Clé USB", "taille": 64 * 10 ** 9, "externe": True, "partitions": [
         {"nom": "sdd1", "taille": 64 * 10 ** 9, "type": "exfat", "etiquette": "PHOTOS 2019", "montage": "/srv/disques/PHOTOS-2019", "role": "Disque externe", "usage": {"total": 59 * G, "utilise": 22 * G}, "disque_jabba": {"nom": "PHOTOS 2019", "ecriture": False, "auto": True}}]},
     {"nom": "sde", "modele": "Disque Mac", "taille": 500 * 10 ** 9, "externe": True, "partitions": [
