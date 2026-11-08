@@ -1029,9 +1029,49 @@ def reveiller_disques():
             ouvrir_disque(chemin)
 
 
+_OUVERTS = set()   # disques vus ouverts au dernier passage
+
+
 def ouvrir_disque(chemin):
     """Ouvre un disque branché. Si l'ouverture automatique n'est pas armée (réglage
-    modifié sans redémarrage, disque rebranché…), l'appli la réarme elle-même."""
+    modifié sans redémarrage, disque rebranché…), l'appli la réarme elle-même.
+    Quand un disque vient d'être (re)branché, Nextcloud refait son inventaire."""
+    ok = _ouvrir(chemin)
+    if ok and chemin not in _OUVERTS:
+        threading.Thread(target=actualiser_nextcloud, args=(chemin,), daemon=True).start()
+    (_OUVERTS.add if ok else _OUVERTS.discard)(chemin)
+    return ok
+
+
+def actualiser_nextcloud(chemin):
+    """Nextcloud garde en mémoire le contenu d'un disque, même vide (disque débranché) :
+    on lui fait relire le disque et on remet son réglage lecture seule / écriture."""
+    occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
+    code, sortie, _ = hote(occ + ["files_external:list", "--output=json"], timeout=60)
+    if code != 0:
+        return   # Nextcloud arrêté ou absent
+    try:
+        montages = json.loads(sortie)
+    except ValueError:
+        return
+    code, sortie, _ = hote(occ + ["user:list", "--output=json"], timeout=60)
+    try:
+        utilisateurs = list(json.loads(sortie)) if code == 0 else []
+    except ValueError:
+        utilisateurs = []
+    dossier = os.path.basename(chemin.rstrip("/"))
+    for m in montages:
+        if (m.get("configuration") or {}).get("datadir", "").rstrip("/") != f"/mnt/disques/{dossier}":
+            continue
+        hote(occ + ["files_external:option", str(m["mount_id"]), "readonly",
+                    "false" if mode_ecriture(chemin) else "true"], timeout=60)
+        point = m.get("mount_point", "").strip("/")
+        for u in m.get("applicable_users") or utilisateurs:
+            hote(occ + ["files:scan", f"--path=/{u}/files/{point}"], timeout=3600)
+    journal.noter("disque", f"Nextcloud a relu {dossier}")
+
+
+def _ouvrir(chemin):
     hote(["ls", chemin], timeout=10)
     if hote(["mountpoint", "-q", chemin], timeout=10)[0] == 0:
         return True

@@ -4,6 +4,7 @@
     "date": "2026-11-08",
     "changements": [
       "Fichiers : boutons Précédent et Suivant, Dossier parent et retour au début ; raccourcis ⌘[ ⌘] et ⌘↑ comme dans le Finder.",
+      "Disques : quand un disque est branché, Nextcloud relit son contenu tout seul et reprend son réglage lecture seule.",
       "Connexion : la touche Entrée valide le formulaire, au lieu d'ouvrir « Mot de passe oublié »."
     ]
   },
