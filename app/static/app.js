@@ -974,7 +974,7 @@ pages.utilisateurs = async () => {
       ${d.comptes.map((c, i) => `
         <div class="ligne">
           <span class="nom"><span class="avatar" aria-hidden="true">${esc((c.nom || c.identifiant)[0].toUpperCase())}</span>
-            <span>${esc(c.nom)}<span class="detail-chemin">${esc(c.identifiant)}${c.systeme ? " · mot de passe du serveur" : c.tailscale ? " · Tailscale : " + esc(c.tailscale) : " · sans compte Tailscale"}${c.provisoire ? " · mot de passe provisoire" : ""}</span>
+            <span>${esc(c.nom)}<span class="detail-chemin">${esc(c.identifiant)}${c.systeme ? " · mot de passe du serveur" : c.tailscale ? " · Tailscale : " + esc(c.tailscale) : " · sans compte Tailscale"}${c.provisoire ? " · mot de passe provisoire" : ""}${c.rang === "super" && !c.systeme && c.terminal === false ? " · sans terminal" : ""}</span>
             <span class="mobile-detail">${RANG[c.rang]}</span></span></span>
           <span class="col-l"><span class="pastille ${c.rang === "super" ? "p-alerte" : "p-gris"}">${RANG[c.rang]}</span></span>
           <span class="gris col-l">${c.systeme ? "—" : esc(ilYa(c.derniere_connexion))}</span>
@@ -1055,6 +1055,8 @@ pages.utilisateurs = async () => {
       } },
     ];
     if (superAdmin) choix.push({ texte: c.rang === "super" ? "Passer admin" : "Nommer super admin", f: () => action({ action: "rang", rang: c.rang === "super" ? "admin" : "super" }, "Rang changé") });
+    if (superAdmin && c.rang === "super") choix.push({ texte: c.terminal === false ? "Autoriser le terminal" : "Retirer le terminal",
+      f: () => action({ action: "terminal", terminal: c.terminal === false }, c.terminal === false ? "Terminal autorisé" : "Terminal retiré") });
     choix.push({ texte: "Retirer ce compte", danger: true, f: async () => {
       if (await demander({ titre: `Retirer ${c.nom} ?`, texte: "Il ne pourra plus faire d'action admin" + (c.tailscale ? " ni ouvrir l'appli" : "") + ".", valider: "Retirer", danger: true })) action({ action: "supprimer" }, "Compte retiré");
     } });
@@ -1479,7 +1481,7 @@ const TOUCHES_TERMINAL = [["Échap", "\x1b"], ["Tab", "\t"], ["Ctrl+C", "\x03"],
 
 pages.terminal = async () => {
   if (terminalOuvert) terminalOuvert.fin();
-  contenu.innerHTML = `<div class="entete"><div><h1>Terminal</h1><p class="sous-titre">Le serveur, comme en SSH. <code>sudo</code> redemande le mot de passe du serveur.</p></div>
+  contenu.innerHTML = `<div class="entete"><div><h1>Terminal</h1><p class="sous-titre">Le serveur, comme en SSH, avec le compte du serveur. <code>sudo</code> redemande son mot de passe. Chaque commande est notée au Journal à ton nom.</p></div>
       <div class="actions"><a class="btn" href="#/systeme">← Système</a></div></div>
     <div class="terminal-zone" id="terminal"><p class="note" style="padding:16px">Ouverture…</p></div>
     <div class="touches-terminal">${TOUCHES_TERMINAL.map(([n], i) => `<button class="btn btn-petit" type="button" data-touche="${i}">${n}</button>`).join("")}</div>`;

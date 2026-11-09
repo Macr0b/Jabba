@@ -22,6 +22,7 @@ import httpx
 import admin
 import comptes
 import invites
+import secrets
 import sessions
 import terminal
 import disque
@@ -427,7 +428,7 @@ async def api_comptes_modifier(cid: str, request: Request):
     j = exiger_espace(request)
     corps = await request.json()
     action = corps.get("action")
-    if action in ("supprimer", "rang"):
+    if action in ("supprimer", "rang", "terminal"):
         exiger_admin(request, fort=True)
     if action == "supprimer":
         c = cmp(lambda: comptes.supprimer(cid, j["rang"]))
@@ -440,13 +441,16 @@ async def api_comptes_modifier(cid: str, request: Request):
     elif action == "tailscale":
         c = cmp(lambda: comptes.modifier(cid, j["rang"], tailscale=corps.get("tailscale") or None))
         texte = f"{c['identifiant']} : compte Tailscale {c['tailscale'] or 'retiré'}"
+    elif action == "terminal":
+        c = cmp(lambda: comptes.modifier(cid, j["rang"], terminal=bool(corps.get("terminal"))))
+        texte = f"Terminal {'autorisé' if c['terminal'] else 'retiré'} pour {c['identifiant']}"
     elif action == "nom":
         c = cmp(lambda: comptes.modifier(cid, j["rang"], nom=corps.get("nom") or ""))
         texte = f"{c['identifiant']} renommé « {c['nom']} »"
     else:
         raise HTTPException(400, "Action inconnue.")
     journal.noter("admin", f"{texte}, par {j['identifiant']}", request.state.nom)
-    if action in ("supprimer", "rang"):
+    if action in ("supprimer", "rang", "terminal"):
         notifs.envoyer("comptes", "Comptes modifiés", f"{texte}, par {j['identifiant']}.", "/#/utilisateurs",
                        famille="admin", pour=pour_super(), noter=False)
     return {"ok": True, "compte": c}
@@ -849,6 +853,10 @@ def api_systeme():
 def api_terminal_ticket(request: Request):
     """Réservé au super admin, mot de passe récent. Le ticket ouvre une seule connexion, dans les 30 s."""
     j = exiger_super(request, fort=True)
+    if j["identifiant"] != nom_hote():
+        c = comptes.trouver(j["identifiant"])
+        if c and c.get("terminal") is False:
+            raise HTTPException(403, "Le terminal t'a été retiré par un super admin.")
     notifs.envoyer("securite", "Terminal ouvert", f"{j['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
                    "/#/journal", famille="admin")
     return {"ticket": terminal.nouveau_ticket(j["identifiant"], request.state.nom), "compte": admin_user()}
@@ -863,13 +871,24 @@ async def ws_terminal(ws: WebSocket, ticket: str = ""):
         await ws.close(code=4403)
         return
     await ws.accept()
+    compte = admin_user()
+    sid = secrets.token_hex(4)
+    # Chaque commande tapée part au journal du serveur, signée par le compte Jabba
+    # (pas seulement par le compte Linux, partagé par tous les super admins).
+    env = {"JABBA_QUI": qui["qui"], "JABBA_SESSION": sid}
     if DEMO:
-        commande = ["bash", "--norc", "-i"]
+        commande = ["bash", "--rcfile", terminal.preparer_rc(None), "-i"]
     else:
-        commande = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "runuser", "-l", admin_user()]
+        rc = terminal.preparer_rc(lambda contenu: hote_entree(
+            ["sh", "-c", "mkdir -p /usr/local/lib/jabba && cat > /usr/local/lib/jabba/terminal.bashrc"], contenu))
+        commande = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--",
+                    "runuser", "-u", compte, "--", "bash", "--rcfile", rc, "-i"]
     debut = time.time()
-    await terminal.relier(ws, commande, demo=DEMO)
-    journal.noter("admin", f"Terminal fermé ({qui['qui']}, {round((time.time() - debut) / 60)} min)")
+    journal.noter("admin", f"Terminal ouvert par {qui['qui']} (compte {compte} du serveur)", qui["nom"])
+    await terminal.relier(ws, commande, demo=DEMO, env=env)
+    for cmd in terminal.commandes(sid, debut, None if DEMO else hote):
+        journal.noter("admin", f"Terminal · {qui['qui']} : {cmd}", qui["nom"])
+    journal.noter("admin", f"Terminal fermé ({qui['qui']}, {max(1, round((time.time() - debut) / 60))} min)", qui["nom"])
 
 
 @app.post("/api/systeme/redemarrer")

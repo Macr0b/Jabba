@@ -40,7 +40,7 @@ Tout est en français. Aucune dépendance externe dans l'interface.
 - La page invités du Wi-Fi est un serveur à part (port 80, réseau local seulement) qui ne connaît **que** les pages invités : aucune connexion admin n'y est possible. Les outils non ouverts au Wi-Fi sont bloqués sur le réseau local par un filtre réseau.
 - **Ce dépôt ne contient aucun secret** : ni adresse, ni nom de serveur, ni mot de passe. Chaque serveur garde ses réglages dans son propre `.env` et ses données dans `donnees/`, jamais publiés.
 - **Le dépôt ne peut rien envoyer à un serveur.** C'est le serveur qui regarde s'il existe une nouvelle version, et rien ne s'installe sans le clic d'un admin.
-- Le terminal de l'appli ouvre un shell sur le serveur avec le compte du serveur (`sudo` y redemande le mot de passe). Il est réservé au super admin, demande un mot de passe saisi depuis moins de 10 minutes, passe par un ticket à usage unique valable 30 secondes, et chaque ouverture envoie une alerte.
+- Le terminal de l'appli ouvre un shell sur le serveur avec le compte du serveur (`sudo` y redemande le mot de passe). Il est réservé au super admin, demande un mot de passe saisi depuis moins de 10 minutes, passe par un ticket à usage unique valable 30 secondes, chaque ouverture envoie une alerte, et chaque commande tapée est notée au Journal au nom du compte Jabba qui l'a tapée (le compte Linux, lui, est partagé). Un super admin peut retirer le terminal à un autre.
 - Pour piloter le serveur (Docker, disques, courant), le conteneur de l'appli a des droits étendus sur la machine (`privileged`, `pid: host`). C'est pour ça qu'il n'est joignable que par Tailscale.
 
 ## Installation

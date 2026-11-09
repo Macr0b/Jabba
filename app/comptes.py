@@ -65,7 +65,9 @@ def _empreinte(mdp, sel):
 
 
 def _public(c):
-    return {k: c.get(k) for k in ("id", "identifiant", "nom", "rang", "tailscale", "provisoire", "cree", "cree_par", "derniere_connexion")}
+    r = {k: c.get(k) for k in ("id", "identifiant", "nom", "rang", "tailscale", "provisoire", "cree", "cree_par", "derniere_connexion")}
+    r["terminal"] = c.get("terminal", True)   # les super admins ont le terminal, sauf s'il leur est retiré
+    return r
 
 
 def valider_mot_de_passe(mdp):
@@ -175,7 +177,7 @@ def _compte(d, cid):
     raise Refus(404, "Compte introuvable.")
 
 
-def modifier(cid, rang_par, rang=None, tailscale=False, nom=None):
+def modifier(cid, rang_par, rang=None, tailscale=False, nom=None, terminal=None):
     with _verrou:
         d = _lire()
         c = _compte(d, cid)
@@ -189,6 +191,10 @@ def modifier(cid, rang_par, rang=None, tailscale=False, nom=None):
             c["tailscale"] = _verifier_login(tailscale)
         if nom is not None:
             c["nom"] = nom.strip()[:60] or c["identifiant"]
+        if terminal is not None:
+            if rang_par != "super":
+                raise Refus(403, "Seul un super admin peut régler l'accès au terminal.")
+            c["terminal"] = bool(terminal)
         _ecrire(d)
         return _public(c)
 

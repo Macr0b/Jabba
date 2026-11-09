@@ -44,7 +44,56 @@ def _taille(fd, lignes, colonnes):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", lignes, colonnes, 0, 0))
 
 
-def lancer(commande, demo=False):
+RC = r"""# Terminal de l'appli Jabba : réglages du shell, puis chaque commande part au journal du serveur.
+[ -f ~/.bashrc ] && . ~/.bashrc
+cd ~
+HISTCONTROL=
+__jabba_dernier=
+__jabba_noter() {
+  local n=$HISTCMD
+  if [ -n "$__jabba_dernier" ] && [ "$n" != "$__jabba_dernier" ]; then
+    logger -t jabba-terminal -- "$JABBA_SESSION $JABBA_QUI : $(fc -ln -1 | sed 's/^[[:space:]]*//')"
+  fi
+  __jabba_dernier=$n
+}
+PROMPT_COMMAND="__jabba_noter${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+echo "Connecté au compte $(whoami) du serveur. Tes commandes sont notées au Journal de Jabba au nom de $JABBA_QUI."
+"""
+CHEMIN_RC = "/usr/local/lib/jabba/terminal.bashrc"
+FICHIER_DEMO = "/tmp/jabba-terminal-demo.log"
+
+
+def preparer_rc(ecrire):
+    """Écrit le fichier de démarrage du shell sur le serveur (ou en démo, à côté) et renvoie son chemin."""
+    if ecrire is None:   # démo : pas de journal système, on note dans un fichier
+        chemin = "/tmp/jabba-terminal.bashrc"
+        with open(chemin, "w") as f:
+            f.write(RC.replace('logger -t jabba-terminal -- ', f'echo >> {FICHIER_DEMO} '))
+        return chemin
+    ecrire(RC)
+    return CHEMIN_RC
+
+
+def commandes(sid, debut, hote):
+    """Les commandes tapées pendant la session `sid`, dans l'ordre (200 au plus)."""
+    if hote is None:
+        try:
+            lignes = open(FICHIER_DEMO).read().splitlines()
+        except OSError:
+            lignes = []
+    else:
+        _, sortie, _ = hote(["journalctl", "-t", "jabba-terminal", "--since", f"@{int(debut) - 1}", "-o", "cat", "--no-pager"])
+        lignes = sortie.splitlines()
+    res = []
+    for l in lignes:
+        if l.startswith(sid + " "):
+            cmd = l[len(sid) + 1:].split(" : ", 1)[-1].strip()
+            if cmd:
+                res.append(cmd[:300])
+    return res[:200]
+
+
+def lancer(commande, demo=False, env_sup=None):
     """Ouvre un shell dans un pseudo-terminal. Renvoie (processus, descripteur maître)."""
     maitre, esclave = pty.openpty()
 
@@ -55,6 +104,7 @@ def lancer(commande, demo=False):
     env = {"TERM": "xterm-256color", "LANG": "C.UTF-8", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
     if demo:
         env["HOME"] = "/tmp"
+    env.update(env_sup or {})
     p = subprocess.Popen(commande, stdin=esclave, stdout=esclave, stderr=esclave, preexec_fn=prepare,
                          close_fds=True, env=env)
     os.close(esclave)
@@ -62,9 +112,9 @@ def lancer(commande, demo=False):
     return p, maitre
 
 
-async def relier(ws, commande, demo=False):
+async def relier(ws, commande, demo=False, env=None):
     """Fait passer les octets entre la page (xterm.js) et le shell, jusqu'à ce que l'un des deux s'arrête."""
-    p, fd = lancer(commande, demo)
+    p, fd = lancer(commande, demo, env)
     OUVERTS[p.pid] = {"debut": time.time()}
     boucle = asyncio.get_running_loop()
     sortie = asyncio.Queue()

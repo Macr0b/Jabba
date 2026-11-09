@@ -3,7 +3,7 @@
     "version": "0.7.0",
     "date": "2026-11-09",
     "changements": [
-      "Terminal du serveur dans l'appli (Système → Terminal) : réservé au super admin, mot de passe redemandé, alerte « Terminal ouvert » sur le téléphone. Touches Échap, Tab, Ctrl+C et flèches sur iPhone.",
+      "Terminal du serveur dans l'appli (Système → Terminal), avec le compte du serveur : pour les super admins, mot de passe redemandé, alerte « Terminal ouvert » sur le téléphone. Chaque commande tapée est notée au Journal au nom de la personne. Un super admin peut retirer le terminal à un autre (Utilisateurs). Touches Échap, Tab, Ctrl+C et flèches sur iPhone.",
       "Fichiers : une rangée en haut pour choisir où naviguer — Mes fichiers, chaque espace et chaque disque branché (R2-D2…).",
       "Mises à jour : si une installation échoue, Système l'affiche avec le détail et un bouton Réessayer, et une alerte part sur le téléphone, au lieu d'une attente sans fin.",
       "Mises à jour : avant chaque installation, l'appli remet elle-même les bons droits sur ses fichiers (cause de l'échec rencontré).",
