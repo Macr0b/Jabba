@@ -245,7 +245,11 @@ TS_LOGIN=$(tailscale status --json | jq -r '.User[(.Self.UserID|tostring)].Login
 TS_NOM=$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//')
 [ -n "$TS_LOGIN" ] || echec "Compte Tailscale introuvable."
 ok "Connecté : $TS_NOM (compte $TS_LOGIN)"
-note "Dans la console Tailscale (login.tailscale.com/admin/machines) : sur la ligne $SERVEUR, … → Disable key expiry."
+if [ -n "$(tailscale status --json | jq -r '.Self.KeyExpiry // empty')" ]; then
+  note "Dans la console Tailscale (login.tailscale.com/admin/machines) : sur la ligne $SERVEUR, … → Disable key expiry. Sinon le serveur se déconnecte dans quelques mois."
+else
+  ok "Clé Tailscale sans date d'expiration"
+fi
 
 # ------------------------------------------------------------ 8. Docker
 etape "Docker"
