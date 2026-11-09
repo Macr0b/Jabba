@@ -5,7 +5,7 @@
     "changements": [
       "Mises à jour : si une installation échoue, Système l'affiche avec le détail et un bouton Réessayer, et une alerte part sur le téléphone, au lieu d'une attente sans fin.",
       "Mises à jour : avant chaque installation, l'appli remet elle-même les bons droits sur ses fichiers (cause de l'échec rencontré).",
-      "Mises à jour : suivi de l'avancement pendant la reconstruction, jusqu'à 20 minutes."
+      "Mises à jour : une barre d'avancement montre l'étape en cours (téléchargement, construction, redémarrage), avec le temps écoulé."
     ]
   },
   {

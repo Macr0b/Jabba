@@ -287,3 +287,7 @@ body.mode-invite main { margin: 0 auto; }
 .aide summary { cursor: pointer; font-weight: 600; padding: 16px 0; list-style-position: inside; }
 .aide ul { margin: 0 0 16px; padding-left: 20px; display: grid; gap: 8px; color: var(--texte-2); }
 .barre-laterale .lien-aide { margin-bottom: 8px; }
+
+/* Barre d'avancement des mises à jour */
+.barre-maj { height: 8px; border-radius: 99px; background: var(--bord); overflow: hidden; margin-bottom: 8px; }
+.barre-maj span { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .8s ease; }

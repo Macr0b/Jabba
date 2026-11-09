@@ -1849,10 +1849,10 @@ def etat_maj():
         return {"statut": "aucune"}
     u = MAJ["unite"] + ".service"
     _, actif, _ = hote(["systemctl", "show", "-p", "ActiveState", "--value", u])
-    _, log, _ = hote(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "40"])
+    _, log, _ = hote(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "300"])
     lignes = [l for l in log.splitlines() if l.strip()]
     if actif.strip() in ("active", "activating", "reloading"):
-        return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"])}
+        return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"]), **avancement_maj(lignes)}
     if any("Failed with result" in l or "status=" in l and "status=0/" not in l for l in lignes):
         detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
         if not MAJ["signale"]:
@@ -1863,11 +1863,29 @@ def etat_maj():
     return {"statut": "termine", "version": MAJ["version"]}
 
 
+def avancement_maj(lignes):
+    """Étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure."""
+    texte = "\n".join(lignes)
+    if re.search(r"Container \S+\s+(Recreate|Starting|Started|Running)", texte):
+        return {"etape": "Redémarrage de l'appli", "pourcent": 92}
+    etapes = re.findall(r"\[(?:[\w-]+ )?(\d+)/(\d+)\]", texte)
+    if etapes:
+        x, y = (int(v) for v in etapes[-1])
+        return {"etape": f"Construction de l'appli (étape {x} sur {y})", "pourcent": 20 + round(65 * x / max(y, 1))}
+    if re.search(r"Building|building|load build definition|resolve image config", texte):
+        return {"etape": "Construction de l'appli", "pourcent": 20}
+    return {"etape": "Téléchargement de la nouvelle version", "pourcent": 8}
+
+
 @app.get("/api/appli/maj/etat")
 def api_appli_maj_etat(request: Request):
     exiger_admin(request)
     if DEMO:
-        return {"statut": os.environ.get("JABBA_DEMO_MAJ", "en_cours"), "version": "0.7.0",
+        if os.environ.get("JABBA_DEMO_MAJ", "en_cours") == "en_cours":
+            t = int(time.time()) % 60
+            return {"statut": "en_cours", "version": "0.7.0", "depuis": t,
+                    **avancement_maj([f"#9 [jabba {1 + t // 10}/6] RUN pip install"] if t > 5 else [])}
+        return {"statut": os.environ.get("JABBA_DEMO_MAJ"), "version": "0.7.0",
                 "detail": ["erreur : droits insuffisants pour ajouter un objet à la base de données .git/objects du dépôt", "fatal : failed to write object"]}
     return etat_maj()
 
