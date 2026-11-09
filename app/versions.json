@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.7.1",
+    "date": "2026-11-09",
+    "changements": [
+      "Terminal : il parle la langue du serveur (sudo et les messages en français)."
+    ]
+  },
+  {
     "version": "0.7.0",
     "date": "2026-11-09",
     "changements": [
