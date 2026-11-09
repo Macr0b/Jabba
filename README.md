@@ -45,7 +45,17 @@ Tout est en français. Aucune dépendance externe dans l'interface.
 
 ## Installation
 
-Prérequis : un serveur Debian avec le socle Jabba (Tailscale, Docker, `git`).
+**Automatique (recommandé).** Sur un Debian 13 tout juste installé (avec le serveur SSH), depuis le compte créé à l'installation :
+
+```bash
+curl -fsSL https://github.com/Macr0b/Jabba/raw/main/installer.sh -o installer.sh && sudo bash installer.sh
+```
+
+Le script fait tout le socle de la méthode, puis installe l'appli : boîte noire, mises à jour automatiques, réseau qui se rétablit tout seul, réglages du portable (capot, écran, batterie), disque de données, Tailscale, Docker, SSH par clé seulement, Dockge et Jabba. Il ne demande que deux choses : le disque de données (rien n'est effacé sans taper `EFFACER`) et la connexion à Tailscale. On peut le relancer sans risque. Tout est noté dans `/var/log/jabba-installation.log`.
+
+Avant de le lancer, ajoute ta clé SSH depuis ton ordinateur (`ssh-copy-id moi@<adresse du serveur>`) : le script ferme alors la connexion par mot de passe.
+
+**À la main.** Prérequis : un serveur Debian avec le socle Jabba (Tailscale, Docker, `git`).
 
 ```bash
 sudo mkdir -p /opt/stacks /srv/disques && sudo chown "$USER": /opt/stacks
