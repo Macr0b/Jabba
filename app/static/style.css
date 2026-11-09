@@ -304,3 +304,10 @@ body.mode-invite main { margin: 0 auto; }
 .ic-disque::after { content: ""; position: absolute; right: 3px; top: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--carte); }
 .ic-maison { width: 14px; height: 12px; background: currentColor; flex-shrink: 0;
   clip-path: polygon(50% 0, 100% 45%, 86% 45%, 86% 100%, 14% 100%, 14% 45%, 0 45%); }
+
+/* Terminal du serveur */
+.terminal-zone { height: calc(100vh - 230px); min-height: 280px; background: #101318; border-radius: 12px; padding: 8px; overflow: hidden; }
+.terminal-zone .xterm { height: 100%; }
+.touches-terminal { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+@media (min-width: 900px) { .touches-terminal { display: none; } }
+@media (max-width: 899px) { .terminal-zone { height: calc(100vh - 300px); } }

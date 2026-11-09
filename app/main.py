@@ -23,12 +23,13 @@ import admin
 import comptes
 import invites
 import sessions
+import terminal
 import disque
 import disques_auto
 import journal
 import maj
 import notifs
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from starlette.datastructures import UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from xml.sax.saxutils import escape as xml_escape
@@ -841,6 +842,34 @@ def api_systeme():
         "derniere_maj_auto": derniere, "appareils": sorted(appareils, key=lambda a: (not a["en_ligne"], a["nom"] or "")),
         "version_appli": VERSION, "courant": COURANT,
     }
+
+
+# ---------------------------------------------------------------- terminal du serveur
+@app.post("/api/terminal/ticket")
+def api_terminal_ticket(request: Request):
+    """Réservé au super admin, mot de passe récent. Le ticket ouvre une seule connexion, dans les 30 s."""
+    j = exiger_super(request, fort=True)
+    notifs.envoyer("securite", "Terminal ouvert", f"{j['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
+                   "/#/journal", famille="admin")
+    return {"ticket": terminal.nouveau_ticket(j["identifiant"], request.state.nom), "compte": admin_user()}
+
+
+@app.websocket("/api/terminal/ws")
+async def ws_terminal(ws: WebSocket, ticket: str = ""):
+    hote_page = (ws.headers.get("host") or "").split(":")[0]
+    origine = (ws.headers.get("origin") or "").split("//")[-1].split(":")[0]
+    qui = terminal.prendre_ticket(ticket)
+    if not qui or not origine or origine != hote_page:
+        await ws.close(code=4403)
+        return
+    await ws.accept()
+    if DEMO:
+        commande = ["bash", "--norc", "-i"]
+    else:
+        commande = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "runuser", "-l", admin_user()]
+    debut = time.time()
+    await terminal.relier(ws, commande, demo=DEMO)
+    journal.noter("admin", f"Terminal fermé ({qui['qui']}, {round((time.time() - debut) / 60)} min)")
 
 
 @app.post("/api/systeme/redemarrer")

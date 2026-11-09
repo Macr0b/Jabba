@@ -535,7 +535,7 @@ pages.systeme = async () => {
   const [s, a] = await Promise.all([api("/api/systeme"), api("/api/admin/etat")]);
   contenu.innerHTML = `
     <div class="entete"><div><h1>Système</h1><p class="sous-titre">${esc(s.nom)} · ${esc(s.os)}</p></div>
-      <div class="actions"><button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
+      <div class="actions">${adminConnecte && adminConnecte.rang === "super" ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
     ${s.redemarrage_requis ? `<div class="bandeau"><span>Une mise à jour attend un redémarrage. Il se fera automatiquement à 4 h, ou maintenant avec le bouton.</span></div>` : ""}
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
@@ -607,6 +607,7 @@ pages.plus = async () => {
       <a href="#/invites"><span>Invités</span><span>›</span></a>
       <a href="#" id="sortir-mobile"><span>Se déconnecter</span><span>›</span></a>
       <a href="#/journal"><span>Journal</span><span>›</span></a>
+      <a href="#/terminal"><span>Terminal</span><span>›</span></a>
       <a href="#/aide"><span>Aide</span><span>›</span></a>
     </section><p class="note" id="qui-mobile"></p>`;
   if (moi && moi.admin) $("#qui-mobile").textContent = `Connecté en ${moi.admin.rang === "super" ? "super admin" : "admin"} : ${moi.admin.identifiant} · version ${moi.version}`;
@@ -1462,6 +1463,67 @@ pages.aide = async () => {
   $("#retour-aide").onclick = () => (history.length > 1 ? history.back() : (location.hash = "#/accueil"));
 };
 
+// ------------------------------------------------------------ terminal du serveur
+// xterm.js est livré avec l'appli (static/vendor), chargé seulement sur cette page.
+let terminalOuvert = null;   // {ws, term, fin()}
+function chargerXterm() {
+  if (window.Terminal && window.FitAddon) return Promise.resolve();
+  const lien = document.createElement("link");
+  lien.rel = "stylesheet"; lien.href = "/static/vendor/xterm.css";
+  document.head.appendChild(lien);
+  const script = (src) => new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+  return script("/static/vendor/xterm.js").then(() => script("/static/vendor/addon-fit.js"));
+}
+
+const TOUCHES_TERMINAL = [["Échap", "\x1b"], ["Tab", "\t"], ["Ctrl+C", "\x03"], ["Ctrl+D", "\x04"], ["↑", "\x1b[A"], ["↓", "\x1b[B"], ["←", "\x1b[D"], ["→", "\x1b[C"]];
+
+pages.terminal = async () => {
+  if (terminalOuvert) terminalOuvert.fin();
+  contenu.innerHTML = `<div class="entete"><div><h1>Terminal</h1><p class="sous-titre">Le serveur, comme en SSH. <code>sudo</code> redemande le mot de passe du serveur.</p></div>
+      <div class="actions"><a class="btn" href="#/systeme">← Système</a></div></div>
+    <div class="terminal-zone" id="terminal"><p class="note" style="padding:16px">Ouverture…</p></div>
+    <div class="touches-terminal">${TOUCHES_TERMINAL.map(([n], i) => `<button class="btn btn-petit" type="button" data-touche="${i}">${n}</button>`).join("")}</div>`;
+  let ticket;
+  try {
+    await chargerXterm();
+    ticket = await api("/api/terminal/ticket", { method: "POST" });
+  } catch (e) {
+    $("#terminal").innerHTML = `<div class="erreur" style="margin:16px">${esc(e.message)}</div>`;
+    return;
+  }
+  const zone = $("#terminal");
+  zone.innerHTML = "";
+  const term = new window.Terminal({ cursorBlink: true, fontSize: 14, fontFamily: "ui-monospace, Menlo, Consolas, monospace", scrollback: 5000,
+    theme: { background: "#101318", foreground: "#E6E8EC", cursor: "#8FB3FF", selectionBackground: "#2A3A5C" } });
+  const fit = new window.FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(zone);
+  fit.fit();
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/terminal/ws?ticket=${encodeURIComponent(ticket.ticket)}`);
+  ws.binaryType = "arraybuffer";
+  const envoyer = (o) => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
+  const taille = () => { try { fit.fit(); envoyer({ t: "r", l: term.rows, c: term.cols }); } catch (_) { /* page quittée */ } };
+  ws.onopen = () => { taille(); term.focus(); };
+  ws.onmessage = (ev) => term.write(new Uint8Array(ev.data));
+  ws.onclose = () => {
+    term.write("\r\n\x1b[90m— Session terminée —\x1b[0m\r\n");
+    if (location.hash.startsWith("#/terminal")) {
+      const b = document.createElement("div");
+      b.className = "actions"; b.style.marginTop = "10px";
+      b.innerHTML = '<button class="btn btn-p" type="button">Rouvrir le terminal</button>';
+      b.firstChild.onclick = () => pages.terminal().catch(montrerErreur);
+      zone.after(b);
+    }
+  };
+  term.onData((d) => envoyer({ t: "i", d }));
+  window.addEventListener("resize", taille);
+  contenu.querySelectorAll("[data-touche]").forEach((b) => b.addEventListener("click", () => { envoyer({ t: "i", d: TOUCHES_TERMINAL[+b.dataset.touche][1] }); term.focus(); }));
+  terminalOuvert = {
+    fin: () => { window.removeEventListener("resize", taille); try { ws.close(); } catch (_) { /* déjà fermé */ } term.dispose(); terminalOuvert = null; },
+  };
+};
+window.addEventListener("hashchange", () => { if (terminalOuvert && !location.hash.startsWith("#/terminal")) terminalOuvert.fin(); });
+
 // ------------------------------------------------------------ navigation
 let moi = null;
 function montrerErreur(e) {
@@ -1476,7 +1538,7 @@ async function router() {
   if (!moi && page !== "aide") return ecranInjoignable(dernierEchec);   // serveur injoignable   // sans connexion admin : seulement la page invités
   if (page !== "ouvrir") document.body.classList.remove("plein-ecran");
   document.querySelectorAll("[data-page]").forEach((a) => {
-    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs"].includes(page));
+    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs", "terminal"].includes(page));
     a.classList.toggle("actif", actif);
     if (actif) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
