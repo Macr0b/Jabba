@@ -755,12 +755,32 @@ document.addEventListener("keydown", (e) => {
   else if (cmd && e.key === "ArrowUp") { e.preventDefault(); const h = $("#nav-fichiers-parent"); if (h) location.hash = h.getAttribute("href"); }
 });
 
+// Emplacements où naviguer : Mes fichiers, puis chaque espace et chaque disque branché.
+const cacheEmplacements = { t: 0, v: null };
+async function lireEmplacements() {
+  if (cacheEmplacements.v && Date.now() - cacheEmplacements.t < 30000) return cacheEmplacements.v;
+  try {
+    const r = await api("/api/accueil/dossiers");
+    cacheEmplacements.v = r.essentiels; cacheEmplacements.t = Date.now();
+  } catch (_) { cacheEmplacements.v = cacheEmplacements.v || []; }
+  return cacheEmplacements.v;
+}
+function choixEmplacement(liste, chemin, lien) {
+  if (!liste || liste.length < 2) return "";
+  const actif = [...liste].filter((e) => e.chemin !== "/" && (chemin === e.chemin || chemin.startsWith(e.chemin + "/")))[0];
+  return `<nav class="emplacements" aria-label="Emplacement">${liste.map((e) => {
+    const sel = actif ? actif === e : e.chemin === "/";
+    const ic = e.type === "disque" ? "ic-disque" : e.type === "racine" ? "ic-maison" : "ic-dossier";
+    return `<a class="puce-emplacement${sel ? " actif" : ""}" href="${lien(e.chemin)}"${sel ? ' aria-current="true"' : ""}><span class="${ic}" aria-hidden="true"></span>${esc(e.nom)}</a>`;
+  }).join("")}</nav>`;
+}
+
 pages.fichiers = async (params) => {
   if (params.get("q")) return pageRecherche(params.get("q"));
   const chemin = params.get("chemin") || "/";
   noterDossier(chemin);
   contenu.innerHTML = `<div class="entete"><div><h1>Fichiers</h1></div></div>${chargement(5)}`;
-  const d = await api("/api/fichiers?chemin=" + encodeURIComponent(chemin));
+  const [d, emplacements] = await Promise.all([api("/api/fichiers?chemin=" + encodeURIComponent(chemin)), lireEmplacements()]);
   const morceaux = chemin.split("/").filter(Boolean);
   const lien = (c) => "#/fichiers?chemin=" + encodeURIComponent(c);
   const fil = [`<a href="${lien("/")}">${d.source === "disque" ? "Serveur" : "Nextcloud"}</a>`]
@@ -781,6 +801,7 @@ pages.fichiers = async (params) => {
       </div>
     </div>
     ${barreRecherche()}
+    ${choixEmplacement(emplacements, chemin, lien)}
     <div class="ligne-nav">${barreNavigation(chemin, lien, d.source === "disque" ? "Serveur" : "Nextcloud")}
     <nav class="fil" aria-label="Emplacement">${fil}</nav></div>
     <section class="carte tableau" aria-label="Contenu du dossier">

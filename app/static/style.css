@@ -291,3 +291,16 @@ body.mode-invite main { margin: 0 auto; }
 /* Barre d'avancement des mises à jour */
 .barre-maj { height: 8px; border-radius: 99px; background: var(--bord); overflow: hidden; margin-bottom: 8px; }
 .barre-maj span { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .8s ease; }
+
+/* Fichiers : choix de l'emplacement (Mes fichiers, espaces, disques branchés) */
+.emplacements { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; margin: 6px 0 4px; scrollbar-width: none; }
+.emplacements::-webkit-scrollbar { display: none; }
+.puce-emplacement { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 7px 14px; border-radius: 99px;
+  border: 1px solid var(--bord); background: var(--carte); color: var(--texte-2); font-weight: 500; font-size: 14px; text-decoration: none; }
+.puce-emplacement:hover { background: var(--survol); }
+.puce-emplacement.actif { background: var(--accent-doux); border-color: var(--accent); color: var(--accent); }
+.puce-emplacement .ic-dossier { width: 16px; height: 12px; }
+.ic-disque { width: 16px; height: 12px; border-radius: 3px; background: var(--texte-3); position: relative; flex-shrink: 0; }
+.ic-disque::after { content: ""; position: absolute; right: 3px; top: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--carte); }
+.ic-maison { width: 14px; height: 12px; background: currentColor; flex-shrink: 0;
+  clip-path: polygon(50% 0, 100% 45%, 86% 45%, 86% 100%, 14% 100%, 14% 45%, 0 45%); }

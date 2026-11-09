@@ -3,6 +3,7 @@
     "version": "0.6.2",
     "date": "2026-11-09",
     "changements": [
+      "Fichiers : une rangée en haut pour choisir où naviguer — Mes fichiers, chaque espace et chaque disque branché (R2-D2…).",
       "Mises à jour : si une installation échoue, Système l'affiche avec le détail et un bouton Réessayer, et une alerte part sur le téléphone, au lieu d'une attente sans fin.",
       "Mises à jour : avant chaque installation, l'appli remet elle-même les bons droits sur ses fichiers (cause de l'échec rencontré).",
       "Mises à jour : une barre d'avancement montre l'étape en cours (téléchargement, construction, redémarrage), avec le temps écoulé."
