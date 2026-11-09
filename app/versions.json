@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.8.1",
+    "date": "2026-11-09",
+    "changements": [
+      "Lecteur vidéo : saut dans le film plus rapide, et la lecture ne s'arrête plus entre deux morceaux.",
+      "Lecteur vidéo : sous-titres et temps affiché bien calés après un saut.",
+      "Lecteur vidéo : bouton pour couper le son et réglage du volume (sur ordinateur ; sur iPhone, les boutons du téléphone).",
+      "Système : consommation électrique du serveur, mesurée quand il est sur batterie, avec la plus basse (au repos)."
+    ]
+  },
+  {
     "version": "0.8.0",
     "date": "2026-11-09",
     "changements": [

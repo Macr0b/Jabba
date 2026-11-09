@@ -176,6 +176,15 @@ if ! grep -q consoleblank /etc/default/grub; then
   lancer update-grub
 fi
 ok "L'écran s'éteint seul après 1 minute"
+# Disques à plateaux : ils s'arrêtent après 20 minutes sans servir (moins de courant, moins d'usure).
+# Le premier accès suivant prend 3 à 5 secondes, le temps qu'ils redémarrent.
+lancer apt-get install -y hdparm
+printf '%s\n' '# Jabba : un disque à plateaux s'"'"'arrête après 20 minutes sans servir.' \
+  'ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", RUN+="/usr/sbin/hdparm -B 127 -S 240 /dev/%k"' \
+  > /etc/udev/rules.d/69-jabba-disques.rules
+lancer udevadm control --reload
+lancer udevadm trigger --subsystem-match=block --action=change
+ok "Disques à plateaux : arrêt après 20 minutes sans servir"
 CONSERVATION=$(ls /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 2>/dev/null | head -1)
 if [ -n "$CONSERVATION" ]; then
   echo 1 > "$CONSERVATION" 2>/dev/null || true

@@ -324,3 +324,5 @@ body.mode-invite main { margin: 0 auto; }
 .commandes .temps { font-variant-numeric: tabular-nums; font-size: 13px; color: #C9CDD6; }
 .commandes select { background: #1B1E25; color: #ECEEF2; border: 1px solid #333844; border-radius: 8px; padding: 6px 8px; font-size: 13px; max-width: 180px; }
 .lect-info { color: #8A909C; margin: 0; font-size: 12px; }
+.commandes input.volume { flex: 0 0 90px; min-width: 70px; }
+@media (hover: none) { .commandes input.volume { display: none; } }   /* iPhone : le volume se règle avec les boutons du téléphone */

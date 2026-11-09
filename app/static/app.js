@@ -547,6 +547,9 @@ pages.systeme = async () => {
         <dt>Courant</dt><dd>${s.courant && s.courant.secteur != null
           ? (s.courant.secteur ? "Sur secteur" : `<strong style="color:var(--rouge)">Sur batterie</strong>`) + (s.courant.batterie != null ? ` · batterie ${s.courant.batterie} %` : "")
           : "Pas encore mesuré"}</dd>
+        ${s.courant && s.courant.batterie != null ? `<dt>Consommation</dt><dd>${s.conso && s.conso.derniere
+          ? `${String(s.conso.derniere.w).replace(".", ",")} W <span class="note">(${s.courant.secteur ? "dernière mesure sur batterie, " + esc(ilYa(s.conso.derniere.t)) : "en ce moment"})</span>${s.conso.repos ? `<br><span class="note">Au plus bas : ${String(s.conso.repos.w).replace(".", ",")} W, au repos</span>` : ""}`
+          : `<span class="note">Se mesure sur batterie : débranche le chargeur 2 minutes pour la voir.</span>`}</dd>` : ""}
       </dl></section>
       <section class="carte pad" id="maj"><h2>Appli Jabba</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Utilisateurs</a></div>
@@ -754,6 +757,8 @@ async function lecteurConverti(e, infos) {
       <span class="temps">${tempsLisible(infos.duree)}</span>
       ${infos.audios.length > 1 ? `<select id="lect-audio" aria-label="Son">${infos.audios.map((a) => `<option value="${a.index}"${a.index === audioDefaut ? " selected" : ""}>Son · ${esc(a.nom)}</option>`).join("")}</select>` : ""}
       ${textes.length ? `<select id="lect-sous" aria-label="Sous-titres"><option value="">Sans sous-titres</option>${textes.map((x) => `<option value="${x.index}">Sous-titres · ${esc(x.nom)}</option>`).join("")}</select>` : ""}
+      <button class="btn btn-petit" type="button" id="lect-son" aria-label="Couper le son">🔊</button>
+      <input type="range" id="lect-volume" class="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume">
       <button class="btn btn-petit" type="button" id="lect-plein" aria-label="Plein écran">⛶</button>
     </div>
     <p class="note lect-info">Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""}).</p>`;
@@ -778,12 +783,29 @@ async function lecteurConverti(e, infos) {
     try { r = await api("/api/lecture/demarrer", { method: "POST", json: { chemin: e.chemin, debut: t, audio: st.audio, remplace: st.sid } }); }
     catch (er) { montrer(er.message); return; }
     if (st.fini) { api(`/api/lecture/${r.id}/arreter`, { method: "POST" }).catch(() => {}); return; }
-    st.sid = r.id; st.debut = t;
+    st.sid = r.id; st.debut = r.debut ?? t;   // le serveur peut repartir un peu avant (image clé)…
+    // … on avance alors jusqu'au moment demandé. Et les lecteurs HLS intégrés (Safari, Chrome récent)
+    // partent « au plus récent » d'une liste qui grandit : on les ramène au bon endroit.
+    const cible = Math.max(0, t - st.debut);
+    video.addEventListener("loadedmetadata", () => { if (Math.abs(video.currentTime - cible) > 0.5) video.currentTime = cible; }, { once: true });
     sousTitres();
-    if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = r.url;
-    else {
-      await chargerHls();
-      st.hls = new window.Hls({ startPosition: 0, maxBufferLength: 40, manifestLoadingMaxRetry: 10, levelLoadingMaxRetry: 10, fragLoadingMaxRetry: 10 });
+    // hls.js partout où il marche (iPhone récent compris) : il suit nos consignes. Le lecteur
+    // intégré du navigateur, qui saute « au plus récent », ne sert qu'en dernier recours.
+    try { await chargerHls(); } catch (_) { /* hors ligne : lecteur intégré */ }
+    if (!(window.Hls && window.Hls.isSupported())) {
+      video.src = r.url;
+      st.garde = true;
+      setTimeout(() => { st.garde = false; }, 8000);
+      video.addEventListener("timeupdate", function garde() {
+        if (!st.garde) return video.removeEventListener("timeupdate", garde);
+        if (video.currentTime > cible + 3) video.currentTime = cible;
+      });
+    } else {
+      // La liste grandit pendant la conversion : hls.js la prendrait pour du direct et sauterait
+      // « au plus récent ». On le lui interdit : lecture depuis le début, sans rattrapage.
+      st.hls = new window.Hls({ autoStartLoad: false, maxBufferLength: 40, manifestLoadingMaxRetry: 10, levelLoadingMaxRetry: 10, fragLoadingMaxRetry: 10,
+        liveSyncDurationCount: 1e9, liveMaxLatencyDurationCount: Infinity, maxLiveSyncPlaybackRate: 1, liveDurationInfinity: true, lowLatencyMode: false });
+      st.hls.on(window.Hls.Events.MANIFEST_PARSED, () => st.hls.startLoad(0));   // toujours depuis le premier morceau
       st.hls.on(window.Hls.Events.ERROR, (_, d) => { if (d.fatal) montrer("Lecture interrompue. Clique sur ▶ pour reprendre."); });
       st.hls.loadSource(r.url); st.hls.attachMedia(video);
     }
@@ -806,13 +828,20 @@ async function lecteurConverti(e, infos) {
     st.glisse = false;
     const t = +barre.value, dans = t - st.debut;
     const fin = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
-    if (dans >= 0 && dans <= fin) video.currentTime = dans;   // déjà converti : on y va directement
+    if (dans >= 0 && dans <= fin) { st.garde = false; video.currentTime = dans; }   // déjà converti : on y va directement
     else depuis(t);
   });
   const audio = $("#lect-audio");
   if (audio) audio.onchange = () => { st.audio = +audio.value; depuis(st.debut + video.currentTime); };
   const sous = $("#lect-sous");
   if (sous) sous.onchange = () => { st.sous = sous.value === "" ? null : +sous.value; sousTitres(); };
+  const sonBtn = $("#lect-son"), volume = $("#lect-volume");
+  const majSon = () => { sonBtn.textContent = video.muted || video.volume === 0 ? "🔇" : "🔊"; sonBtn.setAttribute("aria-label", video.muted ? "Remettre le son" : "Couper le son"); volume.value = String(video.muted ? 0 : video.volume); };
+  try { const v = parseFloat(localStorage.getItem("jabba-volume")); if (v >= 0 && v <= 1) video.volume = v; } catch (_) { /* rien */ }
+  sonBtn.onclick = () => { video.muted = !video.muted; if (!video.muted && video.volume === 0) video.volume = 0.5; majSon(); };
+  volume.addEventListener("input", () => { video.volume = +volume.value; video.muted = +volume.value === 0; try { localStorage.setItem("jabba-volume", volume.value); } catch (_) { /* rien */ } majSon(); });
+  video.addEventListener("volumechange", majSon);
+  majSon();
   $("#lect-plein").onclick = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else if (zone.requestFullscreen) zone.requestFullscreen();

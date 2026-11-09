@@ -123,8 +123,36 @@ def _video(infos):
              "-preset", "veryfast", "-crf", "23", "-g", str(DUREE_MORCEAU * 25), "-sc_threshold", "0"], {})
 
 
+def image_cle(source, infos, debut):
+    """Quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`.
+    On part donc de là, pour que le temps affiché et les sous-titres tombent juste."""
+    v = infos["video"]
+    if debut <= 0 or not v or not (v["codec"] == "h264" and v["pix_fmt"] in (None, "yuv420p")):
+        return debut
+    args = ["ffprobe", "-v", "error", "-select_streams", f"{v['index']}", "-skip_frame", "nokey",
+            "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
+            "-read_intervals", f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}"]
+    if source.get("entetes"):
+        args += ["-headers", source["entetes"]]
+    try:
+        r = subprocess.run(args + [source["entree"]], capture_output=True, text=True, timeout=20)
+    except subprocess.TimeoutExpired:
+        return debut
+    temps = []
+    for ligne in r.stdout.splitlines():
+        for morceau in ligne.split(","):
+            try:
+                temps.append(float(morceau))
+                break
+            except ValueError:
+                continue
+    avant = [t for t in temps if t <= debut + 0.05]
+    return max(avant) if avant else debut
+
+
 def demarrer(source, infos, debut=0.0, audio=None):
-    """Lance la conversion à partir de `debut` (secondes). Renvoie l'identifiant de la session."""
+    """Lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)."""
+    debut = image_cle(source, infos, max(0.0, float(debut)))
     with _VERROU:
         while len(_SESSIONS) >= MAX_SESSIONS:   # trop de films en même temps : on arrête le plus ancien
             arreter(min(_SESSIONS, key=lambda k: _SESSIONS[k]["vu"]), verrou=False)
@@ -139,15 +167,18 @@ def demarrer(source, infos, debut=0.0, audio=None):
            + _entree(source)
            + (video[2:] if video[:1] == ["-vaapi_device"] else video)
            + son
-           + ["-max_muxing_queue_size", "4096", "-f", "hls", "-hls_time", str(DUREE_MORCEAU),
+           + (["-force_key_frames", "expr:gte(t,n_forced*2)"] if video[-2:] != ["-c:v", "copy"] and "copy" not in video else [])
+           # horodatages à partir de 0 : la vidéo et les sous-titres partent du même instant, sur tous les navigateurs
+           + ["-muxdelay", "0", "-muxpreload", "0"]
+           + ["-max_muxing_queue_size", "4096", "-f", "hls", "-hls_init_time", "1", "-hls_time", str(DUREE_MORCEAU),
               "-hls_list_size", "0", "-hls_playlist_type", "event",
               "-hls_segment_filename", os.path.join(dossier, "m%05d.ts"), os.path.join(dossier, "index.m3u8")])
     env = dict(os.environ, **env_sup)
     p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=open(os.path.join(dossier, "erreurs.txt"), "w"), env=env)
     with _VERROU:
-        _SESSIONS[sid] = {"p": p, "dossier": dossier, "vu": time.time(), "debut": float(debut)}
-    return sid
+        _SESSIONS[sid] = {"p": p, "dossier": dossier, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
+    return sid, debut
 
 
 def fichier(sid, nom, attendre=20):
@@ -160,9 +191,13 @@ def fichier(sid, nom, attendre=20):
     fin = time.time() + attendre
     while time.time() < fin:
         if nom == "index.m3u8":
-            # la liste n'est servie qu'avec au moins un morceau dedans
+            # Au démarrage, la liste n'est servie qu'avec quelques morceaux d'avance (6, ou moins si la
+            # conversion traîne) : le lecteur ne la relit qu'au rythme des morceaux et s'arrêterait entre deux.
             try:
-                if ".ts" in open(chemin).read():
+                texte = open(chemin).read()
+                n = texte.count(".ts")
+                age = time.time() - s["cree"]
+                if n >= 6 or "#EXT-X-ENDLIST" in texte or (n >= 2 and age > 3) or (n >= 1 and age > 8):
                     return chemin
             except OSError:
                 pass
