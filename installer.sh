@@ -303,7 +303,11 @@ SEUIL_BATTERIE=15
 EOF
   chown "$MOI:$MOI" .env; chmod 600 .env
 fi
-lancer docker compose up -d --build || echec "Construction de l'appli impossible."
+# Lancée par systemd : la construction va au bout même si ce script s'arrête en route
+# (par exemple s'il tourne dans le terminal de l'appli, qui redémarre à ce moment-là).
+info "Construction de l'appli : 3 à 10 minutes."
+systemd-run --wait --collect --quiet --unit="jabba-installation-$(date +%s)" -p WorkingDirectory="$APP" \
+  docker compose up -d --build >> "$JOURNAL" 2>&1 || echec "Construction de l'appli impossible (détails : journalctl -u 'jabba-installation-*')."
 if lancer tailscale serve --bg --https=9000 http://127.0.0.1:8090; then
   ok "Jabba $TAG installé : https://$TS_NOM:9000"
 else
