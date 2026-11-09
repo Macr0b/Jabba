@@ -51,7 +51,12 @@ def script(dossier, tag):
     if not re.fullmatch(r"/[\w./-]+", dossier) or not RE_VERSION.match(tag):
         raise ValueError("Paramètres inattendus")
     # git tourne avec le compte propriétaire du dossier : les fichiers restent à son nom.
+    # Avant, on lui rend tout ce qui ne lui appartient plus (traces d'anciennes installations
+    # faites en root), sauf donnees/ qui reste à l'appli.
+    proprio = f"$(stat -c %U:%G '{dossier}')"
+    remettre = (f"find '{dossier}' -path '{dossier}/donnees' -prune -o ! -user \"$(stat -c %U '{dossier}')\" "
+                f"-exec chown -h \"{proprio}\" {{}} +")
     git = f"runuser -u \"$(stat -c %U '{dossier}')\" -- git"
-    return (f"cd '{dossier}' && {git} fetch --quiet --tags --force origin && "
+    return (f"cd '{dossier}' && {remettre} && {git} fetch --quiet --tags --force origin && "
             f"{git} -c advice.detachedHead=false checkout --quiet --force 'refs/tags/{tag}' && "
             "docker compose up -d --build && docker image prune -f")

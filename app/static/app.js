@@ -1163,11 +1163,26 @@ async function carteMaj(verifier = false) {
     if (!(await demander({ titre: `Installer la version ${m.derniere.version} ?`, texte: "L'appli se coupe 1 à 3 minutes pendant l'installation, puis se recharge toute seule. Les outils, tes fichiers et tes réglages ne sont pas touchés.", valider: "Installer" }))) return;
     try {
       await api("/api/appli/maj", { method: "POST" });
-      z.innerHTML = `<h2>Appli Jabba</h2><p class="note" style="margin-top:8px">Installation de la ${esc(m.derniere.version)}… ne ferme pas cette page.</p>`;
-      const fin = Date.now() + 6 * 60000;
-      while (Date.now() < fin) {
+      const debut = Date.now();
+      const afficher = (t) => { z.innerHTML = `<h2>Appli Jabba</h2><p class="note" style="margin-top:8px">${t}</p>`; };
+      afficher(`Installation de la ${esc(m.derniere.version)}… ne ferme pas cette page.`);
+      while (Date.now() - debut < 20 * 60000) {
         await new Promise((r) => setTimeout(r, 5000));
-        try { const x = await api("/api/moi"); if (x.version === m.derniere.version) { location.reload(); return; } } catch (_) { /* l'appli redémarre */ }
+        try {
+          const x = await api("/api/moi");
+          if (x.version === m.derniere.version) { location.reload(); return; }
+          const e = await api("/api/appli/maj/etat");
+          if (e.statut === "echec") {
+            z.innerHTML = `<h2>Appli Jabba</h2>
+              <div class="erreur" style="margin-top:8px"><strong>La version ${esc(e.version)} ne s'est pas installée.</strong> Ta version actuelle continue de fonctionner normalement.</div>
+              ${e.detail && e.detail.length ? `<pre class="notes-version">${esc(e.detail.join("\n"))}</pre>` : ""}
+              <div class="actions"><button class="btn btn-p" id="reessayer-maj">Réessayer</button></div>`;
+            $("#reessayer-maj").onclick = () => carteMaj(true).catch((er) => toast(er.message, true));
+            return;
+          }
+          const min = Math.floor((Date.now() - debut) / 60000);
+          afficher(`Installation de la ${esc(m.derniere.version)} en cours${min ? ` depuis ${min} min` : ""}… La reconstruction de l'appli peut prendre jusqu'à 10 minutes sur un petit serveur. Ne ferme pas cette page.`);
+        } catch (_) { afficher(`Installation de la ${esc(m.derniere.version)} : l'appli redémarre…`); }
       }
       toast("L'installation prend plus de temps que prévu. Recharge la page dans quelques minutes.", true);
     } catch (e) { toast(e.message, true); }

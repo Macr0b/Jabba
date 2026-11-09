@@ -1832,10 +1832,44 @@ def api_appli_installer(request: Request):
     script = maj.script(d, der["tag"])
     journal.noter("appli", f"Mise à jour de l'appli vers {der['version']} lancée", request.state.nom)
     # Lancée par le serveur lui-même : elle continue pendant que l'appli redémarre.
-    code, _, err = hote(["systemd-run", f"--unit=jabba-maj-{int(time.time())}", "--collect", "sh", "-c", script])
+    unite = f"jabba-maj-{int(time.time())}"
+    code, _, err = hote(["systemd-run", f"--unit={unite}", "--collect", "sh", "-c", script])
     if code != 0:
         raise HTTPException(500, "Lancement impossible : " + err[:200])
+    MAJ.update(unite=unite, version=der["version"], debut=time.time(), signale=False)
     return {"ok": True, "version": der["version"]}
+
+
+MAJ = {"unite": None, "version": None, "debut": 0, "signale": False}
+
+
+def etat_maj():
+    """Où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine."""
+    if not MAJ["unite"]:
+        return {"statut": "aucune"}
+    u = MAJ["unite"] + ".service"
+    _, actif, _ = hote(["systemctl", "show", "-p", "ActiveState", "--value", u])
+    _, log, _ = hote(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "40"])
+    lignes = [l for l in log.splitlines() if l.strip()]
+    if actif.strip() in ("active", "activating", "reloading"):
+        return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"])}
+    if any("Failed with result" in l or "status=" in l and "status=0/" not in l for l in lignes):
+        detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
+        if not MAJ["signale"]:
+            MAJ["signale"] = True
+            notifs.envoyer("mises_a_jour", "Mise à jour échouée",
+                           f"La version {MAJ['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", famille="appli")
+        return {"statut": "echec", "version": MAJ["version"], "detail": detail}
+    return {"statut": "termine", "version": MAJ["version"]}
+
+
+@app.get("/api/appli/maj/etat")
+def api_appli_maj_etat(request: Request):
+    exiger_admin(request)
+    if DEMO:
+        return {"statut": os.environ.get("JABBA_DEMO_MAJ", "en_cours"), "version": "0.7.0",
+                "detail": ["erreur : droits insuffisants pour ajouter un objet à la base de données .git/objects du dépôt", "fatal : failed to write object"]}
+    return etat_maj()
 
 
 # ---------------------------------------------------------------- invités : réglages (admin)
@@ -2125,7 +2159,7 @@ def surveiller():
     while True:
         etapes = [scruter_disques]
         if tour % 4 == 0:   # toutes les minutes
-            etapes += [surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
+            etapes += [lambda: MAJ["unite"] and not MAJ["signale"] and etat_maj(), surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
         if tour % 40 == 0:  # toutes les 10 minutes
             etapes += [relier_disques_nextcloud]
         if tour % 240 == 0:  # toutes les heures
