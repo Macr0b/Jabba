@@ -45,6 +45,8 @@ def _taille(fd, lignes, colonnes):
 
 
 RC = r"""# Terminal de l'appli Jabba : réglages du shell, puis chaque commande part au journal du serveur.
+# La langue du serveur (le terminal démarre en anglais sinon)
+[ -f /etc/default/locale ] && . /etc/default/locale && export LANG LANGUAGE LC_ALL 2>/dev/null
 [ -f ~/.bashrc ] && . ~/.bashrc
 cd ~
 HISTCONTROL=
