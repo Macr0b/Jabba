@@ -1,8 +1,11 @@
 [
   {
-    "version": "0.7.1",
+    "version": "0.8.0",
     "date": "2026-11-09",
     "changements": [
+      "Lecteur vidéo : Fichiers lit maintenant tous les formats, comme VLC. Ce que le navigateur ne sait pas lire (MKV, HEVC, son AC3/DTS…) est converti par le serveur pendant la lecture, sans rien installer.",
+      "Lecteur vidéo : choix de la piste son, sous-titres (SRT, ASS…), barre pour avancer dans le film, plein écran.",
+      "Bouton « Regarder dans Jellyfin » sur les vidéos : ouvre directement le film dans Jellyfin (Jabba se relie à Jellyfin une seule fois avec une clé).",
       "Terminal : il parle la langue du serveur (sudo et les messages en français)."
     ]
   },

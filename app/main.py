@@ -5,6 +5,7 @@ que par `tailscale serve`, qui ajoute l'identité Tailscale de la personne.
 Les commandes système sont lancées sur Jabba lui-même via nsenter.
 """
 import asyncio
+import base64
 import json
 import mimetypes
 import os
@@ -23,6 +24,7 @@ import admin
 import comptes
 import invites
 import secrets
+import lecture
 import sessions
 import terminal
 import disque
@@ -1146,7 +1148,7 @@ def disques_fs():
     """Pour l'écran Fichiers en mode disque : disques branchés (nom -> chemin) et ceux en lecture seule."""
     branches = disques_branches()
     connus = disques_connus()
-    disques = {n: connus[n] for n in branches}
+    disques = {n: connus[n] for n in branches if n in connus}
     lecture_seule = {n for n, c in disques.items() if not mode_ecriture(c)}
     return disques, lecture_seule
 
@@ -1633,6 +1635,147 @@ async def api_voir(chemin: str, request: Request):
             sortie[h] = r.headers[h]
     sortie.setdefault("accept-ranges", "bytes")
     return StreamingResponse(flux(), status_code=r.status_code, media_type=type_, headers=sortie)
+
+
+# ---------------------------------------------------------------- lecteur vidéo (conversion à la volée)
+def source_lecture(chemin):
+    """Où ffmpeg lit le fichier : sur le disque si possible, sinon par Nextcloud."""
+    chemin = chemin_propre(chemin)
+    if source() == "disque":
+        return {"entree": fs(lambda: disque.chemin_lecture(chemin, *disques_fs()))}
+    premier, _, reste = chemin.strip("/").partition("/")
+    connus = disques_connus()
+    if premier in connus:   # un disque externe : lu directement, sans passer par Nextcloud
+        base = os.path.realpath(connus[premier])
+        reel = os.path.realpath(os.path.join(base, reste))
+        if (reel == base or reel.startswith(base + os.sep)) and os.path.isfile(reel):
+            return {"entree": reel}
+    nc_pret()
+    jeton = base64.b64encode(f"{NC_USER}:{NC_PASS}".encode()).decode()
+    return {"entree": dav_url(chemin), "entetes": f"Authorization: Basic {jeton}\r\n"}
+
+
+def infos_lecture(chemin):
+    try:
+        infos = lecture.sonder(source_lecture(chemin))
+    except RuntimeError as e:
+        raise HTTPException(415, str(e))
+    except FileNotFoundError:
+        raise HTTPException(500, "Le moteur vidéo (ffmpeg) manque dans l'appli.")
+    return infos
+
+
+# ---------------------------------------------------------------- Jellyfin : ouvrir un film depuis Fichiers
+JELLYFIN = {"t": 0, "index": {}}
+FICHIER_JELLYFIN = os.path.join(os.environ.get("JABBA_DATA", "/data"), "jellyfin.json")
+
+
+def cle_jellyfin():
+    try:
+        with open(FICHIER_JELLYFIN) as f:
+            return json.load(f).get("cle") or ""
+    except (OSError, ValueError):
+        return ""
+
+
+def index_jellyfin(cle):
+    """Nom de fichier -> identifiant Jellyfin, pour tous les films et épisodes (gardé 5 minutes)."""
+    if time.time() - JELLYFIN["t"] < 300 and JELLYFIN["index"]:
+        return JELLYFIN["index"]
+    r = httpx.get(f"http://127.0.0.1:{PORTS['jellyfin']}/Items", timeout=30, headers={"X-Emby-Token": cle},
+                  params={"Recursive": "true", "IncludeItemTypes": "Movie,Episode,Video", "Fields": "Path",
+                          "EnableImages": "false", "EnableUserData": "false"})
+    if r.status_code in (401, 403):
+        raise HTTPException(409, {"cle_jellyfin": True, "message": "La clé Jellyfin n'est plus valable."})
+    r.raise_for_status()
+    JELLYFIN["index"] = {os.path.basename(x.get("Path") or ""): x["Id"] for x in r.json().get("Items", []) if x.get("Path")}
+    JELLYFIN["t"] = time.time()
+    return JELLYFIN["index"]
+
+
+@app.get("/api/jellyfin/trouver")
+def api_jellyfin_trouver(chemin: str):
+    lien = LIENS.get("jellyfin")
+    if not lien:
+        raise HTTPException(404, "Jellyfin n'a pas d'adresse dans les réglages de l'appli (LIENS).")
+    cle = cle_jellyfin()
+    if not cle:
+        raise HTTPException(409, {"cle_jellyfin": True, "message": "Jabba n'est pas encore relié à Jellyfin."})
+    try:
+        ident = index_jellyfin(cle).get(chemin.rsplit("/", 1)[-1])
+    except httpx.HTTPError:
+        raise HTTPException(502, "Jellyfin ne répond pas : vérifie qu'il est activé dans l'Établi.")
+    if not ident:
+        raise HTTPException(404, "Ce fichier n'est pas dans une médiathèque Jellyfin (ou Jellyfin ne l'a pas encore analysé).")
+    return {"lien": f"{lien.rstrip('/')}/web/#/details?id={ident}"}
+
+
+@app.post("/api/jellyfin/cle")
+async def api_jellyfin_cle(request: Request):
+    j = exiger_admin(request, fort=True)
+    cle = str((await request.json()).get("cle", "")).strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{32}", cle):
+        raise HTTPException(400, "Une clé Jellyfin fait 32 caractères (chiffres et lettres de a à f).")
+    try:
+        JELLYFIN["t"] = 0
+        index_jellyfin(cle)
+    except HTTPException:
+        raise HTTPException(400, "Jellyfin refuse cette clé.")
+    except httpx.HTTPError:
+        raise HTTPException(502, "Jellyfin ne répond pas : vérifie qu'il est activé dans l'Établi.")
+    with open(FICHIER_JELLYFIN, "w") as f:
+        json.dump({"cle": cle}, f)
+    os.chmod(FICHIER_JELLYFIN, 0o600)
+    journal.noter("admin", f"Jabba relié à Jellyfin, par {j['identifiant']}", request.state.nom)
+    return {"ok": True}
+
+
+@app.get("/api/lecture/infos")
+def api_lecture_infos(chemin: str):
+    infos = infos_lecture(chemin)
+    infos["directe"] = lecture.lecture_directe(infos)
+    return infos
+
+
+@app.post("/api/lecture/demarrer")
+async def api_lecture_demarrer(request: Request):
+    corps = await request.json()
+    chemin = corps.get("chemin", "")
+    infos = await asyncio.to_thread(infos_lecture, chemin)
+    if not infos["video"]:
+        raise HTTPException(415, "Pas d'image dans ce fichier.")
+    if corps.get("remplace"):
+        lecture.arreter(str(corps["remplace"]))
+    sid = await asyncio.to_thread(lecture.demarrer, source_lecture(chemin), infos,
+                                  float(corps.get("debut") or 0), corps.get("audio"))
+    return {"id": sid, "url": f"/api/lecture/{sid}/index.m3u8", "duree": infos["duree"]}
+
+
+@app.get("/api/lecture/soustitres")
+def api_lecture_soustitres(chemin: str, piste: int, debut: float = 0):
+    try:
+        vtt = lecture.soustitres(source_lecture(chemin), piste, debut)
+    except (RuntimeError, subprocess.TimeoutExpired):
+        raise HTTPException(415, "Sous-titres illisibles.")
+    return Response(vtt, media_type="text/vtt; charset=utf-8")
+
+
+@app.get("/api/lecture/{sid}/{nom}")
+def api_lecture_morceau(sid: str, nom: str):
+    chemin = lecture.fichier(sid, nom)
+    if not chemin:
+        raise HTTPException(404 if lecture.erreur(sid) is None else 500, lecture.erreur(sid) or "Pas encore prêt.")
+    if nom.endswith(".m3u8"):
+        # Lecture depuis le début de la liste (et pas « en direct », au dernier morceau produit)
+        texte = open(chemin).read().replace("#EXTM3U\n", "#EXTM3U\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES\n", 1)
+        return Response(texte, media_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
+    return FileResponse(chemin, media_type="video/mp2t", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/lecture/{sid}/arreter")
+def api_lecture_arreter(sid: str):
+    lecture.arreter(sid)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- recherche
@@ -2225,7 +2368,7 @@ def surveiller():
     while True:
         etapes = [scruter_disques]
         if tour % 4 == 0:   # toutes les minutes
-            etapes += [lambda: MAJ["unite"] and not MAJ["signale"] and etat_maj(), surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
+            etapes += [lecture.nettoyer, lambda: MAJ["unite"] and not MAJ["signale"] and etat_maj(), surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
         if tour % 40 == 0:  # toutes les 10 minutes
             etapes += [relier_disques_nextcloud]
         if tour % 240 == 0:  # toutes les heures

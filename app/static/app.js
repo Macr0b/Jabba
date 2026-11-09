@@ -645,7 +645,7 @@ async function voir(liste, i) {
   const pos = visibles.indexOf(e);
   let corps;
   if (g === "image") corps = `<img src="${urlVoir(e.chemin)}" alt="${esc(e.nom)}">`;
-  else if (g === "video") corps = `<video src="${urlVoir(e.chemin)}" controls playsinline autoplay></video>`;
+  else if (g === "video") corps = `<div class="lecteur" id="lecteur"><p class="note">Préparation de la vidéo…</p></div>`;
   else if (g === "audio") corps = `<div class="audio"><span class="ic-fichier audio grand" aria-hidden="true"></span><audio src="${urlVoir(e.chemin)}" controls autoplay></audio></div>`;
   else if (g === "pdf") corps = `<iframe src="${urlVoir(e.chemin)}" title="${esc(e.nom)}"></iframe>`;
   else corps = `<pre class="texte">Chargement…</pre>`;
@@ -656,6 +656,7 @@ async function voir(liste, i) {
       <span class="actions">
         ${visibles.length > 1 ? `<button class="btn btn-petit" data-v="prec" aria-label="Précédent">‹</button><span class="note">${pos + 1} / ${visibles.length}</span><button class="btn btn-petit" data-v="suiv" aria-label="Suivant">›</button>` : ""}
         ${g === "pdf" ? `<a class="btn btn-petit" href="${urlVoir(e.chemin)}" target="_blank" rel="noopener">Plein écran ↗</a>` : ""}
+        ${g === "video" ? `<button class="btn btn-petit" data-v="jellyfin">Regarder dans Jellyfin</button>` : ""}
         <a class="btn btn-petit" href="${urlTelecharger(e.chemin)}">Télécharger</a>
       </span>
     </div>
@@ -667,7 +668,10 @@ async function voir(liste, i) {
   if (p) p.onclick = () => aller(-1);
   if (n) n.onclick = () => aller(1);
   visionneuse.onkeydown = (ev) => { if (ev.key === "ArrowLeft" && p) aller(-1); if (ev.key === "ArrowRight" && n) aller(1); };
-  const media = visionneuse.querySelector("video, audio");
+  const jf = visionneuse.querySelector('[data-v="jellyfin"]');
+  if (jf) jf.onclick = () => regarderDansJellyfin(e).catch((er) => toast(er.message, true));
+  if (g === "video") lancerVideo(e).catch((er) => { const l = $("#lecteur"); if (l) l.innerHTML = `<div class="message-vision"><p>${esc(er.message)}</p></div>`; });
+  const media = visionneuse.querySelector("audio");
   if (media) media.addEventListener("error", () => {
     visionneuse.querySelector(".corps-vision").innerHTML = `<div class="message-vision"><p>Ce format ne se lit pas dans le navigateur.</p><p class="note">${g === "video" ? "Regarde-le dans Jellyfin, ou télécharge-le." : "Télécharge-le pour l'écouter."}</p></div>`;
   });
@@ -681,7 +685,149 @@ async function voir(liste, i) {
     } catch (er) { const pre = visionneuse.querySelector("pre.texte"); if (pre) pre.textContent = er.message; }
   }
 }
-visionneuse.addEventListener("close", () => { visionneuse.innerHTML = ""; });
+visionneuse.addEventListener("close", () => { if (lecteurActif) lecteurActif.fin(); visionneuse.innerHTML = ""; });
+
+// Ouvre ce film dans Jellyfin. La première fois, Jabba demande la clé d'accès Jellyfin.
+async function regarderDansJellyfin(e) {
+  const url = "/api/jellyfin/trouver?chemin=" + encodeURIComponent(e.chemin);
+  let r = await fetch(url, { credentials: "same-origin" });
+  let corps = await r.json().catch(() => ({}));
+  if (r.status === 409 && corps.detail && corps.detail.cle_jellyfin) {
+    const v = await formulaire({
+      titre: "Relier Jabba à Jellyfin",
+      texte: "Une seule fois : dans Jellyfin, Tableau de bord → Clés API → +, nom « Jabba », puis copie la clé et colle-la ici.",
+      champs: [{ nom: "cle", label: "Clé API Jellyfin", indice: "32 caractères" }],
+      valider: "Relier",
+    });
+    if (!v || v === "secondaire") return;
+    await api("/api/jellyfin/cle", { method: "POST", json: { cle: v.cle } });
+    toast("Jabba est relié à Jellyfin");
+    r = await fetch(url, { credentials: "same-origin" });
+    corps = await r.json().catch(() => ({}));
+  }
+  if (!r.ok) throw new Error((corps.detail && (corps.detail.message || corps.detail)) || `Erreur ${r.status}`);
+  if (lecteurActif) { const v = $("#lecteur video"); if (v) v.pause(); }
+  window.open(corps.lien, "_blank", "noopener");
+}
+
+// ------------------------------------------------------------ lecteur vidéo
+// Si le navigateur sait lire le fichier, on le lit tel quel. Sinon le serveur le
+// convertit pendant la lecture (comme VLC le ferait), en HLS : Safari le lit seul,
+// les autres navigateurs avec hls.js (livré avec l'appli).
+let lecteurActif = null;
+const tempsLisible = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+function chargerHls() {
+  if (window.Hls) return Promise.resolve();
+  return new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "/static/vendor/hls.min.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+}
+
+async function lancerVideo(e) {
+  if (lecteurActif) lecteurActif.fin();
+  let infos = null;
+  try { infos = await api("/api/lecture/infos?chemin=" + encodeURIComponent(e.chemin)); } catch (_) { /* moteur indisponible : on tente la lecture directe */ }
+  const zone = $("#lecteur");
+  if (!zone) return;
+  if (!infos || infos.directe) {
+    zone.innerHTML = `<video src="${urlVoir(e.chemin)}" controls playsinline autoplay></video>`;
+    zone.querySelector("video").addEventListener("error", () => {
+      if (infos) lecteurConverti(e, infos);
+      else zone.innerHTML = `<div class="message-vision"><p>Ce format ne se lit pas dans le navigateur.</p><p class="note">Télécharge-le, ou regarde-le dans Jellyfin.</p></div>`;
+    });
+    return;
+  }
+  return lecteurConverti(e, infos);
+}
+
+async function lecteurConverti(e, infos) {
+  const zone = $("#lecteur");
+  if (!zone) return;
+  const audioDefaut = (infos.audios.find((a) => a.defaut) || infos.audios[0] || {}).index;
+  const st = { sid: null, debut: 0, audio: audioDefaut, sous: null, hls: null, glisse: false, fini: false };
+  const textes = infos.soustitres.filter((x) => x.texte);
+  zone.innerHTML = `
+    <video playsinline></video>
+    <div class="etat-lecteur" id="etat-lecteur">Le serveur prépare la vidéo…</div>
+    <div class="commandes">
+      <button class="btn btn-petit" type="button" id="lect-jouer" aria-label="Lecture">▶</button>
+      <span class="temps" id="lect-temps">0:00</span>
+      <input type="range" id="lect-barre" min="0" max="${Math.floor(infos.duree)}" value="0" step="1" aria-label="Position">
+      <span class="temps">${tempsLisible(infos.duree)}</span>
+      ${infos.audios.length > 1 ? `<select id="lect-audio" aria-label="Son">${infos.audios.map((a) => `<option value="${a.index}"${a.index === audioDefaut ? " selected" : ""}>Son · ${esc(a.nom)}</option>`).join("")}</select>` : ""}
+      ${textes.length ? `<select id="lect-sous" aria-label="Sous-titres"><option value="">Sans sous-titres</option>${textes.map((x) => `<option value="${x.index}">Sous-titres · ${esc(x.nom)}</option>`).join("")}</select>` : ""}
+      <button class="btn btn-petit" type="button" id="lect-plein" aria-label="Plein écran">⛶</button>
+    </div>
+    <p class="note lect-info">Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""}).</p>`;
+  const video = zone.querySelector("video"), barre = $("#lect-barre"), temps = $("#lect-temps"), jouer = $("#lect-jouer"), etat = $("#etat-lecteur");
+  const montrer = (t) => { etat.textContent = t; etat.hidden = !t; };
+
+  const sousTitres = () => {
+    video.querySelectorAll("track").forEach((t) => t.remove());
+    if (st.sous === null) return;
+    const t = document.createElement("track");
+    t.kind = "subtitles"; t.default = true; t.label = "Sous-titres";
+    t.src = `/api/lecture/soustitres?chemin=${encodeURIComponent(e.chemin)}&piste=${st.sous}&debut=${st.debut}`;
+    video.appendChild(t);
+    t.addEventListener("load", () => { t.track.mode = "showing"; });
+  };
+
+  const depuis = async (t) => {
+    montrer("Le serveur prépare la vidéo…");
+    if (st.hls) { st.hls.destroy(); st.hls = null; }
+    video.removeAttribute("src"); video.load();
+    let r;
+    try { r = await api("/api/lecture/demarrer", { method: "POST", json: { chemin: e.chemin, debut: t, audio: st.audio, remplace: st.sid } }); }
+    catch (er) { montrer(er.message); return; }
+    if (st.fini) { api(`/api/lecture/${r.id}/arreter`, { method: "POST" }).catch(() => {}); return; }
+    st.sid = r.id; st.debut = t;
+    sousTitres();
+    if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = r.url;
+    else {
+      await chargerHls();
+      st.hls = new window.Hls({ startPosition: 0, maxBufferLength: 40, manifestLoadingMaxRetry: 10, levelLoadingMaxRetry: 10, fragLoadingMaxRetry: 10 });
+      st.hls.on(window.Hls.Events.ERROR, (_, d) => { if (d.fatal) montrer("Lecture interrompue. Clique sur ▶ pour reprendre."); });
+      st.hls.loadSource(r.url); st.hls.attachMedia(video);
+    }
+    video.play().catch(() => montrer("Clique sur ▶ pour lancer la lecture."));
+  };
+
+  video.addEventListener("playing", () => montrer(""));
+  video.addEventListener("waiting", () => montrer("Chargement…"));
+  video.addEventListener("play", () => { jouer.textContent = "❚❚"; });
+  video.addEventListener("pause", () => { jouer.textContent = "▶"; });
+  video.addEventListener("timeupdate", () => {
+    const t = st.debut + video.currentTime;
+    temps.textContent = tempsLisible(t);
+    if (!st.glisse) barre.value = String(Math.floor(t));
+  });
+  jouer.onclick = () => { if (!st.sid) depuis(0); else if (video.paused) video.play(); else video.pause(); };
+  video.onclick = () => jouer.onclick();
+  barre.addEventListener("input", () => { st.glisse = true; temps.textContent = tempsLisible(+barre.value); });
+  barre.addEventListener("change", () => {
+    st.glisse = false;
+    const t = +barre.value, dans = t - st.debut;
+    const fin = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
+    if (dans >= 0 && dans <= fin) video.currentTime = dans;   // déjà converti : on y va directement
+    else depuis(t);
+  });
+  const audio = $("#lect-audio");
+  if (audio) audio.onchange = () => { st.audio = +audio.value; depuis(st.debut + video.currentTime); };
+  const sous = $("#lect-sous");
+  if (sous) sous.onchange = () => { st.sous = sous.value === "" ? null : +sous.value; sousTitres(); };
+  $("#lect-plein").onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (zone.requestFullscreen) zone.requestFullscreen();
+    else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+  };
+  lecteurActif = {
+    fin: () => {
+      st.fini = true;
+      if (st.hls) st.hls.destroy();
+      if (st.sid) api(`/api/lecture/${st.sid}/arreter`, { method: "POST" }).catch(() => {});
+      lecteurActif = null;
+    },
+  };
+  depuis(0);
+}
 
 function ouvrirElement(liste, i) {
   const e = liste[i];
