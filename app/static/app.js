@@ -670,7 +670,7 @@ async function voir(liste, i) {
   const p = visionneuse.querySelector('[data-v="prec"]'), n = visionneuse.querySelector('[data-v="suiv"]');
   if (p) p.onclick = () => aller(-1);
   if (n) n.onclick = () => aller(1);
-  visionneuse.onkeydown = (ev) => { if (ev.key === "ArrowLeft" && p) aller(-1); if (ev.key === "ArrowRight" && n) aller(1); };
+  visionneuse.onkeydown = (ev) => { if (g === "video") return; /* flèches = ±10 s dans le lecteur */ if (ev.key === "ArrowLeft" && p) aller(-1); if (ev.key === "ArrowRight" && n) aller(1); };
   const jf = visionneuse.querySelector('[data-v="jellyfin"]');
   if (jf) jf.onclick = () => regarderDansJellyfin(e).catch((er) => toast(er.message, true));
   if (g === "video") lancerVideo(e).catch((er) => { const l = $("#lecteur"); if (l) l.innerHTML = `<div class="message-vision"><p>${esc(er.message)}</p></div>`; });
@@ -727,21 +727,13 @@ function chargerHls() {
 async function lancerVideo(e) {
   if (lecteurActif) lecteurActif.fin();
   let infos = null;
-  try { infos = await api("/api/lecture/infos?chemin=" + encodeURIComponent(e.chemin)); } catch (_) { /* moteur indisponible : on tente la lecture directe */ }
-  const zone = $("#lecteur");
-  if (!zone) return;
-  if (!infos || infos.directe) {
-    zone.innerHTML = `<video src="${urlVoir(e.chemin)}" controls playsinline autoplay></video>`;
-    zone.querySelector("video").addEventListener("error", () => {
-      if (infos) lecteurConverti(e, infos);
-      else zone.innerHTML = `<div class="message-vision"><p>Ce format ne se lit pas dans le navigateur.</p><p class="note">Télécharge-le, ou regarde-le dans Jellyfin.</p></div>`;
-    });
-    return;
-  }
-  return lecteurConverti(e, infos);
+  try { infos = await api("/api/lecture/infos?chemin=" + encodeURIComponent(e.chemin)); } catch (_) { /* moteur indisponible : lecture directe */ }
+  if (!$("#lecteur")) return;
+  // Même lecteur pour toutes les vidéos : lu tel quel quand le navigateur sait le faire, converti sinon.
+  return lecteur(e, infos || { duree: 0, audios: [], soustitres: [], video: { codec: "" }, inconnu: true }, !infos || infos.directe);
 }
 
-async function lecteurConverti(e, infos) {
+async function lecteur(e, infos, direct) {
   const zone = $("#lecteur");
   if (!zone) return;
   const audioDefaut = (infos.audios.find((a) => a.defaut) || infos.audios[0] || {}).index;
@@ -749,19 +741,21 @@ async function lecteurConverti(e, infos) {
   const textes = infos.soustitres.filter((x) => x.texte);
   zone.innerHTML = `
     <video playsinline></video>
-    <div class="etat-lecteur" id="etat-lecteur">Le serveur prépare la vidéo…</div>
+    <div class="etat-lecteur" id="etat-lecteur">${direct ? "Chargement…" : "Le serveur prépare la vidéo…"}</div>
     <div class="commandes">
+      <button class="btn btn-petit" type="button" id="lect-recul" aria-label="Reculer de 10 secondes" title="Reculer de 10 s (←)">↺ 10</button>
       <button class="btn btn-petit" type="button" id="lect-jouer" aria-label="Lecture">▶</button>
+      <button class="btn btn-petit" type="button" id="lect-avance" aria-label="Avancer de 10 secondes" title="Avancer de 10 s (→)">10 ↻</button>
       <span class="temps" id="lect-temps">0:00</span>
       <input type="range" id="lect-barre" min="0" max="${Math.floor(infos.duree)}" value="0" step="1" aria-label="Position">
-      <span class="temps">${tempsLisible(infos.duree)}</span>
+      <span class="temps" id="lect-duree">${tempsLisible(infos.duree)}</span>
       ${infos.audios.length > 1 ? `<select id="lect-audio" aria-label="Son">${infos.audios.map((a) => `<option value="${a.index}"${a.index === audioDefaut ? " selected" : ""}>Son · ${esc(a.nom)}</option>`).join("")}</select>` : ""}
       ${textes.length ? `<select id="lect-sous" aria-label="Sous-titres"><option value="">Sans sous-titres</option>${textes.map((x) => `<option value="${x.index}">Sous-titres · ${esc(x.nom)}</option>`).join("")}</select>` : ""}
       <button class="btn btn-petit" type="button" id="lect-son" aria-label="Couper le son">🔊</button>
       <input type="range" id="lect-volume" class="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume">
       <button class="btn btn-petit" type="button" id="lect-plein" aria-label="Plein écran">⛶</button>
     </div>
-    <p class="note lect-info">Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""}).</p>`;
+    <p class="note lect-info">${direct ? "Lu directement" : `Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())})`}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""} · ← → : 10 s · espace : pause</p>`;
   const video = zone.querySelector("video"), barre = $("#lect-barre"), temps = $("#lect-temps"), jouer = $("#lect-jouer"), etat = $("#etat-lecteur");
   const montrer = (t) => { etat.textContent = t; etat.hidden = !t; };
 
@@ -776,6 +770,20 @@ async function lecteurConverti(e, infos) {
   };
 
   const depuis = async (t) => {
+    if (direct) {   // fichier lu tel quel : le navigateur va où on veut tout seul
+      if (!st.sid) {
+        st.sid = "direct";
+        video.src = urlVoir(e.chemin);
+        sousTitres();
+        video.addEventListener("error", () => { if (!st.fini && !infos.inconnu) { direct = false; st.sid = null; depuis(t); } else montrer("Ce format ne se lit pas dans le navigateur."); }, { once: true });
+        video.addEventListener("loadedmetadata", () => {
+          if (!infos.duree && isFinite(video.duration)) { infos.duree = video.duration; barre.max = String(Math.floor(video.duration)); $("#lect-duree").textContent = tempsLisible(video.duration); }
+          if (t) video.currentTime = t;
+        }, { once: true });
+        video.play().catch(() => montrer("Clique sur ▶ pour lancer la lecture."));
+      } else video.currentTime = t;
+      return;
+    }
     montrer("Le serveur prépare la vidéo…");
     if (st.hls) { st.hls.destroy(); st.hls = null; }
     video.removeAttribute("src"); video.load();
@@ -824,13 +832,36 @@ async function lecteurConverti(e, infos) {
   jouer.onclick = () => { if (!st.sid) depuis(0); else if (video.paused) video.play(); else video.pause(); };
   video.onclick = () => jouer.onclick();
   barre.addEventListener("input", () => { st.glisse = true; temps.textContent = tempsLisible(+barre.value); });
-  barre.addEventListener("change", () => {
-    st.glisse = false;
-    const t = +barre.value, dans = t - st.debut;
+  const position = () => st.debut + video.currentTime;
+  const allerA = (t) => {
+    t = Math.max(0, Math.min(t, (infos.duree || Infinity) - 1));
+    temps.textContent = tempsLisible(t); barre.value = String(Math.floor(t));
+    const dans = t - st.debut;
     const fin = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
-    if (dans >= 0 && dans <= fin) { st.garde = false; video.currentTime = dans; }   // déjà converti : on y va directement
+    if (direct || (dans >= 0 && dans <= fin)) { st.garde = false; if (direct) depuis(t); else video.currentTime = dans; }   // déjà converti : on y va directement
     else depuis(t);
-  });
+  };
+  barre.addEventListener("change", () => { st.glisse = false; allerA(+barre.value); });
+  // Plusieurs appuis rapides sur ±10 s s'additionnent avant de relancer (utile quand le serveur convertit).
+  let saut = null;
+  const decaler = (d) => {
+    if (!saut) saut = { cible: position() };
+    saut.cible = Math.max(0, saut.cible + d);
+    temps.textContent = tempsLisible(saut.cible); barre.value = String(Math.floor(saut.cible));
+    clearTimeout(saut.minuteur);
+    saut.minuteur = setTimeout(() => { const c = saut.cible; saut = null; allerA(c); }, 350);
+  };
+  $("#lect-recul").onclick = () => decaler(-10);
+  $("#lect-avance").onclick = () => decaler(10);
+  const clavier = (ev) => {
+    if (!visionneuse.open || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
+    if (ev.key === "ArrowLeft") { ev.preventDefault(); decaler(-10); }
+    else if (ev.key === "ArrowRight") { ev.preventDefault(); decaler(10); }
+    else if (ev.key === " " || ev.key === "k") { ev.preventDefault(); jouer.onclick(); }
+    else if (ev.key === "m") { ev.preventDefault(); $("#lect-son").onclick(); }
+    else if (ev.key === "f") { ev.preventDefault(); $("#lect-plein").onclick(); }
+  };
+  document.addEventListener("keydown", clavier);
   const audio = $("#lect-audio");
   if (audio) audio.onchange = () => { st.audio = +audio.value; depuis(st.debut + video.currentTime); };
   const sous = $("#lect-sous");
@@ -850,8 +881,10 @@ async function lecteurConverti(e, infos) {
   lecteurActif = {
     fin: () => {
       st.fini = true;
+      document.removeEventListener("keydown", clavier);
       if (st.hls) st.hls.destroy();
-      if (st.sid) api(`/api/lecture/${st.sid}/arreter`, { method: "POST" }).catch(() => {});
+      if (st.sid && st.sid !== "direct") api(`/api/lecture/${st.sid}/arreter`, { method: "POST" }).catch(() => {});
+      video.removeAttribute("src"); video.load();
       lecteurActif = null;
     },
   };

@@ -3,6 +3,7 @@
     "version": "0.8.1",
     "date": "2026-11-09",
     "changements": [
+      "Lecteur vidéo : le même lecteur pour toutes les vidéos (MP4 compris), avec boutons −10 s et +10 s. Au clavier : ← → pour 10 s, espace pour pause, M pour couper le son, F pour le plein écran.",
       "Lecteur vidéo : saut dans le film plus rapide, et la lecture ne s'arrête plus entre deux morceaux.",
       "Lecteur vidéo : sous-titres et temps affiché bien calés après un saut.",
       "Lecteur vidéo : bouton pour couper le son et réglage du volume (sur ordinateur ; sur iPhone, les boutons du téléphone).",
