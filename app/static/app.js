@@ -1423,7 +1423,7 @@ const AIDE = [
   ["Un disque branché n'apparaît pas", [
     "Attends 15 secondes, puis Disques → Actualiser.",
     "Formats lisibles : exFAT, FAT, NTFS, ext4. Un disque Mac (APFS) est signalé comme illisible : reformate-le en exFAT avec l'Utilitaire de disque.",
-    "Sur un hub USB, préfère un hub alimenté : un disque 2,5\" peut manquer de courant.",
+    "Le disque fait des petits clics et n'apparaît pas : il manque de courant. Branche-le directement sur le serveur, ou sur un hub alimenté (avec son propre bloc secteur) : un hub sans alimentation ne suffit pas pour un disque 2,5\".",
     "Si tu avais cliqué « Oublier ce disque », remets-le en ajout automatique depuis Disques.",
   ]],
   ["Un dossier de disque paraît vide dans Fichiers", [
