@@ -1,5 +1,34 @@
 [
   {
+    "version": "0.10.0",
+    "date": "2026-11-10",
+    "changements": [
+      "Comptes Nextcloud (façon Dropbox) : chacun peut demander un compte, un super admin le valide dans Jabba (alerte à chaque demande).",
+      "Chaque compte a 5 Go par défaut. Les admins changent l'espace sans dépasser le plafond fixé par le super admin ; chaque changement est noté au Journal.",
+      "Dossiers communs pour tous les membres ou pour un groupe : lecture seule, dépôt (ajouter et modifier sans supprimer) ou accès complet.",
+      "Rangs (en option, réglés par le compte du serveur) : des rangs nommés librement, du plus bas au plus haut (par exemple Adhérent, Employé, Gérant). On choisit le rang en validant une inscription ; un dossier commun donné à un rang est vu par ce rang et ceux au-dessus, pas par ceux en dessous.",
+      "Ajouter un compte à la main, nouveau mot de passe, suspendre, supprimer, groupes."
+    ]
+  },
+  {
+    "version": "0.9.0",
+    "date": "2026-11-10",
+    "changements": [
+      "Sauvegardes : chaque nuit, une copie chiffrée des fichiers, des réglages des outils (avec leurs bases de données) et de ceux du serveur part sur le disque choisi. Seules les nouveautés prennent de la place ; on garde 7 jours, 4 semaines et 6 mois.",
+      "Sauvegardes : un disque en lecture seule n'est ouvert en écriture que le temps de la copie. Disque absent : alerte, et la copie part dès son retour. Échec : alerte, et nouvel essai chaque heure.",
+      "Sauvegardes : pour retrouver un fichier, choisis une date puis le fichier ou le dossier ; il revient dans « Mes dossiers › Restaurations », sans rien écraser.",
+      "Nouveau type d'alerte « Sauvegardes » et nouvelle catégorie au Journal."
+    ]
+  },
+  {
+    "version": "0.8.2",
+    "date": "2026-11-09",
+    "changements": [
+      "Lecteur vidéo : comme YouTube, deux touches rapides à droite de l'image avancent de 10 s, à gauche reculent de 10 s ; chaque touche de plus ajoute 10 s. Une touche au centre : pause.",
+      "Lecteur vidéo : plein écran avec les commandes de Jabba, y compris sur iPhone (plus de lecteur « direct » du système, barre juste). Les commandes se cachent après 3 s et reviennent d'une touche."
+    ]
+  },
+  {
     "version": "0.8.1",
     "date": "2026-11-09",
     "changements": [

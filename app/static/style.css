@@ -326,3 +326,43 @@ body.mode-invite main { margin: 0 auto; }
 .lect-info { color: #8A909C; margin: 0; font-size: 12px; }
 .commandes input.volume { flex: 0 0 90px; min-width: 70px; }
 @media (hover: none) { .commandes input.volume { display: none; } }   /* iPhone : le volume se règle avec les boutons du téléphone */
+
+/* Lecteur : touches à gauche / à droite, plein écran avec nos commandes */
+.saut-indic { position: absolute; top: 0; bottom: 64px; width: 35%; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 600; font-size: 18px; text-shadow: 0 1px 4px rgba(0,0,0,.8); pointer-events: none;
+  background: radial-gradient(circle at center, rgba(255,255,255,.18), transparent 60%); }
+.saut-indic.gauche { left: 0; border-radius: 0 50% 50% 0; }
+.saut-indic.droite { right: 0; border-radius: 50% 0 0 50%; }
+.lecteur video { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.lecteur.plein { position: fixed; inset: 0; z-index: 1000; background: #000; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); border-radius: 0; }
+.lecteur.plein, .lecteur:fullscreen { grid-template-rows: minmax(0, 1fr); }
+.lecteur.plein video, .lecteur:fullscreen video { border-radius: 0; }
+.lecteur.plein .commandes, .lecteur:fullscreen .commandes { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, rgba(0,0,0,.75)); transition: opacity .3s; }
+.lecteur.plein .lect-info, .lecteur:fullscreen .lect-info { display: none; }
+.lecteur.plein .saut-indic, .lecteur:fullscreen .saut-indic { bottom: 0; }
+.lecteur.repos .commandes { opacity: 0; pointer-events: none; }
+.lecteur.repos video { cursor: none; }
+
+/* sauvegardes */
+.carte > .ligne-reglage { padding: 10px 0; border-top: 1px solid var(--bord-doux); }
+.sauv-liste { display: flex; flex-direction: column; }
+.sauv-ligne { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 4px; border: 0; border-top: 1px solid var(--bord-doux); background: none; color: inherit; font: inherit; text-align: left; width: 100%; cursor: pointer; }
+div.sauv-ligne { cursor: default; }
+.sauv-ligne:first-child { border-top: 0; }
+.sauv-ligne span { overflow-wrap: anywhere; }
+button.sauv-ligne:hover { background: var(--fond); }
+
+/* comptes Nextcloud */
+.nuage-compte { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 4px; border: 0; border-top: 1px solid var(--bord-doux); background: none; color: inherit; font: inherit; text-align: left; width: 100%; cursor: pointer; }
+.nuage-compte:first-child { border-top: 0; }
+.nuage-compte:hover { background: var(--fond); }
+.nuage-qui { min-width: 0; overflow-wrap: anywhere; }
+.nuage-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.nuage-badges:empty { display: none; }
+.nuage-espace { flex-shrink: 0; width: 150px; text-align: right; font-size: 14px; }
+.nuage-espace .jauge { margin-top: 6px; }
+.nuage-attente { border-color: var(--alerte, #d97706); margin-top: 16px; }
+.carte .actions .btn-petit { margin: 0; }
+@media (max-width: 600px) { .nuage-compte { flex-direction: column; align-items: stretch; } .nuage-espace { width: auto; text-align: left; } }
+.sauv-ligne > span.note { white-space: nowrap; }

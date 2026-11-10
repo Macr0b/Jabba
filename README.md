@@ -28,7 +28,10 @@ Une appli web installable (écran d'accueil de l'iPhone, Dock du Mac) qui sert d
   - journal d'activité ;
   - mise à jour de l'appli en un clic ;
   - historique des versions ;
-  - terminal du serveur (super admin, mot de passe redemandé).
+  - terminal du serveur (super admin, mot de passe redemandé) ;
+  - sauvegardes.
+- **Comptes Nextcloud** (façon Dropbox) : inscription libre validée par un super admin, 5 Go par défaut, espace changé par les admins sous un plafond fixé par le super admin, groupes, dossiers communs (lecture seule, dépôt ou accès complet) pour tous les membres, un groupe ou un rang (rangs en option, nommés librement : un dossier donné à un rang est vu par ce rang et ceux au-dessus). Tout passe par les applis officielles de Nextcloud (Registration, Team folders) et est noté au Journal.
+- **Sauvegardes** : chaque nuit, une copie chiffrée ([restic](https://restic.net)) des fichiers, des réglages des outils (avec une copie propre de leurs bases de données) et de ceux du serveur part sur le disque choisi, dans un dossier caché. Seules les nouveautés prennent de la place ; on garde 7 jours, 4 semaines et 6 mois. Une sauvegarde manquée (disque absent, serveur éteint) part dès que possible. Pour récupérer un fichier : choisir une date, puis le fichier ; il revient à côté, dans « Mes dossiers › Restaurations », sans rien écraser. La phrase de passe est montrée une seule fois : sans elle, les sauvegardes sont illisibles.
 
 Tout est en français. Aucune dépendance externe dans l'interface : xterm.js (terminal) et hls.js (lecteur vidéo) sont livrés avec l'appli.
 

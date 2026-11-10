@@ -26,6 +26,7 @@ TYPES = {
     "nouveau_disque": ("Nouveau disque", "Quand un disque branché est ajouté tout seul, ou s'il est illisible."),
     "mises_a_jour": ("Mises à jour", "Nouvelle version de l'appli, ou redémarrage en attente."),
     "securite": ("Sécurité", "Mot de passe raté 5 fois, mot de passe changé, accès refusé à un inconnu."),
+    "sauvegardes": ("Sauvegardes", "Sauvegarde échouée, incomplète, ou en attente du disque."),
     "comptes": ("Comptes", "Demande de mot de passe oublié, compte ajouté ou retiré, rang changé."),
 }
 

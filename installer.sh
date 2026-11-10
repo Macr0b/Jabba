@@ -56,7 +56,7 @@ etape "Outils de base et mises à jour"
 export DEBIAN_FRONTEND=noninteractive
 lancer apt-get update || echec "apt-get update a échoué."
 lancer apt-get full-upgrade -y || echec "La mise à jour du système a échoué."
-lancer apt-get install -y curl git htop nano jq unattended-upgrades apt-listchanges avahi-daemon ca-certificates parted \
+lancer apt-get install -y curl git htop nano jq unattended-upgrades apt-listchanges avahi-daemon ca-certificates parted restic \
   || echec "Installation des outils de base impossible."
 ok "Système à jour, outils installés"
 

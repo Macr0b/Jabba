@@ -1,2 +1,1 @@
-"""Numéro de version de l'appli (aussi dans app/versions.json)."""
-VERSION = "0.8.1"
+VERSION = "0.10.0"

@@ -535,7 +535,7 @@ pages.systeme = async () => {
   const [s, a] = await Promise.all([api("/api/systeme"), api("/api/admin/etat")]);
   contenu.innerHTML = `
     <div class="entete"><div><h1>Système</h1><p class="sous-titre">${esc(s.nom)} · ${esc(s.os)}</p></div>
-      <div class="actions">${adminConnecte && adminConnecte.rang === "super" ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
+      <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a>${adminConnecte && adminConnecte.rang === "super" ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
     ${s.redemarrage_requis ? `<div class="bandeau"><span>Une mise à jour attend un redémarrage. Il se fera automatiquement à 4 h, ou maintenant avec le bouton.</span></div>` : ""}
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
@@ -606,7 +606,9 @@ pages.plus = async () => {
       <a href="#/disques"><span>Disques</span><span>›</span></a>
       <a href="#/corbeille"><span>Corbeille</span><span>›</span></a>
       <a href="#/systeme"><span>Système et alertes</span><span>›</span></a>
+      <a href="#/sauvegardes"><span>Sauvegardes</span><span>›</span></a>
       <a href="#/utilisateurs"><span>Utilisateurs</span><span>›</span></a>
+      <a href="#/nuage"><span>Comptes Nextcloud</span><span>›</span></a>
       <a href="#/invites"><span>Invités</span><span>›</span></a>
       <a href="#" id="sortir-mobile"><span>Se déconnecter</span><span>›</span></a>
       <a href="#/journal"><span>Journal</span><span>›</span></a>
@@ -740,12 +742,11 @@ async function lecteur(e, infos, direct) {
   const st = { sid: null, debut: 0, audio: audioDefaut, sous: null, hls: null, glisse: false, fini: false };
   const textes = infos.soustitres.filter((x) => x.texte);
   zone.innerHTML = `
-    <video playsinline></video>
+    <video playsinline webkit-playsinline disablepictureinpicture></video>
+    <div class="saut-indic gauche" id="saut-gauche" hidden></div><div class="saut-indic droite" id="saut-droite" hidden></div>
     <div class="etat-lecteur" id="etat-lecteur">${direct ? "Chargement…" : "Le serveur prépare la vidéo…"}</div>
     <div class="commandes">
-      <button class="btn btn-petit" type="button" id="lect-recul" aria-label="Reculer de 10 secondes" title="Reculer de 10 s (←)">↺ 10</button>
       <button class="btn btn-petit" type="button" id="lect-jouer" aria-label="Lecture">▶</button>
-      <button class="btn btn-petit" type="button" id="lect-avance" aria-label="Avancer de 10 secondes" title="Avancer de 10 s (→)">10 ↻</button>
       <span class="temps" id="lect-temps">0:00</span>
       <input type="range" id="lect-barre" min="0" max="${Math.floor(infos.duree)}" value="0" step="1" aria-label="Position">
       <span class="temps" id="lect-duree">${tempsLisible(infos.duree)}</span>
@@ -755,7 +756,7 @@ async function lecteur(e, infos, direct) {
       <input type="range" id="lect-volume" class="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume">
       <button class="btn btn-petit" type="button" id="lect-plein" aria-label="Plein écran">⛶</button>
     </div>
-    <p class="note lect-info">${direct ? "Lu directement" : `Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())})`}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""} · ← → : 10 s · espace : pause</p>`;
+    <p class="note lect-info">${direct ? "Lu directement" : `Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())})`}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""} · touche deux fois à gauche ou à droite de l'image : 10 s</p>`;
   const video = zone.querySelector("video"), barre = $("#lect-barre"), temps = $("#lect-temps"), jouer = $("#lect-jouer"), etat = $("#etat-lecteur");
   const montrer = (t) => { etat.textContent = t; etat.hidden = !t; };
 
@@ -830,7 +831,6 @@ async function lecteur(e, infos, direct) {
     if (!st.glisse) barre.value = String(Math.floor(t));
   });
   jouer.onclick = () => { if (!st.sid) depuis(0); else if (video.paused) video.play(); else video.pause(); };
-  video.onclick = () => jouer.onclick();
   barre.addEventListener("input", () => { st.glisse = true; temps.textContent = tempsLisible(+barre.value); });
   const position = () => st.debut + video.currentTime;
   const allerA = (t) => {
@@ -851,8 +851,33 @@ async function lecteur(e, infos, direct) {
     clearTimeout(saut.minuteur);
     saut.minuteur = setTimeout(() => { const c = saut.cible; saut = null; allerA(c); }, 350);
   };
-  $("#lect-recul").onclick = () => decaler(-10);
-  $("#lect-avance").onclick = () => decaler(10);
+  // Comme YouTube : deux touches rapides à gauche ou à droite de l'image = −10 s / +10 s,
+  // puis chaque touche suivante du même côté ajoute 10 s. Une seule touche = pause / lecture.
+  const indic = { "-1": $("#saut-gauche"), "1": $("#saut-droite") };
+  let tape = { t: 0, cote: 0, serie: 0, minuteur: null, masque: null };
+  const montrerSaut = (cote) => {
+    const el = indic[cote]; el.textContent = (cote < 0 ? "« −" : "+") + (tape.serie * 10) + " s" + (cote < 0 ? "" : " »");
+    el.hidden = false; clearTimeout(tape.masque); tape.masque = setTimeout(() => { el.hidden = true; }, 700);
+  };
+  video.onclick = null;
+  video.addEventListener("click", (ev) => {
+    const r = video.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width;
+    const cote = x < 0.35 ? -1 : x > 0.65 ? 1 : 0, maintenant = Date.now();
+    const cachees = zone.classList.contains("repos");
+    reveiller();
+    if (cachees && !cote) return;   // commandes cachées : une touche au centre les fait juste revenir
+    if (cote && ((maintenant - tape.t < 320 && tape.cote === cote) || (tape.serie && tape.cote === cote && maintenant - tape.t < 700))) {
+      clearTimeout(tape.minuteur);
+      tape.serie = tape.serie ? tape.serie + 1 : 1;
+      tape.t = maintenant; tape.cote = cote;
+      decaler(10 * cote); montrerSaut(cote);
+      return;
+    }
+    tape = { ...tape, t: maintenant, cote, serie: 0 };
+    clearTimeout(tape.minuteur);
+    tape.minuteur = setTimeout(() => { if (!tape.serie) jouer.onclick(); }, cote ? 320 : 0);
+  });
+  video.addEventListener("dblclick", (ev) => ev.preventDefault());
   const clavier = (ev) => {
     if (!visionneuse.open || /INPUT|SELECT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.key === "ArrowLeft") { ev.preventDefault(); decaler(-10); }
@@ -860,6 +885,7 @@ async function lecteur(e, infos, direct) {
     else if (ev.key === " " || ev.key === "k") { ev.preventDefault(); jouer.onclick(); }
     else if (ev.key === "m") { ev.preventDefault(); $("#lect-son").onclick(); }
     else if (ev.key === "f") { ev.preventDefault(); $("#lect-plein").onclick(); }
+    if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") { const c = ev.key === "ArrowLeft" ? -1 : 1; tape.serie = tape.cote === c && Date.now() - tape.t < 700 ? tape.serie + 1 : 1; tape.cote = c; tape.t = Date.now(); montrerSaut(c); }
   };
   document.addEventListener("keydown", clavier);
   const audio = $("#lect-audio");
@@ -873,11 +899,26 @@ async function lecteur(e, infos, direct) {
   volume.addEventListener("input", () => { video.volume = +volume.value; video.muted = +volume.value === 0; try { localStorage.setItem("jabba-volume", volume.value); } catch (_) { /* rien */ } majSon(); });
   video.addEventListener("volumechange", majSon);
   majSon();
+  // Plein écran avec NOS commandes. Sur iPhone, le plein écran du système reprendrait la vidéo
+  // dans son propre lecteur (marqué « direct », barre fausse) : on remplit l'écran nous-mêmes.
+  const pleinActif = () => document.fullscreenElement === zone || document.webkitFullscreenElement === zone || zone.classList.contains("plein");
   $("#lect-plein").onclick = () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (zone.requestFullscreen) zone.requestFullscreen();
-    else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else if (zone.classList.contains("plein")) zone.classList.remove("plein");
+    else if (zone.requestFullscreen) zone.requestFullscreen().catch(() => zone.classList.add("plein"));
+    else if (zone.webkitRequestFullscreen) zone.webkitRequestFullscreen();
+    else zone.classList.add("plein");
+    reveiller();
   };
+  // En plein écran, les commandes se cachent après 3 s sans toucher ; une touche les fait revenir.
+  let repos = null;
+  function reveiller() {
+    zone.classList.remove("repos"); clearTimeout(repos);
+    repos = setTimeout(() => { if (pleinActif() && !video.paused) zone.classList.add("repos"); }, 3000);
+  }
+  zone.addEventListener("pointermove", reveiller);
+  video.addEventListener("pause", reveiller);
+  visionneuse.addEventListener("cancel", (ev) => { if (zone.classList.contains("plein")) { ev.preventDefault(); zone.classList.remove("plein"); } }, { once: true });
   lecteurActif = {
     fin: () => {
       st.fini = true;
@@ -1173,7 +1214,7 @@ pages.utilisateurs = async () => {
   const parLogin = Object.fromEntries(d.comptes.filter((c) => c.tailscale).map((c) => [c.tailscale, c]));
   contenu.innerHTML = `
     <div class="entete"><div><h1>Utilisateurs</h1><p class="sous-titre">Les admins de l'appli, et qui se connecte. Tu es <strong>${esc(d.moi.identifiant)}</strong> · ${RANG[d.moi.rang]}.</p></div>
-      <div class="actions"><button class="btn btn-p" id="ajouter">Ajouter un admin</button></div></div>
+      <div class="actions"><a class="btn" href="#/nuage">Comptes Nextcloud</a><button class="btn btn-p" id="ajouter">Ajouter un admin</button></div></div>
     ${d.demandes.map((x) => `<div class="bandeau demande"><span><strong>${esc(x.nom)}</strong> (${esc(x.identifiant)}) a oublié son mot de passe · demandé par ${esc(x.demandeur)}, ${esc(ilYa(x.t))}.${x.autre_personne ? " <strong>Attention : demandé depuis le compte Tailscale de quelqu'un d'autre.</strong> Le mot de passe provisoire n'ira qu'à son compte à lui." : ""}</span>
       <span class="actions"><button class="btn btn-petit btn-p" data-accepter="${esc(x.id)}">Accepter</button><button class="btn btn-petit" data-refuser="${esc(x.id)}">Refuser</button></span></div>`).join("")}
     ${!superAdmin && d.demandes_n ? `<div class="bandeau"><span>${d.demandes_n} demande${d.demandes_n > 1 ? "s" : ""} de mot de passe en attente : seul un super admin peut y répondre.</span></div>` : ""}
@@ -1285,7 +1326,7 @@ async function montrerProvisoire(compte, mdp) {
 }
 
 // ------------------------------------------------------------ journal
-const FAMILLES = { outil: "Outil", admin: "Admin", disque: "Disque", courant: "Courant", fichier: "Fichier", appli: "Appli", alerte: "Alerte", systeme: "Système" };
+const FAMILLES = { outil: "Outil", admin: "Admin", disque: "Disque", courant: "Courant", fichier: "Fichier", appli: "Appli", alerte: "Alerte", sauvegardes: "Sauvegardes", nuage: "Nextcloud", systeme: "Système" };
 const ligneJournal = (ev) => `<div class="evenement f-${esc(ev.famille)}">
     <span class="famille">${FAMILLES[ev.famille] || "Système"}</span>
     <span class="texte-ev">${esc(ev.texte)}${ev.qui ? ` <span class="note">· ${esc(ev.qui)}</span>` : ""}</span>
@@ -1734,6 +1775,455 @@ pages.terminal = async () => {
 };
 window.addEventListener("hashchange", () => { if (terminalOuvert && !location.hash.startsWith("#/terminal")) terminalOuvert.fin(); });
 
+// ------------------------------------------------------------ comptes Nextcloud
+const go = (o) => (o == null ? "illimité" : String(Math.round((o / 1073741824) * 10) / 10).replace(".", ",") + " Go");
+const nomGroupe = (g, n) => {
+  if (g === n.tous) return "Tous les membres";
+  const r = (n.rangs || []).find((x) => x.id === g);
+  return r ? `${r.nom} et au-dessus` : g;
+};
+// À qui donner un dossier : tous, puis les rangs (du plus haut au plus bas), puis les groupes.
+const ciblesDossier = (n) => [
+  ...n.groupes.filter((g) => g.id === n.tous),
+  ...(n.rangs_actif ? [...n.rangs].reverse() : []),
+  ...n.groupes.filter((g) => g.id !== n.tous),
+];
+async function choisirRang(n, titre, actuel) {
+  const choix = [...n.rangs].reverse().map((r) => ({ texte: r.nom + (r.id === actuel ? " (actuel)" : ""), id: r.id }));
+  choix.push({ texte: "Aucun rang" + (actuel ? "" : " (actuel)"), id: null });
+  return menu(titre, choix);
+}
+
+async function choisirEspace(titre, actuel, n, superAdmin, illimite = true) {
+  const tailles = [1, 2, 5, 10, 20, 50, 100, 200].filter((t) => superAdmin || t <= n.plafond_go);
+  const choix = tailles.map((t) => ({ texte: `${t} Go${actuel === t * 1073741824 ? " (actuel)" : ""}`, go: t }));
+  choix.push({ texte: "Autre…", autre: true });
+  if (superAdmin && illimite) choix.push({ texte: "Illimité", go: null });
+  const c = await menu(titre + (superAdmin ? "" : ` (plafond : ${n.plafond_go} Go)`), choix);
+  if (!c) return undefined;
+  if (!c.autre) return c.go;
+  const v = await demander({ titre, texte: "En Go (par exemple 7,5).", champ: "" });
+  const x = v && parseFloat(v.replace(",", "."));
+  return x > 0 ? x : undefined;
+}
+
+pages.nuage = async () => {
+  contenu.innerHTML = `<div class="entete"><div><h1>Comptes Nextcloud</h1></div></div>${chargement(4)}`;
+  const n = await api("/api/nuage");
+  const superAdmin = n.rang === "super";
+  const recharger = () => pages.nuage().catch(montrerErreur);
+  const agir = async (url, json, ok) => {
+    try { const r = await api(url, { method: "POST", json }); if (ok) toast(ok); return r; }
+    catch (e) { toast(e.message, true); return null; }
+  };
+  if (!n.etat.present) {
+    contenu.innerHTML = `<div class="entete"><div><h1>Comptes Nextcloud</h1></div></div>
+      <section class="carte pad"><p>Nextcloud n'est pas allumé. Active-le dans l'<a href="#/outils">Établi</a>, puis reviens ici.</p></section>`;
+    return;
+  }
+  if (!n.etat.pret) {
+    contenu.innerHTML = `<div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">Pas encore en route.</p></div></div>
+      <section class="carte pad"><h2>Mettre en route</h2>
+        <p class="note" style="margin:8px 0">Comme Dropbox : chacun peut demander un compte, et un super admin le valide ici. Chaque compte a <strong>5 Go</strong> par défaut, que les admins peuvent changer sans dépasser le plafond. Des <strong>dossiers communs</strong> peuvent être partagés avec tous les membres ou avec un groupe.</p>
+        <p class="note" style="margin:8px 0 14px">Jabba installe deux applis officielles de Nextcloud (inscription, dossiers communs) et pose les réglages. Les comptes déjà créés ne changent pas.</p>
+        ${superAdmin ? '<div class="actions"><button class="btn btn-p" id="nuage-route">Mettre en route</button></div>' : '<p class="note">Seul un super admin peut le faire.</p>'}
+      </section>`;
+    const b = $("#nuage-route");
+    if (b) b.onclick = async () => {
+      b.disabled = true; b.textContent = "Installation… (1 à 2 minutes)";
+      await agir("/api/nuage/mettre-en-route", {}, "Comptes Nextcloud en route");
+      recharger();
+    };
+    return;
+  }
+  const attente = n.comptes.filter((c) => c.etat === "attente");
+  const autres = n.comptes.filter((c) => c.etat !== "attente");
+  const ligneCompte = (c) => {
+    const p = c.quota && c.utilise != null ? Math.min(100, Math.round((100 * c.utilise) / c.quota)) : 0;
+    return `<button class="nuage-compte" data-compte="${esc(c.id)}">
+      <span class="nuage-qui"><strong>${esc(c.nom)}</strong> <span class="note">${esc(c.id)}${c.email ? " · " + esc(c.email) : ""}</span>
+        <span class="nuage-badges">${c.rang_nuage ? `<span class="pastille p-ok">${esc((n.rangs.find((r) => r.id === c.rang_nuage) || {}).nom || "")}</span>` : ""}${c.etat === "suspendu" ? '<span class="pastille p-rouge">Suspendu</span>' : ""}${c.admin ? '<span class="pastille p-gris">Admin Nextcloud</span>' : ""}${c.groupes.filter((g) => g !== n.tous && g !== "admin" && !g.startsWith("rang-")).map((g) => `<span class="pastille p-gris">${esc(g)}</span>`).join("")}</span></span>
+      <span class="nuage-espace"><span>${c.utilise != null ? octets(c.utilise) + " / " : ""}${go(c.quota)}</span>${c.quota ? `<span class="jauge"><span style="width:${p}%;${p >= 90 ? "background:var(--rouge)" : ""}"></span></span>` : ""}</span>
+    </button>`;
+  };
+  const acces = (f) => f.acces.map((a) => `${esc(nomGroupe(a.groupe, n))} : ${esc(n.modes[a.mode].nom.toLowerCase())}`).join(" · ") || "Personne";
+  contenu.innerHTML = `
+    <div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">${autres.length} compte${autres.length > 1 ? "s" : ""} · ${go(n.promis)} promis${n.espace ? ` · ${go(n.espace.total - n.espace.utilise)} libres sur le disque de données` : ""}</p></div>
+      <div class="actions">${superAdmin ? '<button class="btn btn-p" id="nuage-ajouter">Ajouter un compte</button>' : ""}</div></div>
+    ${attente.length ? `<section class="carte pad nuage-attente"><h2>À valider</h2>
+      ${attente.map((c) => `<div class="sauv-ligne"><span><strong>${esc(c.nom)}</strong> <span class="note">${esc(c.id)}${c.email ? " · " + esc(c.email) : ""}</span></span>
+        ${superAdmin ? `<span class="actions"><button class="btn btn-petit" data-refuser="${esc(c.id)}">Refuser</button><button class="btn btn-p btn-petit" data-valider="${esc(c.id)}">Valider</button></span>` : '<span class="note">Un super admin doit valider</span>'}</div>`).join("")}
+    </section>` : ""}
+    <section class="carte pad" style="margin-top:16px"><h2>Comptes</h2>
+      <div class="sauv-liste">${autres.map(ligneCompte).join("") || '<p class="note">Aucun compte.</p>'}</div></section>
+    <div class="grille g2" style="margin-top:16px">
+      <section class="carte pad"><div class="entete-carte"><h2>Dossiers communs</h2><button class="btn btn-petit" id="nuage-dossier">Nouveau</button></div>
+        <p class="note" style="margin:6px 0 8px">Ils apparaissent dans le Nextcloud de chaque personne qui y a accès.</p>
+        <div class="sauv-liste">${n.dossiers.map((f) => `<button class="sauv-ligne" data-dossier="${f.id}"><span><strong>${esc(f.nom)}</strong><br><span class="note">${acces(f)}</span></span><span class="note">${octets(f.taille)}${f.quota ? " / " + go(f.quota) : ""}</span></button>`).join("") || '<p class="note">Aucun pour l\'instant.</p>'}</div></section>
+      <section class="carte pad"><div class="entete-carte"><h2>Rangs</h2>${n.createur ? `<button class="interrupteur" role="switch" aria-checked="${n.rangs_actif}" id="rangs-actif" aria-label="Utiliser des rangs"><span></span></button>` : ""}</div>
+        <p class="note" style="margin:6px 0 8px">${n.rangs_actif
+          ? "Du plus haut au plus bas. Un dossier commun donné à un rang est vu par ce rang et ceux au-dessus, pas par ceux en dessous."
+          : "Désactivés. Avec les rangs (par exemple Adhérent, Employé, Gérant), on donne des dossiers communs à un rang et à ceux au-dessus."}${n.createur ? "" : " Seul le compte du serveur règle les rangs."}</p>
+        ${n.rangs_actif ? `<div class="sauv-liste">${[...n.rangs].reverse().map((r) => `<button class="sauv-ligne" data-rang="${esc(r.id)}"${n.createur ? "" : " disabled"}><span><strong>${esc(r.nom)}</strong></span><span class="note">${r.membres} personne${r.membres > 1 ? "s" : ""}</span></button>`).join("") || '<p class="note">Aucun rang pour l\'instant.</p>'}</div>
+        ${n.createur ? '<div class="actions" style="margin-top:10px"><button class="btn btn-petit" id="rang-nouveau">Nouveau rang</button></div>' : ""}` : ""}
+      </section>
+      <section class="carte pad"><div class="entete-carte"><h2>Groupes</h2><button class="btn btn-petit" id="nuage-groupe">Nouveau</button></div>
+        <p class="note" style="margin:6px 0 8px">Pour donner un dossier commun à quelques personnes (le fablab, la famille…). Chaque compte validé fait partie de « Tous les membres ».</p>
+        <div class="sauv-liste">${n.groupes.map((g) => `<button class="sauv-ligne" data-groupe="${esc(g.id)}"><span><strong>${esc(nomGroupe(g.id, n))}</strong></span><span class="note">${g.membres.length} membre${g.membres.length > 1 ? "s" : ""}</span></button>`).join("")}</div></section>
+      ${superAdmin ? `<section class="carte pad"><h2>Réglages</h2>
+        <label class="ligne-reglage"><span><strong>Espace des nouveaux comptes</strong></span><button class="btn btn-petit" id="nuage-defaut">${esc(n.etat.quota_defaut.replace(" GB", " Go").replace(" MB", " Mo"))}</button></label>
+        <label class="ligne-reglage"><span><strong>Plafond par compte</strong><br><span class="note">Un admin ne peut pas donner plus. Un super admin, si.</span></span><button class="btn btn-petit" id="nuage-plafond">${n.plafond_go} Go</button></label>
+        <p class="note" style="margin-top:10px">Inscription : lien « S'inscrire » sur la page de connexion de Nextcloud. Tant que Nextcloud n'a pas d'adresse publique, seuls ceux qui ont accès au serveur peuvent l'ouvrir. L'adresse e-mail n'est pas vérifiée (pas encore de serveur d'e-mails).</p>
+      </section>` : ""}
+    </div>`;
+
+  // à valider
+  contenu.querySelectorAll("[data-valider]").forEach((b) => b.addEventListener("click", async () => {
+    let rang = null;
+    if (n.rangs_actif && n.rangs.length) {
+      const r = await choisirRang(n, `Rang de ${b.dataset.valider}`, null);
+      if (!r) return;
+      rang = r.id;
+    }
+    if (await agir(`/api/nuage/comptes/${encodeURIComponent(b.dataset.valider)}`, { action: "valider", rang }, "Compte validé")) recharger();
+  }));
+  contenu.querySelectorAll("[data-refuser]").forEach((b) => b.addEventListener("click", async () => {
+    if (!(await demander({ titre: `Refuser ${b.dataset.refuser} ?`, texte: "La demande est supprimée. La personne pourra en refaire une.", valider: "Refuser", danger: true }))) return;
+    if (await agir(`/api/nuage/comptes/${encodeURIComponent(b.dataset.refuser)}`, { action: "refuser" }, "Demande refusée")) recharger();
+  }));
+
+  // un compte
+  contenu.querySelectorAll("[data-compte]").forEach((b) => b.addEventListener("click", async () => {
+    const c = n.comptes.find((x) => x.id === b.dataset.compte);
+    const url = `/api/nuage/comptes/${encodeURIComponent(c.id)}`;
+    const choix = [{ texte: `Changer l'espace (${go(c.quota)})`, f: "espace" }, { texte: "Groupes", f: "groupes" }];
+    if (superAdmin && n.rangs_actif && n.rangs.length) choix.unshift({ texte: `Rang (${(n.rangs.find((r) => r.id === c.rang_nuage) || { nom: "aucun" }).nom})`, f: "rang" });
+    if (superAdmin) {
+      choix.push({ texte: "Nouveau mot de passe", f: "mdp" });
+      if (!c.admin) choix.push({ texte: c.etat === "suspendu" ? "Réactiver" : "Suspendre", f: "suspendre" }, { texte: "Supprimer le compte", f: "supprimer", danger: true });
+    }
+    const ch = await menu(`${c.nom} (${c.id})`, choix);
+    if (!ch) return;
+    if (ch.f === "rang") {
+      const r = await choisirRang(n, `Rang de ${c.nom}`, c.rang_nuage);
+      if (r && r.id !== c.rang_nuage && await agir(url, { action: "rang", rang: r.id }, `${c.nom} : ${r.id ? r.texte.replace(" (actuel)", "") : "aucun rang"}`)) recharger();
+    } else if (ch.f === "espace") {
+      const v = await choisirEspace(`Espace de ${c.nom}`, c.quota, n, superAdmin);
+      if (v !== undefined && await agir(url, { action: "quota", go: v }, `Espace de ${c.nom} : ${v == null ? "illimité" : String(v).replace(".", ",") + " Go"}`)) recharger();
+    } else if (ch.f === "groupes") {
+      const g = await menu(`Groupes de ${c.nom}`, n.groupes.filter((x) => x.id !== n.tous).map((x) => ({ texte: (c.groupes.includes(x.id) ? "✓ " : "") + x.id, id: x.id })));
+      if (!g) return;
+      const dedans = !c.groupes.includes(g.id);
+      if (await agir(url, { action: "groupe", groupe: g.id, dedans }, dedans ? `${c.nom} ajouté à ${g.id}` : `${c.nom} retiré de ${g.id}`)) recharger();
+    } else if (ch.f === "mdp") {
+      if (!(await demander({ titre: `Nouveau mot de passe pour ${c.nom} ?`, texte: "L'ancien ne marchera plus. Les applis Nextcloud de la personne devront se reconnecter.", valider: "Changer" }))) return;
+      const r = await agir(url, { action: "mdp" });
+      if (r) await montrerMdpNuage(c, r.mdp);
+    } else if (ch.f === "suspendre") {
+      const actif = c.etat === "suspendu";
+      if (!actif && !(await demander({ titre: `Suspendre ${c.nom} ?`, texte: "La personne ne peut plus se connecter. Ses fichiers sont gardés.", valider: "Suspendre", danger: true }))) return;
+      if (await agir(url, { action: "suspendre", actif }, actif ? "Compte réactivé" : "Compte suspendu")) recharger();
+    } else if (ch.f === "supprimer") {
+      const v = await demander({ titre: `Supprimer ${c.nom} ?`, texte: `Le compte et TOUS ses fichiers sont effacés. Pour confirmer, tape ${c.id}.`, champ: "", valider: "Supprimer", danger: true });
+      if (v !== c.id) { if (v !== null) toast("Pas confirmé : rien n'a été supprimé.", true); return; }
+      if (await agir(url, { action: "supprimer" }, "Compte supprimé")) recharger();
+    }
+  }));
+
+  // ajouter
+  const aj = $("#nuage-ajouter");
+  if (aj) aj.onclick = async () => {
+    const v = await formulaire({ titre: "Ajouter un compte", texte: "Pour quelqu'un qui ne passe pas par l'inscription. Un mot de passe provisoire s'affichera.",
+      champs: [{ nom: "nom", label: "Prénom et nom" }, { nom: "id", label: "Identifiant (minuscules, sans espace)" }, { nom: "email", label: "E-mail (facultatif)", type: "email" },
+        ...(n.rangs_actif && n.rangs.length ? [{ nom: "rang", label: "Rang", valeur: n.rangs[0].id, options: [...[...n.rangs].reverse().map((x) => [x.id, x.nom]), ["", "Aucun rang"]] }] : [])], valider: "Créer" });
+    if (!v || v === "secondaire") return;
+    const r = await agir("/api/nuage/comptes", { id: v.id.trim().toLowerCase(), nom: v.nom, email: v.email, rang: v.rang || null });
+    if (r) { await montrerMdpNuage({ nom: v.nom || v.id, id: v.id.trim().toLowerCase() }, r.mdp); recharger(); }
+  };
+
+  // dossiers communs
+  const choisirMode = (titre) => menu(titre, Object.entries(n.modes).map(([k, m]) => ({ texte: `${m.nom} : ${m.detail}`, mode: k })));
+  $("#nuage-dossier").onclick = async () => {
+    const nom = await demander({ titre: "Nouveau dossier commun", texte: "Son nom, tel qu'il apparaîtra dans Nextcloud.", champ: "", valider: "Suivant" });
+    if (!nom) return;
+    const g = await menu("Pour qui ?", ciblesDossier(n).map((x) => ({ texte: nomGroupe(x.id, n), id: x.id })));
+    if (!g) return;
+    const m = await choisirMode(`${nomGroupe(g.id, n)} pourra…`);
+    if (!m) return;
+    if (await agir("/api/nuage/dossiers", { action: "creer", nom, groupe: g.id, mode: m.mode }, `Dossier « ${nom} » créé`)) recharger();
+  };
+  contenu.querySelectorAll("[data-dossier]").forEach((b) => b.addEventListener("click", async () => {
+    const f = n.dossiers.find((x) => x.id === +b.dataset.dossier);
+    const ch = await menu(f.nom, [{ texte: "Qui y a accès", f: "acces" }, { texte: `Taille maximale (${f.quota ? go(f.quota) : "aucune"})`, f: "quota" },
+      { texte: "Renommer", f: "renommer" }, { texte: "Supprimer le dossier", f: "supprimer", danger: true }]);
+    if (!ch) return;
+    const corps = { id: f.id };
+    if (ch.f === "acces") {
+      const g = await menu(`Accès à « ${f.nom} »`, ciblesDossier(n).map((x) => {
+        const a = f.acces.find((y) => y.groupe === x.id);
+        return { texte: `${nomGroupe(x.id, n)} : ${a ? n.modes[a.mode].nom.toLowerCase() : "pas d'accès"}`, id: x.id, a };
+      }));
+      if (!g) return;
+      const choix = Object.entries(n.modes).map(([k, m]) => ({ texte: `${m.nom} : ${m.detail}`, mode: k }));
+      if (g.a) choix.push({ texte: "Pas d'accès", mode: null, danger: true });
+      const m = await menu(`${nomGroupe(g.id, n)} pourra…`, choix);
+      if (!m) return;
+      Object.assign(corps, { action: "acces", groupe: g.id, mode: m.mode });
+    } else if (ch.f === "quota") {
+      const v = await choisirEspace(`Taille maximale de « ${f.nom} »`, f.quota, { plafond_go: 100000 }, true);
+      if (v === undefined) return;
+      Object.assign(corps, { action: "quota", go: v });
+    } else if (ch.f === "renommer") {
+      const nom = await demander({ titre: "Renommer", champ: f.nom, valider: "Renommer" });
+      if (!nom || nom === f.nom) return;
+      Object.assign(corps, { action: "renommer", nom });
+    } else {
+      const v = await demander({ titre: `Supprimer « ${f.nom} » ?`, texte: "Le dossier et TOUT son contenu sont effacés pour tout le monde. Pour confirmer, tape SUPPRIMER.", champ: "", valider: "Supprimer", danger: true });
+      if (v !== "SUPPRIMER") { if (v !== null) toast("Pas confirmé : rien n'a été supprimé.", true); return; }
+      corps.action = "supprimer";
+    }
+    if (await agir("/api/nuage/dossiers", corps, "C'est fait")) recharger();
+  }));
+
+  // rangs (compte du serveur)
+  const rangs = (json, ok) => agir("/api/nuage/rangs", json, ok).then((r) => r && recharger());
+  const ra = $("#rangs-actif");
+  if (ra) ra.onclick = async () => {
+    if (n.rangs_actif && !(await demander({ titre: "Désactiver les rangs ?", texte: "Chacun garde son rang, mais les dossiers donnés à un rang ne sont plus visibles jusqu'à la réactivation.", valider: "Désactiver", danger: true }))) return;
+    rangs({ action: "activer", actif: !n.rangs_actif }, n.rangs_actif ? "Rangs désactivés" : "Rangs activés");
+  };
+  const rn = $("#rang-nouveau");
+  if (rn) rn.onclick = async () => {
+    const nom = await demander({ titre: "Nouveau rang", texte: "Il se place tout en haut ; tu pourras le descendre ensuite.", champ: "", valider: "Créer" });
+    if (nom) rangs({ action: "creer", nom }, `Rang « ${nom} » créé`);
+  };
+  contenu.querySelectorAll("[data-rang]").forEach((b) => b.addEventListener("click", async () => {
+    const r = n.rangs.find((x) => x.id === b.dataset.rang), i = n.rangs.indexOf(r);
+    const choix = [{ texte: "Renommer", f: "renommer" }];
+    if (i < n.rangs.length - 1) choix.push({ texte: "Monter d'un cran", f: "haut" });
+    if (i > 0) choix.push({ texte: "Descendre d'un cran", f: "bas" });
+    choix.push({ texte: "Supprimer le rang", f: "supprimer", danger: true });
+    const ch = await menu(r.nom, choix);
+    if (!ch) return;
+    if (ch.f === "renommer") {
+      const nom = await demander({ titre: "Renommer le rang", champ: r.nom, valider: "Renommer" });
+      if (nom && nom !== r.nom) rangs({ action: "renommer", id: r.id, nom }, "Rang renommé");
+    } else if (ch.f === "supprimer") {
+      if (await demander({ titre: `Supprimer le rang ${r.nom} ?`, texte: `Ses ${r.membres} membre(s) descendent d'un rang. Les dossiers donnés à ce rang ne leur sont plus donnés.`, valider: "Supprimer", danger: true }))
+        rangs({ action: "supprimer", id: r.id }, "Rang supprimé");
+    } else rangs({ action: "deplacer", id: r.id, sens: ch.f }, "Ordre changé");
+  }));
+
+  // groupes
+  $("#nuage-groupe").onclick = async () => {
+    const nom = await demander({ titre: "Nouveau groupe", texte: "Par exemple : Fablab, Famille…", champ: "", valider: "Créer" });
+    if (nom && await agir("/api/nuage/groupes", { nom }, `Groupe « ${nom} » créé`)) recharger();
+  };
+  contenu.querySelectorAll("[data-groupe]").forEach((b) => b.addEventListener("click", async () => {
+    const g = n.groupes.find((x) => x.id === b.dataset.groupe);
+    const noms = g.membres.map((id) => (n.comptes.find((c) => c.id === id) || { nom: id }).nom);
+    if (g.id === n.tous) return demander({ titre: "Tous les membres", texte: noms.join(", ") || "Personne pour l'instant.", valider: "OK" });
+    const ch = await menu(g.id, [{ texte: "Ajouter quelqu'un", f: "ajouter" }, ...(noms.length ? [{ texte: "Retirer quelqu'un", f: "retirer" }] : []), { texte: "Supprimer le groupe", f: "supprimer", danger: true }]);
+    if (!ch) return;
+    if (ch.f === "supprimer") {
+      if (!(await demander({ titre: `Supprimer le groupe ${g.id} ?`, texte: "Les comptes et les fichiers restent. Ses membres perdent l'accès aux dossiers communs donnés à ce groupe.", valider: "Supprimer", danger: true }))) return;
+      if (await agir("/api/nuage/groupes", { nom: g.id, supprimer: true }, "Groupe supprimé")) recharger();
+      return;
+    }
+    const dedans = ch.f === "ajouter";
+    const liste = n.comptes.filter((c) => c.etat !== "attente" && g.membres.includes(c.id) !== dedans);
+    if (!liste.length) return toast(dedans ? "Tout le monde en fait déjà partie." : "Personne à retirer.");
+    const c = await menu(dedans ? `Ajouter à ${g.id}` : `Retirer de ${g.id}`, liste.map((x) => ({ texte: `${x.nom} (${x.id})`, id: x.id })));
+    if (c && await agir(`/api/nuage/comptes/${encodeURIComponent(c.id)}`, { action: "groupe", groupe: g.id, dedans }, "C'est fait")) recharger();
+  }));
+
+  // réglages
+  if (!superAdmin) return;
+  $("#nuage-defaut").onclick = async () => {
+    const v = await choisirEspace("Espace des nouveaux comptes", null, n, false, false);
+    if (v != null && await agir("/api/nuage/reglages", { quota_defaut_go: v }, `Nouveaux comptes : ${String(v).replace(".", ",")} Go`)) recharger();
+  };
+  $("#nuage-plafond").onclick = async () => {
+    const v = await demander({ titre: "Plafond par compte", texte: "En Go. Un admin ne pourra pas donner plus à un compte.", champ: String(n.plafond_go), valider: "Changer" });
+    const x = v && parseFloat(v.replace(",", "."));
+    if (x > 0 && await agir("/api/nuage/reglages", { plafond_go: x }, `Plafond : ${v} Go`)) recharger();
+  };
+};
+
+async function montrerMdpNuage(c, mdp) {
+  await new Promise((resoudre) => {
+    dform.innerHTML = `<h2>Mot de passe Nextcloud</h2>
+      <p>Donne-le à <strong>${esc(c.nom)}</strong> (identifiant <strong>${esc(c.id)}</strong>). Il ne sera plus affiché. Conseille-lui de le changer dans Nextcloud (Paramètres personnels, Sécurité).</p>
+      <p class="code-secours">${esc(mdp)}</p>
+      <div class="actions"><button class="btn" type="button" id="copier-mdp">Copier</button><button class="btn btn-p" value="ok" type="submit">C'est noté</button></div>`;
+    dialogue.onclose = () => resoudre();
+    dialogue.showModal();
+    $("#copier-mdp").onclick = async () => { try { await navigator.clipboard.writeText(mdp); toast("Copié"); } catch (_) { toast("Copie impossible : sélectionne-le à la main.", true); } };
+  });
+}
+
+// ------------------------------------------------------------ sauvegardes
+const heureDe = (t) => new Date(t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const jourDe = (t) => new Date(t * 1000).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+const dureeCourte = (s) => (s < 60 ? `${Math.max(1, Math.round(s))} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`);
+let suiviSauvegarde = null;
+
+async function montrerPhrase(phrase, premiere) {
+  await new Promise((resoudre) => {
+    dform.innerHTML = `<h2>${premiere ? "La clé de tes sauvegardes" : "Phrase de passe des sauvegardes"}</h2>
+      <p>Tes sauvegardes sont chiffrées avec cette phrase. <strong>Sans elle, personne ne peut les relire, toi non plus</strong>, par exemple si le serveur est perdu et qu'il faut tout récupérer sur un autre ordinateur.</p>
+      <p>${premiere ? "Elle ne sera plus affichée d'elle-même : enregistre-la maintenant dans l'app Mots de passe et note-la sur papier, rangée ailleurs que le disque." : "Garde-la dans l'app Mots de passe et sur papier."}</p>
+      <p class="code-secours">${esc(phrase)}</p>
+      <div class="actions"><button class="btn" type="button" id="copier-phrase">Copier</button><button class="btn btn-p" value="ok" type="submit">C'est noté</button></div>`;
+    dialogue.onclose = () => resoudre();
+    dialogue.showModal();
+    $("#copier-phrase").onclick = async () => { try { await navigator.clipboard.writeText(phrase); toast("Phrase copiée"); } catch (_) { toast("Copie impossible : sélectionne la phrase à la main.", true); } };
+  });
+}
+
+function etatSauvegarde(s) {
+  if (s.en_cours) return `<span class="pastille p-alerte">En cours</span> <span class="note">depuis ${heureDe(s.depuis)}</span>`;
+  const r = s.dernier;
+  if (!r) return `<span class="pastille p-gris">Pas encore faite</span>`;
+  if (!r.ok) return `<span class="pastille p-rouge">Échouée</span> <span class="note">${esc(ilYa(r.fin))}</span><br><span style="color:var(--rouge)">${esc(r.erreur)}</span>`;
+  return `<span class="pastille p-ok">Réussie</span> <span class="note">${esc(ilYa(r.fin))} à ${heureDe(r.fin)}, en ${dureeCourte(r.duree)}</span>${r.avert ? `<br><span class="note">${esc(r.avert)}</span>` : ""}`;
+}
+
+pages.sauvegardes = async () => {
+  if (suiviSauvegarde) { clearTimeout(suiviSauvegarde); suiviSauvegarde = null; }
+  contenu.innerHTML = `<div class="entete"><div><h1>Sauvegardes</h1></div></div>${chargement()}`;
+  const s = await api("/api/sauvegardes");
+  const superAdmin = adminConnecte && adminConnecte.rang === "super";
+  const choixDisque = (sel) => `<select id="sauv-disque">${s.disques.map((d) => `<option value="${esc(d.nom)}"${d.nom === sel ? " selected" : ""}>${esc(d.nom)}</option>`).join("")}</select>`;
+  const quoi = `<p class="note" style="margin:8px 0">Chaque nuit, une copie chiffrée part sur le disque choisi : tes dossiers (sans les films ni les téléchargements, qui existent ailleurs), les réglages des outils avec leurs bases, et ceux du serveur. Seules les nouveautés prennent de la place. On garde les ${s.garder.jours} derniers jours, ${s.garder.semaines} semaines et ${s.garder.mois} mois.</p>`;
+  if (!s.pret) {
+    contenu.innerHTML = `<div class="entete"><div><h1>Sauvegardes</h1><p class="sous-titre">Pas encore en route.</p></div></div>
+      <section class="carte pad"><h2>Mettre en route</h2>${quoi}
+        <p class="note" style="margin:8px 0 14px">La copie est rangée dans un dossier caché du disque (<code>.sauvegardes-jabba</code>), à côté de ce qu'il contient déjà. Un disque en lecture seule n'est ouvert en écriture que le temps de la copie.</p>
+        ${s.disques.length ? (superAdmin ? `<label class="note" for="sauv-disque">Disque des sauvegardes</label>${choixDisque(s.disques[0].nom)}
+          <div class="actions" style="margin-top:14px"><button class="btn btn-p" id="sauv-activer">Mettre en route</button></div>`
+          : '<p class="note">Seul un super admin peut les mettre en route.</p>')
+          : '<div class="bandeau"><span>Aucun disque externe : branche celui qui recevra les sauvegardes, il apparaîtra ici.</span></div>'}
+      </section>`;
+    const b = $("#sauv-activer");
+    if (b) b.onclick = async () => {
+      b.disabled = true; b.textContent = "Mise en route…";
+      try {
+        const r = await api("/api/sauvegardes/activer", { method: "POST", json: { disque: $("#sauv-disque").value } });
+        if (r.phrase) await montrerPhrase(r.phrase, true);
+        toast("Sauvegardes en route : la première peut partir tout de suite");
+      } catch (e) { toast(e.message, true); }
+      pages.sauvegardes().catch(montrerErreur);
+    };
+    return;
+  }
+  const r = s.derniere_reussie;
+  contenu.innerHTML = `
+    <div class="entete"><div><h1>Sauvegardes</h1><p class="sous-titre">${s.actif ? `Chaque nuit à ${esc(s.heure)}, vers ${esc(s.disque)}` : "En pause"}</p></div>
+      <div class="actions"><button class="btn btn-p" id="sauv-lancer"${s.en_cours || !s.branche ? " disabled" : ""}>${s.en_cours ? "Sauvegarde en cours…" : "Sauvegarder maintenant"}</button></div></div>
+    ${s.branche ? "" : `<div class="bandeau"><span>Le disque ${esc(s.disque)} n'est pas branché. ${s.actif ? "La sauvegarde partira toute seule dès qu'il reviendra." : ""}</span></div>`}
+    <div class="grille g2">
+      <section class="carte pad"><h2>Dernière sauvegarde</h2>
+        <p style="margin:10px 0">${etatSauvegarde(s)}</p>
+        <dl class="cles">
+          <dt>Dernière réussie</dt><dd>${r ? `${esc(jourDe(r.fin))} à ${heureDe(r.fin)}` : "Aucune"}</dd>
+          ${r && r.taille != null ? `<dt>Contenu</dt><dd>${octets(r.taille)} · ${(r.fichiers || 0).toLocaleString("fr-FR")} fichiers</dd>
+          <dt>Nouveautés copiées</dt><dd>${octets(r.ajoute)}${r.nouveaux != null ? ` <span class="note">(${r.nouveaux} nouveaux, ${r.modifies} modifiés)</span>` : ""}</dd>` : ""}
+          <dt>Prochaine</dt><dd>${s.prochaine ? (s.prochaine * 1000 - Date.now() < 86400000 ? (+s.heure.slice(0, 2) < 12 ? "Cette nuit" : "Aujourd'hui") : esc(quand(new Date(s.prochaine * 1000).toISOString()))) + ` à ${esc(s.heure)}` : "En pause"}</dd>
+        </dl>
+      </section>
+      <section class="carte pad"><h2>Réglages</h2>${quoi}
+        ${superAdmin ? `
+        <label class="ligne-reglage"><span><strong>Sauvegarde chaque nuit</strong></span>
+          <button class="interrupteur" role="switch" aria-checked="${s.actif}" id="sauv-actif" aria-label="Sauvegarde chaque nuit"><span></span></button></label>
+        <label class="ligne-reglage"><span><strong>Heure</strong><br><span class="note">Une sauvegarde manquée (serveur éteint, disque absent) part dès que possible.</span></span>
+          <input type="time" id="sauv-heure" value="${esc(s.heure)}" style="width:auto"></label>
+        ${s.sources.map((x) => `<label class="ligne-reglage"><span><strong>${esc(x.nom)}</strong><br><span class="note">${esc(x.detail)}</span></span>
+          <button class="interrupteur" role="switch" aria-checked="${x.actif}" data-source="${esc(x.id)}" aria-label="${esc(x.nom)}"><span></span></button></label>`).join("")}
+        <label class="ligne-reglage"><span><strong>Disque</strong></span><span style="min-width:140px">${choixDisque(s.disque)}</span></label>
+        <div class="actions" style="margin-top:12px"><button class="btn" id="sauv-phrase">Revoir la phrase de passe</button></div>`
+        : `<p class="note">Seul un super admin peut changer ces réglages.</p>`}
+      </section>
+    </div>
+    <section class="carte pad" id="sauv-copies" style="margin-top:16px"><div class="entete-carte"><h2>Retrouver un fichier</h2></div>
+      <p class="note" style="margin:8px 0 12px">Choisis une date, puis le fichier ou le dossier à récupérer. Il revient dans <strong>Mes dossiers › Restaurations</strong> : rien n'est remplacé.</p>
+      <div class="actions"><button class="btn" id="sauv-voir"${s.branche ? "" : " disabled"}>Voir les sauvegardes</button></div>
+    </section>`;
+  $("#sauv-lancer").onclick = async () => {
+    try { await api("/api/sauvegardes/lancer", { method: "POST" }); toast("Sauvegarde lancée"); } catch (e) { toast(e.message, true); }
+    pages.sauvegardes().catch(montrerErreur);
+  };
+  $("#sauv-voir").onclick = () => listeCopies().catch((e) => toast(e.message, true));
+  if (s.en_cours) suiviSauvegarde = setTimeout(() => { if (location.hash.startsWith("#/sauvegardes")) pages.sauvegardes().catch(montrerErreur); }, 5000);
+  if (!superAdmin) return;
+  const regler = async (json, quoi2) => {
+    try { await api("/api/sauvegardes/reglages", { method: "POST", json }); toast(quoi2); } catch (e) { toast(e.message, true); }
+    pages.sauvegardes().catch(montrerErreur);
+  };
+  $("#sauv-actif").onclick = () => regler({ actif: !s.actif }, s.actif ? "Sauvegardes en pause" : "Sauvegardes réactivées");
+  $("#sauv-heure").onchange = (ev) => ev.target.value && regler({ heure: ev.target.value }, `Chaque nuit à ${ev.target.value}`);
+  contenu.querySelectorAll("[data-source]").forEach((b) => b.addEventListener("click", () =>
+    regler({ sources: { [b.dataset.source]: b.getAttribute("aria-checked") !== "true" } }, "Contenu des sauvegardes changé")));
+  $("#sauv-disque").onchange = async (ev) => {
+    const nom = ev.target.value;
+    if (!(await demander({ titre: `Sauvegarder sur ${nom} ?`, texte: `Les prochaines sauvegardes iront sur ${nom}. Celles déjà faites restent sur ${s.disque}. La phrase de passe ne change pas.`, valider: "Changer" }))) { ev.target.value = s.disque; return; }
+    try { await api("/api/sauvegardes/activer", { method: "POST", json: { disque: nom } }); toast(`Sauvegardes vers ${nom}`); } catch (e) { toast(e.message, true); }
+    pages.sauvegardes().catch(montrerErreur);
+  };
+  $("#sauv-phrase").onclick = async () => {
+    try { const r = await api("/api/sauvegardes/phrase", { method: "POST" }); await montrerPhrase(r.phrase, false); } catch (e) { toast(e.message, true); }
+  };
+};
+
+async function listeCopies() {
+  const z = $("#sauv-copies");
+  z.innerHTML = `<h2>Retrouver un fichier</h2>${chargement(2)}`;
+  const { copies } = await api("/api/sauvegardes/historique");
+  z.innerHTML = `<div class="entete-carte"><h2>Retrouver un fichier</h2></div>
+    <p class="note" style="margin:8px 0 12px">${copies.length ? "Choisis la date de la copie." : "Aucune sauvegarde pour l'instant."}</p>
+    <div class="sauv-liste">${copies.map((c) => `<button class="sauv-ligne" data-copie="${esc(c.id)}"><span><strong>${esc(quand(c.date))}</strong> <span class="note">${esc(new Date(c.date).toLocaleString("fr-FR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }))}</span></span><span>›</span></button>`).join("")}</div>`;
+  z.querySelectorAll("[data-copie]").forEach((b) => b.addEventListener("click", () => {
+    const c = copies.find((x) => x.id === b.dataset.copie);
+    parcourirCopie(c, null).catch((e) => toast(e.message, true));
+  }));
+}
+
+const NOMS_RACINES = { "/srv/data": "Fichiers", "/opt/stacks": "Réglages des outils", "/etc": "Réglages du serveur" };
+async function parcourirCopie(c, chemin) {
+  const z = $("#sauv-copies");
+  const date = new Date(c.date).toLocaleString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const racine = chemin && c.chemins.find((r) => chemin === r || chemin.startsWith(r + "/"));
+  let elements;
+  if (!chemin) elements = c.chemins.map((r) => ({ nom: NOMS_RACINES[r] || r, chemin: r, dossier: true }));
+  else {
+    z.querySelector(".sauv-liste").innerHTML = '<div class="squelette"></div>';
+    elements = (await api(`/api/sauvegardes/parcourir?id=${encodeURIComponent(c.id)}&chemin=${encodeURIComponent(chemin)}`)).elements;
+  }
+  const morceaux = [];
+  if (racine) {
+    morceaux.push([NOMS_RACINES[racine] || racine, racine]);
+    let acc = racine;
+    for (const m of chemin.slice(racine.length).split("/").filter(Boolean)) { acc += "/" + m; morceaux.push([m, acc]); }
+  }
+  z.innerHTML = `<div class="entete-carte"><h2>Copie du ${esc(date)}</h2><button class="btn btn-petit" id="sauv-dates">Autre date</button></div>
+    <div class="fil" style="margin:10px 0"><a href="#" data-aller="">Début</a>${morceaux.map(([n, p]) => `<span class="sep">›</span><a href="#" data-aller="${esc(p)}">${esc(n)}</a>`).join("")}</div>
+    <div class="sauv-liste">${elements.map((e) => `<div class="sauv-ligne">
+        ${e.dossier ? `<a href="#" data-aller="${esc(e.chemin)}"><strong>${esc(e.nom)}</strong></a>` : `<span>${esc(e.nom)} <span class="note">${octets(e.taille)}</span></span>`}
+        ${chemin ? `<button class="btn btn-petit" data-restaurer="${esc(e.chemin)}">Récupérer</button>` : ""}</div>`).join("") || '<p class="note">Dossier vide.</p>'}</div>`;
+  $("#sauv-dates").onclick = () => listeCopies().catch((e) => toast(e.message, true));
+  z.querySelectorAll("[data-aller]").forEach((a) => a.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    parcourirCopie(c, a.dataset.aller || null).catch((e) => toast(e.message, true));
+  }));
+  z.querySelectorAll("[data-restaurer]").forEach((b) => b.addEventListener("click", async () => {
+    const p = b.dataset.restaurer, nom = p.split("/").pop();
+    if (!(await demander({ titre: `Récupérer « ${nom} » ?`, texte: `Il revient tel qu'il était le ${date}, dans Mes dossiers › Restaurations. Rien n'est remplacé.`, valider: "Récupérer" }))) return;
+    b.disabled = true; b.textContent = "Récupération…";
+    try { await api("/api/sauvegardes/restaurer", { method: "POST", json: { id: c.id, chemin: p } }); toast(`« ${nom} » est dans Mes dossiers › Restaurations`); b.textContent = "Récupéré"; }
+    catch (e) { toast(e.message, true); b.disabled = false; b.textContent = "Récupérer"; }
+  }));
+}
+
 // ------------------------------------------------------------ navigation
 let moi = null;
 function montrerErreur(e) {
@@ -1748,11 +2238,11 @@ async function router() {
   if (!moi && page !== "aide") return ecranInjoignable(dernierEchec);   // serveur injoignable   // sans connexion admin : seulement la page invités
   if (page !== "ouvrir") document.body.classList.remove("plein-ecran");
   document.querySelectorAll("[data-page]").forEach((a) => {
-    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs", "terminal"].includes(page));
+    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal", "sauvegardes", "nuage"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs", "terminal", "sauvegardes", "nuage"].includes(page));
     a.classList.toggle("actif", actif);
     if (actif) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
-  document.title = "Jabba · " + ({ outils: "Établi", ouvrir: "Outil" }[page] || page[0].toUpperCase() + page.slice(1));
+  document.title = "Jabba · " + ({ outils: "Établi", ouvrir: "Outil", nuage: "Comptes Nextcloud" }[page] || page[0].toUpperCase() + page.slice(1));
   try { await pages[page](new URLSearchParams(requete || "")); }
   catch (e) { montrerErreur(e); }
 }
