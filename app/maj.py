@@ -5,9 +5,9 @@ Rien ne s'installe tout seul : l'admin clique, le serveur télécharge le code
 de cette version, reconstruit l'appli et la relance. .env et donnees/ ne sont
 jamais touchés (ils ne sont pas dans le dépôt).
 
-Signature : chaque version publiée porte, dans le message de son étiquette (tag),
-une signature SSH faite avec une clé qui ne quitte pas l'ordinateur du mainteneur.
-Le texte signé est « jabba <tag> <commit> ». Avant d'installer quoi que ce soit, le
+Signature : chaque version publiée a, sur la branche main du dépôt, un fichier
+signatures/<tag>.sig : sa première ligne est le texte signé, « jabba <tag> <commit> »,
+suivie de la signature SSH faite avec une clé qui ne quitte pas l'ordinateur du mainteneur. Avant d'installer quoi que ce soit, le
 serveur vérifie cette signature avec la clé publique de la version DÉJÀ installée
 (cle_publication.pub, figée dans l'appli qui tourne) : un compte GitHub piraté ne
 suffit pas à faire installer du code. Sans signature valable, rien ne s'installe.
@@ -75,7 +75,7 @@ def plus_recente(actuelle, autre):
 def script(dossier, tag, cle):
     """Commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli).
 
-    Étapes : récupérer les étiquettes, vérifier la signature de celle-ci avec `cle`
+    Étapes : récupérer le dépôt, vérifier la signature de cette version avec `cle`
     (la clé de la version installée), puis installer exactement le commit signé.
     """
     if not re.fullmatch(r"/[\w./-]+", dossier) or not RE_VERSION.match(tag):
@@ -89,14 +89,18 @@ def script(dossier, tag, cle):
     remettre = (f"find '{dossier}' -path '{dossier}/donnees' -prune -o ! -user \"$(stat -c %U '{dossier}')\" "
                 f"-exec chown -h \"{proprio}\" {{}} +")
     git = f"runuser -u \"$(stat -c %U '{dossier}')\" -- git"
+    # Le fichier de signature de cette version, sur main : « jabba <tag> <commit> » puis la signature.
+    # Toute étape qui échoue (fichier absent, ligne inattendue, signature fausse) = refus.
     verifier = (
         'T=$(mktemp -d) && trap \'rm -rf "$T"\' EXIT && '
         f"printf '%s %s\\n' {ESPACE_SIGNATURE} '{cle}' > \"$T/cles\" && "
-        f"SHA=$({git} rev-parse --verify 'refs/tags/{tag}^{{commit}}') && "
-        f"{git} tag -l --format='%(contents)' '{tag}' | "
-        "sed -n '/^-----BEGIN SSH SIGNATURE-----$/,/^-----END SSH SIGNATURE-----$/p' > \"$T/sig\" && "
-        f"if printf '%s' \"jabba {tag} $SHA\" | ssh-keygen -Y verify -f \"$T/cles\" -I {ESPACE_SIGNATURE} "
-        f"-n {ESPACE_SIGNATURE} -s \"$T/sig\"; then echo \"Signature valable : {tag} ($SHA)\"; "
+        f"if {git} show 'refs/remotes/origin/main:signatures/{tag}.sig' > \"$T/fichier\" 2>/dev/null"
+        ' && LIGNE=$(head -n 1 "$T/fichier")'
+        f' && [ "${{LIGNE% *}}" = "jabba {tag}" ] && SHA="${{LIGNE##* }}"'
+        ' && printf %s "$SHA" | grep -Eqx "[0-9a-f]{40}"'
+        " && sed -n '/^-----BEGIN SSH SIGNATURE-----$/,/^-----END SSH SIGNATURE-----$/p' \"$T/fichier\" > \"$T/sig\""
+        f' && printf %s "$LIGNE" | ssh-keygen -Y verify -f "$T/cles" -I {ESPACE_SIGNATURE} -n {ESPACE_SIGNATURE} -s "$T/sig"'
+        f' && {git} cat-file -e "$SHA^{{commit}}"; then echo "Signature valable : {tag} ($SHA)"; '
         f"else echo '{MARQUE_REFUS} : la version {tag} n est pas signée par la clé attendue, rien n a été installé.'; exit 1; fi"
     )
     return (f"cd '{dossier}' && {remettre} && {git} fetch --quiet --tags --force origin && {verifier} && "

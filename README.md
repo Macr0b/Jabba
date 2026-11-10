@@ -44,7 +44,7 @@ Tout est en français. Aucune dépendance externe dans l'interface : xterm.js (t
 - **ffmpeg et Pillow tournent sans aucun droit** (compte `nobody`, aucune capacité, `no_new_privs`) : ils ne reçoivent que le fichier à lire, déjà ouvert par l'appli, et ne peuvent rien ouvrir d'autre. Un fichier vidéo ou une image piégés (déposés par un invité, par exemple) ne peuvent pas atteindre le serveur.
 - **Ce dépôt ne contient aucun secret** : ni adresse, ni nom de serveur, ni mot de passe. Chaque serveur garde ses réglages dans son propre `.env` et ses données dans `donnees/`, jamais publiés.
 - **Le dépôt ne peut rien envoyer à un serveur.** C'est le serveur qui regarde s'il existe une nouvelle version, et rien ne s'installe sans le clic d'un admin.
-- **Les mises à jour sont signées.** Chaque version porte une signature SSH faite avec une clé qui ne quitte pas l'ordinateur du mainteneur. Avant d'installer quoi que ce soit, le serveur la vérifie avec la clé de la version **qu'il a déjà** (`app/cle_publication.pub`) : un compte GitHub piraté ne suffit pas à faire installer du code. Sans signature valable, rien ne s'installe et une alerte part. (Limite : le script d'installation, lui, se télécharge sans vérification ; lis-le avant de le lancer.)
+- **Les mises à jour sont signées.** Chaque version a sa signature SSH (`signatures/`), faite avec une clé qui ne quitte pas l'ordinateur du mainteneur. Avant d'installer quoi que ce soit, le serveur la vérifie avec la clé de la version **qu'il a déjà** (`app/cle_publication.pub`) : un compte GitHub piraté ne suffit pas à faire installer du code. Sans signature valable, rien ne s'installe et une alerte part. (Limite : le script d'installation, lui, se télécharge sans vérification ; lis-le avant de le lancer.)
 - Le terminal de l'appli ouvre un shell sur le serveur avec le compte du serveur : **il donne tous les pouvoirs sur la machine**. Il est donc réservé au compte du serveur (son propriétaire), demande un mot de passe saisi depuis moins de 10 minutes, passe par un ticket à usage unique valable 30 secondes, et chaque ouverture envoie une alerte. Les commandes tapées sont notées au Journal, à titre indicatif seulement (un shell lancé à la main n'est plus noté). Le compte du serveur ne fait pas partie du groupe `docker` : `sudo docker …` redemande son mot de passe.
 - Dockge pilote Docker, donc tout le serveur : il n'écoute que sur le serveur lui-même et n'est joignable que par Tailscale, jamais depuis le Wi-Fi.
 - Pour piloter le serveur (Docker, disques, courant), le conteneur de l'appli a des droits étendus sur la machine (`privileged`, `pid: host`). C'est pour ça qu'il n'est joignable que par Tailscale, et qu'il ne traite plus rien qui vienne d'inconnus (la page invités et le décodage des fichiers sont ailleurs, sans droits). Étape suivante prévue : un petit service privilégié n'acceptant qu'une liste fermée d'actions, et l'appli elle-même sans droits.
@@ -87,11 +87,10 @@ Avec `JABBA_DEPOT=Macr0b/jabba` dans `.env`, l'écran **Système** annonce chaqu
 ssh-keygen -t ed25519 -f ~/.ssh/jabba_publication -C "publication Jabba"
 ```
 
-Puis, pour chaque version : envoie le code sur `main` (les tests tournent), signe « jabba vX.Y.Z <commit> » et pousse l'étiquette avec la signature dans son message ; GitHub revérifie la signature et les tests, puis crée la release.
+Puis, pour chaque version : envoie le code sur `main` (les tests tournent), signe « jabba vX.Y.Z <commit> » sur ton ordinateur, et ajoute sur `main` le fichier `signatures/vX.Y.Z.sig` (cette ligne, puis la signature). GitHub vérifie la signature et les tests, puis crée l'étiquette et la release sur le commit signé.
 
 ```bash
 printf 'jabba v0.11.0 <commit complet>' | ssh-keygen -Y sign -f ~/.ssh/jabba_publication -n jabba
-git tag -a v0.11.0 -m "Jabba 0.11.0" -m "<la signature affichée>" <commit complet> && git push origin v0.11.0
 ```
 
 Pour publier ton propre Jabba (une copie du dépôt), remplace `app/cle_publication.pub` par ta propre clé.

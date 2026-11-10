@@ -1,17 +1,19 @@
-# Crée la release GitHub quand une étiquette signée vX.Y.Z arrive.
+# Crée la release GitHub quand une signature de version arrive sur main.
 #
 # Publier une version :
 #   1. le code part sur main (les tests tournent : tests.yml) ;
 #   2. le mainteneur signe « jabba vX.Y.Z <commit> » avec sa clé SSH, sur SON ordinateur ;
-#   3. l'étiquette vX.Y.Z est poussée avec cette signature dans son message.
-# Ici, on vérifie que la signature correspond à la clé de app/cle_publication.pub et que
-# les tests passent, puis on crée la release. Les serveurs revérifient de leur côté, avec
+#   3. le fichier signatures/vX.Y.Z.sig (cette ligne, puis la signature) arrive sur main.
+# Ici, on vérifie la signature avec app/cle_publication.pub et la version, puis on crée
+# l'étiquette et la release sur le commit signé. Les serveurs revérifient de leur côté, avec
 # la clé de la version qu'ils ont DÉJÀ (un dépôt modifié ne peut pas changer leur clé).
 name: Release
 
 on:
   push:
-    tags: ["v*.*.*"]
+    branches: [main]
+    paths: ["signatures/*.sig"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -27,25 +29,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Vérifier la signature de l'étiquette
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
-          SHA=$(git rev-parse "refs/tags/$TAG^{commit}")
-          printf 'jabba %s\n' "$(grep -v '^#' app/cle_publication.pub | head -1)" > /tmp/cles
-          git tag -l --format='%(contents)' "$TAG" | sed -n '/^-----BEGIN SSH SIGNATURE-----$/,/^-----END SSH SIGNATURE-----$/p' > /tmp/sig
-          printf '%s' "jabba $TAG $SHA" | ssh-keygen -Y verify -f /tmp/cles -I jabba -n jabba -s /tmp/sig
-          V=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)
-          [ "v$V" = "$TAG" ] || { echo "app/version.py ($V) ne correspond pas à $TAG"; exit 1; }
-      - name: Créer la release
+      - name: Vérifier les signatures et créer les releases manquantes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF_NAME}"; V="${TAG#v}"
-          gh release view "$TAG" >/dev/null 2>&1 && { echo "$TAG existe déjà"; exit 0; }
-          NOTES=$(python3 -c "
+          printf 'jabba %s\n' "$(grep -v '^#' app/cle_publication.pub | head -1)" > /tmp/cles
+          for f in signatures/v*.sig; do
+            [ -f "$f" ] || continue
+            TAG=$(basename "$f" .sig); V="${TAG#v}"
+            if gh release view "$TAG" >/dev/null 2>&1; then echo "$TAG existe déjà"; continue; fi
+            LIGNE=$(head -n 1 "$f")
+            [ "${LIGNE% *}" = "jabba $TAG" ] || { echo "$f : première ligne inattendue"; exit 1; }
+            SHA="${LIGNE##* }"
+            printf %s "$SHA" | grep -Eqx '[0-9a-f]{40}' || { echo "$f : commit invalide"; exit 1; }
+            sed -n '/^-----BEGIN SSH SIGNATURE-----$/,/^-----END SSH SIGNATURE-----$/p' "$f" > /tmp/sig
+            printf %s "$LIGNE" | ssh-keygen -Y verify -f /tmp/cles -I jabba -n jabba -s /tmp/sig
+            git show "$SHA:app/version.py" | grep -qx "VERSION = \"$V\"" || { echo "app/version.py ne correspond pas à $TAG"; exit 1; }
+            git show "$SHA:app/versions.json" > /tmp/versions.json
+            NOTES=$(python3 -c "
           import json
-          v = json.load(open('app/versions.json'))[0]
+          v = json.load(open('/tmp/versions.json'))[0]
           print('\n'.join('- ' + c for c in v['changements']) if v['version'] == '$V' else '')
           ")
-          gh release create "$TAG" --verify-tag --title "Jabba $V" --notes "$NOTES" --latest
+            gh release create "$TAG" --target "$SHA" --title "Jabba $V" --notes "$NOTES" --latest
+          done

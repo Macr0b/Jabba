@@ -53,9 +53,16 @@ def depots(tmp_path):
             "pub": pub, "git": git, "tmp": tmp_path, "path": f"{bin_}:{os.environ['PATH']}"}
 
 
-def publier(d, tag, signature=None, sur=None):
-    msg = f"Jabba {tag}\n\n{signature}\n" if signature else f"Jabba {tag}\n"
-    sh(*d["git"], "tag", "-a", "-f", tag, "-m", msg, *( [sur] if sur else []), cwd=d["origine"])
+def publier(d, tag, signature=None, sur=None, ligne=None):
+    """Publie `tag` : l'étiquette, et sur main le fichier signatures/<tag>.sig (ligne signée + signature)."""
+    sur = sur or d["sha"]
+    sh(*d["git"], "tag", "-f", tag, sur, cwd=d["origine"])
+    if signature is not None:
+        dossier = d["origine"] / "signatures"
+        dossier.mkdir(exist_ok=True)
+        (dossier / f"{tag}.sig").write_text((ligne or maj.texte_signe(tag, sur)) + "\n" + signature + "\n")
+        sh(*d["git"], "add", ".", cwd=d["origine"])
+        sh(*d["git"], "commit", "-qm", f"Signature {tag}", cwd=d["origine"])
 
 
 def installer(d, tag):
@@ -95,23 +102,39 @@ def test_signature_d_une_autre_cle_refusee(depots):
 
 
 @exige_root
-def test_signature_d_un_autre_commit_refusee(depots):
-    """Un pirate réutilise une vraie signature, mais déplace l'étiquette sur son propre code."""
+def test_ligne_signee_modifiee_refusee(depots):
+    """Un pirate garde la vraie signature, mais change le commit dans la ligne : la signature ne colle plus."""
     d = depots
     signature = signer(d["bonne"], "v2.0.0", d["sha"])
     (d["origine"] / "app.txt").write_text("piège\n")
     sh(*d["git"], "commit", "-qam", "piège", cwd=d["origine"])
-    publier(d, "v2.0.0", signature)
+    piege = sh("git", "rev-parse", "HEAD", cwd=d["origine"])
+    publier(d, "v2.0.0", signature, piege)
     r, contenu, reconstruit = installer(d, "v2.0.0")
     assert r.returncode != 0 and maj.MARQUE_REFUS in r.stdout
     assert contenu == "v1" and not reconstruit
 
 
 @exige_root
+def test_etiquette_deplacee_sans_effet(depots):
+    """L'étiquette pointe sur un autre code : on installe quand même exactement le commit signé."""
+    d = depots
+    signature = signer(d["bonne"], "v2.0.0", d["sha"])
+    (d["origine"] / "app.txt").write_text("piège\n")
+    sh(*d["git"], "commit", "-qam", "piège", cwd=d["origine"])
+    piege = sh("git", "rev-parse", "HEAD", cwd=d["origine"])
+    publier(d, "v2.0.0", signature)                      # fichier signé : le bon commit
+    sh(*d["git"], "tag", "-f", "v2.0.0", piege, cwd=d["origine"])
+    r, contenu, _ = installer(d, "v2.0.0")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert contenu == "v2"
+
+
+@exige_root
 def test_signature_d_une_autre_version_refusee(depots):
     """Une signature valable pour v2.0.0 ne vaut pas pour v9.0.0."""
     d = depots
-    publier(d, "v9.0.0", signer(d["bonne"], "v2.0.0", d["sha"]), d["sha"])
+    publier(d, "v9.0.0", signer(d["bonne"], "v2.0.0", d["sha"]), d["sha"], ligne=maj.texte_signe("v2.0.0", d["sha"]))
     r, contenu, _ = installer(d, "v9.0.0")
     assert r.returncode != 0 and contenu == "v1"
 
