@@ -18,6 +18,8 @@ import os
 import secrets
 import shutil
 import subprocess
+
+import bac_a_sable
 import threading
 import time
 
@@ -32,19 +34,12 @@ _MATERIEL = {"teste": False, "options": None}
 
 
 # ---------------------------------------------------------------- analyse du fichier
-def _entree(source):
-    """Arguments ffmpeg pour lire la source (fichier local, ou adresse avec en-têtes)."""
-    a = []
-    if source.get("entetes"):
-        a += ["-headers", source["entetes"]]
-    return a + ["-i", source["entree"]]
-
-
+# ffmpeg et ffprobe tournent sans aucun droit (bac_a_sable) : ils ne reçoivent que le
+# fichier à lire, déjà ouvert par l'appli.
 def sonder(source):
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
-    if source.get("entetes"):
-        args += ["-headers", source["entetes"]]
-    r = subprocess.run(args + [source["entree"]], capture_output=True, text=True, timeout=30)
+    with bac_a_sable.entree(source) as (entree, fds):
+        r = bac_a_sable.run(args + bac_a_sable.sans_i(entree), fds, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
         raise RuntimeError("Fichier illisible : " + (r.stderr.strip()[:200] or "format inconnu"))
     d = json.loads(r.stdout or "{}")
@@ -98,7 +93,7 @@ def _options_materiel():
                  "-f", "lavfi", "-i", "testsrc=duration=1:size=640x360:rate=25",
                  "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-f", "null", "-"]
         try:
-            if subprocess.run(essai, capture_output=True, env=env, timeout=30).returncode == 0:
+            if bac_a_sable.run(essai, puce=True, capture_output=True, env=env, timeout=30).returncode == 0:
                 _MATERIEL["options"] = {"pilote": pilote}
                 return _MATERIEL["options"]
         except (OSError, subprocess.TimeoutExpired):
@@ -132,11 +127,10 @@ def image_cle(source, infos, debut):
     args = ["ffprobe", "-v", "error", "-select_streams", f"{v['index']}", "-skip_frame", "nokey",
             "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
             "-read_intervals", f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}"]
-    if source.get("entetes"):
-        args += ["-headers", source["entetes"]]
     try:
-        r = subprocess.run(args + [source["entree"]], capture_output=True, text=True, timeout=20)
-    except subprocess.TimeoutExpired:
+        with bac_a_sable.entree(source) as (entree, fds):
+            r = bac_a_sable.run(args + bac_a_sable.sans_i(entree), fds, capture_output=True, text=True, timeout=20)
+    except (subprocess.TimeoutExpired, OSError, RuntimeError):
         return debut
     temps = []
     for ligne in r.stdout.splitlines():
@@ -158,13 +152,14 @@ def demarrer(source, infos, debut=0.0, audio=None):
             arreter(min(_SESSIONS, key=lambda k: _SESSIONS[k]["vu"]), verrou=False)
     sid = secrets.token_urlsafe(18)
     dossier = os.path.join(RACINE, sid)
-    os.makedirs(dossier, exist_ok=True)
+    os.makedirs(RACINE, exist_ok=True)
+    bac_a_sable.dossier_ecrivable(dossier)
     video, env_sup = _video(infos)
     pistes = [a for a in infos["audios"] if audio is None or a["index"] == audio] or infos["audios"]
     son = ["-map", f"0:{pistes[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if pistes else []
     cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(debut)):.3f}"]
            + ([a for a in video[:2]] if video[:1] == ["-vaapi_device"] else [])
-           + _entree(source)
+           + ["ENTREE"]
            + (video[2:] if video[:1] == ["-vaapi_device"] else video)
            + son
            + (["-force_key_frames", "expr:gte(t,n_forced*2)"] if video[-2:] != ["-c:v", "copy"] and "copy" not in video else [])
@@ -174,8 +169,11 @@ def demarrer(source, infos, debut=0.0, audio=None):
               "-hls_list_size", "0", "-hls_playlist_type", "event",
               "-hls_segment_filename", os.path.join(dossier, "m%05d.ts"), os.path.join(dossier, "index.m3u8")])
     env = dict(os.environ, **env_sup)
-    p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=open(os.path.join(dossier, "erreurs.txt"), "w"), env=env)
+    with bac_a_sable.entree(source) as (entree, fds), open(os.path.join(dossier, "erreurs.txt"), "w") as err:
+        i = cmd.index("ENTREE")
+        cmd[i:i + 1] = entree
+        p = bac_a_sable.popen(cmd, fds, puce=bool(env_sup) or "-vaapi_device" in cmd, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=err, env=env)
     with _VERROU:
         _SESSIONS[sid] = {"p": p, "dossier": dossier, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
     return sid, debut
@@ -280,9 +278,10 @@ def decaler_vtt(vtt, debut):
 
 def soustitres(source, index, debut=0.0):
     """Une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé."""
-    cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
-           + _entree(source) + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
-    r = subprocess.run(cmd, capture_output=True, timeout=180)
+    with bac_a_sable.entree(source) as (entree, fds):
+        cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
+               + entree + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
+        r = bac_a_sable.run(cmd, fds, capture_output=True, timeout=180)
     if r.returncode != 0:
         raise RuntimeError("Sous-titres illisibles.")
     return decaler_vtt(r.stdout.decode("utf-8", "replace"), float(debut)).encode()

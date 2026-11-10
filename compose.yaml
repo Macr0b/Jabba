@@ -8,9 +8,10 @@ services:
     # on n'y entre que par Tailscale (tailscale serve).
     network_mode: host
     # Pour lancer les actions sur Jabba (outils, disques, redémarrage).
+    # Ce conteneur ne reçoit rien d'inconnu : ni la page invités (service ci-dessous),
+    # ni les fichiers à décoder (ffmpeg et Pillow tournent sans droits, bac_a_sable.py).
     pid: host
     privileged: true
-    # Favoris et dossiers souvent ouverts (gardés sur le serveur).
     volumes:
       - ./donnees:/data
       # Les dossiers du serveur, pour l'écran Fichiers quand Nextcloud est désactivé.
@@ -19,4 +20,36 @@ services:
         target: /srv
         bind:
           propagation: rslave
+    restart: unless-stopped
+
+  # La porte du Wi-Fi : la page invités (http://<serveur>.local), sans aucun pouvoir.
+  # Compte du serveur (pas root), aucune capacité Linux, fichiers de l'appli en lecture seule.
+  # Elle ne voit que /srv (les dossiers partagés aux invités) et donnees/porte-wifi/ (son état),
+  # jamais le reste des données de l'appli (comptes, clés, sessions, sauvegardes).
+  jabba-invites:
+    image: jabba-app:local
+    container_name: jabba-invites
+    depends_on: [jabba-app]
+    command: ["uvicorn", "invites:app", "--host", "0.0.0.0", "--port", "8080", "--no-server-header", "--log-level", "warning"]
+    user: "${JABBA_UID:-1000}:${JABBA_GID:-1000}"
+    ports:
+      - "${PORT_WIFI:-80}:8080"
+    environment:
+      - JABBA_INVITES_ETAT=/etat/etat.json
+      - JABBA_JOURNAL=/etat/journal.jsonl
+      - JABBA_JOURNAUX_AUTRES=
+      - HOME=/tmp
+    volumes:
+      - ./donnees/porte-wifi:/etat
+      - type: bind
+        source: /srv
+        target: /srv
+        bind:
+          propagation: rslave
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped

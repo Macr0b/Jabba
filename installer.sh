@@ -265,7 +265,11 @@ etape "Docker"
 if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | lancer sh || echec "Installation de Docker impossible."
 fi
-usermod -aG docker "$MOI"
+# Le groupe docker équivaut à root sans mot de passe : le compte du serveur n'en fait pas
+# partie (« sudo docker … » redemande le mot de passe, comme toute action d'admin).
+if id -nG "$MOI" | tr ' ' '\n' | grep -qx docker; then
+  gpasswd -d "$MOI" docker >/dev/null && note "$MOI retiré du groupe docker : utilise « sudo docker … » (effet à la prochaine connexion)."
+fi
 docker compose version >/dev/null 2>&1 || echec "Docker Compose absent."
 ok "Docker $(docker --version | awk '{print $3}' | tr -d ,) installé"
 
@@ -288,12 +292,29 @@ fi
 etape "Dockge (gérer les outils depuis le navigateur)"
 mkdir -p /opt/stacks /opt/dockge
 chown "$MOI:$MOI" /opt/stacks /opt/dockge
-if [ ! -f /opt/dockge/compose.yaml ]; then
-  curl -fsSL https://dockge.kuma.pet/compose.yaml -o /opt/dockge/compose.yaml || echec "Téléchargement de Dockge impossible."
-  chown "$MOI:$MOI" /opt/dockge/compose.yaml
-fi
+# Dockge pilote Docker, donc tout le serveur : il n'écoute que sur le serveur lui-même
+# (127.0.0.1), et on n'y entre que par Tailscale. Jamais depuis le Wi-Fi.
+cat > /opt/dockge/compose.yaml <<'FIN'
+services:
+  dockge:
+    image: louislam/dockge:1
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:5001:5001
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - /opt/stacks:/opt/stacks
+    environment:
+      - DOCKGE_STACKS_DIR=/opt/stacks
+FIN
+chown "$MOI:$MOI" /opt/dockge/compose.yaml
 (cd /opt/dockge && lancer docker compose up -d) || echec "Démarrage de Dockge impossible."
-ok "Dockge : http://$SERVEUR.local:5001 (à ouvrir une fois pour créer ton compte)"
+if lancer tailscale serve --bg --https=5001 http://127.0.0.1:5001; then
+  ok "Dockge : https://$TS_NOM:5001, par Tailscale seulement (à ouvrir une fois pour créer ton compte)"
+else
+  note "Dockge tourne, mais seulement sur le serveur : active « HTTPS Certificates » dans la console Tailscale, puis relance le script."
+fi
 
 # ------------------------------------------------------------ 11. l'appli Jabba
 etape "Appli Jabba"
@@ -311,11 +332,15 @@ if [ ! -f .env ]; then
 TS_USERS=$TS_LOGIN
 ADMIN_USER=$MOI
 JABBA_DEPOT=$DEPOT
-LIENS=dockge=http://$SERVEUR.local:5001
+LIENS=dockge=https://$TS_NOM:5001
 SEUIL_BATTERIE=15
 EOF
   chown "$MOI:$MOI" .env; chmod 600 .env
 fi
+# Anciennes installations : le lien de Dockge passait par le Wi-Fi.
+sed -i "s#dockge=http://[^,]*:5001#dockge=https://$TS_NOM:5001#" .env
+# Compte du serveur : la porte du Wi-Fi (page invités) tourne avec lui, pas en root.
+grep -q '^JABBA_UID=' .env || printf 'JABBA_UID=%s\nJABBA_GID=%s\n' "$(id -u "$MOI")" "$(id -g "$MOI")" >> .env
 # Lancée par systemd : la construction va au bout même si ce script s'arrête en route
 # (par exemple s'il tourne dans le terminal de l'appli, qui redémarre à ce moment-là).
 info "Construction de l'appli : 3 à 10 minutes."

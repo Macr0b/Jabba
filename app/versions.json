@@ -1,5 +1,18 @@
 [
   {
+    "version": "0.11.0",
+    "date": "2026-11-10",
+    "changements": [
+      "Sécurité : la page invités du Wi-Fi tourne dans son propre conteneur, sans aucun pouvoir, et ne voit plus les données de l'appli.",
+      "Sécurité : ffmpeg (lecteur vidéo) et Pillow (aperçus d'images) tournent sans aucun droit et ne reçoivent que le fichier à lire.",
+      "Sécurité : les mises à jour sont signées ; le serveur vérifie la signature avec sa propre clé avant d'installer quoi que ce soit, et alerte si elle manque.",
+      "Sécurité : Dockge n'est plus joignable que par Tailscale, jamais depuis le Wi-Fi (à appliquer en relançant le script d'installation).",
+      "Sécurité : le terminal donne tous les pouvoirs sur le serveur, il est donc réservé au compte du serveur ; ce compte quitte le groupe docker (en relançant le script d’installation).",
+      "Sécurité : « mot de passe oublié » n'est possible que depuis le compte Tailscale relié au compte ; sinon, voir un super admin.",
+      "Tests automatiques de ces protections, lancés par GitHub avant chaque version."
+    ]
+  },
+  {
     "version": "0.10.0",
     "date": "2026-11-10",
     "changements": [

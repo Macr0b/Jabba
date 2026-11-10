@@ -6,6 +6,7 @@ conteneur sous /srv. Rien n'est jamais lu ni écrit en dehors de ces dossiers.
 import hashlib
 import json
 import os
+import subprocess
 import shutil
 import time
 from datetime import datetime, timezone
@@ -294,13 +295,15 @@ def vignette(reel, taille):
     cle = hashlib.sha1(f"{reel}|{st.st_mtime_ns}|{st.st_size}|{taille}".encode()).hexdigest()
     cache = os.path.join(VIGNETTES, cle[:2], cle + ".jpg")
     if not os.path.exists(cache):
-        from PIL import Image, ImageOps
+        import bac_a_sable
+        # Pillow tourne à part, sans aucun droit : une image piégée ne peut rien faire.
+        try:
+            jpeg = bac_a_sable.vignette(reel, taille)
+        except (RuntimeError, OSError, subprocess.SubprocessError):
+            raise Refus(404, "Pas d'aperçu")
         os.makedirs(os.path.dirname(cache), exist_ok=True)
-        with Image.open(reel) as im:
-            im.draft("RGB", (taille, taille))
-            im = ImageOps.exif_transpose(im)
-            im.thumbnail((taille, taille))
-            im.convert("RGB").save(cache + ".tmp", "JPEG", quality=80)
+        with open(cache + ".tmp", "wb") as f:
+            f.write(jpeg)
         os.replace(cache + ".tmp", cache)
     return cache
 

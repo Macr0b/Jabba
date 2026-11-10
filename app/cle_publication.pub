@@ -1,0 +1,4 @@
+# Clé publique qui signe les versions de Jabba (ssh-keygen -Y sign, espace « jabba »).
+# Un serveur n'installe une mise à jour que si elle est signée par cette clé.
+# Pour publier ton propre Jabba : remplace cette ligne par ta clé publique.
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN0xsgE2U83559OKlK2BFogmucuMC07mcOOhGy5Z0ggm publication Jabba

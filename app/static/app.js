@@ -158,7 +158,7 @@ async function motDePasseOublie(identifiant) {
   try {
     const r = await api("/api/comptes-oubli", { method: "POST", json: { identifiant: v.identifiant } }, true);
     if (r.serveur) return recupererMotDePasse();
-    await demander({ titre: "Demande envoyée", texte: "Si cet identifiant existe, le super admin est prévenu. Dès qu'il accepte, tu reçois une alerte et ton mot de passe provisoire s'affiche ici, sur cet appareil.", valider: "OK" });
+    await demander({ titre: "Demande envoyée", texte: "Si cet identifiant existe et qu'il est relié à ton compte Tailscale, le super admin est prévenu. Dès qu'il accepte, tu reçois une alerte et ton mot de passe provisoire s'affiche ici, sur cet appareil. Sinon, rien n'est envoyé : demande directement à un super admin de te recréer un compte.", valider: "OK" });
   } catch (e) { toast(e.message, true); }
 }
 
@@ -535,7 +535,7 @@ pages.systeme = async () => {
   const [s, a] = await Promise.all([api("/api/systeme"), api("/api/admin/etat")]);
   contenu.innerHTML = `
     <div class="entete"><div><h1>Système</h1><p class="sous-titre">${esc(s.nom)} · ${esc(s.os)}</p></div>
-      <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a>${adminConnecte && adminConnecte.rang === "super" ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
+      <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a>${adminConnecte && adminConnecte.compte_serveur ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
     ${s.redemarrage_requis ? `<div class="bandeau"><span>Une mise à jour attend un redémarrage. Il se fera automatiquement à 4 h, ou maintenant avec le bouton.</span></div>` : ""}
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
@@ -612,7 +612,7 @@ pages.plus = async () => {
       <a href="#/invites"><span>Invités</span><span>›</span></a>
       <a href="#" id="sortir-mobile"><span>Se déconnecter</span><span>›</span></a>
       <a href="#/journal"><span>Journal</span><span>›</span></a>
-      <a href="#/terminal"><span>Terminal</span><span>›</span></a>
+      ${adminConnecte && adminConnecte.compte_serveur ? '<a href="#/terminal"><span>Terminal</span><span>›</span></a>' : ""}
       <a href="#/aide"><span>Aide</span><span>›</span></a>
     </section><p class="note" id="qui-mobile"></p>`;
   if (moi && moi.admin) $("#qui-mobile").textContent = `Connecté en ${moi.admin.rang === "super" ? "super admin" : "admin"} : ${moi.admin.identifiant} · version ${moi.version}`;
@@ -1223,7 +1223,7 @@ pages.utilisateurs = async () => {
       ${d.comptes.map((c, i) => `
         <div class="ligne">
           <span class="nom"><span class="avatar" aria-hidden="true">${esc((c.nom || c.identifiant)[0].toUpperCase())}</span>
-            <span>${esc(c.nom)}<span class="detail-chemin">${esc(c.identifiant)}${c.systeme ? " · mot de passe du serveur" : c.tailscale ? " · Tailscale : " + esc(c.tailscale) : " · sans compte Tailscale"}${c.provisoire ? " · mot de passe provisoire" : ""}${c.rang === "super" && !c.systeme && c.terminal === false ? " · sans terminal" : ""}</span>
+            <span>${esc(c.nom)}<span class="detail-chemin">${esc(c.identifiant)}${c.systeme ? " · mot de passe du serveur" : c.tailscale ? " · Tailscale : " + esc(c.tailscale) : " · sans compte Tailscale"}${c.provisoire ? " · mot de passe provisoire" : ""}</span>
             <span class="mobile-detail">${RANG[c.rang]}</span></span></span>
           <span class="col-l"><span class="pastille ${c.rang === "super" ? "p-alerte" : "p-gris"}">${RANG[c.rang]}</span></span>
           <span class="gris col-l">${c.systeme ? "—" : esc(ilYa(c.derniere_connexion))}</span>
@@ -1304,8 +1304,7 @@ pages.utilisateurs = async () => {
       } },
     ];
     if (superAdmin) choix.push({ texte: c.rang === "super" ? "Passer admin" : "Nommer super admin", f: () => action({ action: "rang", rang: c.rang === "super" ? "admin" : "super" }, "Rang changé") });
-    if (superAdmin && c.rang === "super") choix.push({ texte: c.terminal === false ? "Autoriser le terminal" : "Retirer le terminal",
-      f: () => action({ action: "terminal", terminal: c.terminal === false }, c.terminal === false ? "Terminal autorisé" : "Terminal retiré") });
+
     choix.push({ texte: "Retirer ce compte", danger: true, f: async () => {
       if (await demander({ titre: `Retirer ${c.nom} ?`, texte: "Il ne pourra plus faire d'action admin" + (c.tailscale ? " ni ouvrir l'appli" : "") + ".", valider: "Retirer", danger: true })) action({ action: "supprimer" }, "Compte retiré");
     } });
@@ -1730,7 +1729,7 @@ const TOUCHES_TERMINAL = [["Échap", "\x1b"], ["Tab", "\t"], ["Ctrl+C", "\x03"],
 
 pages.terminal = async () => {
   if (terminalOuvert) terminalOuvert.fin();
-  contenu.innerHTML = `<div class="entete"><div><h1>Terminal</h1><p class="sous-titre">Le serveur, comme en SSH, avec le compte du serveur. <code>sudo</code> redemande son mot de passe. Chaque commande est notée au Journal à ton nom.</p></div>
+  contenu.innerHTML = `<div class="entete"><div><h1>Terminal</h1><p class="sous-titre">Le serveur, comme en SSH, avec le compte du serveur : <strong>tous les pouvoirs</strong>, réservé à toi. <code>sudo</code> redemande ton mot de passe. Les commandes tapées sont notées au Journal (à titre indicatif).</p></div>
       <div class="actions"><a class="btn" href="#/systeme">← Système</a></div></div>
     <div class="terminal-zone" id="terminal"><p class="note" style="padding:16px">Ouverture…</p></div>
     <div class="touches-terminal">${TOUCHES_TERMINAL.map(([n], i) => `<button class="btn btn-petit" type="button" data-touche="${i}">${n}</button>`).join("")}</div>`;

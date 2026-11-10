@@ -647,6 +647,8 @@ ADRESSES = {
 # Où chaque outil range son icône : l'appli affiche le logo servi par l'outil lui-même.
 # Port local de chaque outil : l'appli y va chercher le logo que l'outil fournit lui-même.
 PORTS = {"jellyfin": 8096, "nextcloud": 8081, "dockge": 5001}
+# Jamais ouverts aux invités du Wi-Fi : ils donnent la main sur le serveur.
+JAMAIS_WIFI = {"dockge"}
 ICONES_SECOURS = ["/web/favicon.png", "/web/favicon.ico", "/favicon.ico", "/favicon.png",
                   "/static/img/icons/favicon-32x32.png", "/core/img/favicon.ico", "/icon.svg"]
 HORS_APPLI = {"nextcloud"}
@@ -855,12 +857,15 @@ def api_systeme():
 # ---------------------------------------------------------------- terminal du serveur
 @app.post("/api/terminal/ticket")
 def api_terminal_ticket(request: Request):
-    """Réservé au super admin, mot de passe récent. Le ticket ouvre une seule connexion, dans les 30 s."""
-    j = exiger_super(request, fort=True)
+    """Réservé au compte du serveur, mot de passe récent. Le ticket ouvre une seule connexion, dans les 30 s.
+
+    Le terminal donne tous les pouvoirs sur le serveur (sudo, Docker…) : il n'est ouvert qu'à
+    celui qui les a déjà, le propriétaire du serveur. Le Journal des commandes est indicatif :
+    il note ce qui est tapé dans le shell, mais un shell lancé à la main lui échappe.
+    """
+    j = exiger_admin(request, "super", fort=True)
     if j["identifiant"] != nom_hote():
-        c = comptes.trouver(j["identifiant"])
-        if c and c.get("terminal") is False:
-            raise HTTPException(403, "Le terminal t'a été retiré par un super admin.")
+        raise HTTPException(403, "Le terminal donne tous les pouvoirs sur le serveur : il est réservé au compte du serveur.")
     notifs.envoyer("securite", "Terminal ouvert", f"{j['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
                    "/#/journal", famille="admin")
     return {"ticket": terminal.nouveau_ticket(j["identifiant"], request.state.nom), "compte": admin_user()}
@@ -2621,7 +2626,10 @@ def api_appli_installer(request: Request):
     d = dossier_appli()
     if not (der and d and maj.plus_recente(VERSION, der["version"])):
         raise HTTPException(409, "Pas de nouvelle version à installer.")
-    script = maj.script(d, der["tag"])
+    cle = maj.cle_publication()
+    if not cle:
+        raise HTTPException(409, "Cette appli n'a pas de clé de publication (cle_publication.pub) : impossible de vérifier une nouvelle version.")
+    script = maj.script(d, der["tag"], cle)
     journal.noter("appli", f"Mise à jour de l'appli vers {der['version']} lancée", request.state.nom)
     # Lancée par le serveur lui-même : elle continue pendant que l'appli redémarre.
     unite = f"jabba-maj-{int(time.time())}"
@@ -2645,6 +2653,14 @@ def etat_maj():
     lignes = [l for l in log.splitlines() if l.strip()]
     if actif.strip() in ("active", "activating", "reloading"):
         return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"]), **avancement_maj(lignes)}
+    if any(maj.MARQUE_REFUS in l for l in lignes):
+        if not MAJ["signale"]:
+            MAJ["signale"] = True
+            notifs.envoyer("securite", "Mise à jour refusée",
+                           f"La version {MAJ['version']} publiée sur GitHub n'est pas signée par la clé attendue : rien n'a été installé. "
+                           "Si tu n'as rien publié toi-même, ton compte GitHub est peut-être piraté.", "/#/systeme", famille="appli")
+        return {"statut": "echec", "version": MAJ["version"],
+                "detail": ["Signature refusée : cette version n'est pas signée par la clé attendue. Rien n'a été installé, l'appli actuelle continue."]}
     if any("Failed with result" in l or "status=" in l and "status=0/" not in l for l in lignes):
         detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
         if not MAJ["signale"]:
@@ -2664,6 +2680,8 @@ def avancement_maj(lignes):
     if etapes:
         x, y = (int(v) for v in etapes[-1])
         return {"etape": f"Construction de l'appli (étape {x} sur {y})", "pourcent": 20 + round(65 * x / max(y, 1))}
+    if "Signature valable" in texte and not re.search(r"Building|building|load build definition", texte):
+        return {"etape": "Signature vérifiée", "pourcent": 15}
     if re.search(r"Building|building|load build definition|resolve image config", texte):
         return {"etape": "Construction de l'appli", "pourcent": 20}
     return {"etape": "Téléchargement de la nouvelle version", "pourcent": 8}
@@ -2696,7 +2714,7 @@ def synchroniser_outils_invites():
     """Copie, pour la page invités, la liste des outils et leur état (la porte du Wi-Fi ne parle pas à Docker)."""
     outils = []
     for o in lister_outils():
-        if o["id"] in PORTS:
+        if o["id"] in PORTS and o["id"] not in JAMAIS_WIFI:
             outils.append({"id": o["id"], "nom": o["nom"], "role": o["role"], "port": PORTS[o["id"]],
                            "actif": o["etat"] != "arrêté", "lien_tailscale": o.get("lien")})
     _, ip = adresse_wifi()
@@ -2713,7 +2731,7 @@ def regles_voulues(interface, d):
     """Une règle par outil fermé au Wi-Fi : bloque son port pour ce qui arrive par la carte réseau du Wi-Fi."""
     regles = []
     for pid, port in sorted(PORTS.items()):
-        if not d["wifi"].get(pid):
+        if pid in JAMAIS_WIFI or not d["wifi"].get(pid):
             regles.append(f"-A {CHAINE} -i {interface} -p tcp -m conntrack --ctorigdstport {port} --ctdir ORIGINAL -j DROP")
     return regles
 
@@ -2794,6 +2812,8 @@ async def api_invites_regler(request: Request):
         pid, ouvert = corps.get("outil"), bool(corps.get("wifi"))
         if pid not in PORTS:
             raise HTTPException(400, "Outil inconnu.")
+        if pid in JAMAIS_WIFI and ouvert:
+            raise HTTPException(403, "Cet outil donne la main sur le serveur : il reste réservé à Tailscale.")
         invites.modifier(lambda d: d["wifi"].update({pid: ouvert}))
         if not appliquer_pare_feu():
             raise HTTPException(500, "Le réglage est noté, mais le filtre réseau n'a pas pu être appliqué.")
@@ -3032,6 +3052,11 @@ def demarrage():
             open(fichier, "w").write(VERSION)
         except OSError:
             pass
+    try:
+        invites.preparer_etat()
+        invites.modifier(lambda d: d.update(serveur=nom_hote()))
+    except OSError as e:
+        print("invités :", e, flush=True)
     threading.Thread(target=surveiller, daemon=True, name="surveillance").start()
 
 

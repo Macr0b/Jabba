@@ -8,6 +8,8 @@ import threading
 import time
 
 FICHIER = os.environ.get("JABBA_JOURNAL", "/data/journal.jsonl")
+# La porte du Wi-Fi (conteneur à part, sans accès aux données de l'appli) note dans son propre fichier.
+AUTRES = [f for f in os.environ.get("JABBA_JOURNAUX_AUTRES", "/data/porte-wifi/journal.jsonl").split(",") if f]
 MAX = 2000
 _VERROU = threading.Lock()
 
@@ -36,17 +38,26 @@ def noter(famille, texte, qui=None):
 
 
 def lire(n=100, famille=None):
-    try:
-        with open(FICHIER) as f:
-            lignes = f.readlines()
-    except OSError:
-        return []
-    res = []
-    for ligne in reversed(lignes):
+    evs = []
+    for chemin in [FICHIER] + [a for a in AUTRES if a != FICHIER]:
         try:
-            ev = json.loads(ligne)
-        except ValueError:
+            with open(chemin) as f:
+                lignes = f.readlines()[-MAX:]
+        except OSError:
             continue
+        for ligne in lignes:
+            try:
+                ev = json.loads(ligne)
+            except ValueError:
+                continue
+            if isinstance(ev, dict) and isinstance(ev.get("t"), int) and isinstance(ev.get("texte"), str):
+                if chemin != FICHIER:
+                    # Écrit par la porte du Wi-Fi : on ne la croit que pour des événements d'invités.
+                    ev = {"t": ev["t"], "famille": "invite", "texte": ev["texte"][:300]}
+                evs.append(ev)
+    evs.sort(key=lambda e: e["t"])
+    res = []
+    for ev in reversed(evs):
         if famille and ev.get("famille") != famille:
             continue
         res.append(ev)

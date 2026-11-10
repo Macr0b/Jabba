@@ -1,0 +1,24 @@
+# Tests de l'appli : à chaque envoi sur main, et avant toute release.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Outils
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg openssh-client util-linux
+      - name: Dépendances
+        run: pip install -r app/requirements.txt -r tests/requirements.txt
+      - name: Tests
+        # En root, comme l'appli : les tests du bac à sable et de la signature des mises à jour en ont besoin.
+        run: sudo -E env "PATH=$PATH" "$(command -v python)" -m pytest -q tests

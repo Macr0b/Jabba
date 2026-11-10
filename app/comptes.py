@@ -239,12 +239,15 @@ def demander(identifiant, login, nom):
     with _verrou:
         d = _lire()
         c = next((x for x in d["comptes"] if x["identifiant"] == (identifiant or "").strip().lower()), None)
-        if not c:
+        # Seul le compte Tailscale relié au compte peut demander : le mot de passe provisoire
+        # ne doit jamais pouvoir arriver chez quelqu'un d'autre (un autre admin, par exemple).
+        # Compte non relié : pas de demande possible, il faut voir un super admin.
+        if not c or not c.get("tailscale") or c["tailscale"] != login:
             return None
         d["demandes"] = [x for x in d["demandes"] if not (x["compte"] == c["id"] and x["etat"] == "attente")]
         d["demandes"].append({"id": secrets.token_hex(4), "compte": c["id"], "identifiant": c["identifiant"],
                               "nom": c["nom"], "login": login, "demandeur": nom, "t": int(time.time()), "etat": "attente",
-                              "autre_personne": bool(c.get("tailscale") and c["tailscale"] != login)})
+                              "autre_personne": False})
         d["demandes"] = d["demandes"][-50:]
         _ecrire(d)
         return _public(c)
@@ -266,8 +269,10 @@ def repondre(did, accepter, par):
             c["empreinte"] = _empreinte(mdp, c["sel"])
             c["provisoire"] = True
             c["provisoire_exp"] = time.time() + DUREE_REMISE
-            # Remis au compte Tailscale relié au compte s'il y en a un : jamais à quelqu'un d'autre.
-            dem["remis_a"] = c.get("tailscale") or dem["login"]
+            # Remis au compte Tailscale relié au compte, et à lui seul.
+            if not c.get("tailscale"):
+                raise Refus(409, "Ce compte n'est plus relié à un compte Tailscale : supprime-le et recrée-le.")
+            dem["remis_a"] = c["tailscale"]
             _remises[dem["remis_a"]] = {"identifiant": c["identifiant"], "mot_de_passe": mdp, "exp": time.time() + DUREE_REMISE}
         _ecrire(d)
         return dem, mdp

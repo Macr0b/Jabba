@@ -2,7 +2,11 @@
 
 Deux portes vers les mêmes pages invités :
 - le Wi-Fi : un petit serveur séparé (port 80, http://<serveur>.local), qui
-  ne connaît QUE les pages invités. La connexion admin y est impossible.
+  ne connaît QUE les pages invités. La connexion admin y est impossible. Il tourne
+  dans son propre conteneur, sans aucun pouvoir : compte du serveur (pas root),
+  aucune capacité Linux, système de fichiers en lecture seule. Il ne voit que
+  /srv (les dossiers partagés) et son petit dossier d'état (donnees/porte-wifi/),
+  jamais le reste des données de l'appli (comptes, clés, sessions…).
 - Tailscale : l'appli, tant qu'on n'est pas connecté en admin.
 
 Sur le Wi-Fi, il faut le code à 4 chiffres (ou le QR code qui le contient).
@@ -29,7 +33,9 @@ from starlette.datastructures import UploadFile
 import journal
 
 DOSSIER = os.environ.get("JABBA_DATA", "/data")
-FICHIER = os.path.join(DOSSIER, "invites.json")
+# État partagé entre l'appli (qui l'écrit) et la porte du Wi-Fi (qui le lit) : un dossier à part.
+FICHIER = os.environ.get("JABBA_INVITES_ETAT", os.path.join(DOSSIER, "porte-wifi", "etat.json"))
+ANCIEN_FICHIER = os.path.join(DOSSIER, "invites.json")    # avant la 0.11
 DOSSIER_INVITES = os.environ.get("JABBA_DOSSIER_INVITES", "/srv/data/invites")
 COOKIE = "jabba_invite"
 DUREE = 7 * 86400
@@ -58,12 +64,40 @@ def lire():
 
 def ecrire(d):
     with _verrou:
-        os.makedirs(DOSSIER, exist_ok=True)
+        os.makedirs(os.path.dirname(FICHIER), exist_ok=True)
         tmp = FICHIER + ".tmp"
         with open(tmp, "w") as f:
             json.dump(d, f, ensure_ascii=False)
         os.chmod(tmp, 0o600)
+        _au_compte_invites(tmp)
         os.replace(tmp, FICHIER)
+
+
+UID_INVITES = int(os.environ.get("JABBA_UID", "1000"))
+GID_INVITES = int(os.environ.get("JABBA_GID", "1000"))
+
+
+def _au_compte_invites(chemin):
+    """L'appli (root) écrit l'état ; la porte du Wi-Fi le lit avec le compte du serveur."""
+    if os.geteuid() == 0:
+        try:
+            os.chown(chemin, UID_INVITES, GID_INVITES)
+        except OSError:
+            pass
+
+
+def preparer_etat():
+    """Au démarrage de l'appli : dossier d'état des invités (et reprise de l'ancien emplacement)."""
+    dossier = os.path.dirname(FICHIER)
+    os.makedirs(dossier, exist_ok=True)
+    if os.path.exists(ANCIEN_FICHIER) and not os.path.exists(FICHIER):
+        os.replace(ANCIEN_FICHIER, FICHIER)
+    if not os.path.exists(FICHIER):
+        ecrire(lire())          # code et secret créés une fois pour toutes, ici
+    if os.geteuid() == 0:
+        os.chmod(dossier, 0o700)
+        _au_compte_invites(dossier)
+        _au_compte_invites(FICHIER)
 
 
 def modifier(fonction):
@@ -289,7 +323,7 @@ app.include_router(routeur)
 def moi_wifi():
     import socket
     from version import VERSION
-    return {"mode": "invite", "serveur": socket.gethostname(), "version": VERSION, "admin": None}
+    return {"mode": "invite", "serveur": lire().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
 
 
 @app.get("/api/{reste:path}")
