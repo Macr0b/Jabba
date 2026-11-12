@@ -82,3 +82,12 @@ def test_disque_de_donnees_ne_bloque_pas_le_demarrage(tmp_path):
     assert lignes[1] == "# UUID=b /srv/data ext4 defaults 0 2" and lignes[2] == "UUID=c / ext4 defaults 0 1"
     deux_fois = subprocess.run(["sh", "-c", f"awk {awk} {fstab} > {fstab}.2 && awk {awk} {fstab}.2"], capture_output=True, text=True).stdout
     assert deux_fois == sortie                       # relancer le script ne rajoute rien
+
+
+def test_workflows_github_lisibles():
+    """Un fichier de workflow mal écrit et GitHub ne lance plus rien (ni tests, ni release)."""
+    dossier = os.path.join(RACINE, ".github", "workflows")
+    for nom in os.listdir(dossier):
+        w = yaml.safe_load(open(os.path.join(dossier, nom)))
+        assert w.get("jobs"), nom
+        assert w.get("name"), nom
