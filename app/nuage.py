@@ -28,6 +28,17 @@ MODES = {   # droits Nextcloud : lire 1, modifier 2, créer 4, supprimer 8, part
 }
 NOMBRES_MODES = {1: "lecture", 7: "depot", 31: "complet", 15: "complet", 23: "depot"}
 GO = 1024 ** 3
+# Charte affichée sur le formulaire d'inscription (modifiable dans Jabba).
+CHARTE_MAX = 1500
+CHARTE_DEFAUT = (
+    "Ce service est hébergé par un particulier, sur son propre serveur, et chaque compte est validé à la main. "
+    "L'administrateur peut techniquement accéder aux fichiers stockés ici : il s'engage à ne pas le faire, "
+    "sauf à ta demande ou par obligation légale. Pour des fichiers vraiment privés, chiffre-les toi-même avec "
+    "Cryptomator (cryptomator.org) : personne d'autre ne pourra les lire, l'administrateur non plus. "
+    "Tout est sauvegardé chaque nuit, mais garde ta propre copie de ce qui compte. "
+    "Tu peux demander à tout moment la suppression de ton compte et de tes fichiers. "
+    "En créant ton compte, tu acceptes cette charte."
+)
 _verrou = threading.RLock()
 USAGE = {"t": 0, "v": {}}   # identifiant -> octets utilisés (lu à part : une commande par compte)
 
@@ -196,6 +207,23 @@ def mettre_en_route(occ, quota_defaut_go=5):
     for k, v in reglages.items():
         _faire(occ, ["config:app:set", "registration", k, "--value", v])
     _faire(occ, ["config:app:set", "files", "default_quota", "--value", texte_quota(quota_defaut_go)])
+    if not charte(occ):
+        poser_charte(occ, CHARTE_DEFAUT)
+
+
+def charte(occ):
+    code, sortie, _ = occ(["config:app:get", "registration", "additional_hint"])
+    return sortie.strip() if code == 0 else ""
+
+
+def poser_charte(occ, texte):
+    texte = " ".join(str(texte or "").split())       # une seule ligne : le formulaire n'affiche pas les retours
+    if len(texte) > CHARTE_MAX:
+        raise Erreur(f"Charte trop longue ({CHARTE_MAX} caractères au plus).")
+    if texte:
+        _faire(occ, ["config:app:set", "registration", "additional_hint", "--value", texte])
+    else:
+        occ(["config:app:delete", "registration", "additional_hint"])
 
 
 def quota_defaut(occ, go):

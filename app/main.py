@@ -21,6 +21,7 @@ from urllib.parse import quote, unquote, urljoin
 import httpx
 
 import admin
+import battement
 import comptes
 import invites
 import secrets
@@ -900,13 +901,59 @@ async def ws_terminal(ws: WebSocket, ticket: str = ""):
     journal.noter("admin", f"Terminal fermé ({qui['qui']}, {max(1, round((time.time() - debut) / 60))} min)", qui["nom"])
 
 
+# ---------------------------------------------------------------- alerte « serveur muet »
+BATTEMENT_DEMO = os.path.join(os.environ.get("JABBA_DATA", "/data"), "battement-demo.json")
+
+
+@app.get("/api/systeme/battement")
+def api_battement(request: Request):
+    exiger_admin(request)
+    if DEMO:
+        try:
+            d = json.load(open(BATTEMENT_DEMO))
+        except (OSError, ValueError):
+            d = {}
+        return {"actif": bool(d.get("url")), "adresse": battement.masquer(d.get("url")), "ok": True if d.get("url") else None, "quand": d.get("quand")}
+    code, url, _ = hote(["cat", battement.FICHIER])
+    url = url.strip() if code == 0 else ""
+    if not url:
+        return {"actif": False, "adresse": None, "ok": None, "quand": None}
+    _, sortie, _ = hote(["systemctl", "show", f"{battement.UNITE}.service", "-p", "Result", "-p", "ExecMainExitTimestamp", "--value"])
+    lignes = sortie.strip().splitlines() + ["", ""]
+    quand = None
+    if lignes[1].strip():
+        _, t, _ = hote(["date", "-d", lignes[1].strip(), "+%s"])
+        quand = int(t.strip()) if t.strip().isdigit() else None
+    return {"actif": True, "adresse": battement.masquer(url), "ok": lignes[0].strip() == "success", "quand": quand}
+
+
+@app.post("/api/systeme/battement")
+async def api_battement_regler(request: Request):
+    """Pose (ou retire) l'adresse du service de surveillance. Super admin, mot de passe récent."""
+    exiger_super(request, fort=True)
+    url = str((await request.json()).get("url") or "").strip()
+    if url and not battement.valide(url):
+        raise HTTPException(400, "Adresse invalide : elle doit commencer par https:// (sans espace ni guillemet).")
+    if DEMO:
+        with open(BATTEMENT_DEMO, "w") as f:
+            json.dump({"url": url, "quand": int(time.time())}, f)
+    else:
+        code, _, err = hote_sh(battement.installer(url) if url else battement.retirer(), timeout=60)
+        if code != 0:
+            raise HTTPException(500, ("Le premier signal n'est pas passé : vérifie l'adresse. " if url else "") + err.strip()[-200:])
+    journal.noter("systeme", "Alerte « serveur muet » " + ("activée : " + battement.masquer(url) if url else "désactivée"), request.state.nom)
+    return {"ok": True}
+
+
 @app.post("/api/systeme/redemarrer")
 def api_reboot(request: Request):
     exiger_admin(request, fort=True)
     if DEMO:
         return {"ok": True}
     journal.noter("systeme", "Redémarrage du serveur demandé", request.state.nom)
-    hote(["systemd-run", "--on-active=3", "systemctl", "reboot"])
+    # Sans passer par le BIOS si le serveur sait le faire (kexec, installé par le script) : certains
+    # portables restent bloqués au redémarrage du BIOS. Sinon, redémarrage classique.
+    hote(["systemd-run", "--on-active=3", "sh", "-c", "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"])
     return {"ok": True}
 
 
@@ -2059,6 +2106,12 @@ def api_nuage(request: Request):
     nuage_usage_en_fond()
     d = nuage.lire()
     promis = sum(c["quota"] or 0 for c in comptes_ if c["etat"] == "actif")
+    attente = sorted(c["id"] for c in comptes_ if c["etat"] == "attente")
+    with nuage._verrou:
+        d = nuage.lire()
+        if d["en_attente_vus"] != attente and set(attente) <= set(d["en_attente_vus"]):
+            d["en_attente_vus"] = attente     # validées ou refusées entre-temps (les nouvelles, c'est la surveillance qui les signale)
+            nuage.ecrire(d)
     tous_groupes = {g["id"]: g["membres"] for g in groupes_}
     for c in comptes_:
         c["rang_nuage"] = d.get("rang_de", {}).get(c["id"]) if d.get("rangs_actif") else None
@@ -2067,6 +2120,7 @@ def api_nuage(request: Request):
     groupes_ = [g for g in groupes_ if not g["id"].startswith(nuage.PREFIXE_RANG)]
     return {"etat": e, "rang": j["rang"], "plafond_go": d["plafond_go"], "comptes": comptes_, "groupes": groupes_,
             "rangs_actif": bool(d.get("rangs_actif")), "rangs": rangs, "createur": j["identifiant"] == nom_hote(),
+            "charte": nuage.charte(occ), "charte_defaut": nuage.CHARTE_DEFAUT, "charte_max": nuage.CHARTE_MAX,
             "dossiers": dossiers_, "modes": {k: {"nom": v[1], "detail": v[2]} for k, v in nuage.MODES.items()},
             "tous": nuage.GROUPE_TOUS, "promis": promis, "espace": None if DEMO else espace(["/srv/data"]).get("/srv/data")}
 
@@ -2098,6 +2152,23 @@ async def api_nuage_reglages(request: Request):
         _nuage(nuage.quota_defaut, go)
         journal.noter("nuage", f"Espace par défaut des nouveaux comptes : {fgo(go)}", request.state.nom)
     return {"ok": True}
+
+
+@app.post("/api/nuage/charte")
+async def api_nuage_charte(request: Request):
+    """La charte affichée sur le formulaire d'inscription (super admin)."""
+    exiger_super(request)
+    texte = (await request.json()).get("texte", "")
+    _nuage(nuage.poser_charte, texte)
+    journal.noter("nuage", "Charte d'inscription " + ("modifiée" if str(texte).strip() else "retirée"), request.state.nom)
+    return {"ok": True}
+
+
+@app.get("/api/nuage/attente")
+def api_nuage_attente(request: Request):
+    """Nombre d'inscriptions qui attendent (léger : pour la pastille de l'Établi)."""
+    exiger_admin(request)
+    return {"attente": len(nuage.lire()["en_attente_vus"])}
 
 
 @app.post("/api/nuage/comptes")

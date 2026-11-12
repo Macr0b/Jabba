@@ -158,8 +158,8 @@ Unattended-Upgrade::Origins-Pattern {
   "origin=Tailscale";
   "origin=Docker";
 };
-Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+// Le redémarrage après une mise à jour est fait par jabba-redemarrage-auto.timer (4 h), sans passer par le BIOS.
+Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
 EOF
 ok "Correctifs installés chaque nuit, redémarrage à 4 h si nécessaire"
@@ -185,6 +185,78 @@ printf '%s\n' '# Jabba : un disque à plateaux s'"'"'arrête après 20 minutes s
 lancer udevadm control --reload
 lancer udevadm trigger --subsystem-match=block --action=change
 ok "Disques à plateaux : arrêt après 20 minutes sans servir"
+# Redémarrer sans passer par le BIOS (kexec) : Linux se relance directement lui-même.
+# Certains portables restent bloqués au démarrage du BIOS ; un serveur qu'on gère à distance
+# ne doit jamais en dépendre. « sudo redemarrer » le fait, le bouton de Jabba aussi, et le
+# redémarrage de 4 h après une mise à jour. En cas d'échec, redémarrage classique.
+lancer apt-get install -y kexec-tools
+# kexec-tools ne doit rien faire de lui-même (on le pilote) :
+sed -i 's/^LOAD_KEXEC=.*/LOAD_KEXEC=false/' /etc/default/kexec 2>/dev/null || true
+cat > /usr/local/sbin/redemarrer <<'FIN'
+#!/bin/sh
+# Redémarre le serveur sans passer par le BIOS (kexec), avec le noyau le plus récent.
+# Repli : redémarrage classique si kexec n'est pas possible.
+set -u
+noyau=$(ls -1v /boot/vmlinuz-* 2>/dev/null | tail -n 1)
+version=${noyau#/boot/vmlinuz-}
+initrd=/boot/initrd.img-$version
+if [ -n "$noyau" ] && [ -f "$initrd" ] && { kexec -s -l "$noyau" --initrd="$initrd" --reuse-cmdline 2>/dev/null || kexec -l "$noyau" --initrd="$initrd" --reuse-cmdline; }; then
+  logger -t redemarrer "Redémarrage sans BIOS (kexec) sur le noyau $version"
+  exec systemctl kexec
+fi
+logger -t redemarrer "kexec impossible : redémarrage classique"
+exec systemctl reboot
+FIN
+chmod 755 /usr/local/sbin/redemarrer
+cat > /etc/systemd/system/jabba-redemarrage-auto.service <<'FIN'
+[Unit]
+Description=Jabba : redémarrage après une mise à jour qui l'exige (sans passer par le BIOS)
+ConditionPathExists=/run/reboot-required
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/redemarrer
+FIN
+cat > /etc/systemd/system/jabba-redemarrage-auto.timer <<'FIN'
+[Unit]
+Description=Jabba : redémarrage de 4 h si une mise à jour l'exige
+
+[Timer]
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
+FIN
+lancer systemctl daemon-reload
+lancer systemctl enable --now jabba-redemarrage-auto.timer
+ok "Redémarrages sans passer par le BIOS (sudo redemarrer, bouton de Jabba, 4 h après une mise à jour)"
+
+# Chien de garde : la puce de surveillance redémarre la machine si le système se fige.
+mkdir -p /etc/systemd/system.conf.d
+printf '[Manager]\nRuntimeWatchdogSec=2min\nRebootWatchdogSec=10min\n' > /etc/systemd/system.conf.d/chien-de-garde.conf
+lancer systemctl daemon-reexec
+if ls /dev/watchdog0 >/dev/null 2>&1; then
+  ok "Chien de garde : si le système se fige, la machine redémarre seule (2 minutes)"
+else
+  note "Pas de puce de surveillance (watchdog) détectée : le chien de garde est réglé mais ne fera rien ici."
+fi
+# Erreur grave du noyau : redémarrage au bout de 10 s, au lieu de rester figé sur l'écran d'erreur.
+printf 'kernel.panic = 10\nkernel.panic_on_oops = 1\n' > /etc/sysctl.d/90-jabba-redemarrage.conf
+lancer sysctl --system
+ok "Erreur grave du système : redémarrage automatique après 10 secondes"
+# Un disque de données absent ou lent ne bloque jamais le démarrage (Tailscale et SSH restent joignables).
+awk '$2 == "/srv/data" && $1 !~ /^#/ {
+  if ($4 !~ /(^|,)nofail(,|$)/) $4 = $4 ",nofail"
+  if ($4 !~ /x-systemd\.device-timeout/) $4 = $4 ",x-systemd.device-timeout=30s"
+} { print }' /etc/fstab > /etc/fstab.jabba-nouveau
+if ! cmp -s /etc/fstab /etc/fstab.jabba-nouveau; then
+  cp /etc/fstab /etc/fstab.jabba-bak && mv /etc/fstab.jabba-nouveau /etc/fstab && lancer systemctl daemon-reload
+else
+  rm -f /etc/fstab.jabba-nouveau
+fi
+ok "Un disque absent ne bloque jamais le démarrage"
+
 CONSERVATION=$(ls /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 2>/dev/null | head -1)
 if [ -n "$CONSERVATION" ]; then
   echo 1 > "$CONSERVATION" 2>/dev/null || true
@@ -228,7 +300,7 @@ else
         ok "$D préparé"
       fi
       UUID=$(blkid -s UUID -o value "$PART")
-      grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /srv/data ext4 defaults,nofail 0 2" >> /etc/fstab
+      grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /srv/data ext4 defaults,nofail,x-systemd.device-timeout=30s 0 2" >> /etc/fstab
       lancer systemctl daemon-reload
       mount /srv/data || echec "Montage de /srv/data impossible."
       ok "$PART monté sur /srv/data, à chaque démarrage"
@@ -374,7 +446,7 @@ echo
 read -rp "Le serveur doit redémarrer pour finir (réseau, écran). Redémarrer maintenant ? (o/n) " r </dev/tty
 if [ "$r" = o ]; then
   echo "Redémarrage… reconnecte-toi dans 2 minutes."
-  systemctl reboot
+  /usr/local/sbin/redemarrer
 else
-  echo "Pense à redémarrer : sudo reboot"
+  echo "Pense à redémarrer : sudo redemarrer"
 fi

@@ -85,6 +85,12 @@ class FauxOcc:
             return ok()
         if c == "app:enable":
             return ok()
+        if c == "config:app:get":
+            v = self.reglages.get((a[1], a[2]))
+            return (0, v + "\n", "") if v is not None else (1, "", "")
+        if c == "config:app:delete":
+            self.reglages.pop((a[1], a[2]), None)
+            return ok()
         return 1, "", "commande inconnue"
 
 
@@ -192,3 +198,25 @@ def test_modes_des_dossiers():
     assert nuage.MODES["lecture"][0] == ["read"]
     assert "delete" not in nuage.MODES["depot"][0] and "share" not in nuage.MODES["depot"][0]
     assert nuage.NOMBRES_MODES[1] == "lecture" and nuage.NOMBRES_MODES[7] == "depot" and nuage.NOMBRES_MODES[31] == "complet"
+
+
+def test_charte(occ):
+    assert nuage.charte(occ) == ""
+    nuage.mettre_en_route(occ)
+    assert nuage.charte(occ) == nuage.CHARTE_DEFAUT          # le modèle est posé à la mise en route
+    nuage.poser_charte(occ, "Ligne un.\n\n  Ligne   deux.")
+    assert nuage.charte(occ) == "Ligne un. Ligne deux."      # une seule ligne : le formulaire n'affiche pas les retours
+    with pytest.raises(nuage.Erreur):
+        nuage.poser_charte(occ, "x" * (nuage.CHARTE_MAX + 1))
+    nuage.poser_charte(occ, "")
+    assert nuage.charte(occ) == ""
+    nuage.mettre_en_route(occ)
+    assert nuage.charte(occ) == nuage.CHARTE_DEFAUT
+    nuage.poser_charte(occ, "Ma charte.")
+    nuage.mettre_en_route(occ)
+    assert nuage.charte(occ) == "Ma charte."                 # relancer la mise en route ne l'écrase pas
+
+
+def test_charte_mentionne_l_essentiel():
+    for mot in ("administrateur", "Cryptomator", "sauvegardé", "suppression"):
+        assert mot in nuage.CHARTE_DEFAUT

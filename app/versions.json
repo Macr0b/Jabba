@@ -1,5 +1,20 @@
 [
   {
+    "version": "0.12.0",
+    "date": "2026-11-12",
+    "changements": [
+      "Lecteur vidéo comme les lecteurs habituels : commandes par-dessus l'image, barre en bas, lecture, son et temps à gauche, ⚙ (son et sous-titres) et plein écran en bas à droite, vraies icônes ; tout se cache pendant la lecture et revient au moindre geste.",
+      "Lecteur : bouton « image dans l'image » (en bas à droite, ou touche i) : la vidéo continue dans une petite fenêtre flottante pendant que tu fais autre chose.",
+      "Redémarrages sans passer par le BIOS (kexec) : bouton Redémarrer, « sudo redemarrer » et redémarrage de 4 h après une mise à jour. Certains portables restent bloqués au démarrage du BIOS ; le serveur n'en dépend plus (à appliquer en relançant le script d'installation).",
+      "Comptes Nextcloud rangés dans l'Établi : bouton « Gérer » sur la carte Nextcloud (avec une pastille quand une inscription attend), et la page en trois onglets : Comptes, Dossiers et rangs, Charte et réglages.",
+      "Charte d'inscription : affichée sur le formulaire « S'inscrire » de Nextcloud, modifiable dans Jabba, avec un modèle (accès technique de l'admin, engagement de ne pas regarder, Cryptomator pour chiffrer soi-même, sauvegardes, suppression sur demande).",
+      "Chien de garde : si le système se fige, la puce de surveillance redémarre la machine. Erreur grave du système : redémarrage après 10 secondes. Un disque de données absent ne bloque jamais le démarrage.",
+      "Alerte « Si le serveur se tait » (Système) : un signal toutes les 5 minutes vers un service de surveillance extérieur (Healthchecks.io, par exemple), qui t'alerte quand le serveur ne répond plus.",
+      "Terminal sur iPhone : boutons Coller et Copier, et plus de suggestions du clavier (contacts, corrections).",
+      "Tests de l'interface lancés par GitHub avant chaque version : connexion, Fichiers, lecteur, Système, terminal, Sauvegardes, Établi, sur ordinateur et sur iPhone."
+    ]
+  },
+  {
     "version": "0.11.0",
     "date": "2026-11-10",
     "changements": [

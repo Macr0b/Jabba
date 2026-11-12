@@ -407,7 +407,7 @@ pages.outils = async () => {
           ${o.lien ? (o.dans_appli
             ? `<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(o.id)}">Ouvrir</a>`
             : (o.id === "nextcloud"
-              ? `<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="${esc(o.lien)}" target="_blank" rel="noopener">Nextcloud complet</a>`
+              ? `<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Gérer<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${esc(o.lien)}" target="_blank" rel="noopener">Nextcloud complet</a>`
               : `<a class="btn btn-p" href="${esc(o.lien)}" target="_blank" rel="noopener">Ouvrir</a>`)) : ""}
           ${o.modifiable ? `<button class="btn" data-action="redemarrer" data-id="${esc(o.id)}">Redémarrer</button>
           <button class="btn" data-action="mettre-a-jour" data-id="${esc(o.id)}">Mettre à jour</button>` : ""}
@@ -425,6 +425,8 @@ pages.outils = async () => {
     <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.</p>`;
 
   const recharger = () => { if (location.hash.startsWith("#/outils")) pages.outils().catch(montrerErreur); };
+  // Inscriptions Nextcloud en attente : une pastille sur « Gérer ».
+  if ($("#attente-nuage")) api("/api/nuage/attente").then((r) => { const z = $("#attente-nuage"); if (z && r.attente) { z.textContent = r.attente; z.hidden = false; } }).catch(() => {});
   contenu.querySelectorAll("[data-bascule]").forEach((b) => b.addEventListener("click", async () => {
     const o = outils.find((x) => x.id === b.dataset.bascule);
     const activer = b.getAttribute("aria-checked") !== "true";
@@ -560,6 +562,7 @@ pages.systeme = async () => {
         <button class="btn" id="code-secours">${a.code_existe ? "Nouveau code de secours" : "Créer le code de secours"}</button></div>
       </section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
+      <section class="carte pad" id="muet"><h2>Si le serveur se tait</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
         <div class="journal" id="journal-court"><div class="squelette"></div></div></section>
       <section class="carte pad"><h2>Appareils Tailscale</h2>
@@ -568,6 +571,7 @@ pages.systeme = async () => {
       </section>
     </div>`;
   carteAlertes().catch((e) => { const z = $("#alertes"); if (z) z.innerHTML = `<h2>Alertes</h2><p class="note">${esc(e.message)}</p>`; });
+  carteMuet().catch((e) => { const z = $("#muet"); if (z) z.innerHTML = `<h2>Si le serveur se tait</h2><p class="note">${esc(e.message)}</p>`; });
   carteMaj().catch((e) => { const z = $("#maj"); if (z) z.innerHTML = `<h2>Appli Jabba</h2><p class="note">${esc(e.message)}</p>`; });
   api("/api/journal?n=8").then((evs) => { const z = $("#journal-court"); if (z) z.innerHTML = evs.map(ligneJournal).join("") || '<p class="note">Rien pour l\'instant.</p>'; }).catch(() => {});
   $("#changer-mdp").onclick = async () => {
@@ -735,6 +739,18 @@ async function lancerVideo(e) {
   return lecteur(e, infos || { duree: 0, audios: [], soustitres: [], video: { codec: "" }, inconnu: true }, !infos || infos.directe);
 }
 
+// Icônes du lecteur (traits blancs, comme les lecteurs vidéo habituels).
+const ICONES_LECTEUR = {
+  jouer: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>',
+  son: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  muet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  reglages: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8zm8.1 4.6.1-1.2-.1-1.2 2-1.6-2-3.4-2.4 1a8 8 0 0 0-2-1.2L15.3 3h-4l-.4 2.6a8 8 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6-.1 1.2.1 1.2-2 1.6 2 3.4 2.4-1a8 8 0 0 0 2 1.2l.4 2.6h4l.4-2.6a8 8 0 0 0 2-1.2l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  incrustation: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor"/></svg>',
+  plein: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  sortir: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
 async function lecteur(e, infos, direct) {
   const zone = $("#lecteur");
   if (!zone) return;
@@ -746,15 +762,24 @@ async function lecteur(e, infos, direct) {
     <div class="saut-indic gauche" id="saut-gauche" hidden></div><div class="saut-indic droite" id="saut-droite" hidden></div>
     <div class="etat-lecteur" id="etat-lecteur">${direct ? "Chargement…" : "Le serveur prépare la vidéo…"}</div>
     <div class="commandes">
-      <button class="btn btn-petit" type="button" id="lect-jouer" aria-label="Lecture">▶</button>
-      <span class="temps" id="lect-temps">0:00</span>
-      <input type="range" id="lect-barre" min="0" max="${Math.floor(infos.duree)}" value="0" step="1" aria-label="Position">
-      <span class="temps" id="lect-duree">${tempsLisible(infos.duree)}</span>
-      ${infos.audios.length > 1 ? `<select id="lect-audio" aria-label="Son">${infos.audios.map((a) => `<option value="${a.index}"${a.index === audioDefaut ? " selected" : ""}>Son · ${esc(a.nom)}</option>`).join("")}</select>` : ""}
-      ${textes.length ? `<select id="lect-sous" aria-label="Sous-titres"><option value="">Sans sous-titres</option>${textes.map((x) => `<option value="${x.index}">Sous-titres · ${esc(x.nom)}</option>`).join("")}</select>` : ""}
-      <button class="btn btn-petit" type="button" id="lect-son" aria-label="Couper le son">🔊</button>
-      <input type="range" id="lect-volume" class="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume">
-      <button class="btn btn-petit" type="button" id="lect-plein" aria-label="Plein écran">⛶</button>
+      <input type="range" class="barre" id="lect-barre" min="0" max="${Math.floor(infos.duree)}" value="0" step="1" aria-label="Position">
+      <div class="ligne-commandes">
+        <div class="groupe">
+          <button class="icone-lect" type="button" id="lect-jouer" aria-label="Lecture">${ICONES_LECTEUR.jouer}</button>
+          <span class="volume-groupe"><button class="icone-lect" type="button" id="lect-son" aria-label="Couper le son">${ICONES_LECTEUR.son}</button>
+          <input type="range" id="lect-volume" class="volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"></span>
+          <span class="temps"><span id="lect-temps">0:00</span> / <span id="lect-duree">${tempsLisible(infos.duree)}</span></span>
+        </div>
+        <div class="groupe">
+          ${infos.audios.length > 1 || textes.length ? `<button class="icone-lect" type="button" id="lect-reglages" aria-label="Son et sous-titres" aria-expanded="false">${ICONES_LECTEUR.reglages}</button>` : ""}
+          <button class="icone-lect" type="button" id="lect-incrustation" aria-label="Image dans l'image" hidden>${ICONES_LECTEUR.incrustation}</button>
+          <button class="icone-lect" type="button" id="lect-plein" aria-label="Plein écran">${ICONES_LECTEUR.plein}</button>
+        </div>
+      </div>
+      <div class="menu-lect" id="lect-menu" hidden>
+        ${infos.audios.length > 1 ? `<label>Son<select id="lect-audio">${infos.audios.map((a) => `<option value="${a.index}"${a.index === audioDefaut ? " selected" : ""}>${esc(a.nom)}</option>`).join("")}</select></label>` : ""}
+        ${textes.length ? `<label>Sous-titres<select id="lect-sous"><option value="">Aucun</option>${textes.map((x) => `<option value="${x.index}">${esc(x.nom)}</option>`).join("")}</select></label>` : ""}
+      </div>
     </div>
     <p class="note lect-info">${direct ? "Lu directement" : `Lu par le serveur (format ${esc((infos.video.codec || "?").toUpperCase())})`}${infos.soustitres.length > textes.length ? " · certains sous-titres sont des images : non affichés" : ""} · touche deux fois à gauche ou à droite de l'image : 10 s</p>`;
   const video = zone.querySelector("video"), barre = $("#lect-barre"), temps = $("#lect-temps"), jouer = $("#lect-jouer"), etat = $("#etat-lecteur");
@@ -823,15 +848,18 @@ async function lecteur(e, infos, direct) {
 
   video.addEventListener("playing", () => montrer(""));
   video.addEventListener("waiting", () => montrer("Chargement…"));
-  video.addEventListener("play", () => { jouer.textContent = "❚❚"; });
-  video.addEventListener("pause", () => { jouer.textContent = "▶"; });
+  video.addEventListener("play", () => { jouer.innerHTML = ICONES_LECTEUR.pause; jouer.setAttribute("aria-label", "Pause"); });
+  video.addEventListener("pause", () => { jouer.innerHTML = ICONES_LECTEUR.jouer; jouer.setAttribute("aria-label", "Lecture"); });
   video.addEventListener("timeupdate", () => {
     const t = st.debut + video.currentTime;
     temps.textContent = tempsLisible(t);
     if (!st.glisse) barre.value = String(Math.floor(t));
+    remplir();
   });
   jouer.onclick = () => { if (!st.sid) depuis(0); else if (video.paused) video.play(); else video.pause(); };
-  barre.addEventListener("input", () => { st.glisse = true; temps.textContent = tempsLisible(+barre.value); });
+  // La barre se remplit (partie vue) comme sur les lecteurs habituels.
+  const remplir = () => barre.style.setProperty("--pct", (infos.duree ? Math.min(100, (100 * +barre.value) / infos.duree) : 0) + "%");
+  barre.addEventListener("input", () => { st.glisse = true; temps.textContent = tempsLisible(+barre.value); remplir(); reveiller(); });
   const position = () => st.debut + video.currentTime;
   const allerA = (t) => {
     t = Math.max(0, Math.min(t, (infos.duree || Infinity) - 1));
@@ -864,6 +892,7 @@ async function lecteur(e, infos, direct) {
     const r = video.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width;
     const cote = x < 0.35 ? -1 : x > 0.65 ? 1 : 0, maintenant = Date.now();
     const cachees = zone.classList.contains("repos");
+    if (!menuLect.hidden) { menuLect.hidden = true; if (btnReglages) btnReglages.setAttribute("aria-expanded", "false"); reveiller(); return; }
     reveiller();
     if (cachees && !cote) return;   // commandes cachées : une touche au centre les fait juste revenir
     if (cote && ((maintenant - tape.t < 320 && tape.cote === cote) || (tape.serie && tape.cote === cote && maintenant - tape.t < 700))) {
@@ -885,6 +914,7 @@ async function lecteur(e, infos, direct) {
     else if (ev.key === " " || ev.key === "k") { ev.preventDefault(); jouer.onclick(); }
     else if (ev.key === "m") { ev.preventDefault(); $("#lect-son").onclick(); }
     else if (ev.key === "f") { ev.preventDefault(); $("#lect-plein").onclick(); }
+    else if (ev.key === "i" && !$("#lect-incrustation").hidden) { ev.preventDefault(); $("#lect-incrustation").onclick(); }
     if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") { const c = ev.key === "ArrowLeft" ? -1 : 1; tape.serie = tape.cote === c && Date.now() - tape.t < 700 ? tape.serie + 1 : 1; tape.cote = c; tape.t = Date.now(); montrerSaut(c); }
   };
   document.addEventListener("keydown", clavier);
@@ -893,7 +923,7 @@ async function lecteur(e, infos, direct) {
   const sous = $("#lect-sous");
   if (sous) sous.onchange = () => { st.sous = sous.value === "" ? null : +sous.value; sousTitres(); };
   const sonBtn = $("#lect-son"), volume = $("#lect-volume");
-  const majSon = () => { sonBtn.textContent = video.muted || video.volume === 0 ? "🔇" : "🔊"; sonBtn.setAttribute("aria-label", video.muted ? "Remettre le son" : "Couper le son"); volume.value = String(video.muted ? 0 : video.volume); };
+  const majSon = () => { sonBtn.innerHTML = video.muted || video.volume === 0 ? ICONES_LECTEUR.muet : ICONES_LECTEUR.son; sonBtn.setAttribute("aria-label", video.muted ? "Remettre le son" : "Couper le son"); volume.value = String(video.muted ? 0 : video.volume); };
   try { const v = parseFloat(localStorage.getItem("jabba-volume")); if (v >= 0 && v <= 1) video.volume = v; } catch (_) { /* rien */ }
   sonBtn.onclick = () => { video.muted = !video.muted; if (!video.muted && video.volume === 0) video.volume = 0.5; majSon(); };
   volume.addEventListener("input", () => { video.volume = +volume.value; video.muted = +volume.value === 0; try { localStorage.setItem("jabba-volume", volume.value); } catch (_) { /* rien */ } majSon(); });
@@ -910,11 +940,47 @@ async function lecteur(e, infos, direct) {
     else zone.classList.add("plein");
     reveiller();
   };
-  // En plein écran, les commandes se cachent après 3 s sans toucher ; une touche les fait revenir.
+  const majPlein = () => { const p = pleinActif(); $("#lect-plein").innerHTML = p ? ICONES_LECTEUR.sortir : ICONES_LECTEUR.plein; $("#lect-plein").setAttribute("aria-label", p ? "Quitter le plein écran" : "Plein écran"); };
+  document.addEventListener("fullscreenchange", majPlein);
+  document.addEventListener("webkitfullscreenchange", majPlein);
+  new MutationObserver(majPlein).observe(zone, { attributes: true, attributeFilter: ["class"] });
+  // Image dans l'image : la vidéo continue dans une petite fenêtre flottante (autre appli, autre fenêtre).
+  // Coupé par défaut (sinon l'iPhone pourrait la sortir tout seul de nos commandes) ; activé sur demande.
+  const btnIncr = $("#lect-incrustation");
+  const incrPossible = (document.pictureInPictureEnabled && video.requestPictureInPicture) || typeof video.webkitSetPresentationMode === "function";
+  if (incrPossible) {
+    btnIncr.hidden = false;
+    btnIncr.onclick = async () => {
+      try {
+        if (document.pictureInPictureElement === video) await document.exitPictureInPicture();
+        else if (video.webkitPresentationMode === "picture-in-picture") video.webkitSetPresentationMode("inline");
+        else {
+          video.disablePictureInPicture = false;
+          if (pleinActif()) $("#lect-plein").onclick();
+          if (video.requestPictureInPicture && document.pictureInPictureEnabled) await video.requestPictureInPicture();
+          else video.webkitSetPresentationMode("picture-in-picture");
+          if (video.paused) video.play().catch(() => {});
+        }
+      } catch (_) { toast("Image dans l'image impossible pour cette vidéo.", true); }
+    };
+    const finIncr = () => { video.disablePictureInPicture = true; };
+    video.addEventListener("leavepictureinpicture", finIncr);
+    video.addEventListener("webkitpresentationmodechanged", () => { if (video.webkitPresentationMode === "inline") finIncr(); });
+  }
+  // Son et sous-titres : un petit menu, comme les lecteurs habituels.
+  const menuLect = $("#lect-menu"), btnReglages = $("#lect-reglages");
+  if (btnReglages) btnReglages.onclick = (ev) => {
+    ev.stopPropagation();
+    menuLect.hidden = !menuLect.hidden;
+    btnReglages.setAttribute("aria-expanded", String(!menuLect.hidden));
+    reveiller();
+  };
+  menuLect.addEventListener("click", (ev) => ev.stopPropagation());
+  // Les commandes se cachent après 3 s sans toucher pendant la lecture ; un geste les fait revenir.
   let repos = null;
   function reveiller() {
     zone.classList.remove("repos"); clearTimeout(repos);
-    repos = setTimeout(() => { if (pleinActif() && !video.paused) zone.classList.add("repos"); }, 3000);
+    repos = setTimeout(() => { if (!video.paused && menuLect.hidden) zone.classList.add("repos"); }, 3000);
   }
   zone.addEventListener("pointermove", reveiller);
   video.addEventListener("pause", reveiller);
@@ -923,6 +989,7 @@ async function lecteur(e, infos, direct) {
     fin: () => {
       st.fini = true;
       document.removeEventListener("keydown", clavier);
+      try { if (document.pictureInPictureElement === video) document.exitPictureInPicture(); } catch (_) { /* rien */ }
       if (st.hls) st.hls.destroy();
       if (st.sid && st.sid !== "direct") api(`/api/lecture/${st.sid}/arreter`, { method: "POST" }).catch(() => {});
       video.removeAttribute("src"); video.load();
@@ -1366,6 +1433,35 @@ async function activerAlertes(cle) {
   await api("/api/alertes/abonnement", { method: "POST", json: { abonnement: ab.toJSON(), appareil } });
 }
 
+// Alerte « serveur muet » : le serveur envoie un signal toutes les 5 minutes à un service extérieur,
+// qui prévient quand les signaux cessent (serveur figé, éteint, coupé d'Internet).
+async function carteMuet() {
+  const z = $("#muet");
+  if (!z) return;
+  const b = await api("/api/systeme/battement");
+  const superAdmin = adminConnecte && adminConnecte.rang === "super";
+  z.innerHTML = `<h2>Si le serveur se tait</h2>
+    <p class="note" style="margin:8px 0">Figé, éteint ou coupé d'Internet, le serveur ne peut plus te prévenir. Il envoie donc un signal toutes les 5 minutes à un service de surveillance extérieur (par exemple <strong>Healthchecks.io</strong>, gratuit), qui t'alerte quand les signaux cessent.</p>
+    <p style="margin:10px 0">${b.actif
+      ? `<span class="pastille ${b.ok ? "p-ok" : b.ok === false ? "p-rouge" : "p-gris"}">${b.ok ? "Actif" : b.ok === false ? "Dernier signal raté" : "Actif"}</span> <span class="note">${esc(b.adresse || "")}${b.quand ? " · dernier signal " + esc(ilYa(b.quand)) : ""}</span>`
+      : '<span class="pastille p-gris">Pas réglé</span>'}</p>
+    ${superAdmin ? `<div class="actions"><button class="btn" id="muet-regler">${b.actif ? "Changer l'adresse" : "Régler"}</button>${b.actif ? '<button class="btn" id="muet-retirer">Désactiver</button>' : ""}</div>` : ""}`;
+  const r = $("#muet-regler");
+  if (r) r.onclick = async () => {
+    const url = await demander({ titre: "Adresse de surveillance", texte: "Sur Healthchecks.io : crée un compte, puis un « check » avec une période de 5 minutes et une marge (grace) de 10 minutes. Copie son adresse de « ping » (https://hc-ping.com/…) et colle-la ici.", champ: "", valider: "Enregistrer" });
+    if (!url) return;
+    try { await api("/api/systeme/battement", { method: "POST", json: { url: url.trim() } }); toast("Premier signal envoyé : l'alerte est en place"); }
+    catch (e) { toast(e.message, true); }
+    carteMuet().catch(() => {});
+  };
+  const d = $("#muet-retirer");
+  if (d) d.onclick = async () => {
+    if (!(await demander({ titre: "Désactiver l'alerte ?", texte: "Le serveur n'enverra plus de signal. Pense à mettre le « check » en pause sur le service, sinon il t'alertera.", valider: "Désactiver", danger: true }))) return;
+    try { await api("/api/systeme/battement", { method: "POST", json: { url: "" } }); toast("Alerte désactivée"); } catch (e) { toast(e.message, true); }
+    carteMuet().catch(() => {});
+  };
+}
+
 async function carteAlertes() {
   const z = $("#alertes");
   if (!z) return;
@@ -1732,7 +1828,7 @@ pages.terminal = async () => {
   contenu.innerHTML = `<div class="entete"><div><h1>Terminal</h1><p class="sous-titre">Le serveur, comme en SSH, avec le compte du serveur : <strong>tous les pouvoirs</strong>, réservé à toi. <code>sudo</code> redemande ton mot de passe. Les commandes tapées sont notées au Journal (à titre indicatif).</p></div>
       <div class="actions"><a class="btn" href="#/systeme">← Système</a></div></div>
     <div class="terminal-zone" id="terminal"><p class="note" style="padding:16px">Ouverture…</p></div>
-    <div class="touches-terminal">${TOUCHES_TERMINAL.map(([n], i) => `<button class="btn btn-petit" type="button" data-touche="${i}">${n}</button>`).join("")}</div>`;
+    <div class="touches-terminal"><button class="btn btn-petit" type="button" id="t-coller">Coller</button><button class="btn btn-petit" type="button" id="t-copier">Copier</button>${TOUCHES_TERMINAL.map(([n], i) => `<button class="btn btn-petit" type="button" data-touche="${i}">${n}</button>`).join("")}</div>`;
   let ticket;
   try {
     await chargerXterm();
@@ -1748,6 +1844,12 @@ pages.terminal = async () => {
   const fit = new window.FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(zone);
+  // Le clavier de l'iPhone ne doit rien proposer (ni contacts, ni corrections, ni majuscule automatique).
+  const saisie = zone.querySelector("textarea");
+  if (saisie) {
+    for (const [k, v] of Object.entries({ autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false",
+      name: "commande-" + Math.random().toString(36).slice(2), "data-form-type": "other", "aria-autocomplete": "none", enterkeyhint: "enter" })) saisie.setAttribute(k, v);
+  }
   fit.fit();
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/terminal/ws?ticket=${encodeURIComponent(ticket.ticket)}`);
   ws.binaryType = "arraybuffer";
@@ -1768,6 +1870,25 @@ pages.terminal = async () => {
   term.onData((d) => envoyer({ t: "i", d }));
   window.addEventListener("resize", taille);
   contenu.querySelectorAll("[data-touche]").forEach((b) => b.addEventListener("click", () => { envoyer({ t: "i", d: TOUCHES_TERMINAL[+b.dataset.touche][1] }); term.focus(); }));
+  // Coller : le texte du presse-papiers part au terminal (l'iPhone demande d'abord « Coller »).
+  $("#t-coller").onclick = async () => {
+    let texte = "";
+    try { texte = await navigator.clipboard.readText(); } catch (_) { /* refusé ou non disponible */ }
+    if (!texte) texte = (await demander({ titre: "Coller dans le terminal", texte: "Colle ici (appui long, Coller), puis valide.", champ: "", valider: "Envoyer" })) || "";
+    if (texte) envoyer({ t: "i", d: texte.replace(/\r?\n/g, "\r") });
+    term.focus();
+  };
+  // Copier : la sélection s'il y en a une, sinon ce qui est affiché (et ce qui précède, jusqu'à 200 lignes).
+  $("#t-copier").onclick = async () => {
+    let texte = term.getSelection();
+    if (!texte) {
+      const b = term.buffer.active, lignes = [];
+      for (let i = Math.max(0, b.length - 200); i < b.length; i++) lignes.push(b.getLine(i).translateToString(true));
+      texte = lignes.join("\n").replace(/\n+$/, "");
+    }
+    try { await navigator.clipboard.writeText(texte); toast(term.hasSelection() ? "Sélection copiée" : "Écran copié (200 dernières lignes)"); }
+    catch (_) { toast("Copie impossible sur cet appareil.", true); }
+  };
   terminalOuvert = {
     fin: () => { window.removeEventListener("resize", taille); try { ws.close(); } catch (_) { /* déjà fermé */ } term.dispose(); terminalOuvert = null; },
   };
@@ -1806,6 +1927,8 @@ async function choisirEspace(titre, actuel, n, superAdmin, illimite = true) {
   return x > 0 ? x : undefined;
 }
 
+const ONGLETS_NUAGE = [["comptes", "Comptes"], ["partage", "Dossiers et rangs"], ["reglages", "Charte et réglages"]];
+let ongletNuage = "comptes";
 pages.nuage = async () => {
   contenu.innerHTML = `<div class="entete"><div><h1>Comptes Nextcloud</h1></div></div>${chargement(4)}`;
   const n = await api("/api/nuage");
@@ -1848,14 +1971,17 @@ pages.nuage = async () => {
   const acces = (f) => f.acces.map((a) => `${esc(nomGroupe(a.groupe, n))} : ${esc(n.modes[a.mode].nom.toLowerCase())}`).join(" · ") || "Personne";
   contenu.innerHTML = `
     <div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">${autres.length} compte${autres.length > 1 ? "s" : ""} · ${go(n.promis)} promis${n.espace ? ` · ${go(n.espace.total - n.espace.utilise)} libres sur le disque de données` : ""}</p></div>
-      <div class="actions">${superAdmin ? '<button class="btn btn-p" id="nuage-ajouter">Ajouter un compte</button>' : ""}</div></div>
+      <div class="actions"><a class="btn" href="#/outils">← Établi</a>${superAdmin ? '<button class="btn btn-p" id="nuage-ajouter">Ajouter un compte</button>' : ""}</div></div>
     ${attente.length ? `<section class="carte pad nuage-attente"><h2>À valider</h2>
       ${attente.map((c) => `<div class="sauv-ligne"><span><strong>${esc(c.nom)}</strong> <span class="note">${esc(c.id)}${c.email ? " · " + esc(c.email) : ""}</span></span>
         ${superAdmin ? `<span class="actions"><button class="btn btn-petit" data-refuser="${esc(c.id)}">Refuser</button><button class="btn btn-p btn-petit" data-valider="${esc(c.id)}">Valider</button></span>` : '<span class="note">Un super admin doit valider</span>'}</div>`).join("")}
     </section>` : ""}
-    <section class="carte pad" style="margin-top:16px"><h2>Comptes</h2>
+    <nav class="sous-onglets" role="tablist">${ONGLETS_NUAGE.filter(([k]) => k !== "reglages" || superAdmin).map(([k, nom]) => `<button type="button" role="tab" data-onglet-btn="${k}" aria-selected="${k === ongletNuage}">${nom}${k === "comptes" && attente.length ? ` <span class="compteur">${attente.length}</span>` : ""}</button>`).join("")}</nav>
+    <div data-onglet="comptes">
+    <section class="carte pad"><h2>Comptes</h2>
       <div class="sauv-liste">${autres.map(ligneCompte).join("") || '<p class="note">Aucun compte.</p>'}</div></section>
-    <div class="grille g2" style="margin-top:16px">
+    </div>
+    <div class="grille g2" data-onglet="partage">
       <section class="carte pad"><div class="entete-carte"><h2>Dossiers communs</h2><button class="btn btn-petit" id="nuage-dossier">Nouveau</button></div>
         <p class="note" style="margin:6px 0 8px">Ils apparaissent dans le Nextcloud de chaque personne qui y a accès.</p>
         <div class="sauv-liste">${n.dossiers.map((f) => `<button class="sauv-ligne" data-dossier="${f.id}"><span><strong>${esc(f.nom)}</strong><br><span class="note">${acces(f)}</span></span><span class="note">${octets(f.taille)}${f.quota ? " / " + go(f.quota) : ""}</span></button>`).join("") || '<p class="note">Aucun pour l\'instant.</p>'}</div></section>
@@ -1869,12 +1995,32 @@ pages.nuage = async () => {
       <section class="carte pad"><div class="entete-carte"><h2>Groupes</h2><button class="btn btn-petit" id="nuage-groupe">Nouveau</button></div>
         <p class="note" style="margin:6px 0 8px">Pour donner un dossier commun à quelques personnes (le fablab, la famille…). Chaque compte validé fait partie de « Tous les membres ».</p>
         <div class="sauv-liste">${n.groupes.map((g) => `<button class="sauv-ligne" data-groupe="${esc(g.id)}"><span><strong>${esc(nomGroupe(g.id, n))}</strong></span><span class="note">${g.membres.length} membre${g.membres.length > 1 ? "s" : ""}</span></button>`).join("")}</div></section>
-      ${superAdmin ? `<section class="carte pad"><h2>Réglages</h2>
+    </div>
+    <div class="grille g2" data-onglet="reglages">
+      ${superAdmin ? `<section class="carte pad"><h2>Charte d'inscription</h2>
+        <p class="note" style="margin:6px 0 10px">Affichée sur le formulaire « S'inscrire » de Nextcloud : ce que la personne accepte en créant son compte.</p>
+        <textarea id="nuage-charte" rows="9" maxlength="${n.charte_max}" style="width:100%">${esc(n.charte)}</textarea>
+        <div class="actions" style="margin-top:10px"><button class="btn" id="charte-modele">Reprendre le modèle</button><button class="btn btn-p" id="charte-enregistrer">Enregistrer</button></div>
+      </section>
+      <section class="carte pad"><h2>Réglages</h2>
         <label class="ligne-reglage"><span><strong>Espace des nouveaux comptes</strong></span><button class="btn btn-petit" id="nuage-defaut">${esc(n.etat.quota_defaut.replace(" GB", " Go").replace(" MB", " Mo"))}</button></label>
         <label class="ligne-reglage"><span><strong>Plafond par compte</strong><br><span class="note">Un admin ne peut pas donner plus. Un super admin, si.</span></span><button class="btn btn-petit" id="nuage-plafond">${n.plafond_go} Go</button></label>
         <p class="note" style="margin-top:10px">Inscription : lien « S'inscrire » sur la page de connexion de Nextcloud. Tant que Nextcloud n'a pas d'adresse publique, seuls ceux qui ont accès au serveur peuvent l'ouvrir. L'adresse e-mail n'est pas vérifiée (pas encore de serveur d'e-mails).</p>
       </section>` : ""}
     </div>`;
+  // Onglets : un seul visible à la fois, et on revient sur le même après une action.
+  const montrerOnglet = (k) => {
+    ongletNuage = k;
+    contenu.querySelectorAll("[data-onglet]").forEach((el) => { el.hidden = el.dataset.onglet !== k; });
+    contenu.querySelectorAll("[data-onglet-btn]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.ongletBtn === k)));
+  };
+  contenu.querySelectorAll("[data-onglet-btn]").forEach((b) => b.addEventListener("click", () => montrerOnglet(b.dataset.ongletBtn)));
+  montrerOnglet(contenu.querySelector(`[data-onglet-btn="${ongletNuage}"]`) ? ongletNuage : "comptes");
+  const ch = $("#charte-enregistrer");
+  if (ch) {
+    ch.onclick = async () => { if (await agir("/api/nuage/charte", { texte: $("#nuage-charte").value }, "Charte enregistrée")) recharger(); };
+    $("#charte-modele").onclick = () => { $("#nuage-charte").value = n.charte_defaut; };
+  }
 
   // à valider
   contenu.querySelectorAll("[data-valider]").forEach((b) => b.addEventListener("click", async () => {
@@ -2237,7 +2383,7 @@ async function router() {
   if (!moi && page !== "aide") return ecranInjoignable(dernierEchec);   // serveur injoignable   // sans connexion admin : seulement la page invités
   if (page !== "ouvrir") document.body.classList.remove("plein-ecran");
   document.querySelectorAll("[data-page]").forEach((a) => {
-    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal", "sauvegardes", "nuage"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs", "terminal", "sauvegardes", "nuage"].includes(page));
+    const actif = a.dataset.page === page || (a.dataset.page === "outils" && ["ouvrir", "nuage"].includes(page)) || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal", "sauvegardes"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs", "terminal", "sauvegardes"].includes(page));
     a.classList.toggle("actif", actif);
     if (actif) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
