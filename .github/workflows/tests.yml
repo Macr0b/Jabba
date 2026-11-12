@@ -21,8 +21,10 @@ jobs:
         run: pip install -r app/requirements.txt -r tests/requirements.txt
       - name: Tests
         # En root, comme l'appli : les tests du bac à sable et de la signature des mises à jour en ont besoin.
-        run: sudo -E env "PATH=$PATH" "$(command -v python)" -m pytest -q tests --ignore=tests/ui
-      - name: Navigateur pour les tests de l'interface
-        run: python -m playwright install --with-deps chromium
+        run: sudo -E env "PATH=$PATH" "$(command -v python)" -m pytest -q -p no:cacheprovider tests --ignore=tests/ui
+      - name: Navigateur pour les tests de l'interface (Google Chrome : il lit le H.264)
+        run: python -m playwright install --with-deps chrome
       - name: Tests de l'interface (ordinateur et iPhone)
-        run: python -m pytest -q tests/ui
+        env:
+          JABBA_UI_NAVIGATEUR: chrome
+        run: python -m pytest -q -p no:cacheprovider tests/ui

@@ -66,7 +66,9 @@ def appli():
 @pytest.fixture(scope="session")
 def navigateur():
     with playwright.sync_playwright() as pw:
-        b = pw.chromium.launch()
+        # Google Chrome sur GitHub (le Chromium de Playwright ne lit pas le H.264) ; ailleurs, celui qui est là.
+        canal = os.environ.get("JABBA_UI_NAVIGATEUR")
+        b = pw.chromium.launch(**({"channel": canal} if canal else {}))
         yield pw, b
         b.close()
 
