@@ -5,6 +5,8 @@ import subprocess
 
 import yaml
 
+import redemarrage
+
 from conftest import RACINE
 
 SCRIPT = open(os.path.join(RACINE, "installer.sh")).read()
@@ -32,43 +34,61 @@ def test_porte_du_wifi_avec_le_compte_du_serveur():
     assert "JABBA_UID=" in SCRIPT
 
 
-def _redemarrer(tmp_path, noyaux, kexec_ok=True):
-    """Le script « redemarrer » de l'installation, avec de faux /boot, kexec et systemctl."""
-    import re as re_
-    bloc = re_.search(r"cat > /usr/local/sbin/redemarrer <<'FIN'\n(.*?)\nFIN", SCRIPT, re_.S).group(1)
-    boot = tmp_path / "boot"
-    boot.mkdir()
-    for v in noyaux:
-        (boot / f"vmlinuz-{v}").write_text("")
-        (boot / f"initrd.img-{v}").write_text("")
+def _bloc(chemin):
+    return re.search(r"cat > " + re.escape(chemin) + r" <<'FIN'\n(.*?)\nFIN", SCRIPT, re.S).group(1)
+
+
+def _executer(script, tmp_path, contenu_choix=None):
+    """Lance un bout de shell avec de faux systemctl / logger / grep sur le fichier de choix."""
     bin_ = tmp_path / "bin"
-    bin_.mkdir()
+    bin_.mkdir(exist_ok=True)
     log = tmp_path / "log"
-    for nom, code in (("kexec", 0 if kexec_ok else 1), ("systemctl", 0), ("logger", 0)):
-        (bin_ / nom).write_text(f'#!/bin/sh\necho "{nom} $*" >> {log}\nexit {code}\n')
+    for nom in ("systemctl", "logger"):
+        (bin_ / nom).write_text(f'#!/bin/sh\necho "{nom} $*" >> {log}\n')
         os.chmod(bin_ / nom, 0o755)
-    script = tmp_path / "redemarrer"
-    script.write_text(bloc.replace("/boot/", f"{boot}/"))
-    subprocess.run(["sh", str(script)], env={"PATH": f"{bin_}:/usr/bin:/bin"}, check=True)
-    return log.read_text()
+    choix = tmp_path / "redemarrage"
+    if contenu_choix is not None:
+        choix.write_text(contenu_choix)
+    r = subprocess.run(["sh", "-c", script.replace("/etc/jabba/redemarrage", str(choix))],
+                       env={"PATH": f"{bin_}:/usr/bin:/bin"})
+    return r.returncode, (log.read_text() if log.exists() else "")
 
 
-def test_redemarrer_sans_bios_sur_le_noyau_le_plus_recent(tmp_path):
-    log = _redemarrer(tmp_path, ["6.12.9-amd64", "6.12.48-amd64", "6.12.10-amd64"])
-    assert "vmlinuz-6.12.48-amd64" in log and "initrd.img-6.12.48-amd64" in log
-    assert "systemctl kexec" in log and "systemctl reboot" not in log
+def test_redemarrer_classique_et_note_au_journal(tmp_path):
+    """Plus de kexec : il a figé le démarrage d'un serveur. « redemarrer » fait un redémarrage normal."""
+    assert "kexec" not in SCRIPT
+    _, log = _executer(_bloc("/usr/local/sbin/redemarrer"), tmp_path)
+    assert log.splitlines() == ["logger -t redemarrer Redémarrage du serveur", "systemctl reboot"]
+    assert redemarrage.REDEMARRER.strip() == _bloc("/usr/local/sbin/redemarrer").strip()
 
 
-def test_redemarrer_repli_classique(tmp_path):
-    log = _redemarrer(tmp_path, ["6.12.48-amd64"], kexec_ok=False)
-    assert "systemctl reboot" in log and "systemctl kexec" not in log
+def test_redemarrage_de_4h_seulement_si_choisi(tmp_path):
+    service = _bloc("/etc/systemd/system/jabba-redemarrage-auto.service")
+    assert "ConditionPathExists=/run/reboot-required" in service
+    condition = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", service, re.M).group(1)
+    assert _executer(condition, tmp_path, "auto\n")[0] == 0
+    for contenu in ("manuel\n", "", "automatique\n", None):      # tout autre contenu, ou pas de fichier : on ne redémarre pas
+        assert _executer(condition, tmp_path, contenu)[0] != 0
+    # Jabba réécrit exactement les mêmes unités quand on change d'avis dans Système.
+    assert service.strip() == redemarrage.SERVICE.strip()
+    assert _bloc("/etc/systemd/system/jabba-redemarrage-auto.timer").strip() == redemarrage.TIMER.strip()
+    assert "OnCalendar=*-*-* 04:00" in redemarrage.TIMER
 
 
-def test_redemarrages_automatiques_par_jabba():
+def test_question_du_redemarrage_a_l_installation():
     assert 'Unattended-Upgrade::Automatic-Reboot "false"' in SCRIPT
-    assert "ConditionPathExists=/run/reboot-required" in SCRIPT and "OnCalendar=*-*-* 04:00" in SCRIPT
+    bloc = SCRIPT.split("if [ ! -f /etc/jabba/redemarrage ]; then")[1].split("\nfi\n")[0]
+    assert "</dev/tty" in bloc                                    # demandé une seule fois, à la personne
+    assert "1) echo auto > /etc/jabba/redemarrage" in bloc and "*) echo manuel > /etc/jabba/redemarrage" in bloc  # par défaut : à la main
     assert "RuntimeWatchdogSec=2min" in SCRIPT and "kernel.panic = 10" in SCRIPT
-    assert "/usr/local/sbin/redemarrer" in SCRIPT.split("Redémarrer maintenant")[1]
+    assert "systemctl reboot" in SCRIPT.split("Redémarrer maintenant")[1]
+
+
+def test_veille_des_disques_internes_seulement():
+    regle = [l for l in SCRIPT.splitlines() if "hdparm -B 127" in l]
+    assert len(regle) == 1
+    assert 'ENV{ID_BUS}=="ata"' in regle[0]                       # jamais les boîtiers USB
+    assert "/usr/bin/timeout 5 /usr/sbin/hdparm" in regle[0]     # jamais plus de 5 s au démarrage
 
 
 def test_disque_de_donnees_ne_bloque_pas_le_demarrage(tmp_path):

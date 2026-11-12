@@ -158,11 +158,28 @@ Unattended-Upgrade::Origins-Pattern {
   "origin=Tailscale";
   "origin=Docker";
 };
-// Le redémarrage après une mise à jour est fait par jabba-redemarrage-auto.timer (4 h), sans passer par le BIOS.
+// Le redémarrage après une mise à jour : jabba-redemarrage-auto.timer, seulement si on l'a choisi.
 Unattended-Upgrade::Automatic-Reboot "false";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
 EOF
-ok "Correctifs installés chaque nuit, redémarrage à 4 h si nécessaire"
+ok "Correctifs de sécurité installés chaque nuit"
+# Certaines mises à jour demandent un redémarrage. Deux façons de faire, au choix :
+#  - automatique, à 4 h : pratique, si la machine redémarre toujours sans souci ;
+#  - à la main : Jabba prévient, et on redémarre quand on est devant (machine capricieuse au démarrage).
+# La réponse est gardée (/etc/jabba/redemarrage) ; elle se change ensuite dans Jabba (Système).
+mkdir -p /etc/jabba
+if [ ! -f /etc/jabba/redemarrage ]; then
+  echo "  Quand une mise à jour demande un redémarrage :"
+  echo "   1) le serveur redémarre seul, à 4 h du matin"
+  echo "   2) Jabba te prévient, et tu redémarres toi-même quand tu es devant (conseillé si la machine a déjà bloqué au démarrage)"
+  read -rp "  Ton choix (1 ou 2) : " choix_redem </dev/tty
+  case "$choix_redem" in 1) echo auto > /etc/jabba/redemarrage ;; *) echo manuel > /etc/jabba/redemarrage ;; esac
+fi
+if [ "$(cat /etc/jabba/redemarrage)" = auto ]; then
+  ok "Redémarrage automatique à 4 h quand une mise à jour le demande"
+else
+  ok "Redémarrage à la main : Jabba te prévient quand une mise à jour le demande"
+fi
 
 # ------------------------------------------------------------ 5. portable : capot, écran, batterie
 etape "Réglages de la machine"
@@ -180,46 +197,33 @@ ok "L'écran s'éteint seul après 1 minute"
 # Le premier accès suivant prend 3 à 5 secondes, le temps qu'ils redémarrent.
 lancer apt-get install -y hdparm
 printf '%s\n' '# Jabba : un disque à plateaux s'"'"'arrête après 20 minutes sans servir.' \
-  'ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", RUN+="/usr/sbin/hdparm -B 127 -S 240 /dev/%k"' \
+  '# Disques internes seulement : certains boîtiers USB se figent en recevant ces commandes.' \
+  'ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="sd[a-z]", ENV{ID_BUS}=="ata", ATTR{queue/rotational}=="1", RUN+="/usr/bin/timeout 5 /usr/sbin/hdparm -B 127 -S 240 /dev/%k"' \
   > /etc/udev/rules.d/69-jabba-disques.rules
 lancer udevadm control --reload
 lancer udevadm trigger --subsystem-match=block --action=change
-ok "Disques à plateaux : arrêt après 20 minutes sans servir"
-# Redémarrer sans passer par le BIOS (kexec) : Linux se relance directement lui-même.
-# Certains portables restent bloqués au démarrage du BIOS ; un serveur qu'on gère à distance
-# ne doit jamais en dépendre. « sudo redemarrer » le fait, le bouton de Jabba aussi, et le
-# redémarrage de 4 h après une mise à jour. En cas d'échec, redémarrage classique.
-lancer apt-get install -y kexec-tools
-# kexec-tools ne doit rien faire de lui-même (on le pilote) :
-sed -i 's/^LOAD_KEXEC=.*/LOAD_KEXEC=false/' /etc/default/kexec 2>/dev/null || true
+ok "Disque interne à plateaux : arrêt après 20 minutes sans servir (jamais les disques USB)"
+# « sudo redemarrer » : redémarrage noté au journal (le bouton de Jabba et le redémarrage de 4 h passent par lui).
 cat > /usr/local/sbin/redemarrer <<'FIN'
 #!/bin/sh
-# Redémarre le serveur sans passer par le BIOS (kexec), avec le noyau le plus récent.
-# Repli : redémarrage classique si kexec n'est pas possible.
-set -u
-noyau=$(ls -1v /boot/vmlinuz-* 2>/dev/null | tail -n 1)
-version=${noyau#/boot/vmlinuz-}
-initrd=/boot/initrd.img-$version
-if [ -n "$noyau" ] && [ -f "$initrd" ] && { kexec -s -l "$noyau" --initrd="$initrd" --reuse-cmdline 2>/dev/null || kexec -l "$noyau" --initrd="$initrd" --reuse-cmdline; }; then
-  logger -t redemarrer "Redémarrage sans BIOS (kexec) sur le noyau $version"
-  exec systemctl kexec
-fi
-logger -t redemarrer "kexec impossible : redémarrage classique"
+logger -t redemarrer "Redémarrage du serveur"
 exec systemctl reboot
 FIN
 chmod 755 /usr/local/sbin/redemarrer
+# Redémarrage de 4 h : seulement si une mise à jour l'attend ET si on l'a choisi (/etc/jabba/redemarrage = auto).
 cat > /etc/systemd/system/jabba-redemarrage-auto.service <<'FIN'
 [Unit]
-Description=Jabba : redémarrage après une mise à jour qui l'exige (sans passer par le BIOS)
+Description=Jabba : redémarrage après une mise à jour qui l'exige (si choisi)
 ConditionPathExists=/run/reboot-required
 
 [Service]
 Type=oneshot
+ExecCondition=/bin/sh -c 'grep -qx auto /etc/jabba/redemarrage'
 ExecStart=/usr/local/sbin/redemarrer
 FIN
 cat > /etc/systemd/system/jabba-redemarrage-auto.timer <<'FIN'
 [Unit]
-Description=Jabba : redémarrage de 4 h si une mise à jour l'exige
+Description=Jabba : redémarrage de 4 h si une mise à jour l'exige (si choisi)
 
 [Timer]
 OnCalendar=*-*-* 04:00
@@ -230,7 +234,6 @@ WantedBy=timers.target
 FIN
 lancer systemctl daemon-reload
 lancer systemctl enable --now jabba-redemarrage-auto.timer
-ok "Redémarrages sans passer par le BIOS (sudo redemarrer, bouton de Jabba, 4 h après une mise à jour)"
 
 # Chien de garde : la puce de surveillance redémarre la machine si le système se fige.
 mkdir -p /etc/systemd/system.conf.d
@@ -446,7 +449,7 @@ echo
 read -rp "Le serveur doit redémarrer pour finir (réseau, écran). Redémarrer maintenant ? (o/n) " r </dev/tty
 if [ "$r" = o ]; then
   echo "Redémarrage… reconnecte-toi dans 2 minutes."
-  /usr/local/sbin/redemarrer
+  systemctl reboot
 else
-  echo "Pense à redémarrer : sudo redemarrer"
+  echo "Pense à redémarrer : sudo reboot"
 fi

@@ -300,7 +300,7 @@ pages.accueil = async () => {
       <span class="pastille ${ok ? "p-ok" : "p-alerte"}">${ok ? "Tout va bien" : "À vérifier"}</span>
     </div>
     ${e.soucis.length ? `<a class="bandeau" href="#/outils"><span><strong>Arrêté ou en panne :</strong> ${esc(e.soucis.join(", "))}</span><strong>Voir</strong></a>` : ""}
-    ${e.redemarrage_requis ? `<a class="bandeau" href="#/systeme"><span>Une mise à jour attend un <strong>redémarrage</strong> (il se fera seul à 4 h).</span><strong>Voir</strong></a>` : ""}
+    ${e.redemarrage_requis ? `<a class="bandeau" href="#/systeme"><span>Une mise à jour attend un <strong>redémarrage</strong> (${e.redemarrage_auto === false ? "redémarre quand tu es devant" : "il se fera seul à 4 h"}).</span><strong>Voir</strong></a>` : ""}
     <div class="grille g4">
       <div class="carte pad mesure"><div class="etiq">Processeur</div><div class="val">${e.cpu} %</div><div class="jauge"><span style="width:${e.cpu}%"></span></div></div>
       <div class="carte pad mesure"><div class="etiq">Mémoire</div><div class="val">${octets(e.memoire.utilise)}</div><div class="detail">sur ${octets(e.memoire.total)}</div></div>
@@ -538,7 +538,7 @@ pages.systeme = async () => {
   contenu.innerHTML = `
     <div class="entete"><div><h1>Système</h1><p class="sous-titre">${esc(s.nom)} · ${esc(s.os)}</p></div>
       <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a>${adminConnecte && adminConnecte.compte_serveur ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
-    ${s.redemarrage_requis ? `<div class="bandeau"><span>Une mise à jour attend un redémarrage. Il se fera automatiquement à 4 h, ou maintenant avec le bouton.</span></div>` : ""}
+    ${s.redemarrage_requis ? `<div class="bandeau"><span>${s.redemarrage && s.redemarrage.mode === "manuel" ? "Une mise à jour attend un redémarrage. Fais-le quand tu es devant le serveur, avec le bouton : si la machine bloque au démarrage, tu pourras agir." : "Une mise à jour attend un redémarrage. Il se fera seul à 4 h, ou maintenant avec le bouton."}</span></div>` : ""}
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
         <dt>Allumé depuis</dt><dd>${duree(s.duree)}</dd>
@@ -562,7 +562,7 @@ pages.systeme = async () => {
         <button class="btn" id="code-secours">${a.code_existe ? "Nouveau code de secours" : "Créer le code de secours"}</button></div>
       </section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
-      <section class="carte pad" id="muet"><h2>Si le serveur se tait</h2><div class="squelette" style="margin-top:10px"></div></section>
+      <section class="carte pad" id="redem"><h2>Redémarrage après une mise à jour</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
         <div class="journal" id="journal-court"><div class="squelette"></div></div></section>
       <section class="carte pad"><h2>Appareils Tailscale</h2>
@@ -571,7 +571,7 @@ pages.systeme = async () => {
       </section>
     </div>`;
   carteAlertes().catch((e) => { const z = $("#alertes"); if (z) z.innerHTML = `<h2>Alertes</h2><p class="note">${esc(e.message)}</p>`; });
-  carteMuet().catch((e) => { const z = $("#muet"); if (z) z.innerHTML = `<h2>Si le serveur se tait</h2><p class="note">${esc(e.message)}</p>`; });
+  carteRedemarrage().catch((e) => { const z = $("#redem"); if (z) z.innerHTML = `<h2>Redémarrage après une mise à jour</h2><p class="note">${esc(e.message)}</p>`; });
   carteMaj().catch((e) => { const z = $("#maj"); if (z) z.innerHTML = `<h2>Appli Jabba</h2><p class="note">${esc(e.message)}</p>`; });
   api("/api/journal?n=8").then((evs) => { const z = $("#journal-court"); if (z) z.innerHTML = evs.map(ligneJournal).join("") || '<p class="note">Rien pour l\'instant.</p>'; }).catch(() => {});
   $("#changer-mdp").onclick = async () => {
@@ -1433,32 +1433,28 @@ async function activerAlertes(cle) {
   await api("/api/alertes/abonnement", { method: "POST", json: { abonnement: ab.toJSON(), appareil } });
 }
 
-// Alerte « serveur muet » : le serveur envoie un signal toutes les 5 minutes à un service extérieur,
-// qui prévient quand les signaux cessent (serveur figé, éteint, coupé d'Internet).
-async function carteMuet() {
-  const z = $("#muet");
+// Redémarrage après une mise à jour du système : seul à 4 h, ou à la main (machine capricieuse au démarrage).
+async function carteRedemarrage() {
+  const z = $("#redem");
   if (!z) return;
-  const b = await api("/api/systeme/battement");
+  const r = await api("/api/systeme/redemarrage");
   const superAdmin = adminConnecte && adminConnecte.rang === "super";
-  z.innerHTML = `<h2>Si le serveur se tait</h2>
-    <p class="note" style="margin:8px 0">Figé, éteint ou coupé d'Internet, le serveur ne peut plus te prévenir. Il envoie donc un signal toutes les 5 minutes à un service de surveillance extérieur (par exemple <strong>Healthchecks.io</strong>, gratuit), qui t'alerte quand les signaux cessent.</p>
-    <p style="margin:10px 0">${b.actif
-      ? `<span class="pastille ${b.ok ? "p-ok" : b.ok === false ? "p-rouge" : "p-gris"}">${b.ok ? "Actif" : b.ok === false ? "Dernier signal raté" : "Actif"}</span> <span class="note">${esc(b.adresse || "")}${b.quand ? " · dernier signal " + esc(ilYa(b.quand)) : ""}</span>`
-      : '<span class="pastille p-gris">Pas réglé</span>'}</p>
-    ${superAdmin ? `<div class="actions"><button class="btn" id="muet-regler">${b.actif ? "Changer l'adresse" : "Régler"}</button>${b.actif ? '<button class="btn" id="muet-retirer">Désactiver</button>' : ""}</div>` : ""}`;
-  const r = $("#muet-regler");
-  if (r) r.onclick = async () => {
-    const url = await demander({ titre: "Adresse de surveillance", texte: "Sur Healthchecks.io : crée un compte, puis un « check » avec une période de 5 minutes et une marge (grace) de 10 minutes. Copie son adresse de « ping » (https://hc-ping.com/…) et colle-la ici.", champ: "", valider: "Enregistrer" });
-    if (!url) return;
-    try { await api("/api/systeme/battement", { method: "POST", json: { url: url.trim() } }); toast("Premier signal envoyé : l'alerte est en place"); }
+  const auto = r.mode === "auto";
+  z.innerHTML = `<h2>Redémarrage après une mise à jour</h2>
+    <p class="note" style="margin:8px 0">Certaines mises à jour du système ne prennent effet qu'au redémarrage. Le serveur peut le faire seul la nuit, ou te laisser le faire quand tu es devant : conseillé si la machine a déjà bloqué au démarrage.</p>
+    <p style="margin:10px 0"><span class="pastille ${auto ? "p-ok" : "p-gris"}">${auto ? "Seul, à 4 h" : "À la main"}</span>
+      <span class="note">${auto ? "Le serveur redémarre seul à 4 h quand une mise à jour le demande." : "Jabba te prévient ; tu redémarres avec le bouton « Redémarrer le serveur »."}${r.choisi ? "" : " (réglage d'origine, pas encore choisi)"}</span></p>
+    ${superAdmin ? `<div class="actions"><button class="btn" id="redem-changer">${auto ? "Passer à la main" : "Redémarrer seul à 4 h"}</button></div>` : ""}`;
+  const b = $("#redem-changer");
+  if (b) b.onclick = async () => {
+    const vers = auto ? "manuel" : "auto";
+    const ok = await demander(vers === "auto"
+      ? { titre: "Redémarrer seul à 4 h ?", texte: "Quand une mise à jour le demande, le serveur redémarrera seul à 4 h du matin. À éviter si la machine a déjà bloqué au démarrage : personne ne serait là pour la relancer.", valider: "Redémarrer seul" }
+      : { titre: "Redémarrer à la main ?", texte: "Le serveur ne redémarrera plus seul. Jabba te préviendra quand une mise à jour attend : redémarre alors quand tu es devant. Les correctifs déjà installés restent actifs, sauf ceux du noyau qui attendent le redémarrage.", valider: "À la main" });
+    if (!ok) return;
+    try { await api("/api/systeme/redemarrage", { method: "POST", json: { mode: vers } }); toast(vers === "auto" ? "Redémarrage automatique à 4 h" : "Redémarrage à la main"); }
     catch (e) { toast(e.message, true); }
-    carteMuet().catch(() => {});
-  };
-  const d = $("#muet-retirer");
-  if (d) d.onclick = async () => {
-    if (!(await demander({ titre: "Désactiver l'alerte ?", texte: "Le serveur n'enverra plus de signal. Pense à mettre le « check » en pause sur le service, sinon il t'alertera.", valider: "Désactiver", danger: true }))) return;
-    try { await api("/api/systeme/battement", { method: "POST", json: { url: "" } }); toast("Alerte désactivée"); } catch (e) { toast(e.message, true); }
-    carteMuet().catch(() => {});
+    carteRedemarrage().catch(() => {});
   };
 }
 
@@ -1790,6 +1786,13 @@ const AIDE = [
     "Invités : l'accès doit être ouvert.",
     "L'invité doit être sur le même Wi-Fi que le serveur, sans VPN.",
     "Donne-lui le QR code ; si tu as changé le code, l'ancien ne marche plus.",
+  ]],
+  ["Le serveur ne revient pas après un redémarrage", [
+    "Attends 5 minutes : un disque lent ou une vérification peuvent retarder le démarrage. Le serveur ne réapparaît dans Tailscale qu'à la fin.",
+    "Écran noir et rien ne bouge : débranche les disques et adaptateurs USB, puis éteins (appui long sur le bouton). Si le portable ne se rallume plus, utilise le petit trou de secours (bouton Novo, sur le côté) avec un trombone : choisis « Normal Startup ».",
+    "Réglages du BIOS conseillés pour un portable serveur (touche F2 ou bouton Novo → BIOS Setup) : démarrage USB désactivé, Fast Boot désactivé, démarrage réseau (PXE) désactivé, disque interne en premier. F10 pour enregistrer.",
+    "Si la machine bloque parfois au démarrage : Système → Redémarrage après une mise à jour → « À la main ». Le serveur ne redémarrera plus seul la nuit ; Jabba te prévient et tu redémarres quand tu es devant.",
+    "Si les blocages continuent malgré tout : mise à jour du BIOS (site du fabricant), ou changer de machine.",
   ]],
   ["Jellyfin, Nextcloud ou un autre outil ne s'ouvre pas", [
     "Établi : l'interrupteur de l'outil doit être activé.",

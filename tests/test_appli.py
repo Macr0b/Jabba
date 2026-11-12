@@ -55,3 +55,25 @@ def test_regles_pare_feu_bloquent_toujours_dockge():
 def test_api_admin_sans_session(client):
     client.cookies.clear()
     assert client.get("/api/etat").status_code in (401, 403)
+
+
+def test_choix_du_redemarrage(client):
+    connecter(client, "serveur-demo", "demo-mot-de-passe")
+    assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] in ("auto", "manuel")
+    assert client.post("/api/systeme/redemarrage", json={"mode": "manuel"}, headers=H).status_code == 200
+    assert client.get("/api/systeme/redemarrage", headers=H).json() == {"mode": "manuel", "choisi": True}
+    assert client.post("/api/systeme/redemarrage", json={"mode": "reboot"}, headers=H).status_code == 400
+    assert client.post("/api/systeme/redemarrage", json={"mode": "auto"}, headers=H).status_code == 200
+    assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] == "auto"
+    import journal
+    assert any("Redémarrage après une mise à jour" in str(e) for e in journal.lire(20))
+
+
+def test_choix_du_redemarrage_reserve_au_super_admin(client):
+    connecter(client, "serveur-demo", "demo-mot-de-passe")
+    c, _ = comptes.creer("simple", "Simple", "admin", None, "test", "admin", set())
+    nouveau = "Un-mot-de-passe-solide-43"
+    comptes.changer_mien("simple", nouveau)
+    connecter(client, "simple", nouveau)
+    assert client.get("/api/systeme/redemarrage", headers=H).status_code == 200
+    assert client.post("/api/systeme/redemarrage", json={"mode": "manuel"}, headers=H).status_code == 403

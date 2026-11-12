@@ -50,7 +50,8 @@ def test_lecteur(page):
 
 def test_systeme(page):
     aller(page, "systeme")
-    expect(page.locator("#muet h2")).to_have_text("Si le serveur se tait")
+    expect(page.locator("#redem h2")).to_have_text("Redémarrage après une mise à jour")
+    expect(page.locator("#redem .pastille")).to_be_visible()
     expect(page.locator("#maj h2")).to_have_text("Appli Jabba")
 
 

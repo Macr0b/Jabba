@@ -21,7 +21,7 @@ from urllib.parse import quote, unquote, urljoin
 import httpx
 
 import admin
-import battement
+import redemarrage
 import comptes
 import invites
 import secrets
@@ -842,6 +842,7 @@ def api_etat():
         "donnees": disques.get("/srv/data"),
         "duree": duree_marche(),
         "redemarrage_requis": code == 0,
+        "redemarrage_auto": mode_redemarrage()["mode"] == "auto" if code == 0 else None,
         "outils_actifs": sum(1 for o in outils if o["etat"] == "actif"),
         "outils_total": len(outils),
         "soucis": soucis,
@@ -876,6 +877,7 @@ def api_systeme():
     return {
         "nom": nom.strip(), "os": jolie.group(1) if jolie else "", "noyau": noyau.strip(),
         "duree": duree_marche(), "redemarrage_requis": code == 0,
+        "redemarrage": mode_redemarrage(),
         "derniere_maj_auto": derniere, "appareils": sorted(appareils, key=lambda a: (not a["en_ligne"], a["nom"] or "")),
         "version_appli": VERSION, "courant": COURANT, "conso": lire_conso(),
     }
@@ -927,47 +929,43 @@ async def ws_terminal(ws: WebSocket, ticket: str = ""):
     journal.noter("admin", f"Terminal fermé ({qui['qui']}, {max(1, round((time.time() - debut) / 60))} min)", qui["nom"])
 
 
-# ---------------------------------------------------------------- alerte « serveur muet »
-BATTEMENT_DEMO = os.path.join(os.environ.get("JABBA_DATA", "/data"), "battement-demo.json")
+# ---------------------------------------------------------------- redémarrage après une mise à jour
+REDEM_DEMO = os.path.join(os.environ.get("JABBA_DATA", "/data"), "redemarrage-demo.txt")
 
 
-@app.get("/api/systeme/battement")
-def api_battement(request: Request):
-    exiger_admin(request)
+def mode_redemarrage():
+    """{"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main."""
     if DEMO:
         try:
-            d = json.load(open(BATTEMENT_DEMO))
-        except (OSError, ValueError):
-            d = {}
-        return {"actif": bool(d.get("url")), "adresse": battement.masquer(d.get("url")), "ok": True if d.get("url") else None, "quand": d.get("quand")}
-    code, url, _ = hote(["cat", battement.FICHIER])
-    url = url.strip() if code == 0 else ""
-    if not url:
-        return {"actif": False, "adresse": None, "ok": None, "quand": None}
-    _, sortie, _ = hote(["systemctl", "show", f"{battement.UNITE}.service", "-p", "Result", "-p", "ExecMainExitTimestamp", "--value"])
-    lignes = sortie.strip().splitlines() + ["", ""]
-    quand = None
-    if lignes[1].strip():
-        _, t, _ = hote(["date", "-d", lignes[1].strip(), "+%s"])
-        quand = int(t.strip()) if t.strip().isdigit() else None
-    return {"actif": True, "adresse": battement.masquer(url), "ok": lignes[0].strip() == "success", "quand": quand}
+            return redemarrage.lire(open(REDEM_DEMO).read(), True)
+        except OSError:
+            return redemarrage.lire("", True)
+    code, contenu, _ = hote(["cat", redemarrage.FICHIER])
+    actif = hote(["systemctl", "is-enabled", "--quiet", f"{redemarrage.UNITE}.timer"])[0] == 0
+    return redemarrage.lire(contenu if code == 0 else "", actif)
 
 
-@app.post("/api/systeme/battement")
-async def api_battement_regler(request: Request):
-    """Pose (ou retire) l'adresse du service de surveillance. Super admin, mot de passe récent."""
+@app.get("/api/systeme/redemarrage")
+def api_redemarrage(request: Request):
+    exiger_admin(request)
+    return mode_redemarrage()
+
+
+@app.post("/api/systeme/redemarrage")
+async def api_redemarrage_regler(request: Request):
+    """Choisit : redémarrage automatique à 4 h, ou à la main. Super admin, mot de passe récent."""
     exiger_super(request, fort=True)
-    url = str((await request.json()).get("url") or "").strip()
-    if url and not battement.valide(url):
-        raise HTTPException(400, "Adresse invalide : elle doit commencer par https:// (sans espace ni guillemet).")
+    mode = str((await request.json()).get("mode") or "")
+    if mode not in redemarrage.MODES:
+        raise HTTPException(400, "Choix inconnu.")
     if DEMO:
-        with open(BATTEMENT_DEMO, "w") as f:
-            json.dump({"url": url, "quand": int(time.time())}, f)
+        with open(REDEM_DEMO, "w") as f:
+            f.write(mode + "\n")
     else:
-        code, _, err = hote_sh(battement.installer(url) if url else battement.retirer(), timeout=60)
+        code, _, err = hote_sh(redemarrage.script(mode), timeout=60)
         if code != 0:
-            raise HTTPException(500, ("Le premier signal n'est pas passé : vérifie l'adresse. " if url else "") + err.strip()[-200:])
-    journal.noter("systeme", "Alerte « serveur muet » " + ("activée : " + battement.masquer(url) if url else "désactivée"), request.state.nom)
+            raise HTTPException(500, err.strip()[-200:] or "Échec du réglage.")
+    journal.noter("systeme", "Redémarrage après une mise à jour : " + ("automatique à 4 h" if mode == "auto" else "à la main"), request.state.nom)
     return {"ok": True}
 
 
@@ -977,8 +975,7 @@ def api_reboot(request: Request):
     if DEMO:
         return {"ok": True}
     journal.noter("systeme", "Redémarrage du serveur demandé", request.state.nom)
-    # Sans passer par le BIOS si le serveur sait le faire (kexec, installé par le script) : certains
-    # portables restent bloqués au redémarrage du BIOS. Sinon, redémarrage classique.
+    # « redemarrer » (posé par le script d'installation) note le redémarrage au journal du serveur.
     hote(["systemd-run", "--on-active=3", "sh", "-c", "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"])
     return {"ok": True}
 
@@ -3083,7 +3080,8 @@ def surveiller_maj():
     if hote(["test", "-f", "/var/run/reboot-required"])[0] == 0:
         if not SURV["redemarrage_signale"]:
             SURV["redemarrage_signale"] = True
-            notifs.envoyer("mises_a_jour", "Redémarrage en attente", "Une mise à jour du système le demande. Il se fera seul à 4 h.", "/#/systeme", famille="systeme")
+            auto = mode_redemarrage()["mode"] == "auto"
+            notifs.envoyer("mises_a_jour", "Redémarrage en attente", redemarrage.message(auto), "/#/systeme", famille="systeme")
     else:
         SURV["redemarrage_signale"] = False
     if DEPOT:
