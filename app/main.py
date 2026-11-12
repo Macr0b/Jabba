@@ -175,6 +175,32 @@ def hote_entree(cmd, entree, timeout=30):
     return hote(cmd, timeout=timeout, entree=entree)
 
 
+DOSSIER_TACHES = "/var/lib/jabba/taches"
+
+
+def commande_tache(unite, interprete="sh", proprietes=()):
+    """La commande systemd-run qui lance le script déjà posé pour `unite` (voir lancer_sur_serveur)."""
+    return (["systemd-run", f"--unit={unite}", "--collect"] + [x for p in proprietes for x in ("-p", p)]
+            + [interprete, f"{DOSSIER_TACHES}/{unite}.sh"])
+
+
+def lancer_sur_serveur(unite, script, interprete="sh", proprietes=()):
+    """Lance `script` sur le serveur, en tâche de fond (systemd-run) : elle va au bout même si l'appli redémarre.
+
+    Le script est d'abord écrit dans un fichier, puis lancé depuis ce fichier. Surtout pas en ligne
+    de commande : systemd y remplace lui-même tout ce qui ressemble à ${…} avant de le passer au
+    shell, ce qui casse le script en silence. Le fichier s'efface dès que le script démarre.
+    """
+    if not re.fullmatch(r"[a-z0-9-]{3,60}", unite):
+        raise ValueError("Nom de tâche inattendu")
+    chemin = f"{DOSSIER_TACHES}/{unite}.sh"
+    code, _, err = hote_entree(["sh", "-c", f"umask 077 && mkdir -p {DOSSIER_TACHES} && cat > {chemin}"],
+                               'rm -f "$0"\n' + script)
+    if code != 0:
+        return code, "", err
+    return hote(commande_tache(unite, interprete, proprietes))
+
+
 # ---------------------------------------------------------------- comptes admin
 # Deux rangs : « super » (tout, dont la gestion des comptes) et « admin » (les
 # actions sensibles). Le super admin principal est le compte du serveur.
@@ -2457,8 +2483,7 @@ def lancer_sauvegarde(qui=None):
     else:
         # Lancée par le serveur lui-même, en douceur (le serveur reste réactif) :
         # elle va au bout même si l'appli redémarre.
-        code, _, err = hote(["systemd-run", f"--unit={unite}", "--collect", "-p", "Nice=10",
-                             "-p", "IOSchedulingClass=idle", "bash", "-c", script])
+        code, _, err = lancer_sur_serveur(unite, script, "bash", ("Nice=10", "IOSchedulingClass=idle"))
         if code != 0:
             raise HTTPException(500, "Lancement impossible : " + err[:200])
     d.update(unite=unite, lancee=int(time.time()))
@@ -2704,7 +2729,7 @@ def api_appli_installer(request: Request):
     journal.noter("appli", f"Mise à jour de l'appli vers {der['version']} lancée", request.state.nom)
     # Lancée par le serveur lui-même : elle continue pendant que l'appli redémarre.
     unite = f"jabba-maj-{int(time.time())}"
-    code, _, err = hote(["systemd-run", f"--unit={unite}", "--collect", "sh", "-c", script])
+    code, _, err = lancer_sur_serveur(unite, script)
     if code != 0:
         raise HTTPException(500, "Lancement impossible : " + err[:200])
     MAJ.update(unite=unite, version=der["version"], debut=time.time(), signale=False)

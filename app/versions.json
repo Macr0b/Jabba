@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.12.1",
+    "date": "2026-11-12",
+    "changements": [
+      "Correctif : la mise à jour en un clic et les sauvegardes étaient lancées d'une façon qui laissait systemd modifier leur script (tout ce qui ressemble à ${…}). La vérification de signature échouait donc toujours, et le compte rendu des sauvegardes était faussé. Le script passe maintenant par un fichier. Pour passer de la 0.11.0 à cette version, il faut relancer le script d'installation (la mise à jour en un clic de la 0.11.0 ne peut pas s'en remettre seule).",
+      "Test avec le vrai systemd sur GitHub, pour que ce genre de problème ne passe plus."
+    ]
+  },
+  {
     "version": "0.12.0",
     "date": "2026-11-12",
     "changements": [
