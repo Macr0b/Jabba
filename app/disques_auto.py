@@ -136,6 +136,8 @@ def relier_nextcloud(hote, entree):
     m = re.search(r"(\d+)\s*$", sortie.strip()) if code == 0 else None
     if not m:
         return False
+    # Réservé aux admins : sans ça, chaque compte Nextcloud verrait le disque.
+    hote(occ + ["files_external:applicable", "--add-group=admin", m.group(1)], timeout=60)
     hote(occ + ["files_external:option", m.group(1), "readonly", "true"], timeout=60)
     with _VERROU:
         d = lire()

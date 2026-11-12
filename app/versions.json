@@ -6,6 +6,7 @@
       "Redémarrage après une mise à jour du système, au choix : seul à 4 h, ou à la main (Jabba te prévient, tu redémarres quand tu es devant). Le script d'installation pose la question ; ça se change ensuite dans Système, carte « Redémarrage après une mise à jour ». Les alertes et les bandeaux disent ce qui va se passer.",
       "Redémarrage classique de nouveau : le redémarrage sans BIOS (kexec) a figé le démarrage d'un serveur. Il est retiré.",
       "Veille des disques à plateaux limitée aux disques internes, et jamais plus de 5 secondes : certains boîtiers USB se figeaient en la recevant, au démarrage.",
+      "Sécurité Nextcloud : les disques branchés au serveur étaient visibles par tous les comptes Nextcloud. Ils sont maintenant réservés aux admins, avant la création ou la validation de chaque compte, et vérifiés toutes les 2 minutes (un disque ajouté à la main est aussi réservé, et c'est noté au Journal). Pour partager des fichiers avec d'autres comptes : les dossiers communs.",
       "Menu : nouvelle entrée « Comptes » (comptes Nextcloud, et les admins de Jabba), au lieu d'être cachés dans l'Établi et dans Système.",
       "Aide : « Le serveur ne revient pas après un redémarrage » (trou de secours, réglages du BIOS d'un portable serveur, choix du redémarrage).",
       "Retrait de l'alerte « Si le serveur se tait » (service extérieur), peu utile ici.",

@@ -209,6 +209,7 @@ def mettre_en_route(occ, quota_defaut_go=5):
     _faire(occ, ["config:app:set", "files", "default_quota", "--value", texte_quota(quota_defaut_go)])
     if not charte(occ):
         poser_charte(occ, CHARTE_DEFAUT)
+    reserver_disques(occ)
 
 
 def charte(occ):
@@ -230,7 +231,29 @@ def quota_defaut(occ, go):
     _faire(occ, ["config:app:set", "files", "default_quota", "--value", texte_quota(go)])
 
 
+def reserver_disques(occ):
+    """Les disques branchés au serveur (stockages externes de Nextcloud) sont réservés aux admins.
+
+    Un stockage externe sans personne de désignée est vu par TOUS les comptes : avant qu'un
+    nouveau compte puisse entrer, chaque disque encore ouvert à tous est réservé au groupe admin.
+    Un disque déjà réservé à des personnes ou des groupes précis n'est pas touché."""
+    code, sortie, _ = occ(["files_external:list", "--output=json"])
+    if code != 0:
+        return []          # appli des stockages externes absente : aucun disque dans Nextcloud
+    try:
+        montages = json.loads(sortie)
+    except ValueError:
+        raise Erreur("Nextcloud : liste des disques illisible.")
+    faits = []
+    for m in montages if isinstance(montages, list) else []:
+        if not m.get("applicable_users") and not m.get("applicable_groups"):
+            _faire(occ, ["files_external:applicable", "--add-group=admin", str(m["mount_id"])])
+            faits.append(str(m.get("mount_point", "")).strip("/"))
+    return faits
+
+
 def valider(occ, uid):
+    reserver_disques(occ)
     _faire(occ, ["user:enable", uid])
     occ(["group:adduser", GROUPE_TOUS, uid])
 
@@ -252,6 +275,7 @@ def ajouter(occ, uid, nom, email, mdp, go=None):
     """Compte créé par un admin (pas d'inscription) : actif tout de suite, membre de « Tous »."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,31}", uid):
         raise Erreur("Identifiant : 2 à 32 caractères, lettres minuscules, chiffres, point, tiret.")
+    reserver_disques(occ)
     args = ["user:add", "--password-from-env", "--group", GROUPE_TOUS]
     if nom:
         args += ["--display-name", nom]

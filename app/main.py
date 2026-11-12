@@ -2427,6 +2427,12 @@ def surveiller_inscriptions():
     if attente != vus:
         d["en_attente_vus"] = sorted(attente)
         nuage.ecrire(d)
+    # Un disque ajouté à la main dans Nextcloud (ou avant cette version) serait vu par tous les comptes.
+    try:
+        for nom in nuage.reserver_disques(occ):
+            journal.noter("nuage", f"Disque {nom} réservé aux admins dans Nextcloud (il était visible par tous les comptes)")
+    except nuage.Erreur:
+        pass
 
 
 # ---------------------------------------------------------------- sauvegardes

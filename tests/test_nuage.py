@@ -220,3 +220,54 @@ def test_charte(occ):
 def test_charte_mentionne_l_essentiel():
     for mot in ("administrateur", "Cryptomator", "sauvegardé", "suppression"):
         assert mot in nuage.CHARTE_DEFAUT
+
+
+class FauxOccDisques(FauxOcc):
+    """FauxOcc avec des stockages externes (disques branchés au serveur)."""
+
+    def __init__(self, montages):
+        super().__init__()
+        self.montages = montages
+
+    def __call__(self, args, entree=None, mdp=False, timeout=60):
+        a = [x for x in args if x != "--output=json"]
+        if a[0] == "files_external:list":
+            self.appels.append(args)
+            return 0, json.dumps(self.montages), ""
+        if a[0] == "files_external:applicable":
+            self.appels.append(args)
+            m = next(m for m in self.montages if str(m["mount_id"]) == a[-1])
+            m["applicable_groups"].append(a[1].split("=", 1)[1])
+            return 0, "", ""
+        return super().__call__(args, entree, mdp, timeout)
+
+
+def _montage(i, nom, users=(), groups=()):
+    return {"mount_id": i, "mount_point": "/" + nom, "applicable_users": list(users), "applicable_groups": list(groups)}
+
+
+def test_disques_reserves_aux_admins_avant_tout_nouveau_compte(tmp_path, monkeypatch):
+    monkeypatch.setattr(nuage, "FICHIER", str(tmp_path / "nuage.json"))
+    f = FauxOccDisques([_montage(1, "R2-D2"), _montage(2, "Photos", groups=["famille"]), _montage(3, "Perso", users=["rob"])])
+    f.ajouter("rob", groupes=["admin"])
+    nuage.ajouter(f, "denis", "Denis", "", "Mot-de-passe-123456")
+    assert f.montages[0]["applicable_groups"] == ["admin"]          # était ouvert à tous : réservé aux admins
+    assert f.montages[1]["applicable_groups"] == ["famille"]        # réglé à la main : pas touché
+    assert f.montages[2]["applicable_groups"] == []
+    ordre = [a[0] for a in f.appels]
+    assert ordre.index("files_external:applicable") < ordre.index("user:add")   # avant que le compte existe
+
+
+def test_disques_reserves_avant_validation(tmp_path, monkeypatch):
+    monkeypatch.setattr(nuage, "FICHIER", str(tmp_path / "nuage.json"))
+    f = FauxOccDisques([_montage(7, "R2-D2")])
+    f.ajouter("bob", enabled=False, attente=True)
+    nuage.valider(f, "bob")
+    ordre = [a[0] for a in f.appels]
+    assert f.montages[0]["applicable_groups"] == ["admin"]
+    assert ordre.index("files_external:applicable") < ordre.index("user:enable")
+    assert nuage.reserver_disques(f) == []                          # rien à refaire
+
+
+def test_disques_sans_appli_stockages_externes(occ):
+    assert nuage.reserver_disques(occ) == []                        # files_external absent : rien à faire, pas d'erreur
