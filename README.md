@@ -21,7 +21,7 @@ Une appli web installable (écran d'accueil de l'iPhone, Dock du Mac) qui sert d
 - **Fichiers** : par Nextcloud s'il est activé, sinon directement sur les disques du serveur. Recherche, aperçus, visionneuse, glisser-déposer, corbeille de 30 jours. Le lecteur vidéo lit tous les formats : ce que le navigateur ne sait pas lire est converti par le serveur pendant la lecture (ffmpeg, avec la puce graphique si possible). Bouton « Regarder dans Jellyfin ».
 - **Disques** : un disque USB branché est ajouté tout seul, en lecture seule. Réglage lecture seule ou écriture, éjection.
 - **Invités** : sur le Wi-Fi, une page sans compte ni appli (code à 4 chiffres ou QR code) donne accès aux dossiers et aux outils choisis par l'admin.
-- **Utilisateurs** : comptes admin et super admin, mot de passe oublié validé par le super admin, qui se connecte, appareils connectés.
+- **Comptes** : comptes Nextcloud (inscriptions, espace, rangs, dossiers communs) et admins de Jabba : comptes admin et super admin, mot de passe oublié validé par le super admin, qui se connecte, appareils connectés.
 - **Système** :
   - alertes sur le téléphone, réglables par type ;
   - surveillance du courant, avec arrêt propre sur batterie faible ;

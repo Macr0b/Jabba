@@ -554,7 +554,7 @@ pages.systeme = async () => {
           : `<span class="note">Se mesure sur batterie : débranche le chargeur 2 minutes pour la voir.</span>`}</dd>` : ""}
       </dl></section>
       <section class="carte pad" id="maj"><h2>Appli Jabba</h2><div class="squelette" style="margin-top:10px"></div></section>
-      <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Utilisateurs</a></div>
+      <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Admins de Jabba</a></div>
         <p class="note" id="connecte-admin">${a.connecte ? `Connecté en admin : <strong>${esc(a.connecte.identifiant)}</strong> · ${a.connecte.rang === "super" ? "super admin" : "admin"}` : "Pas connecté en admin."}</p>
         <p class="note" style="margin:8px 0 14px">Le mot de passe du serveur protège les actions sensibles : activer un outil, mettre à jour, redémarrer, régler ou oublier un disque, supprimer un dossier entier, effacer la corbeille.</p>
         ${a.code_existe ? "" : `<div class="bandeau" style="margin-bottom:12px"><span>Aucun code de secours : crée-le maintenant, il sert si tu oublies le mot de passe.</span></div>`}
@@ -611,8 +611,8 @@ pages.plus = async () => {
       <a href="#/corbeille"><span>Corbeille</span><span>›</span></a>
       <a href="#/systeme"><span>Système et alertes</span><span>›</span></a>
       <a href="#/sauvegardes"><span>Sauvegardes</span><span>›</span></a>
-      <a href="#/utilisateurs"><span>Utilisateurs</span><span>›</span></a>
       <a href="#/nuage"><span>Comptes Nextcloud</span><span>›</span></a>
+      <a href="#/utilisateurs"><span>Admins de Jabba</span><span>›</span></a>
       <a href="#/invites"><span>Invités</span><span>›</span></a>
       <a href="#" id="sortir-mobile"><span>Se déconnecter</span><span>›</span></a>
       <a href="#/journal"><span>Journal</span><span>›</span></a>
@@ -1275,12 +1275,12 @@ const RANG = { super: "Super admin", admin: "Admin" };
 const ilYa = (t) => (t ? quand(new Date(t * 1000).toISOString()) : "Jamais");
 
 pages.utilisateurs = async () => {
-  contenu.innerHTML = `<div class="entete"><div><h1>Utilisateurs</h1></div></div>${chargement(4)}`;
+  contenu.innerHTML = `<div class="entete"><div><h1>Admins de Jabba</h1></div></div>${chargement(4)}`;
   const d = await api("/api/comptes");
   const superAdmin = d.moi.rang === "super";
   const parLogin = Object.fromEntries(d.comptes.filter((c) => c.tailscale).map((c) => [c.tailscale, c]));
   contenu.innerHTML = `
-    <div class="entete"><div><h1>Utilisateurs</h1><p class="sous-titre">Les admins de l'appli, et qui se connecte. Tu es <strong>${esc(d.moi.identifiant)}</strong> · ${RANG[d.moi.rang]}.</p></div>
+    <div class="entete"><div><h1>Admins de Jabba</h1><p class="sous-titre">Les admins de l'appli, et qui se connecte. Tu es <strong>${esc(d.moi.identifiant)}</strong> · ${RANG[d.moi.rang]}.</p></div>
       <div class="actions"><a class="btn" href="#/nuage">Comptes Nextcloud</a><button class="btn btn-p" id="ajouter">Ajouter un admin</button></div></div>
     ${d.demandes.map((x) => `<div class="bandeau demande"><span><strong>${esc(x.nom)}</strong> (${esc(x.identifiant)}) a oublié son mot de passe · demandé par ${esc(x.demandeur)}, ${esc(ilYa(x.t))}.${x.autre_personne ? " <strong>Attention : demandé depuis le compte Tailscale de quelqu'un d'autre.</strong> Le mot de passe provisoire n'ira qu'à son compte à lui." : ""}</span>
       <span class="actions"><button class="btn btn-petit btn-p" data-accepter="${esc(x.id)}">Accepter</button><button class="btn btn-petit" data-refuser="${esc(x.id)}">Refuser</button></span></div>`).join("")}
@@ -1974,7 +1974,7 @@ pages.nuage = async () => {
   const acces = (f) => f.acces.map((a) => `${esc(nomGroupe(a.groupe, n))} : ${esc(n.modes[a.mode].nom.toLowerCase())}`).join(" · ") || "Personne";
   contenu.innerHTML = `
     <div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">${autres.length} compte${autres.length > 1 ? "s" : ""} · ${go(n.promis)} promis${n.espace ? ` · ${go(n.espace.total - n.espace.utilise)} libres sur le disque de données` : ""}</p></div>
-      <div class="actions"><a class="btn" href="#/outils">← Établi</a>${superAdmin ? '<button class="btn btn-p" id="nuage-ajouter">Ajouter un compte</button>' : ""}</div></div>
+      <div class="actions"><a class="btn" href="#/utilisateurs">Admins de Jabba</a>${superAdmin ? '<button class="btn btn-p" id="nuage-ajouter">Ajouter un compte</button>' : ""}</div></div>
     ${attente.length ? `<section class="carte pad nuage-attente"><h2>À valider</h2>
       ${attente.map((c) => `<div class="sauv-ligne"><span><strong>${esc(c.nom)}</strong> <span class="note">${esc(c.id)}${c.email ? " · " + esc(c.email) : ""}</span></span>
         ${superAdmin ? `<span class="actions"><button class="btn btn-petit" data-refuser="${esc(c.id)}">Refuser</button><button class="btn btn-p btn-petit" data-valider="${esc(c.id)}">Valider</button></span>` : '<span class="note">Un super admin doit valider</span>'}</div>`).join("")}
@@ -2386,7 +2386,7 @@ async function router() {
   if (!moi && page !== "aide") return ecranInjoignable(dernierEchec);   // serveur injoignable   // sans connexion admin : seulement la page invités
   if (page !== "ouvrir") document.body.classList.remove("plein-ecran");
   document.querySelectorAll("[data-page]").forEach((a) => {
-    const actif = a.dataset.page === page || (a.dataset.page === "outils" && ["ouvrir", "nuage"].includes(page)) || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal", "sauvegardes"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "utilisateurs", "terminal", "sauvegardes"].includes(page));
+    const actif = a.dataset.page === page || (a.dataset.page === "outils" && page === "ouvrir") || (a.dataset.page === "comptes" && ["nuage", "utilisateurs"].includes(page)) || (a.dataset.page === "plus" && ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal", "sauvegardes"].includes(page)) || (a.dataset.page === "fichiers" && page === "corbeille") || (a.dataset.page === "systeme" && ["journal", "terminal", "sauvegardes"].includes(page));
     a.classList.toggle("actif", actif);
     if (actif) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });

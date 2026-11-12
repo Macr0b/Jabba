@@ -1,4 +1,5 @@
 """Les écrans principaux s'affichent et répondent, sur ordinateur et sur iPhone."""
+import re
 import urllib.parse
 
 from playwright.sync_api import expect
@@ -78,6 +79,20 @@ def test_sauvegardes(page):
 def test_comptes_nextcloud_sans_nextcloud(page):
     aller(page, "nuage")
     expect(page.get_by_text("Nextcloud n'est pas allumé")).to_be_visible()
+
+
+def test_comptes_dans_le_menu(page):
+    """Les comptes ont leur entrée dans le menu de gauche (ordinateur) et dans Plus (iPhone)."""
+    aller(page, "")
+    if page.appareil == "ordinateur":
+        page.locator('.barre-laterale a[data-page="comptes"]').click()
+        expect(page.locator('.barre-laterale a[data-page="comptes"]')).to_have_attribute("aria-current", "page")
+    else:
+        aller(page, "plus")
+        page.get_by_text("Comptes Nextcloud").click()
+    expect(page).to_have_url(re.compile(r"#/nuage$"))
+    aller(page, "utilisateurs")
+    expect(page.locator("#contenu h1").first).to_have_text("Admins de Jabba")
 
 
 def test_etabli(page):
