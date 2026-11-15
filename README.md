@@ -97,6 +97,20 @@ printf 'jabba v0.11.0 <commit complet>' | ssh-keygen -Y sign -f ~/.ssh/jabba_pub
 
 Pour publier ton propre Jabba (une copie du dépôt), remplace `app/cle_publication.pub` par ta propre clé.
 
-## Licence
+## Licence / License
 
-[AGPL-3.0-or-later](LICENSE) : libre d'utilisation, de modification et de partage, à condition que toute version modifiée reste libre elle aussi, y compris quand elle est proposée en service.
+Copyright 2026 Macr0b
+
+Jabba est distribué sous la licence **PolyForm Perimeter 1.0.1**, voir [LICENSE](LICENSE).
+Tout le monde peut l'utiliser gratuitement, y compris pour un usage professionnel (une association, un fablab, une entreprise), lire le code et le modifier pour son propre usage. Il est interdit de proposer à d'autres un produit qui fait concurrence à Jabba (revente, service payant, copie rebaptisée…), même gratuit.
+Les versions 0.5.1 à 0.12.1 ont été publiées sous AGPL-3.0-or-later et le restent.
+Le nom « Jabba » et son logo ne sont pas couverts par la licence : voir [TRADEMARK.md](TRADEMARK.md).
+
+Jabba is distributed under the **PolyForm Perimeter License 1.0.1**, see [LICENSE](LICENSE).
+Anyone may use it for free, including for professional work, read the code and modify it for their own use. Providing to others any product that competes with Jabba (resale, paid service, renamed copy…) is not allowed, even free of charge.
+Versions 0.5.1 to 0.12.1 were released under AGPL-3.0-or-later and remain so.
+The "Jabba" name and logo are not covered by the license: see [TRADEMARK.md](TRADEMARK.md).
+
+Composants tiers / Third-party components:
+- `app/static/vendor/hls.js` — hls.js 1.5.20, Dailymotion, Apache License 2.0 (`app/static/vendor/LICENSE-hls.js`)
+- `app/static/vendor/xterm*` — xterm.js et addon-fit, MIT (`app/static/vendor/LICENSE-xterm`)
