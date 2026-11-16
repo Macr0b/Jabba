@@ -12,12 +12,7 @@ const STATE_CLASSES = { bon: "p-ok", a_surveiller: "p-alerte", critique: "p-roug
 
 // Heures de fonctionnement cumulées depuis la fabrication (compteur du disque), pas depuis le démarrage.
 function usageText(hours) {
-  const days = Math.round(hours / 24);
-  const total =
-    days >= 365
-      ? `${String(Math.round((days / 365) * 10) / 10).replace(".", ",")} an${days >= 730 ? "s" : ""}`
-      : `${days} jours`;
-  return `${total} de fonctionnement depuis sa fabrication`;
+  return `${Math.round(hours / 24).toLocaleString("fr-FR")} jours de fonctionnement depuis sa fabrication`;
 }
 
 function diskLine(disk) {
