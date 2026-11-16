@@ -38,7 +38,7 @@ export function confirmAction({
 }) {
   return new Promise((resolve) => {
     dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
-      ${field !== null ? `<input type="text" name="champ" value="${escapeHtml(field)}" autocomplete="off" autocapitalize="off">` : ""}
+      ${field !== null ? `<input type="text" name="champ" value="${escapeHtml(field)}" aria-label="${escapeHtml(title)}" autocomplete="off" autocapitalize="off">` : ""}
       <div class="actions"><button class="btn" value="non" type="submit">Annuler</button>
       <button class="btn ${danger ? "btn-danger" : "btn-p"}" value="oui" type="submit">${escapeHtml(confirmLabel)}</button></div>`;
     dialogElement.onclose = () => {

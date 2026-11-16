@@ -210,19 +210,19 @@ const dropTarget = (item) => (item.dossier && item.ecriture ? ` data-dossier="${
 
 function rowHtml(item, index, link) {
   return `
-        <div class="ligne element" role="row" data-i="${index}"${dropTarget(item)}>
-          <span class="nom" role="cell">${checkboxHtml(item, index)}${entryIcon(item)}
+        <div class="ligne element" data-i="${index}"${dropTarget(item)}>
+          <span class="nom">${checkboxHtml(item, index)}${entryIcon(item)}
             <span>${nameLinkHtml(item, index, link)}
             <span class="mobile-detail">${formatBytes(item.taille)} · ${formatWhen(item.modifie)}</span></span></span>
-          <span class="gris col-l" role="cell">${formatBytes(item.taille)}</span>
-          <span class="gris col-l" role="cell">${formatWhen(item.modifie)}</span>
+          <span class="gris col-l">${formatBytes(item.taille)}</span>
+          <span class="gris col-l">${formatWhen(item.modifie)}</span>
           <button class="btn-menu" type="button" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
         </div>`;
 }
 
 function tileHtml(item, index, link) {
   return `
-        <div class="tuile-fichier element" role="gridcell" data-i="${index}"${dropTarget(item)}>
+        <div class="tuile-fichier element" data-i="${index}"${dropTarget(item)}>
           ${checkboxHtml(item, index)}
           <span class="apercu-tuile">${entryIcon(item, 256)}</span>
           <span class="nom-tuile-fichier">${nameLinkHtml(item, index, link)}</span>
@@ -257,8 +257,7 @@ pages.fichiers = async (params) => {
   const grid = preferences.vue === "grille";
   const sortHeader = (key, label, extraClass = "") => {
     const active = preferences.tri === key;
-    const order = active ? (preferences.sens === 1 ? "ascending" : "descending") : "none";
-    return `<span class="${extraClass}" role="columnheader" aria-sort="${order}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
+    return `<span class="${extraClass}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}" aria-label="Trier par ${label.toLowerCase()}${active ? (preferences.sens === 1 ? ", ordre croissant" : ", ordre décroissant") : ""}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
   };
   content.innerHTML = `
     <div class="entete">
@@ -285,8 +284,8 @@ pages.fichiers = async (params) => {
       <button class="lien" type="button" id="aide-clavier" aria-expanded="false">Raccourcis clavier</button>
     </div>
     <dl class="raccourcis" id="raccourcis" hidden>${SHORTCUTS.map(([keys, label]) => `<dt><kbd>${escapeHtml(keys)}</kbd></dt><dd>${escapeHtml(label)}</dd>`).join("")}</dl>
-    <section class="carte tableau${grid ? " vue-grille" : ""}" aria-label="Contenu du dossier" role="${grid ? "grid" : "table"}" aria-multiselectable="true">
-      ${grid ? "" : `<div class="ligne titres" role="row">${sortHeader("nom", "Nom")}${sortHeader("taille", "Taille", "col-l")}${sortHeader("modifie", "Modifié", "col-l")}<span></span></div>`}
+    <section class="carte tableau${grid ? " vue-grille" : ""}" aria-label="Contenu du dossier">
+      ${grid ? "" : `<div class="ligne titres">${sortHeader("nom", "Nom")}${sortHeader("taille", "Taille", "col-l")}${sortHeader("modifie", "Modifié", "col-l")}<span></span></div>`}
       ${
         entries.length
           ? grid

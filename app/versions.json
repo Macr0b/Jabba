@@ -23,7 +23,8 @@
       "Fichiers : tri par nom, date ou taille, et vue en grille de vignettes ; le choix est mémorisé pour chaque dossier.",
       "Fichiers : plusieurs éléments ou un dossier se téléchargent en un seul .zip.",
       "Fichiers : plus de confirmation avant de mettre à la corbeille, de déplacer ou de renommer : le message propose « Annuler » pendant 10 secondes.",
-      "Envois : une barre d'avancement par fichier ; un fichier en erreur garde son bouton « Réessayer » sans renvoyer les autres."
+      "Envois : une barre d'avancement par fichier ; un fichier en erreur garde son bouton « Réessayer » sans renvoyer les autres.",
+      "Accessibilité (WCAG 2.2 niveau AA) : textes gris plus contrastés, outils arrêtés lisibles, liens soulignés dans les phrases, toutes les zones cliquables d'au moins 24 px, champ des fenêtres nommé pour les lecteurs d'écran, focus jamais caché sous la barre d'onglets. Chaque écran est désormais vérifié automatiquement (axe), en clair et en sombre, sur ordinateur et sur iPhone."
     ]
   },
   {

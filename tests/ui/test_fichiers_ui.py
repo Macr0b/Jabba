@@ -92,7 +92,7 @@ def test_clavier_clic_droit_et_zip(page, dossier):
     page.keyboard.press("ArrowDown")
     page.keyboard.press(" ")
     expect(page.locator("#barre-selection")).to_contain_text("1 sélectionné")
-    expect(page.locator(".element").nth(1)).to_have_attribute("aria-selected", "true")
+    expect(page.locator(".element .case").nth(1)).to_be_checked()
     page.keyboard.press("Control+a")
     expect(page.locator("#barre-selection")).to_contain_text("3 sélectionnés")
     page.keyboard.press("Escape")

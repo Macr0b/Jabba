@@ -338,6 +338,8 @@ main {
 }
 .fil a {
   font-weight: 500;
+  display: inline-block;
+  padding: 3px 0; /* cible d'au moins 24 px (WCAG 2.5.8) */
 }
 .fil span.sep {
   color: var(--texte-4);
@@ -373,6 +375,12 @@ main {
 }
 .tableau .nom a {
   color: var(--texte);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  padding: 3px 0; /* cible d'au moins 24 px (WCAG 2.5.8) */
 }
 .tableau .gris {
   color: var(--texte-3);
@@ -652,5 +660,24 @@ dialog .actions {
 @media (min-width: 761px) {
   .mobile-detail {
     display: none;
+  }
+}
+
+/* Un lien dans un paragraphe se repère sans la couleur (WCAG 1.4.1). */
+p a:not(.btn),
+.note a:not(.btn),
+dd a:not(.btn),
+li a:not(.btn) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Ce qui reçoit le focus au clavier n'est jamais caché sous la barre d'onglets (WCAG 2.4.11). */
+html {
+  scroll-padding-bottom: 24px;
+}
+@media (max-width: 760px) {
+  html {
+    scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 }

@@ -43,7 +43,6 @@ function refresh() {
   items().forEach((element) => {
     const selected = current.selected.has(+element.dataset.i);
     element.classList.toggle("choisi", selected);
-    element.setAttribute("aria-selected", String(selected));
     const box = element.querySelector("input[data-choix]");
     if (box) box.checked = selected;
   });

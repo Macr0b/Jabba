@@ -71,8 +71,8 @@ button.tri.actif {
 
 /* Cases à cocher : visibles au survol, au clavier, ou dès qu'une sélection a commencé. */
 .element .case {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   margin: 0;
   flex-shrink: 0;
   accent-color: var(--accent);

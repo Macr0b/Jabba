@@ -7,7 +7,7 @@
   --texte: #15181e;
   --texte-2: #3a404c;
   --texte-3: #5b6270;
-  --texte-4: #8a909c;
+  --texte-4: #646a76; /* contraste ≥ 4,5:1 sur les fonds clairs (WCAG AA) */
   --accent: #2457c5;
   --accent-fonce: #1a3f8f;
   --accent-doux: #e9effc;
@@ -32,7 +32,7 @@
     --texte: #eceef2;
     --texte-2: #c9cdd6;
     --texte-3: #9aa0ac;
-    --texte-4: #747a86;
+    --texte-4: #8a909c; /* contraste ≥ 4,5:1 sur les fonds sombres */
     --accent: #6e9bff;
     --accent-fonce: #9bbbff;
     --accent-doux: #1f2b47;

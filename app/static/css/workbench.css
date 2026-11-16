@@ -22,10 +22,12 @@
   object-fit: contain;
 }
 .outil.eteint {
-  opacity: 0.62;
+  background: var(--fond);
 }
-.outil.eteint .interrupteur {
-  opacity: 1;
+/* Outil arrêté : seule l'image s'efface, le texte reste lisible (contraste WCAG AA). */
+.outil.eteint img {
+  opacity: 0.5;
+  filter: grayscale(1);
 }
 .titre-section {
   margin: 8px 0 -4px;
