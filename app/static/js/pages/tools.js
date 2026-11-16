@@ -1,0 +1,147 @@
+// Écran Établi : les outils du serveur (démarrer, arrêter, mettre à jour) et leur ouverture dans l'appli.
+//
+// Sommaire :
+//   partagé : pages.outils (écran), pages.ouvrir (écran)
+import { confirmAction, toast } from "../components/dialogs.js";
+import { api } from "../core/api.js";
+import { $, content, escapeHtml } from "../core/dom.js";
+import { pages } from "../core/pages.js";
+import { showError } from "../core/router.js";
+import { loadingHtml, followTask } from "../core/tasks.js";
+import { COMING_SOON, toolIcon } from "./home.js";
+
+pages.outils = async () => {
+  content.innerHTML = `<div class="entete"><div><h1>Établi</h1></div></div>${loadingHtml()}`;
+  const tools = await api("/api/outils");
+  const badge = { actif: "p-ok", partiel: "p-alerte", "en panne": "p-rouge", arrêté: "p-gris" };
+  const workbenchTools = tools.filter((item) => !item.systeme),
+    system = tools.filter((item) => item.systeme);
+  const card = (item) => {
+    const active = item.etat !== "arrêté";
+    return `
+      <article class="carte pad outil${active ? "" : " eteint"}">
+        <div class="haut">
+          <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div>
+          ${
+            item.systeme || !item.modifiable
+              ? `<span class="pastille ${badge[item.etat] || "p-gris"}">${escapeHtml(item.etat[0].toUpperCase() + item.etat.slice(1))}</span>`
+              : `<button class="interrupteur" role="switch" aria-checked="${active}" aria-label="${active ? "Désactiver" : "Activer"} ${escapeHtml(item.nom)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
+          }
+        </div>
+        ${item.etat === "en panne" || item.etat === "partiel" ? `<div class="note" style="color:var(--rouge)">${item.etat === "en panne" ? "En panne : essaie Redémarrer." : "Une partie de l'outil ne tourne pas : essaie Redémarrer."}</div>` : ""}
+        ${
+          active && !item.systeme
+            ? `<div class="actions">
+          ${
+            item.lien
+              ? item.dans_appli
+                ? `<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(item.id)}">Ouvrir</a>`
+                : item.id === "nextcloud"
+                  ? `<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Gérer<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Nextcloud complet</a>`
+                  : `<a class="btn btn-p" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Ouvrir</a>`
+              : ""
+          }
+          ${
+            item.modifiable
+              ? `<button class="btn" data-action="redemarrer" data-id="${escapeHtml(item.id)}">Redémarrer</button>
+          <button class="btn" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button>`
+              : ""
+          }
+        </div>`
+            : ""
+        }
+        ${item.systeme && item.modifiable ? `<div class="actions"><button class="btn" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button></div>` : ""}
+      </article>`;
+  };
+  content.innerHTML = `
+    <div class="entete"><div><h1>Établi</h1><p class="sous-titre">Active les outils dont tu as besoin. Un outil désactivé ne consomme rien et garde ses données.</p></div></div>
+    <div class="grille g2">${workbenchTools.map(card).join("")}</div>
+    <h2 class="titre-section">Bientôt dans l'établi</h2>
+    <div class="grille g2">${COMING_SOON.map((item) => `<article class="carte pad outil eteint"><div class="haut"><div class="titre-outil">${toolIcon({ nom: item.nom })}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div><span class="pastille p-gris">Bientôt</span></div></article>`).join("")}</div>
+    <h2 class="titre-section">Système</h2>
+    <div class="grille g2">${system.map(card).join("")}</div>
+    <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.</p>`;
+
+  const reload = () => {
+    if (location.hash.startsWith("#/outils")) pages.outils().catch(showError);
+  };
+  // Inscriptions Nextcloud en attente : une pastille sur « Gérer ».
+  if ($("#attente-nuage"))
+    api("/api/nuage/attente")
+      .then((result) => {
+        const element = $("#attente-nuage");
+        if (element && result.attente) {
+          element.textContent = result.attente;
+          element.hidden = false;
+        }
+      })
+      .catch(() => {});
+  content.querySelectorAll("[data-bascule]").forEach((element) =>
+    element.addEventListener("click", async () => {
+      const item = tools.find((item) => item.id === element.dataset.bascule);
+      const enable = element.getAttribute("aria-checked") !== "true";
+      if (
+        !enable &&
+        !(await confirmAction({
+          titre: `Désactiver ${item.nom} ?`,
+          texte:
+            "Il ne sera plus accessible, sur aucun appareil, jusqu'à ce que tu le réactives. Ses réglages et ses données sont conservés.",
+          valider: "Désactiver",
+          danger: true,
+        }))
+      )
+        return;
+      element.setAttribute("aria-checked", String(enable));
+      content.querySelectorAll("[data-bascule],[data-action]").forEach((item) => (item.disabled = true));
+      try {
+        await followTask(
+          await api(`/api/outils/${encodeURIComponent(item.id)}/${enable ? "demarrer" : "arreter"}`, {
+            method: "POST",
+          }),
+        );
+      } catch (error) {
+        toast(error.message, true);
+      }
+      reload();
+    }),
+  );
+  content.querySelectorAll("[data-action]").forEach((element) =>
+    element.addEventListener("click", async () => {
+      const item = tools.find((item) => item.id === element.dataset.id);
+      const texts = {
+        redemarrer: ["Redémarrer " + item.nom + " ?", "Il sera indisponible quelques secondes.", "Redémarrer"],
+        "mettre-a-jour": [
+          "Mettre à jour " + item.nom + " ?",
+          "Il sera indisponible pendant la mise à jour (1 à 5 minutes).",
+          "Mettre à jour",
+        ],
+      }[element.dataset.action];
+      if (!(await confirmAction({ titre: texts[0], texte: texts[1], valider: texts[2] }))) return;
+      content.querySelectorAll("[data-bascule],[data-action]").forEach((item) => (item.disabled = true));
+      try {
+        await followTask(
+          await api(`/api/outils/${encodeURIComponent(item.id)}/${element.dataset.action}`, { method: "POST" }),
+        );
+      } catch (error) {
+        toast(error.message, true);
+      }
+      reload();
+    }),
+  );
+};
+
+// Ouvrir un outil dans l'appli, sans passer par le navigateur.
+pages.ouvrir = async (params) => {
+  const tools = await api("/api/outils");
+  const item = tools.find((item) => item.id === params.get("outil"));
+  if (!item || !item.lien) throw new Error("Outil introuvable ou désactivé.");
+  document.body.classList.add("plein-ecran");
+  content.innerHTML = `
+    <div class="barre-outil">
+      <a class="btn btn-petit" href="#/outils">← Établi</a>
+      <span class="titre-outil">${toolIcon(item, 24)}<strong>${escapeHtml(item.nom)}</strong></span>
+      <a class="btn btn-petit" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Navigateur ↗</a>
+    </div>
+    <iframe class="cadre-outil" src="${escapeHtml(item.lien)}" title="${escapeHtml(item.nom)}" allow="fullscreen; autoplay; clipboard-write" allowfullscreen></iframe>
+    <p class="note aide-cadre">Page blanche ? Utilise « Navigateur ↗ » en haut à droite.</p>`;
+};

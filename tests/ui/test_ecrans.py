@@ -106,3 +106,15 @@ def test_comptes_dans_le_menu(page):
 def test_etabli(page):
     aller(page, "outils")
     expect(page.locator("#contenu h1").first).to_have_text("Établi")
+
+
+ECRANS = ["accueil", "outils", "fichiers", "disques", "invites", "nuage", "systeme", "journal", "utilisateurs",
+          "sauvegardes", "corbeille", "aide", "plus"]
+
+
+def test_chaque_ecran_s_ouvre_sans_erreur(page):
+    """Chaque écran s'affiche (un titre) et aucune erreur JavaScript ne survient (vérifiée à la fin du test)."""
+    for ecran in ECRANS:
+        aller(page, ecran)
+        page.wait_for_timeout(400)
+        expect(page.locator("#contenu h1").first).to_be_visible()
