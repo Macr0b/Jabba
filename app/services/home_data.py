@@ -5,10 +5,11 @@ Sommaire :
   record_visit : note l'ouverture d'un dossier (pour les suggestions)
 """
 
-import json
 import os
 import threading
 import time
+
+from services import json_files
 
 # ---------------------------------------------------------------- accueil : essentiels, favoris, suggestions
 HOME_FILE = os.environ.get("JABBA_DONNEES", "/data/accueil.json")
@@ -18,11 +19,7 @@ SUGGESTION_WINDOW = 30 * 86400  # …sur 30 jours
 
 
 def read():
-    try:
-        with open(HOME_FILE) as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        data = {}
+    data = json_files.load(HOME_FILE)
     data.setdefault("favoris", [])
     data.setdefault("visites", {})
     data.setdefault("ignores", [])
@@ -30,11 +27,7 @@ def read():
 
 
 def write(data):
-    os.makedirs(os.path.dirname(HOME_FILE), exist_ok=True)
-    temporary_file = HOME_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(data, file, ensure_ascii=False)
-    os.replace(temporary_file, HOME_FILE)
+    json_files.save(HOME_FILE, data)
 
 
 def record_visit(path):

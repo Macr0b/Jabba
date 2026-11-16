@@ -1,9 +1,9 @@
-// Écran Fichiers : parcourir, chercher, envoyer, déplacer, supprimer ; et la Corbeille.
+// Écran Fichiers : parcourir, chercher, envoyer, déplacer, supprimer (la Corbeille : pages/trash.js).
 //
 // Sommaire :
-//   partagé : pages.fichiers (écran), pages.corbeille (écran)
+//   partagé : pages.fichiers (écran)
 //   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
-import { confirmAction, dialogElement, chooseFromMenu, toast } from "../components/dialogs.js";
+import { confirmAction, dialogElement, toast } from "../components/dialogs.js";
 import { attachSelection, SHORTCUTS } from "../components/file_selection.js";
 import { publicModeOpen } from "../components/public_mode_card.js";
 import { enableDrop } from "../components/drop_targets.js";
@@ -25,7 +25,7 @@ function openEntry(list, index) {
   else location.href = downloadUrl(entry.chemin);
 }
 
-const searchBarHtml = (query = "") => `<form class="recherche" id="form-recherche" role="search">
+const searchBarHtml = (query = "") => t`<form class="recherche" id="form-recherche" role="search">
     <input type="search" name="q" value="${escapeHtml(query)}" placeholder="Chercher un fichier ou un dossier, partout" aria-label="Chercher" autocomplete="off" enterkeyhint="search">
   </form>`;
 function wireSearch() {
@@ -103,7 +103,7 @@ function goInHistory(direction) {
 function navigationBarHtml(path, link, root) {
   const history = filesHistory,
     parent = "/" + path.split("/").filter(Boolean).slice(0, -1).join("/");
-  return `<div class="nav-fichiers" role="group" aria-label="Navigation">
+  return t`<div class="nav-fichiers" role="group" aria-label="Navigation">
     <button class="btn btn-petit" id="nav-prec" title="Précédent (⌘[)" aria-label="Précédent"${history.pos > 0 ? "" : " disabled"}>‹</button>
     <button class="btn btn-petit" id="nav-suiv" title="Suivant (⌘])" aria-label="Suivant"${history.pos < history.pile.length - 1 ? "" : " disabled"}>›</button>
     ${
@@ -154,7 +154,7 @@ function locationPickerHtml(list, path, link) {
   const active = [...list].filter(
     (item) => item.chemin !== "/" && (path === item.chemin || path.startsWith(item.chemin + "/")),
   )[0];
-  return `<nav class="emplacements" aria-label="Emplacement">${list
+  return t`<nav class="emplacements" aria-label="Emplacement">${list
     .map((item) => {
       const selected = active ? active === item : item.chemin === "/";
       const icon = item.type === "disque" ? "ic-disque" : item.type === "racine" ? "ic-maison" : "ic-dossier";
@@ -204,7 +204,7 @@ function sortEntries(list, key, direction) {
 }
 
 const checkboxHtml = (item, index) =>
-  `<input type="checkbox" class="case" data-choix="${index}" aria-label="Sélectionner ${escapeHtml(item.nom)}">`;
+  t`<input type="checkbox" class="case" data-choix="${index}" aria-label="Sélectionner ${escapeHtml(item.nom)}">`;
 const nameLinkHtml = (item, index, link) =>
   item.dossier
     ? `<a href="${link(item.chemin)}">${escapeHtml(item.nom)}</a>`
@@ -212,7 +212,7 @@ const nameLinkHtml = (item, index, link) =>
 const dropTarget = (item) => (item.dossier && item.ecriture ? ` data-dossier="${escapeHtml(item.chemin)}"` : "");
 
 function rowHtml(item, index, link) {
-  return `
+  return t`
         <div class="ligne element" data-i="${index}"${dropTarget(item)}>
           <span class="nom">${checkboxHtml(item, index)}${entryIcon(item)}
             <span>${nameLinkHtml(item, index, link)}
@@ -224,7 +224,7 @@ function rowHtml(item, index, link) {
 }
 
 function tileHtml(item, index, link) {
-  return `
+  return t`
         <div class="tuile-fichier element" data-i="${index}"${dropTarget(item)}>
           ${checkboxHtml(item, index)}
           <span class="apercu-tuile">${entryIcon(item, 256)}</span>
@@ -262,7 +262,7 @@ pages.fichiers = async (params) => {
   const grid = preferences.vue === "grille";
   const sortHeader = (key, label, extraClass = "") => {
     const active = preferences.tri === key;
-    return `<span class="${extraClass}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}" aria-label="Trier par ${label.toLowerCase()}${active ? (preferences.sens === 1 ? t(", ordre croissant") : t(", ordre décroissant")) : ""}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
+    return t`<span class="${extraClass}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}" aria-label="Trier par ${label.toLowerCase()}${active ? (preferences.sens === 1 ? t(", ordre croissant") : t(", ordre décroissant")) : ""}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
   };
   content.innerHTML = t`
     <div class="entete">
@@ -424,105 +424,4 @@ pages.fichiers = async (params) => {
       }
     },
   });
-};
-
-// ------------------------------------------------------------ corbeille
-pages.corbeille = async () => {
-  content.innerHTML = t`<div class="entete"><div><h1>Corbeille</h1></div></div>${loadingHtml(4)}`;
-  const data = await api("/api/corbeille");
-  const element = data.elements;
-  const days = (value) => Math.max(0, data.garde - Math.floor((Date.now() / 1000 - value) / 86400));
-  content.innerHTML = t`
-    <div class="entete"><div><h1>Corbeille</h1><p class="sous-titre">Ce que tu as supprimé, gardé ${data.garde} jours puis effacé tout seul.</p></div>
-      <div class="actions"><a class="btn" href="#/fichiers">← Fichiers</a>${element.length ? t`<button class="btn btn-danger" id="vider">Vider la corbeille</button>` : ""}</div></div>
-    <section class="carte tableau" aria-label="Éléments supprimés">
-      <div class="ligne titres"><span>Nom</span><span class="col-l">Taille</span><span class="col-l">Supprimé</span><span></span></div>
-      ${
-        element.length
-          ? element
-              .map(
-                (item, index) => `
-        <div class="ligne">
-          <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
-            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${item.origine ? "Venait de " + escapeHtml(item.origine) : t("Origine inconnue")} · encore ${days(item.supprime)} j</span></span></span>
-          <span class="gris col-l">${formatBytes(item.taille)}</span>
-          <span class="gris col-l">${formatWhen(new Date(item.supprime * 1000).toISOString())}</span>
-          <button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
-        </div>`,
-              )
-              .join("")
-          : t`<div class="vide">La corbeille est vide.</div>`
-      }
-    </section>
-    <p class="note">Restaurer remet l'élément à sa place. Effacer pour de bon demande le mot de passe du serveur.</p>`;
-  const reload = () => pages.corbeille().catch(showError);
-  const emptyButton = $("#vider");
-  if (emptyButton)
-    emptyButton.onclick = async () => {
-      if (
-        !(await confirmAction({
-          titre: t("Vider la corbeille ?"),
-          texte: t`Les ${element.length} éléments seront effacés pour de bon. Impossible de revenir en arrière.`,
-          valider: t("Tout effacer"),
-          danger: true,
-        }))
-      )
-        return;
-      try {
-        await api("/api/corbeille/effacer", { method: "POST", json: { tout: true } });
-        toast(t("Corbeille vidée"));
-      } catch (error) {
-        toast(error.message, true);
-      }
-      reload();
-    };
-  content.querySelectorAll(".btn-menu").forEach((node) =>
-    node.addEventListener("click", async () => {
-      const entry = element[+node.dataset.i];
-      const choices = [];
-      if (entry.origine)
-        choices.push({
-          texte: t("Restaurer"),
-          f: async () => {
-            try {
-              const data = await api("/api/corbeille/restaurer", {
-                method: "POST",
-                json: { id: entry.id, source: entry.source, origine: entry.origine },
-              });
-              toast(t`Restauré dans ${data.chemin}`);
-            } catch (error) {
-              toast(error.message, true);
-            }
-            reload();
-          },
-        });
-      choices.push({
-        texte: t("Effacer pour de bon"),
-        danger: true,
-        f: async () => {
-          if (
-            !(await confirmAction({
-              titre: t`Effacer « ${entry.nom} » pour de bon ?`,
-              texte: t("Impossible de revenir en arrière."),
-              valider: t("Effacer"),
-              danger: true,
-            }))
-          )
-            return;
-          try {
-            await api("/api/corbeille/effacer", {
-              method: "POST",
-              json: { id: entry.id, source: entry.source, nom: entry.nom },
-            });
-            toast(t("Effacé"));
-          } catch (error) {
-            toast(error.message, true);
-          }
-          reload();
-        },
-      });
-      const secondChoice = await chooseFromMenu(entry.nom, choices);
-      if (secondChoice) setTimeout(secondChoice.f, 50);
-    }),
-  );
 };

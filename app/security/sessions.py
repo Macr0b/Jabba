@@ -7,11 +7,12 @@ saisie date de plus de 10 minutes (« confirmation »).
 """
 
 import hashlib
-import json
 import os
 import secrets
 import threading
 import time
+
+from services import json_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SESSIONS_FILE = os.path.join(DATA_DIR, "sessions.json")
@@ -29,21 +30,12 @@ def _token_hash(token):
 
 def _read():
     if _cache["d"] is None:
-        try:
-            with open(SESSIONS_FILE) as file:
-                _cache["d"] = json.load(file)
-        except (OSError, ValueError):
-            _cache["d"] = {}
+        _cache["d"] = json_files.load(SESSIONS_FILE)
     return _cache["d"]
 
 
 def _write():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = SESSIONS_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(_cache["d"], file)
-    os.chmod(temporary_file, 0o600)
-    os.replace(temporary_file, SESSIONS_FILE)
+    json_files.save(SESSIONS_FILE, _cache["d"], private=True)
     _cache["ecrit"] = time.time()
 
 

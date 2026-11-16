@@ -66,7 +66,7 @@ export async function openViewer(list, index) {
       <button class="btn btn-petit" data-v="fermer">✕ Fermer</button>
       <strong class="nom-vision">${escapeHtml(entry.nom)}</strong>
       <span class="actions">
-        ${visible.length > 1 ? `<button class="btn btn-petit" data-v="prec" aria-label="Précédent">‹</button><span class="note">${position + 1} / ${visible.length}</span><button class="btn btn-petit" data-v="suiv" aria-label="Suivant">›</button>` : ""}
+        ${visible.length > 1 ? t`<button class="btn btn-petit" data-v="prec" aria-label="Précédent">‹</button><span class="note">${position + 1} / ${visible.length}</span><button class="btn btn-petit" data-v="suiv" aria-label="Suivant">›</button>` : ""}
         ${item === "pdf" ? t`<a class="btn btn-petit" href="${viewUrl(entry.chemin)}" target="_blank" rel="noopener">Plein écran ↗</a>` : ""}
         ${item === "video" ? t`<button class="btn btn-petit" data-v="jellyfin">Regarder dans Jellyfin</button>` : ""}
         <a class="btn btn-petit" href="${downloadUrl(entry.chemin)}">Télécharger</a>

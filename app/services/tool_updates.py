@@ -22,7 +22,7 @@ import httpx
 
 import config
 from host import commands
-from services import notifications, tools
+from services import json_files, notifications, tools
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "mises-a-jour-outils.json")
@@ -38,19 +38,11 @@ MANIFEST_TYPES = ", ".join(
 
 
 def _read_state():
-    try:
-        with open(STATE_FILE) as file:
-            return json.load(file)
-    except (OSError, ValueError):
-        return {"outils": {}, "lu": 0}
+    return json_files.load(STATE_FILE, {"outils": {}, "lu": 0})
 
 
 def _write_state(state):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = STATE_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(state, file)
-    os.replace(temporary_file, STATE_FILE)
+    json_files.save(STATE_FILE, state)
 
 
 # ---------------------------------------------------------------- registre

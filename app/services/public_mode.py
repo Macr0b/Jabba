@@ -14,11 +14,10 @@ usage public. Brancher le domaine reste une étape à part, faite par l'admin.
 """
 
 import datetime
-import json
 import os
 import time
 
-from services import notifications
+from services import json_files, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "public.json")
@@ -43,19 +42,11 @@ PUBLIC_LINK = 3
 
 
 def read():
-    try:
-        with open(SETTINGS_FILE) as file:
-            return {**DEFAULTS, **json.load(file)}
-    except (OSError, ValueError):
-        return dict(DEFAULTS)
+    return {**DEFAULTS, **json_files.load(SETTINGS_FILE)}
 
 
 def write(settings):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = SETTINGS_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(settings, file)
-    os.replace(temporary_file, SETTINGS_FILE)
+    json_files.save(SETTINGS_FILE, settings)
 
 
 # ---------------------------------------------------------------- liens publics de Nextcloud

@@ -86,7 +86,7 @@ async function openPlayer(entry, info, directPlay) {
           <span class="temps"><span id="lect-temps">0:00</span> / <span id="lect-duree">${readableTime(info.duree)}</span></span>
         </div>
         <div class="groupe">
-          ${info.audios.length > 1 || texts.length ? `<button class="icone-lect" type="button" id="lect-reglages" aria-label="Son et sous-titres" aria-expanded="false">${PLAYER_ICONS.reglages}</button>` : ""}
+          ${info.audios.length > 1 || texts.length ? t`<button class="icone-lect" type="button" id="lect-reglages" aria-label="Son et sous-titres" aria-expanded="false">${PLAYER_ICONS.reglages}</button>` : ""}
           <button class="icone-lect" type="button" id="lect-incrustation" aria-label="Image dans l'image" hidden>${PLAYER_ICONS.incrustation}</button>
           <button class="icone-lect" type="button" id="lect-plein" aria-label="Plein écran">${PLAYER_ICONS.plein}</button>
         </div>

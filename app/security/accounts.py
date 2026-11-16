@@ -14,7 +14,6 @@
 
 import hashlib
 import hmac
-import json
 import os
 import re
 import secrets
@@ -22,6 +21,7 @@ import threading
 import time
 
 from security import password_rules
+from services import json_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "comptes.json")
@@ -41,11 +41,7 @@ class Refusal(Exception):
 
 
 def _read():
-    try:
-        with open(ACCOUNTS_FILE) as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        data = {}
+    data = json_files.load(ACCOUNTS_FILE)
     data.setdefault("comptes", [])
     data.setdefault("reglages", {"espace_admins": True})
     data.setdefault("demandes", [])
@@ -55,12 +51,7 @@ def _read():
 
 
 def _write(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = ACCOUNTS_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(data, file, ensure_ascii=False)
-    os.chmod(temporary_file, 0o600)
-    os.replace(temporary_file, ACCOUNTS_FILE)
+    json_files.save(ACCOUNTS_FILE, data, private=True)
 
 
 def _password_hash(password, salt):

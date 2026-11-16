@@ -173,7 +173,7 @@ pages.nuage = async () => {
       <section class="carte pad" id="partages"><div class="entete-carte"><h2>Dossiers partagés</h2></div>
         <p class="note" style="margin:6px 0 8px">Un dossier existant (même sur un disque), donné à voir à un rang ou un groupe. Pour en ajouter : Fichiers, menu du dossier, « Partager avec… ».</p>
         <div class="sauv-liste" id="partages-liste"><p class="note">Chargement…</p></div></section>
-      <section class="carte pad"><div class="entete-carte"><h2>Rangs</h2>${cloud.createur ? `<button class="interrupteur" role="switch" aria-checked="${cloud.rangs_actif}" id="rangs-actif" aria-label="Utiliser des rangs"><span></span></button>` : ""}</div>
+      <section class="carte pad"><div class="entete-carte"><h2>Rangs</h2>${cloud.createur ? t`<button class="interrupteur" role="switch" aria-checked="${cloud.rangs_actif}" id="rangs-actif" aria-label="Utiliser des rangs"><span></span></button>` : ""}</div>
         <p class="note" style="margin:6px 0 8px">${
           cloud.rangs_actif
             ? t(

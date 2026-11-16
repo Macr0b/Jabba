@@ -31,11 +31,7 @@ UNREADABLE = {"apfs": "APFS (format Mac récent)", "hfsplus": "Mac OS étendu (H
 
 
 def read():
-    try:
-        with open(DISKS_FILE) as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        data = {}
+    data = json_files.load(DISKS_FILE)
     data.setdefault("disques", [])  # {nom, chemin, uuid, format, ajoute}
     data.setdefault("oublies", [])  # uuid
     data.setdefault("signales", [])  # uuid illisibles déjà signalés
@@ -43,10 +39,7 @@ def read():
 
 
 def write(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(DISKS_FILE + ".tmp", "w") as file:
-        json.dump(data, file, ensure_ascii=False)
-    os.replace(DISKS_FILE + ".tmp", DISKS_FILE)
+    json_files.save(DISKS_FILE, data)
 
 
 def known_disks():
@@ -303,7 +296,7 @@ import os
 import threading
 
 from host import commands
-from services import disk_browser, files_source, notifications
+from services import disk_browser, files_source, json_files, notifications
 
 
 def scan_disks():

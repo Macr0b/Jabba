@@ -45,7 +45,7 @@ pages.utilisateurs = async () => {
             <span class="mobile-detail">${ROLE_NAMES[item.rang]}</span></span></span>
           <span class="col-l"><span class="pastille ${item.rang === "super" ? "p-alerte" : "p-gris"}">${ROLE_NAMES[item.rang]}</span></span>
           <span class="gris col-l">${item.systeme ? "—" : escapeHtml(timeAgo(item.derniere_connexion))}</span>
-          ${item.systeme ? "<span></span>" : `<button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>`}
+          ${item.systeme ? "<span></span>" : t`<button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>`}
         </div>`,
         )
         .join("")}

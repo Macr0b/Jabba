@@ -18,8 +18,11 @@ const SKIP_CALLS = new Set([
 ]);
 const SETATTR_TEXT = new Set(["aria-label", "title", "placeholder", "alt"]);
 
+// Le texte lu à l'écran : hors balises, plus les attributs lus par les lecteurs d'écran ou affichés
+// (placeholder, aria-label, title, alt).
 function visibleText(s) {
-  return s.replace(/<[^>]*>/g, " ").replace(/&[a-z]+;/g, " ");
+  const attributes = [...s.matchAll(/\b(?:placeholder|aria-label|title|alt)="([^"]*)"/g)].map((match) => match[1]);
+  return [s.replace(/<[^>]*>/g, " "), ...attributes].join(" ").replace(/&[a-z]+;/g, " ");
 }
 function looksLikeText(raw) {
   if (/^\s*$/.test(raw)) return false;

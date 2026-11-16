@@ -9,7 +9,6 @@
 import contextvars
 import hashlib
 import hmac
-import json
 import os
 import secrets
 import threading
@@ -17,6 +16,7 @@ import time
 
 from host import system_crypt
 from security import password_rules
+from services import json_files
 
 TOKEN_LIFETIME = 10 * 60
 MAX_ATTEMPTS = 5
@@ -55,20 +55,11 @@ requester = contextvars.ContextVar("requester", default="inconnu")
 
 
 def _read():
-    try:
-        with open(STATE_FILE) as file:
-            return json.load(file)
-    except (OSError, ValueError):
-        return {}
+    return json_files.load(STATE_FILE)
 
 
 def _write(data):
-    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    temporary_file = STATE_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(data, file)
-    os.chmod(temporary_file, 0o600)
-    os.replace(temporary_file, STATE_FILE)
+    json_files.save(STATE_FILE, data, private=True)
 
 
 def is_locked():

@@ -19,13 +19,13 @@ principe du TOTP) : le fichier est lisible par l'appli seule (0600).
 
 import hashlib
 import hmac
-import json
 import os
 import secrets
 import threading
 import time
 
 from security import passkeys, totp
+from services import json_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 DATA_FILE = os.path.join(DATA_DIR, "double-verification.json")
@@ -49,20 +49,11 @@ class SecondFactorError(Exception):
 
 # ---------------------------------------------------------------- fichier
 def _read():
-    try:
-        with open(DATA_FILE) as file:
-            return json.load(file)
-    except (OSError, ValueError):
-        return {}
+    return json_files.load(DATA_FILE)
 
 
 def _write(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = DATA_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(data, file)
-    os.chmod(temporary_file, 0o600)
-    os.replace(temporary_file, DATA_FILE)
+    json_files.save(DATA_FILE, data, private=True)
 
 
 def _entry(data, identifier):

@@ -49,8 +49,6 @@ FALLBACK_ICONS = [
     "/icon.svg",
 ]
 OUTSIDE_APP = {"nextcloud"}
-# Sans page web : pas de bouton « Ouvrir ».
-NO_WEB_PAGE = {"antivirus"}
 
 
 def list_tools():
@@ -96,7 +94,6 @@ def list_tools():
                 "systeme": pid in SYSTEM_TOOLS,
                 "icone": pid in PORTS,
                 "dans_appli": pid not in OUTSIDE_APP,
-                "sans_page": pid in NO_WEB_PAGE,
             }
         )
     return result

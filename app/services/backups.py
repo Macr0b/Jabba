@@ -54,11 +54,7 @@ _lock = threading.RLock()
 
 # ---------------------------------------------------------------- réglages
 def read():
-    try:
-        with open(SETTINGS_FILE) as file:
-            settings = json.load(file)
-    except (OSError, ValueError):
-        settings = {}
+    settings = json_files.load(SETTINGS_FILE)
     settings.setdefault("actif", False)
     settings.setdefault("disque", None)  # nom du disque choisi
     settings.setdefault("chemin", None)  # point de montage du disque
@@ -73,12 +69,7 @@ def read():
 
 def write(settings):
     with _lock:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        temporary_file = SETTINGS_FILE + ".tmp"
-        with open(temporary_file, "w") as file:
-            json.dump(settings, file, ensure_ascii=False)
-        os.chmod(temporary_file, 0o600)
-        os.replace(temporary_file, SETTINGS_FILE)
+        json_files.save(SETTINGS_FILE, settings, private=True)
 
 
 def new_passphrase():
@@ -167,11 +158,7 @@ done"""
 
 
 def read_state():
-    try:
-        with open(STATE_FILE) as file:
-            return json.loads(file.read() or "{}")
-    except (OSError, ValueError):
-        return {}
+    return json_files.load(STATE_FILE)
 
 
 STEPS = {
@@ -321,7 +308,7 @@ from fastapi import HTTPException
 
 import config
 from host import commands
-from services import activity_log, app_update, files_source, notifications
+from services import activity_log, app_update, files_source, json_files, notifications
 
 # ---------------------------------------------------------------- sauvegardes
 DEMO_STATE = {}  # en démo : le processus de la sauvegarde en cours

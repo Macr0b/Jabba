@@ -25,7 +25,7 @@ import time
 
 import config
 from host import actions, commands
-from services import activity_log, notifications
+from services import activity_log, json_files, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "fragmentation.json")
@@ -42,19 +42,11 @@ DEMO = {
 
 
 def _read():
-    try:
-        with open(STATE_FILE) as file:
-            return json.load(file)
-    except (OSError, ValueError):
-        return {"disques": {}, "lu": 0}
+    return json_files.load(STATE_FILE, {"disques": {}, "lu": 0})
 
 
 def _write(state):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = STATE_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(state, file)
-    os.replace(temporary_file, STATE_FILE)
+    json_files.save(STATE_FILE, state)
 
 
 # ---------------------------------------------------------------- TRIM

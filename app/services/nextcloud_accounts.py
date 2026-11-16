@@ -50,11 +50,7 @@ class CloudError(Exception):
 
 # ---------------------------------------------------------------- réglages de Jabba
 def read():
-    try:
-        with open(STATE_FILE) as folder:
-            state = json.load(folder)
-    except (OSError, ValueError):
-        state = {}
+    state = json_files.load(STATE_FILE)
     state.setdefault("plafond_go", 50)
     state.setdefault("en_attente_vus", [])  # inscriptions déjà signalées
     return state
@@ -62,11 +58,7 @@ def read():
 
 def write(state):
     with _lock:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        temporary_file = STATE_FILE + ".tmp"
-        with open(temporary_file, "w") as folder:
-            json.dump(state, folder, ensure_ascii=False)
-        os.replace(temporary_file, STATE_FILE)
+        json_files.save(STATE_FILE, state)
 
 
 # ---------------------------------------------------------------- tailles
@@ -454,7 +446,7 @@ import threading
 
 from host import commands
 from security import guard
-from services import activity_log, notifications
+from services import activity_log, json_files, notifications
 
 
 def refresh_usage_in_background(user_ids=None):

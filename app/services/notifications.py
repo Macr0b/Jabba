@@ -13,7 +13,7 @@ import time
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from services import activity_log
+from services import activity_log, json_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 KEY_FILE = os.path.join(DATA_DIR, "vapid.pem")
@@ -37,11 +37,7 @@ TYPES = {
 
 
 def _read():
-    try:
-        with open(SUBSCRIPTIONS_FILE) as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        data = {}
+    data = json_files.load(SUBSCRIPTIONS_FILE)
     data.setdefault("abonnements", [])
     data.setdefault("types", {alert_type: True for alert_type in TYPES})
     for alert_type in TYPES:
@@ -50,10 +46,7 @@ def _read():
 
 
 def _write(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(SUBSCRIPTIONS_FILE + ".tmp", "w") as file:
-        json.dump(data, file)
-    os.replace(SUBSCRIPTIONS_FILE + ".tmp", SUBSCRIPTIONS_FILE)
+    json_files.save(SUBSCRIPTIONS_FILE, data)
 
 
 def _b64(raw_bytes):

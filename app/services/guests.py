@@ -16,7 +16,6 @@ Les invités ne voient que les dossiers et les outils choisis par l'admin.
 
 import hashlib
 import hmac
-import json
 import os
 import secrets
 import threading
@@ -29,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.datastructures import UploadFile
 
 import config
-from services import activity_log, safe_files
+from services import activity_log, json_files, safe_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 # État partagé entre l'appli (qui l'écrit) et la porte du Wi-Fi (qui le lit) : un dossier à part.
@@ -48,11 +47,7 @@ _failures = {}  # ip -> [horodatages]
 
 # ---------------------------------------------------------------- réglages
 def read():
-    try:
-        with open(STATE_FILE) as file:
-            state = json.load(file)
-    except (OSError, ValueError):
-        state = {}
+    state = json_files.load(STATE_FILE)
     state.setdefault("actif", False)
     state.setdefault("code", "%04d" % secrets.randbelow(10000))
     state.setdefault("generation", 1)
@@ -66,13 +61,7 @@ def read():
 
 def write(state):
     with _lock:
-        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-        temporary_file = STATE_FILE + ".tmp"
-        with open(temporary_file, "w") as file:
-            json.dump(state, file, ensure_ascii=False)
-        os.chmod(temporary_file, 0o600)
-        _give_to_guest_account(temporary_file)
-        os.replace(temporary_file, STATE_FILE)
+        json_files.save(STATE_FILE, state, private=True, before_replace=_give_to_guest_account)
 
 
 GUEST_UID = int(os.environ.get("JABBA_UID", "1000"))

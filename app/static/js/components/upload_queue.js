@@ -34,7 +34,7 @@ function renderItem(item) {
       : item.state === "erreur"
         ? t`<button class="btn btn-petit" type="button" data-reessayer="${item.id}">Réessayer</button>`
         : `<span class="envoi-etat">${item.state === "attente" ? t("En attente") : percent + " %"}</span>`;
-  return `<li class="envoi" data-etat="${item.state}">
+  return t`<li class="envoi" data-etat="${item.state}">
       <span class="envoi-nom">${escapeHtml(item.file.name)}<span class="note"> · ${formatBytes(item.file.size)}</span>
         ${item.message ? `<span class="envoi-erreur">${escapeHtml(item.message)}</span>` : ""}</span>
       ${status}

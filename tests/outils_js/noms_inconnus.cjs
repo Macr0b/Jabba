@@ -1,4 +1,6 @@
-// Noms utilisés mais jamais déclarés ni importés, dans chaque module de l'interface (sinon : erreur à l'exécution).
+// Dans chaque module de l'interface :
+//   - noms utilisés mais jamais déclarés ni importés (sinon : erreur à l'exécution) ;
+//   - imports jamais utilisés (code mort à retirer).
 const acorn = require("acorn");
 const eslintScope = require("eslint-scope");
 const fs = require("fs");
@@ -22,6 +24,14 @@ for (const file of process.argv.slice(2)) {
     if (!GLOBALS.has(name)) {
       problems++;
       console.log(`${path.relative(process.cwd(), file)}:${ref.identifier.loc.start.line} ${name}`);
+    }
+  }
+  const moduleScope = scopes.scopes.find((scope) => scope.type === "module");
+  for (const variable of moduleScope ? moduleScope.variables : []) {
+    const imported = variable.defs.some((definition) => definition.type === "ImportBinding");
+    if (imported && variable.references.length === 0) {
+      problems++;
+      console.log(`${path.relative(process.cwd(), file)}:${variable.defs[0].name.loc.start.line} import inutilisé : ${variable.name}`);
     }
   }
 }

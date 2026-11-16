@@ -73,7 +73,7 @@ async function showGuestFolder(folderId, path) {
     )
     .join('<span class="sep">/</span>');
   const dropZone = data.dossier.mode === "depot";
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="entete"><div><h1>${escapeHtml(parts.length ? parts[parts.length - 1] : data.dossier.nom)}${dropZone ? "" : t('<span class="lecture-seule">Lecture seule</span>')}</h1></div>
       ${dropZone ? t`<div class="actions"><button class="btn btn-p" id="envoyer">Déposer des fichiers</button></div>` : ""}</div>
     <nav class="fil" aria-label="Emplacement">${thread}</nav>
@@ -86,7 +86,7 @@ async function showGuestFolder(folderId, path) {
         <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : THUMBNAIL_EXTENSIONS.includes(extensionOf(item.nom)) ? `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="${guestFileUrl(folderId, item.chemin, 1)}"></span>` : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
           <span>${item.dossier ? `<a href="${link(item.chemin)}">${escapeHtml(item.nom)}</a>` : `<a href="${guestFileUrl(folderId, item.chemin)}">${escapeHtml(item.nom)}</a>`}<span class="mobile-detail">${item.dossier ? "" : formatBytes(item.taille)}</span></span></span>
         <span class="gris col-l">${item.dossier ? "" : formatBytes(item.taille)}</span><span class="gris col-l">${formatWhen(item.modifie)}</span>
-        ${item.dossier ? "<span></span>" : `<a class="btn btn-petit" href="${guestFileUrl(folderId, item.chemin)}" aria-label="Télécharger ${escapeHtml(item.nom)}">↓</a>`}</div>`,
+        ${item.dossier ? "<span></span>" : t`<a class="btn btn-petit" href="${guestFileUrl(folderId, item.chemin)}" aria-label="Télécharger ${escapeHtml(item.nom)}">↓</a>`}</div>`,
               )
               .join("")
           : t('<div class="vide">Ce dossier est vide.</div>')

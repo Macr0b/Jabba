@@ -14,7 +14,6 @@ jamais supprimé : l'admin décide. Les fichiers de plus de 100 Mo ne sont pas a
 (limite par défaut de clamd) ; ce sont presque toujours des vidéos.
 """
 
-import json
 import os
 import re
 import shutil
@@ -23,7 +22,7 @@ import time
 
 import config
 from host import actions, commands
-from services import activity_log, guests, notifications
+from services import activity_log, guests, json_files, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "antivirus.json")
@@ -36,19 +35,11 @@ RUNNING = {"analyse": False, "installation": False}
 
 
 def _read():
-    try:
-        with open(STATE_FILE) as file:
-            return json.load(file)
-    except (OSError, ValueError):
-        return {"vus": {}, "derniere_analyse": None, "analyses": 0, "menaces": []}
+    return json_files.load(STATE_FILE, {"vus": {}, "derniere_analyse": None, "analyses": 0, "menaces": []})
 
 
 def _write(state):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    temporary_file = STATE_FILE + ".tmp"
-    with open(temporary_file, "w") as file:
-        json.dump(state, file)
-    os.replace(temporary_file, STATE_FILE)
+    json_files.save(STATE_FILE, state)
 
 
 # ---------------------------------------------------------------- l'outil
