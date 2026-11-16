@@ -15,13 +15,20 @@ export function showError(entry) {
   content.innerHTML = `<div class="entete"><div><h1>Oups</h1></div></div>${errorHtml(entry)}`;
 }
 
+// Chaque navigation a un numéro. Un écran lent qui finit après qu'on soit passé à un autre
+// a pu écrire par-dessus : on réaffiche alors l'écran demandé en dernier.
+let latestNavigation = 0;
+let latestFinished = 0;
+
 export async function router() {
+  const navigation = ++latestNavigation;
   const [path, query] = (
     location.hash.slice(2) || (state.me && state.me.mode === "invite" ? "invite" : "accueil")
   ).split("?");
   let page = pages[path] ? path : "accueil";
   if (state.me && state.me.mode === "invite" && page !== "aide") page = "invite";
-  if (!state.me && page !== "aide") return showUnreachable(lastFailure); // serveur injoignable   // sans connexion admin : seulement la page invités
+  // Sans réponse du serveur : écran « serveur injoignable » (l'Aide reste ouverte).
+  if (!state.me && page !== "aide") return showUnreachable(lastFailure);
   if (page !== "ouvrir") document.body.classList.remove("plein-ecran");
   document.querySelectorAll("[data-page]").forEach((element) => {
     const active =
@@ -44,6 +51,8 @@ export async function router() {
   try {
     await pages[page](new URLSearchParams(query || ""));
   } catch (error) {
-    showError(error);
+    if (navigation === latestNavigation) showError(error);
   }
+  if (navigation === latestNavigation) latestFinished = navigation;
+  else if (latestFinished === latestNavigation) router();
 }
