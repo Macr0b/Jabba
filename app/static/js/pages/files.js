@@ -5,6 +5,7 @@
 //   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
 import { confirmAction, dialogElement, chooseFromMenu, toast } from "../components/dialogs.js";
 import { attachSelection, SHORTCUTS } from "../components/file_selection.js";
+import { publicModeOpen } from "../components/public_mode_card.js";
 import { uploadFiles } from "../components/upload_queue.js";
 import { kindOf, entryIcon, downloadUrl, openViewer } from "../components/viewer.js";
 import { api } from "../core/api.js";
@@ -397,6 +398,7 @@ pages.fichiers = async (params) => {
 
   attachSelection(entries, {
     folder: data,
+    publicOpen: data.source === "nextcloud" && (await publicModeOpen()),
     after: reload,
     open: openAt,
     link,

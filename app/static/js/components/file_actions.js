@@ -7,6 +7,7 @@
 import { api } from "../core/api.js";
 import { state } from "../core/state.js";
 import { confirmAction, toast } from "./dialogs.js";
+import { requestFiles } from "./public_mode_card.js";
 import { shareFolder } from "./share.js";
 import { downloadUrl, kindOf, openViewer } from "./viewer.js";
 
@@ -110,13 +111,15 @@ export async function deleteEntries(entries, after) {
   after();
 }
 
-// Le menu d'un élément (bouton •••, clic droit) : context = {list, index, folder, after, link}.
+// Le menu d'un élément (bouton •••, clic droit) : context = {list, index, folder, after, link, publicOpen}.
 export function itemChoices(entry, context) {
   const choices = [];
   if (entry.dossier) {
     choices.push({ texte: "Ouvrir", f: () => (location.hash = context.link(entry.chemin)) });
     if (context.folder.source === "nextcloud" && state.admin)
       choices.push({ texte: "Partager avec…", f: () => shareFolder(entry.chemin, entry.nom) });
+    if (context.folder.source === "nextcloud" && context.publicOpen)
+      choices.push({ texte: "Demander des fichiers…", f: () => requestFiles(entry) });
     choices.push({ texte: "Ajouter à l'accès rapide", f: () => context.addToQuickAccess(entry.chemin) });
     choices.push({ texte: "Télécharger (.zip)", f: () => downloadEntries([entry]) });
   } else {

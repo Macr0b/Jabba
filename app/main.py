@@ -32,6 +32,7 @@ from routes import (
     files_batch,
     guests_admin,
     player,
+    public_mode,
     second_factor,
     shares,
     system,
@@ -98,6 +99,7 @@ for module in (
     guests_admin,
     shares,
     second_factor,
+    public_mode,
 ):
     app.include_router(module.router)
 

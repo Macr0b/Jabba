@@ -8,6 +8,7 @@ Sommaire :
   disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
   mass_deletion.watch_mass_deletion : beaucoup de fichiers supprimés d'un coup
   tool_updates.watch_tool_updates : nouvelle version d'un outil (une fois par jour)
+  public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
   watch_tools : outil en panne
   watch_system_updates : mises à jour du système, redémarrage en attente
   watch_forever : la boucle (voir le détail des fréquences dedans)
@@ -31,6 +32,7 @@ from services import (
     nextcloud_accounts,
     notifications,
     power,
+    public_mode,
     restart_policy,
     tool_updates,
     tools,
@@ -192,6 +194,7 @@ def watch_forever():
                 disk_health.watch_disk_health,
                 mass_deletion.watch_mass_deletion,
                 tool_updates.watch_tool_updates,
+                lambda: public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts),
             ]
         if tick % 240 == 0:  # toutes les heures
             steps += [watch_system_updates]

@@ -2,9 +2,10 @@
 //
 // Sommaire :
 //   partagé : pages.systeme (écran), pages.plus (écran)
-//   interne : restartPolicyCard, appUpdateCard (la carte Double vérification : components/second_factor.js)
+//   interne : restartPolicyCard, appUpdateCard (cartes Double vérification et Serveur ouvert au public : components/)
 import { alertsCard } from "../components/alerts.js";
 import { confirmAction, toast } from "../components/dialogs.js";
+import { publicModeCard } from "../components/public_mode_card.js";
 import { secondFactorCard } from "../components/second_factor.js";
 import { chooseMyPassword, logOut, showRecoveryCode } from "../core/admin_session.js";
 import { api, formBody } from "../core/api.js";
@@ -55,6 +56,7 @@ pages.systeme = async () => {
         <button class="btn" id="code-secours">${entry.code_existe ? "Nouveau code de secours" : "Créer le code de secours"}</button></div>
       </section>
       <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
+      <section class="carte pad" id="public"><h2>Serveur ouvert au public</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="redem"><h2>Redémarrage après une mise à jour</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
@@ -75,6 +77,11 @@ pages.systeme = async () => {
   secondFactorCard().catch((entry) => {
     const element = $("#double");
     if (element) element.innerHTML = `<h2>Double vérification</h2><p class="note">${escapeHtml(entry.message)}</p>`;
+  });
+  publicModeCard().catch((entry) => {
+    const element = $("#public");
+    if (element)
+      element.innerHTML = `<h2>Serveur ouvert au public</h2><p class="note">${escapeHtml(entry.message)}</p>`;
   });
   alertsCard().catch((entry) => {
     const element = $("#alertes");

@@ -28,7 +28,9 @@
       "Santé des disques (écran Disques) : lecture SMART chaque jour, sans réveiller un disque endormi ; alerte sur l'iPhone au premier signe de fatigue (secteurs abîmés, panne annoncée, usure, chaleur). S'active d'un clic (installe smartmontools).",
       "Alerte « suppression massive » : 200 éléments mis à la corbeille en moins d'une heure (rançongiciel, synchronisation qui déraille, fausse manœuvre).",
       "Établi : la version de chaque outil, et « Une version plus récente est disponible » quand Nextcloud, Jellyfin ou Dockge peuvent être mis à jour (vérifié chaque jour, avec une alerte).",
-      "Aide : plan de reprise (tout réinstaller depuis la sauvegarde) et connexion sans son téléphone."
+      "Aide : plan de reprise (tout réinstaller depuis la sauvegarde) et connexion sans son téléphone.",
+      "Option « Serveur ouvert au public » (Système, pour un fablab ou une association) : liste « avant d'ouvrir » (double vérification obligatoire, sauvegardes, comptes Nextcloud, mentions), liens publics de Nextcloud avec mot de passe et date limite imposés (réglages d'avant remis si on revient en privé), mentions RGPD ajoutées d'un clic à la charte d'inscription, comptes inactifs signalés chaque mois. N'ouvre rien sur Internet par lui-même.",
+      "Demande de fichiers : en mode public, Fichiers → ••• d'un dossier Nextcloud → « Demander des fichiers… » crée un lien où l'on dépose sans compte et sans rien voir du dossier, avec date limite et mot de passe facultatif."
     ]
   },
   {
