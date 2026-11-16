@@ -1,0 +1,9 @@
+{
+  "name": "jabba-verifications-interface",
+  "private": true,
+  "description": "Outils des tests : lecture du code de l'interface (noms inconnus, imports).",
+  "devDependencies": {
+    "acorn": "8.12.1",
+    "eslint-scope": "8.0.2"
+  }
+}

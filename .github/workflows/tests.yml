@@ -19,6 +19,10 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg openssh-client util-linux
       - name: Dépendances
         run: pip install -r app/requirements.txt -r tests/requirements.txt
+      - name: Outils de vérification de l'interface
+        run: npm ci --prefix tests/outils_js
+      - name: Relecture du code Python (erreurs, une instruction par ligne, imports rangés)
+        run: ruff check app tests && ruff format --check app tests
       - name: Tests
         # En root, comme l'appli : les tests du bac à sable et de la signature des mises à jour en ont besoin.
         run: sudo -E env "PATH=$PATH" "$(command -v python)" -m pytest -q -p no:cacheprovider tests --ignore=tests/ui
