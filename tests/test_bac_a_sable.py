@@ -1,4 +1,5 @@
 """ffmpeg et Pillow tournent sans aucun droit (revue, point 1)."""
+
 import os
 
 import pytest
@@ -11,11 +12,14 @@ from conftest import exige_root, outil
 
 @exige_root
 def test_commande_sous_nobody_sans_capacites():
-    r = sandbox.run(["sh", "-c", "id -u; id -G; grep -E '^(CapEff|CapBnd|NoNewPrivs)' /proc/self/status"],
-                        capture_output=True, text=True)
+    r = sandbox.run(
+        ["sh", "-c", "id -u; id -G; grep -E '^(CapEff|CapBnd|NoNewPrivs)' /proc/self/status"],
+        capture_output=True,
+        text=True,
+    )
     lignes = r.stdout.split("\n")
     assert lignes[0] == "65534"
-    assert lignes[1] in ("65534", "")                    # aucun groupe supplémentaire
+    assert lignes[1] in ("65534", "")  # aucun groupe supplémentaire
     statut = dict(l.split(":\t") for l in lignes[2:] if l)
     assert int(statut["CapEff"], 16) == 0 and int(statut["CapBnd"], 16) == 0
     assert statut["NoNewPrivs"].strip() == "1"
@@ -78,6 +82,7 @@ def test_adresse_passee_telle_quelle():
 
 def test_vignette(tmp_path):
     from PIL import Image
+
     img = tmp_path / "photo.png"
     Image.new("RGB", (1200, 800), "red").save(img)
     jpeg = sandbox.thumbnail(str(img), 128)

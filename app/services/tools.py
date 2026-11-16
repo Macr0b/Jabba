@@ -1,4 +1,5 @@
 """services.tools"""
+
 import json
 import re
 from urllib.parse import urljoin
@@ -29,14 +30,22 @@ ADRESSES = {
 PORTS = {"jellyfin": 8096, "nextcloud": 8081, "dockge": 5001}
 # Jamais ouverts aux invités du Wi-Fi : ils donnent la main sur le serveur.
 NEVER_ON_WIFI = {"dockge"}
-FALLBACK_ICONS = ["/web/favicon.png", "/web/favicon.ico", "/favicon.ico", "/favicon.png",
-                  "/static/img/icons/favicon-32x32.png", "/core/img/favicon.ico", "/icon.svg"]
+FALLBACK_ICONS = [
+    "/web/favicon.png",
+    "/web/favicon.ico",
+    "/favicon.ico",
+    "/favicon.png",
+    "/static/img/icons/favicon-32x32.png",
+    "/core/img/favicon.ico",
+    "/icon.svg",
+]
 OUTSIDE_APP = {"nextcloud"}
 
 
 def list_tools():
     if config.DEMO:
         from services.demo_data import TOOLS
+
         return TOOLS
     code, output, error_output = commands.run_on_host(["docker", "ps", "-a", "--format", "{{json .}}"])
     if code != 0:
@@ -48,7 +57,9 @@ def list_tools():
         projet = labels.get("com.docker.compose.project", container["Names"])
         folder = labels.get("com.docker.compose.project.working_dir", "")
         project = projects.setdefault(projet, {"id": projet, "dossier": folder, "conteneurs": []})
-        project["conteneurs"].append({"nom": container["Names"], "etat": container["State"], "statut": container["Status"]})
+        project["conteneurs"].append(
+            {"nom": container["Names"], "etat": container["State"], "statut": container["Status"]}
+        )
     result = []
     for pid, project in sorted(projects.items()):
         name, role = NAMES.get(pid, (pid, ""))
@@ -61,13 +72,21 @@ def list_tools():
             state = "arrêté"
         if any("restarting" in container["etat"] for container in project["conteneurs"]):
             state = "en panne"
-        result.append({
-            "id": pid, "nom": name, "role": role, "etat": state,
-            "lien": config.LINKS.get(pid), "dossier": project["dossier"], "conteneurs": project["conteneurs"],
-            "modifiable": pid != "jabba-app" and bool(project["dossier"]),
-            "systeme": pid in SYSTEM_TOOLS, "icone": pid in PORTS,
-            "dans_appli": pid not in OUTSIDE_APP,
-        })
+        result.append(
+            {
+                "id": pid,
+                "nom": name,
+                "role": role,
+                "etat": state,
+                "lien": config.LINKS.get(pid),
+                "dossier": project["dossier"],
+                "conteneurs": project["conteneurs"],
+                "modifiable": pid != "jabba-app" and bool(project["dossier"]),
+                "systeme": pid in SYSTEM_TOOLS,
+                "icone": pid in PORTS,
+                "dans_appli": pid not in OUTSIDE_APP,
+            }
+        )
     return result
 
 
@@ -100,13 +119,19 @@ def find_icon(pid):
                     candidates.append((priority, urljoin(str(page.url), href.group(1))))
         except httpx.HTTPError:
             pass
-        urls = [candidate_url for _, candidate_url in sorted(candidates)] + [urljoin(base, project) for project in FALLBACK_ICONS]
+        urls = [candidate_url for _, candidate_url in sorted(candidates)] + [
+            urljoin(base, project) for project in FALLBACK_ICONS
+        ]
         for candidate_url in urls:
             try:
                 response = container.get(candidate_url)
             except httpx.HTTPError:
                 continue
             media_type = response.headers.get("content-type", "").split(";")[0]
-            if response.status_code == 200 and media_type.startswith("image/") and 0 < len(response.content) < 2_000_000:
+            if (
+                response.status_code == 200
+                and media_type.startswith("image/")
+                and 0 < len(response.content) < 2_000_000
+            ):
                 return response.content, media_type
     return None

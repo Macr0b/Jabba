@@ -1,4 +1,5 @@
 """services.measurements"""
+
 import os
 import time
 import config
@@ -64,4 +65,6 @@ def uptime():
 
 
 def server_name():
-    return "Serveur-démo" if config.DEMO else (commands.run_on_host(["hostname"])[1].strip().capitalize() or "Le serveur")
+    return (
+        "Serveur-démo" if config.DEMO else (commands.run_on_host(["hostname"])[1].strip().capitalize() or "Le serveur")
+    )

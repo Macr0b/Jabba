@@ -1,4 +1,5 @@
 """services.background_tasks"""
+
 import threading
 import time
 import uuid
@@ -13,7 +14,14 @@ TASKS = {}
 
 def start_task(title, script, who=None, tool=None):
     task_id = uuid.uuid4().hex[:8]
-    TASKS[task_id] = {"id": task_id, "titre": title, "etat": "en cours", "debut": time.time(), "journal": "", "outil": tool}
+    TASKS[task_id] = {
+        "id": task_id,
+        "titre": title,
+        "etat": "en cours",
+        "debut": time.time(),
+        "journal": "",
+        "outil": tool,
+    }
 
     def travail():
         try:
@@ -28,7 +36,9 @@ def start_task(title, script, who=None, tool=None):
             TASKS[task_id]["journal"] = str(e)
             TASKS[task_id]["etat"] = "erreur"
         TASKS[task_id]["fin"] = time.time()
-        activity_log.record("outil", title + (" : terminé" if TASKS[task_id]["etat"] == "terminé" else " : erreur"), who)
+        activity_log.record(
+            "outil", title + (" : terminé" if TASKS[task_id]["etat"] == "terminé" else " : erreur"), who
+        )
 
     threading.Thread(target=travail, daemon=True).start()
     return TASKS[task_id]

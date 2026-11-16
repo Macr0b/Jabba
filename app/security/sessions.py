@@ -5,6 +5,7 @@ serveur n'en garde que l'empreinte. Une session peut être fermée à distance.
 Les actions les plus sensibles redemandent le mot de passe si sa dernière
 saisie date de plus de 10 minutes (« confirmation »).
 """
+
 import hashlib
 import json
 import os
@@ -58,9 +59,18 @@ def create(identifier, rank, temporary=False, device=None, login=None):
     with _lock:
         sessions_data = _read()
         _drop_expired(sessions_data)
-        sessions_data[_token_hash(token)] = {"id": secrets.token_hex(4), "identifiant": identifier, "rang": rank, "provisoire": temporary,
-                        "appareil": device, "login": login, "cree": int(now), "vu": int(now),
-                        "exp": now + (TEMPORARY_LIFETIME if temporary else LIFETIME), "confirme": now}
+        sessions_data[_token_hash(token)] = {
+            "id": secrets.token_hex(4),
+            "identifiant": identifier,
+            "rang": rank,
+            "provisoire": temporary,
+            "appareil": device,
+            "login": login,
+            "cree": int(now),
+            "vu": int(now),
+            "exp": now + (TEMPORARY_LIFETIME if temporary else LIFETIME),
+            "confirme": now,
+        }
         _write()
     return token
 
@@ -111,7 +121,9 @@ def close_account(identifier=None):
     """Ferme toutes les sessions d'un compte (ou de tout le monde)."""
     with _lock:
         sessions_data = _read()
-        for key in [key for key, session in sessions_data.items() if identifier is None or session["identifiant"] == identifier]:
+        for key in [
+            key for key, session in sessions_data.items() if identifier is None or session["identifiant"] == identifier
+        ]:
             del sessions_data[key]
         _write()
 
@@ -120,5 +132,11 @@ def list_sessions():
     with _lock:
         sessions_data = _read()
         _drop_expired(sessions_data)
-        return sorted(({key: value for key, value in session.items() if key != "exp"} for session in sessions_data.values() if not session["provisoire"]),
-                      key=lambda session: -session["vu"])
+        return sorted(
+            (
+                {key: value for key, value in session.items() if key != "exp"}
+                for session in sessions_data.values()
+                if not session["provisoire"]
+            ),
+            key=lambda session: -session["vu"],
+        )

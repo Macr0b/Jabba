@@ -4,6 +4,7 @@ systemd-run remplace lui-même ${…} dans sa ligne de commande, avant le shell 
 par « sh -c » y perdait ses ${LIGNE% *}, et la vérification de signature échouait toujours
 (c'est arrivé : v0.11.0 → v0.12.0). Le script passe donc par un fichier.
 """
+
 import os
 import re
 import shutil
@@ -20,13 +21,25 @@ from host import commands
 
 def test_le_script_passe_par_un_fichier(monkeypatch):
     appels = []
-    monkeypatch.setattr(commands, "run_on_host", lambda command, timeout=30, input_text=None: (appels.append((command, input_text)), (0, "", ""))[1])
+    monkeypatch.setattr(
+        commands,
+        "run_on_host",
+        lambda command, timeout=30, input_text=None: (appels.append((command, input_text)), (0, "", ""))[1],
+    )
     script = 'L="a b"; echo "${L% *}"'
     commands.start_on_host("jabba-test-1", script, "bash", ("Nice=10",))
     (ecrire, contenu), (lancer, _) = appels
     assert contenu.endswith(script) and contenu.startswith('rm -f "$0"')
-    assert "$" not in " ".join(lancer)                       # rien que systemd puisse remplacer
-    assert lancer == ["systemd-run", "--unit=jabba-test-1", "--collect", "-p", "Nice=10", "bash", f"{commands.TASKS_DIR}/jabba-test-1.sh"]
+    assert "$" not in " ".join(lancer)  # rien que systemd puisse remplacer
+    assert lancer == [
+        "systemd-run",
+        "--unit=jabba-test-1",
+        "--collect",
+        "-p",
+        "Nice=10",
+        "bash",
+        f"{commands.TASKS_DIR}/jabba-test-1.sh",
+    ]
 
 
 def test_nom_de_tache_verifie():

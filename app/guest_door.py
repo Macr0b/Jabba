@@ -3,6 +3,7 @@
 Ce petit serveur tourne dans son propre conteneur, sans aucun pouvoir (voir compose.yaml).
 Il ne connaît QUE les pages invités : la connexion admin y est impossible.
 """
+
 import ipaddress
 import os
 
@@ -15,8 +16,10 @@ from services import guests
 # ---------------------------------------------------------------- la porte du Wi-Fi (port 80)
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
-LOCAL_NETWORKS = [ipaddress.ip_network(n) for n in
-                  ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8", "100.64.0.0/10")]
+LOCAL_NETWORKS = [
+    ipaddress.ip_network(n)
+    for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8", "100.64.0.0/10")
+]
 
 
 @app.middleware("http")
@@ -45,7 +48,13 @@ app.include_router(guests.router)
 def who_am_i_on_wifi():
     import socket
     from version import VERSION
-    return {"mode": "invite", "serveur": guests.read().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
+
+    return {
+        "mode": "invite",
+        "serveur": guests.read().get("serveur") or socket.gethostname(),
+        "version": VERSION,
+        "admin": None,
+    }
 
 
 @app.get("/api/{reste:path}")

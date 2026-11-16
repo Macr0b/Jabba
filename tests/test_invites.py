@@ -1,4 +1,5 @@
 """La porte du Wi-Fi (page invités) : séparée de l'appli et de ses données (revue, point 1)."""
+
 import json
 import os
 
@@ -23,17 +24,25 @@ def etat(tmp_path, monkeypatch):
     partage.mkdir()
     (partage / "menu.txt").write_text("menu")
     guests.prepare_state()
-    guests.update(lambda d: d.update(actif=True, code="1234", serveur="holo",
-                                        dossiers=[{"id": "p", "nom": "Partage", "chemin": str(partage), "mode": "depot"}]))
+    guests.update(
+        lambda d: d.update(
+            actif=True,
+            code="1234",
+            serveur="holo",
+            dossiers=[{"id": "p", "nom": "Partage", "chemin": str(partage), "mode": "depot"}],
+        )
+    )
     return f, partage
 
 
 def wifi(ip="192.168.1.20"):
     """La porte du Wi-Fi, vue depuis l'adresse `ip`."""
+
     async def depuis(scope, receive, send):
         if scope["type"] in ("http", "websocket"):
             scope = dict(scope, client=(ip, 5000))
         await guest_door.app(scope, receive, send)
+
     return TestClient(depuis)
 
 
@@ -95,8 +104,11 @@ def test_journal_de_la_porte_ne_peut_pas_se_faire_passer_pour_l_appli(tmp_path, 
     monkeypatch.setattr(activity_log, "LOG_FILE", str(principal))
     monkeypatch.setattr(activity_log, "OTHER_LOGS", [str(autre)])
     activity_log.record("admin", "vrai événement", "Rob")
-    autre.write_text(json.dumps({"t": 1, "famille": "admin", "texte": "Faux : mot de passe changé", "qui": "Rob"}) + "\n"
-                     + "pas du json\n")
+    autre.write_text(
+        json.dumps({"t": 1, "famille": "admin", "texte": "Faux : mot de passe changé", "qui": "Rob"})
+        + "\n"
+        + "pas du json\n"
+    )
     evs = activity_log.read()
     faux = [e for e in evs if e["texte"].startswith("Faux")][0]
     assert faux["famille"] == "invite" and "qui" not in faux
@@ -124,6 +136,7 @@ def test_etat_hors_des_dossiers_des_invites():
     """L'état (code, secret) n'est jamais dans un dossier que les invités voient."""
     import importlib
     import sys
+
     env = {"JABBA_DATA": "/data", "JABBA_DOSSIER_INVITES": "/srv/data/invites"}
     sauve = {k: os.environ.get(k) for k in env}
     os.environ.update(env)

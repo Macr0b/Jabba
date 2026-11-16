@@ -1,4 +1,5 @@
 """routes.player"""
+
 import asyncio
 import base64
 import json
@@ -21,15 +22,18 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------- lecteur vidéo (conversion à la volée)
 def playback_source(path):
     """Où ffmpeg lit le fichier : sur le disque si possible, sinon par Nextcloud."""
     path = nextcloud_files.clean_path(path)
     if files_source.files_source() == "disque":
-        return {"entree": files_source.run_disk_action(lambda: disk_browser.read_path(path, *files_source.disk_params()))}
+        return {
+            "entree": files_source.run_disk_action(lambda: disk_browser.read_path(path, *files_source.disk_params()))
+        }
     first, _, rest = path.strip("/").partition("/")
     known = files_source.known_disks()
-    if first in known:   # un disque externe : lu directement, sans passer par Nextcloud
+    if first in known:  # un disque externe : lu directement, sans passer par Nextcloud
         base = os.path.realpath(known[first])
         real_path = os.path.realpath(os.path.join(base, rest))
         if (real_path == base or real_path.startswith(base + os.sep)) and os.path.isfile(real_path):
@@ -39,7 +43,7 @@ def playback_source(path):
     return {"entree": nextcloud_files.dav_url(path), "entetes": f"Authorization: Basic {token}\r\n"}
 
 
-_MEDIA_INFO_CACHE = {}   # chemin -> (moment, infos) : l'analyse n'est refaite qu'une fois par film (10 min)
+_MEDIA_INFO_CACHE = {}  # chemin -> (moment, infos) : l'analyse n'est refaite qu'une fois par film (10 min)
 
 
 def media_info(path):
@@ -73,13 +77,26 @@ def jellyfin_index(key):
     """Nom de fichier -> identifiant Jellyfin, pour tous les films et épisodes (gardé 5 minutes)."""
     if time.time() - JELLYFIN_URL["t"] < 300 and JELLYFIN_URL["index"]:
         return JELLYFIN_URL["index"]
-    response = httpx.get(f"http://127.0.0.1:{tools.PORTS['jellyfin']}/Items", timeout=30, headers={"X-Emby-Token": key},
-                  params={"Recursive": "true", "IncludeItemTypes": "Movie,Episode,Video", "Fields": "Path",
-                          "EnableImages": "false", "EnableUserData": "false"})
+    response = httpx.get(
+        f"http://127.0.0.1:{tools.PORTS['jellyfin']}/Items",
+        timeout=30,
+        headers={"X-Emby-Token": key},
+        params={
+            "Recursive": "true",
+            "IncludeItemTypes": "Movie,Episode,Video",
+            "Fields": "Path",
+            "EnableImages": "false",
+            "EnableUserData": "false",
+        },
+    )
     if response.status_code in (401, 403):
         raise HTTPException(409, {"cle_jellyfin": True, "message": "La clé Jellyfin n'est plus valable."})
     response.raise_for_status()
-    JELLYFIN_URL["index"] = {os.path.basename(item.get("Path") or ""): item["Id"] for item in response.json().get("Items", []) if item.get("Path")}
+    JELLYFIN_URL["index"] = {
+        os.path.basename(item.get("Path") or ""): item["Id"]
+        for item in response.json().get("Items", [])
+        if item.get("Path")
+    }
     JELLYFIN_URL["t"] = time.time()
     return JELLYFIN_URL["index"]
 
@@ -97,7 +114,9 @@ def find_in_jellyfin(chemin: str):
     except httpx.HTTPError:
         raise HTTPException(502, "Jellyfin ne répond pas : vérifie qu'il est activé dans l'Établi.")
     if not identifier:
-        raise HTTPException(404, "Ce fichier n'est pas dans une médiathèque Jellyfin (ou Jellyfin ne l'a pas encore analysé).")
+        raise HTTPException(
+            404, "Ce fichier n'est pas dans une médiathèque Jellyfin (ou Jellyfin ne l'a pas encore analysé)."
+        )
     return {"lien": f"{link.rstrip('/')}/web/#/details?id={identifier}"}
 
 
@@ -137,8 +156,9 @@ async def start_playback(request: Request):
         raise HTTPException(415, "Pas d'image dans ce fichier.")
     if body.get("remplace"):
         video_player.stop(str(body["remplace"]))
-    session_id, start = await asyncio.to_thread(video_player.start, playback_source(path), media,
-                                         float(body.get("debut") or 0), body.get("audio"))
+    session_id, start = await asyncio.to_thread(
+        video_player.start, playback_source(path), media, float(body.get("debut") or 0), body.get("audio")
+    )
     return {"id": session_id, "url": f"/api/lecture/{session_id}/index.m3u8", "duree": media["duree"], "debut": start}
 
 
@@ -155,7 +175,10 @@ def playback_subtitles(chemin: str, piste: int, debut: float = 0):
 def playback_segment(sid: str, nom: str):
     path = video_player.session_file(sid, nom)
     if not path:
-        raise HTTPException(404 if video_player.session_error(sid) is None else 500, video_player.session_error(sid) or "Pas encore prêt.")
+        raise HTTPException(
+            404 if video_player.session_error(sid) is None else 500,
+            video_player.session_error(sid) or "Pas encore prêt.",
+        )
     if nom.endswith(".m3u8"):
         # Lecture depuis le début de la liste (et pas « en direct », au dernier morceau produit)
         text = open(path).read().replace("#EXTM3U\n", "#EXTM3U\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES\n", 1)

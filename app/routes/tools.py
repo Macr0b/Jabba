@@ -1,4 +1,5 @@
 """routes.tools"""
+
 from fastapi import HTTPException, Request
 from fastapi.responses import Response
 import config
@@ -8,6 +9,7 @@ from services import tools
 from fastapi import APIRouter
 
 router = APIRouter()
+
 
 @router.get("/api/outils")
 def list_tools():
@@ -30,7 +32,9 @@ def tool_icon(pid: str):
 @router.post("/api/outils/{pid}/redemarrer")
 def restart_tool(pid: str, request: Request):
     tool = tools.find_tool(pid)
-    return background_tasks.start_task(f"Redémarrage de {tool['nom']}", f"cd '{tool['dossier']}' && docker compose restart", request.state.nom, pid)
+    return background_tasks.start_task(
+        f"Redémarrage de {tool['nom']}", f"cd '{tool['dossier']}' && docker compose restart", request.state.nom, pid
+    )
 
 
 @router.post("/api/outils/{pid}/demarrer")

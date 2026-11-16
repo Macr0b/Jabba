@@ -1,4 +1,5 @@
 """Comptes Nextcloud : quotas, inscriptions, rangs et dossiers communs, avec un faux `occ`."""
+
 import json
 
 import pytest
@@ -10,14 +11,21 @@ class FauxOcc:
     """Imite les commandes occ utilisées par Jabba, sur un petit état en mémoire."""
 
     def __init__(self):
-        self.users = {}       # uid -> dict
+        self.users = {}  # uid -> dict
         self.groups = {"admin": [], nextcloud_accounts.MEMBERS_GROUP: []}
         self.reglages = {}
         self.appels = []
 
     def ajouter(self, uid, enabled=True, attente=False, groupes=()):
-        self.users[uid] = {"display_name": uid.capitalize(), "email": "", "enabled": enabled, "quota": "5 GB",
-                           "groups": list(groupes), "attente": attente, "last_seen": "never"}
+        self.users[uid] = {
+            "display_name": uid.capitalize(),
+            "email": "",
+            "enabled": enabled,
+            "quota": "5 GB",
+            "groups": list(groupes),
+            "attente": attente,
+            "last_seen": "never",
+        }
         for g in groupes:
             self.groups.setdefault(g, []).append(uid)
 
@@ -107,18 +115,22 @@ def occ(tmp_path, monkeypatch):
 
 
 def test_tailles():
-    assert nextcloud_accounts.to_bytes("5 GB") == 5 * 1024 ** 3
-    assert nextcloud_accounts.to_bytes("500 MB") == 500 * 1024 ** 2
+    assert nextcloud_accounts.to_bytes("5 GB") == 5 * 1024**3
+    assert nextcloud_accounts.to_bytes("500 MB") == 500 * 1024**2
     assert nextcloud_accounts.to_bytes("none") is None
-    assert nextcloud_accounts.quota_text(5) == "5 GB" and nextcloud_accounts.quota_text(2.5) == "2560 MB" and nextcloud_accounts.quota_text(None) == "none"
+    assert (
+        nextcloud_accounts.quota_text(5) == "5 GB"
+        and nextcloud_accounts.quota_text(2.5) == "2560 MB"
+        and nextcloud_accounts.quota_text(None) == "none"
+    )
 
 
 def test_etats_des_comptes(occ):
     c = {x["id"]: x for x in nextcloud_accounts.accounts(occ)}
-    assert c["bob"]["etat"] == "attente"          # inscrit, en attente de validation
-    assert c["carole"]["etat"] == "suspendu"      # désactivé par un admin
+    assert c["bob"]["etat"] == "attente"  # inscrit, en attente de validation
+    assert c["carole"]["etat"] == "suspendu"  # désactivé par un admin
     assert c["alice"]["etat"] == "actif" and c["rob"]["admin"]
-    assert [x["id"] for x in nextcloud_accounts.accounts(occ)][0] == "bob"   # les demandes d'abord
+    assert [x["id"] for x in nextcloud_accounts.accounts(occ)][0] == "bob"  # les demandes d'abord
 
 
 def test_valider(occ):
@@ -197,15 +209,23 @@ def test_groupes_proteges(occ):
 def test_modes_des_dossiers():
     assert nextcloud_accounts.MODES["lecture"][0] == ["read"]
     assert "delete" not in nextcloud_accounts.MODES["depot"][0] and "share" not in nextcloud_accounts.MODES["depot"][0]
-    assert nextcloud_accounts.MODES_BY_PERMISSIONS[1] == "lecture" and nextcloud_accounts.MODES_BY_PERMISSIONS[7] == "depot" and nextcloud_accounts.MODES_BY_PERMISSIONS[31] == "complet"
+    assert (
+        nextcloud_accounts.MODES_BY_PERMISSIONS[1] == "lecture"
+        and nextcloud_accounts.MODES_BY_PERMISSIONS[7] == "depot"
+        and nextcloud_accounts.MODES_BY_PERMISSIONS[31] == "complet"
+    )
 
 
 def test_charte(occ):
     assert nextcloud_accounts.charter(occ) == ""
     nextcloud_accounts.set_up(occ)
-    assert nextcloud_accounts.charter(occ) == nextcloud_accounts.DEFAULT_CHARTER          # le modèle est posé à la mise en route
+    assert (
+        nextcloud_accounts.charter(occ) == nextcloud_accounts.DEFAULT_CHARTER
+    )  # le modèle est posé à la mise en route
     nextcloud_accounts.set_charter(occ, "Ligne un.\n\n  Ligne   deux.")
-    assert nextcloud_accounts.charter(occ) == "Ligne un. Ligne deux."      # une seule ligne : le formulaire n'affiche pas les retours
+    assert (
+        nextcloud_accounts.charter(occ) == "Ligne un. Ligne deux."
+    )  # une seule ligne : le formulaire n'affiche pas les retours
     with pytest.raises(nextcloud_accounts.CloudError):
         nextcloud_accounts.set_charter(occ, "x" * (nextcloud_accounts.CHARTER_MAX + 1))
     nextcloud_accounts.set_charter(occ, "")
@@ -214,7 +234,7 @@ def test_charte(occ):
     assert nextcloud_accounts.charter(occ) == nextcloud_accounts.DEFAULT_CHARTER
     nextcloud_accounts.set_charter(occ, "Ma charte.")
     nextcloud_accounts.set_up(occ)
-    assert nextcloud_accounts.charter(occ) == "Ma charte."                 # relancer la mise en route ne l'écrase pas
+    assert nextcloud_accounts.charter(occ) == "Ma charte."  # relancer la mise en route ne l'écrase pas
 
 
 def test_charte_mentionne_l_essentiel():
@@ -248,14 +268,16 @@ def _montage(i, nom, users=(), groups=()):
 
 def test_disques_reserves_aux_admins_avant_tout_nouveau_compte(tmp_path, monkeypatch):
     monkeypatch.setattr(nextcloud_accounts, "STATE_FILE", str(tmp_path / "nuage.json"))
-    f = FauxOccDisques([_montage(1, "R2-D2"), _montage(2, "Photos", groups=["famille"]), _montage(3, "Perso", users=["rob"])])
+    f = FauxOccDisques(
+        [_montage(1, "R2-D2"), _montage(2, "Photos", groups=["famille"]), _montage(3, "Perso", users=["rob"])]
+    )
     f.ajouter("rob", groupes=["admin"])
     nextcloud_accounts.add(f, "denis", "Denis", "", "Mot-de-passe-123456")
-    assert f.montages[0]["applicable_groups"] == ["admin"]          # était ouvert à tous : réservé aux admins
-    assert f.montages[1]["applicable_groups"] == ["famille"]        # réglé à la main : pas touché
+    assert f.montages[0]["applicable_groups"] == ["admin"]  # était ouvert à tous : réservé aux admins
+    assert f.montages[1]["applicable_groups"] == ["famille"]  # réglé à la main : pas touché
     assert f.montages[2]["applicable_groups"] == []
     ordre = [a[0] for a in f.appels]
-    assert ordre.index("files_external:applicable") < ordre.index("user:add")   # avant que le compte existe
+    assert ordre.index("files_external:applicable") < ordre.index("user:add")  # avant que le compte existe
 
 
 def test_disques_reserves_avant_validation(tmp_path, monkeypatch):
@@ -266,8 +288,8 @@ def test_disques_reserves_avant_validation(tmp_path, monkeypatch):
     ordre = [a[0] for a in f.appels]
     assert f.montages[0]["applicable_groups"] == ["admin"]
     assert ordre.index("files_external:applicable") < ordre.index("user:enable")
-    assert nextcloud_accounts.reserve_disks_for_admins(f) == []                          # rien à refaire
+    assert nextcloud_accounts.reserve_disks_for_admins(f) == []  # rien à refaire
 
 
 def test_disques_sans_appli_stockages_externes(occ):
-    assert nextcloud_accounts.reserve_disks_for_admins(occ) == []                        # files_external absent : rien à faire, pas d'erreur
+    assert nextcloud_accounts.reserve_disks_for_admins(occ) == []  # files_external absent : rien à faire, pas d'erreur

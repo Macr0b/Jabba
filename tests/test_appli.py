@@ -1,4 +1,5 @@
 """L'appli en démo : terminal réservé au compte du serveur (point 2), Dockge jamais ouvert au Wi-Fi (point 3)."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -67,6 +68,7 @@ def test_choix_du_redemarrage(client):
     assert client.post("/api/systeme/redemarrage", json={"mode": "auto"}, headers=H).status_code == 200
     assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] == "auto"
     from services import activity_log
+
     assert any("Redémarrage après une mise à jour" in str(e) for e in activity_log.read(20))
 
 

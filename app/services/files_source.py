@@ -1,4 +1,5 @@
 """services.files_source"""
+
 import json
 import os
 import re
@@ -14,7 +15,7 @@ from host import commands
 
 # ---------------------------------------------------------------- source de l'écran Fichiers
 _SOURCE_CACHE = {"t": 0, "v": None}
-EJECTED = {}          # nom du disque -> moment de l'éjection
+EJECTED = {}  # nom du disque -> moment de l'éjection
 EJECTION_PAUSE = 10 * 60
 
 
@@ -45,7 +46,7 @@ def wake_disks():
             open_disk(path)
 
 
-_OPENED = set()   # disques vus ouverts au dernier passage
+_OPENED = set()  # disques vus ouverts au dernier passage
 
 
 def open_disk(path):
@@ -65,7 +66,7 @@ def rescan_in_nextcloud(path):
     occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
     code, output, _ = commands.run_on_host(occ + ["files_external:list", "--output=json"], timeout=60)
     if code != 0:
-        return   # Nextcloud arrêté ou absent
+        return  # Nextcloud arrêté ou absent
     try:
         mounts = json.loads(output)
     except ValueError:
@@ -79,8 +80,11 @@ def rescan_in_nextcloud(path):
     for mount in mounts:
         if (mount.get("configuration") or {}).get("datadir", "").rstrip("/") != f"/mnt/disques/{folder}":
             continue
-        commands.run_on_host(occ + ["files_external:option", str(mount["mount_id"]), "readonly",
-                    "false" if is_writable(path) else "true"], timeout=60)
+        commands.run_on_host(
+            occ
+            + ["files_external:option", str(mount["mount_id"]), "readonly", "false" if is_writable(path) else "true"],
+            timeout=60,
+        )
         mount_point = mount.get("mount_point", "").strip("/")
         for user in mount.get("applicable_users") or users:
             commands.run_on_host(occ + ["files:scan", f"--path=/{user}/files/{mount_point}"], timeout=3600)
@@ -93,8 +97,15 @@ def _mount(path):
         return True
     _, unit, _ = commands.run_on_host(["systemd-escape", "--path", "--suffix=automount", path])
     unit = unit.strip()
-    commands.run_on_host(["sh", "-c", f"systemctl daemon-reload; systemctl reset-failed '{unit[:-10]}.mount' 2>/dev/null; "
-                      f"systemctl restart '{unit}'; ls '{path}' >/dev/null 2>&1"], timeout=30)
+    commands.run_on_host(
+        [
+            "sh",
+            "-c",
+            f"systemctl daemon-reload; systemctl reset-failed '{unit[:-10]}.mount' 2>/dev/null; "
+            f"systemctl restart '{unit}'; ls '{path}' >/dev/null 2>&1",
+        ],
+        timeout=30,
+    )
     return commands.run_on_host(["mountpoint", "-q", path], timeout=10)[0] == 0
 
 

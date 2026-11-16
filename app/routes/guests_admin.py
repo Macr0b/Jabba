@@ -1,4 +1,5 @@
 """routes.guests_admin"""
+
 import os
 import uuid
 from services import guests
@@ -15,6 +16,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.get("/api/invites")
 def guest_settings(request: Request):
     guard.require_admin(request)
@@ -23,9 +25,15 @@ def guest_settings(request: Request):
     except HTTPException:
         pass
     state = guests.read()
-    return {"actif": state["actif"], "code": state["code"], "url": guest_network.guest_url(state), "nom_local": f"http://{guard.hostname()}.local",
-            "dossiers": state["dossiers"], "wifi": state["wifi"],
-            "outils": [{**tool, "wifi": bool(state["wifi"].get(tool["id"]))} for tool in state["outils"]]}
+    return {
+        "actif": state["actif"],
+        "code": state["code"],
+        "url": guest_network.guest_url(state),
+        "nom_local": f"http://{guard.hostname()}.local",
+        "dossiers": state["dossiers"],
+        "wifi": state["wifi"],
+        "outils": [{**tool, "wifi": bool(state["wifi"].get(tool["id"]))} for tool in state["outils"]],
+    }
 
 
 @router.get("/api/invites/qr.svg")
@@ -33,6 +41,7 @@ def guest_qr_code(request: Request):
     guard.require_admin(request)
     import io
     import segno
+
     url = guest_network.guest_url(guests.read())
     if not url:
         raise HTTPException(404, "Adresse du serveur introuvable.")
@@ -67,7 +76,9 @@ async def update_guest_settings(request: Request):
         text = f"{tools.NAMES.get(pid, (pid,))[0]} {'joignable' if opened else 'plus joignable'} depuis le Wi-Fi"
     elif action == "ajouter_dossier":
         virtual_path, mode = nextcloud_files.clean_path(body.get("chemin", "")), body.get("mode", "lecture")
-        real_path, _ = files_source.run_disk_action(lambda: disk_browser.resolve(virtual_path, guest_network.shareable_roots(), set()))
+        real_path, _ = files_source.run_disk_action(
+            lambda: disk_browser.resolve(virtual_path, guest_network.shareable_roots(), set())
+        )
         if not real_path or not os.path.isdir(real_path):
             raise HTTPException(404, "Dossier introuvable.")
         if mode not in ("lecture", "depot"):
@@ -78,8 +89,11 @@ async def update_guest_settings(request: Request):
             if any(folder["chemin"] == real_path for folder in state["dossiers"]):
                 raise HTTPException(409, "Ce dossier est déjà partagé.")
             state["dossiers"].append({"id": uuid.uuid4().hex[:8], "nom": name, "chemin": real_path, "mode": mode})
+
         guests.update(f)
-        text = f"Dossier « {name} » partagé avec les invités ({'dépôt autorisé' if mode == 'depot' else 'lecture seule'})"
+        text = (
+            f"Dossier « {name} » partagé avec les invités ({'dépôt autorisé' if mode == 'depot' else 'lecture seule'})"
+        )
     elif action in ("retirer_dossier", "mode_dossier"):
         did = body.get("id")
         mode = body.get("mode")
@@ -93,8 +107,13 @@ async def update_guest_settings(request: Request):
             elif mode in ("lecture", "depot"):
                 folder["mode"] = mode
             return folder["nom"]
+
         name = guests.update(f)
-        text = f"Dossier « {name} » " + ("retiré des invités" if action == "retirer_dossier" else f"en {'dépôt autorisé' if mode == 'depot' else 'lecture seule'} pour les invités")
+        text = f"Dossier « {name} » " + (
+            "retiré des invités"
+            if action == "retirer_dossier"
+            else f"en {'dépôt autorisé' if mode == 'depot' else 'lecture seule'} pour les invités"
+        )
     else:
         raise HTTPException(400, "Action inconnue.")
     activity_log.record("invite", f"{text}, par {session['identifiant']}", request.state.nom)
@@ -109,7 +128,16 @@ def browse_shareable_folders(request: Request, chemin: str = "/"):
     if chemin == "/":
         guests.prepare_guest_folder()
         all_entries = {**disk_browser.roots(), **guest_network.shareable_roots()}
-        elements = [{"nom": name, "chemin": "/" + name} for name, disk_path in all_entries.items() if os.path.isdir(disk_path)]
+        elements = [
+            {"nom": name, "chemin": "/" + name} for name, disk_path in all_entries.items() if os.path.isdir(disk_path)
+        ]
         return {"chemin": "/", "elements": elements}
-    state = files_source.run_disk_action(lambda: disk_browser.list_folder(chemin, guest_network.shareable_roots(), set()))
-    return {"chemin": chemin, "elements": [{"nom": entries["nom"], "chemin": entries["chemin"]} for entries in state["elements"] if entries["dossier"]]}
+    state = files_source.run_disk_action(
+        lambda: disk_browser.list_folder(chemin, guest_network.shareable_roots(), set())
+    )
+    return {
+        "chemin": chemin,
+        "elements": [
+            {"nom": entries["nom"], "chemin": entries["chemin"]} for entries in state["elements"] if entries["dossier"]
+        ],
+    }

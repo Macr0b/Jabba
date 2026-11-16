@@ -1,4 +1,5 @@
 """services.guest_network"""
+
 import re
 from services import guests
 import config
@@ -22,12 +23,21 @@ def sync_guest_tools():
     tools_list = []
     for tool in tools.list_tools():
         if tool["id"] in tools.PORTS and tool["id"] not in tools.NEVER_ON_WIFI:
-            tools_list.append({"id": tool["id"], "nom": tool["nom"], "role": tool["role"], "port": tools.PORTS[tool["id"]],
-                           "actif": tool["etat"] != "arrêté", "lien_tailscale": tool.get("lien")})
+            tools_list.append(
+                {
+                    "id": tool["id"],
+                    "nom": tool["nom"],
+                    "role": tool["role"],
+                    "port": tools.PORTS[tool["id"]],
+                    "actif": tool["etat"] != "arrêté",
+                    "lien_tailscale": tool.get("lien"),
+                }
+            )
     _, address = wifi_address()
 
     def f(state):
         state["outils"], state["adresse"] = tools_list, address
+
     guests.update(f)
 
 
@@ -39,7 +49,9 @@ def wanted_rules(interface, state):
     rules = []
     for pid, port in sorted(tools.PORTS.items()):
         if pid in tools.NEVER_ON_WIFI or not state["wifi"].get(pid):
-            rules.append(f"-A {FIREWALL_CHAIN} -i {interface} -p tcp -m conntrack --ctorigdstport {port} --ctdir ORIGINAL -j DROP")
+            rules.append(
+                f"-A {FIREWALL_CHAIN} -i {interface} -p tcp -m conntrack --ctorigdstport {port} --ctdir ORIGINAL -j DROP"
+            )
     return rules
 
 
@@ -56,8 +68,11 @@ def apply_firewall():
         if commands.run_on_host([iptables_tool, "-S", "DOCKER-USER"])[0] != 0:
             continue
         code, current_rules, _ = commands.run_on_host([iptables_tool, "-S", FIREWALL_CHAIN])
-        if code == 0 and [line for line in current_rules.splitlines() if line.startswith("-A ")] == wanted and \
-                commands.run_on_host([iptables_tool, "-C", "DOCKER-USER", "-j", FIREWALL_CHAIN])[0] == 0:
+        if (
+            code == 0
+            and [line for line in current_rules.splitlines() if line.startswith("-A ")] == wanted
+            and commands.run_on_host([iptables_tool, "-C", "DOCKER-USER", "-j", FIREWALL_CHAIN])[0] == 0
+        ):
             continue
         script = f"{iptables_tool} -N {FIREWALL_CHAIN} 2>/dev/null; {iptables_tool} -F {FIREWALL_CHAIN}"
         for roots in wanted:
@@ -77,6 +92,10 @@ def guest_url(state):
 
 def shareable_roots():
     """Disques branchés et dossier Invités, en plus des dossiers du serveur."""
-    roots = {name: disk_path for name, disk_path in files_source.known_disks().items() if name in files_source.plugged_disks()}
+    roots = {
+        name: disk_path
+        for name, disk_path in files_source.known_disks().items()
+        if name in files_source.plugged_disks()
+    }
     roots["Invités"] = guests.GUEST_FOLDER
     return roots

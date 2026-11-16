@@ -1,4 +1,5 @@
 """Mot de passe oublié : le mot de passe provisoire ne va qu'au compte Tailscale relié (revue, point 4)."""
+
 import pytest
 
 from security import accounts

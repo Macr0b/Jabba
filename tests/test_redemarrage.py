@@ -1,4 +1,5 @@
 """Redémarrage après une mise à jour : automatique à 4 h ou à la main, au choix."""
+
 import subprocess
 
 import pytest

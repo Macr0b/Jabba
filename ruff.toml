@@ -1,0 +1,11 @@
+# Style du code Python de Jabba : lisible, une instruction par ligne.
+line-length = 120
+target-version = "py312"
+
+[format]
+quote-style = "double"
+
+[lint]
+# F : erreurs (noms inconnus, imports inutiles) ; E7 : une instruction par ligne ; B : pièges courants.
+select = ["F", "E7", "E9", "B006", "B008", "B023"]
+ignore = ["B008"]

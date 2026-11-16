@@ -1,4 +1,5 @@
 """routes.terminal"""
+
 import time
 import secrets
 from services import terminal
@@ -12,6 +13,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------- terminal du serveur
 @router.post("/api/terminal/ticket")
 def terminal_ticket(request: Request):
@@ -23,9 +25,16 @@ def terminal_ticket(request: Request):
     """
     session = guard.require_admin(request, "super", strong=True)
     if session["identifiant"] != guard.hostname():
-        raise HTTPException(403, "Le terminal donne tous les pouvoirs sur le serveur : il est réservé au compte du serveur.")
-    notifications.send("securite", "Terminal ouvert", f"{session['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
-                   "/#/journal", family="admin")
+        raise HTTPException(
+            403, "Le terminal donne tous les pouvoirs sur le serveur : il est réservé au compte du serveur."
+        )
+    notifications.send(
+        "securite",
+        "Terminal ouvert",
+        f"{session['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
+        "/#/journal",
+        family="admin",
+    )
     return {"ticket": terminal.new_ticket(session["identifiant"], request.state.nom), "compte": guard.server_user()}
 
 
@@ -46,13 +55,35 @@ async def terminal_socket(ws: WebSocket, ticket: str = ""):
     if config.DEMO:
         commande = ["bash", "--rcfile", terminal.prepare_rc(None), "-i"]
     else:
-        rc_path = terminal.prepare_rc(lambda content: commands.run_on_host_with_input(
-            ["sh", "-c", "mkdir -p /usr/local/lib/jabba && cat > /usr/local/lib/jabba/terminal.bashrc"], content))
-        commande = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--",
-                    "runuser", "-u", account, "--", "bash", "--rcfile", rc_path, "-i"]
+        rc_path = terminal.prepare_rc(
+            lambda content: commands.run_on_host_with_input(
+                ["sh", "-c", "mkdir -p /usr/local/lib/jabba && cat > /usr/local/lib/jabba/terminal.bashrc"], content
+            )
+        )
+        commande = [
+            "nsenter",
+            "-t",
+            "1",
+            "-m",
+            "-u",
+            "-i",
+            "-n",
+            "-p",
+            "--",
+            "runuser",
+            "-u",
+            account,
+            "--",
+            "bash",
+            "--rcfile",
+            rc_path,
+            "-i",
+        ]
     start = time.time()
     activity_log.record("admin", f"Terminal ouvert par {who['qui']} (compte {account} du serveur)", who["nom"])
     await terminal.bridge(ws, commande, demo=config.DEMO, env=env)
     for command in terminal.command_log(session_id, start, None if config.DEMO else commands.run_on_host):
         activity_log.record("admin", f"Terminal · {who['qui']} : {command}", who["nom"])
-    activity_log.record("admin", f"Terminal fermé ({who['qui']}, {max(1, round((time.time() - start) / 60))} min)", who["nom"])
+    activity_log.record(
+        "admin", f"Terminal fermé ({who['qui']}, {max(1, round((time.time() - start) / 60))} min)", who["nom"]
+    )

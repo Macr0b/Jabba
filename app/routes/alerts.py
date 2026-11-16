@@ -1,4 +1,5 @@
 """routes.alerts"""
+
 from services import activity_log
 from services import notifications
 from fastapi import HTTPException, Request
@@ -6,6 +7,7 @@ from services import measurements
 from fastapi import APIRouter
 
 router = APIRouter()
+
 
 # ---------------------------------------------------------------- alertes (notifications)
 @router.get("/api/alertes")
@@ -52,5 +54,11 @@ async def set_alert_types(request: Request):
 
 @router.post("/api/alertes/essai")
 def send_test_alert(request: Request):
-    sent_count = notifications.send("essai", "Alerte d'essai", f"Tout marche : {measurements.server_name()} peut te prévenir.", "/#/systeme", force=True)
+    sent_count = notifications.send(
+        "essai",
+        "Alerte d'essai",
+        f"Tout marche : {measurements.server_name()} peut te prévenir.",
+        "/#/systeme",
+        force=True,
+    )
     return {"ok": True, "appareils": sent_count}

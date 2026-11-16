@@ -11,6 +11,7 @@
   fois sur l'appareil de la personne qui a fait la demande. Il n'est jamais écrit
   sur le disque.
 """
+
 import hashlib
 import hmac
 import json
@@ -25,8 +26,8 @@ ACCOUNTS_FILE = os.path.join(DATA_DIR, "comptes.json")
 ROLES = ("admin", "super")
 RESET_LIFETIME = 24 * 3600
 _lock = threading.RLock()
-_pending_resets = {}   # login Tailscale -> {"identifiant", "mot_de_passe", "exp"}
-_visits = {}   # login -> {"nom", "appareil", "derniere", "premiere", "n"} (copie en mémoire)
+_pending_resets = {}  # login Tailscale -> {"identifiant", "mot_de_passe", "exp"}
+_visits = {}  # login -> {"nom", "appareil", "derniere", "premiere", "n"} (copie en mémoire)
 _last_flush = [0]
 
 
@@ -61,12 +62,25 @@ def _write(data):
 
 
 def _password_hash(password, salt):
-    return hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1).hex()
+    return hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex()
 
 
 def _public_view(account):
-    result = {key: account.get(key) for key in ("id", "identifiant", "nom", "rang", "tailscale", "provisoire", "cree", "cree_par", "derniere_connexion")}
-    result["terminal"] = account.get("terminal", True)   # les super admins ont le terminal, sauf s'il leur est retiré
+    result = {
+        key: account.get(key)
+        for key in (
+            "id",
+            "identifiant",
+            "nom",
+            "rang",
+            "tailscale",
+            "provisoire",
+            "cree",
+            "cree_par",
+            "derniere_connexion",
+        )
+    }
+    result["terminal"] = account.get("terminal", True)  # les super admins ont le terminal, sauf s'il leur est retiré
     return result
 
 
@@ -80,6 +94,7 @@ def check_password_strength(password):
 def temporary_password():
     """Mot de passe provisoire lisible : 3 mots et 2 chiffres."""
     from security.server_password import WORDS
+
     return "-".join(secrets.choice(WORDS) for _ in range(3)) + "-" + str(secrets.randbelow(90) + 10)
 
 
@@ -87,8 +102,11 @@ def temporary_password():
 def list_accounts():
     with _lock:
         data = _read()
-        return {"comptes": [_public_view(account) for account in data["comptes"]], "reglages": data["reglages"],
-                "demandes": [entry for entry in data["demandes"] if entry["etat"] == "attente"]}
+        return {
+            "comptes": [_public_view(account) for account in data["comptes"]],
+            "reglages": data["reglages"],
+            "demandes": [entry for entry in data["demandes"] if entry["etat"] == "attente"],
+        }
 
 
 def find(identifiant):
@@ -105,7 +123,11 @@ def allowed_logins():
 
 
 def super_admin_logins():
-    return {account["tailscale"] for account in _read()["comptes"] if account.get("tailscale") and account["rang"] == "super"}
+    return {
+        account["tailscale"]
+        for account in _read()["comptes"]
+        if account.get("tailscale") and account["rang"] == "super"
+    }
 
 
 def admin_space_open():
@@ -142,7 +164,9 @@ def _check_identifier(identifier, forbidden):
 def _check_login(login):
     login = (login or "").strip().lower()
     if login and not re.fullmatch(r"[^\s@]+@[^\s@]+|[\w.-]+", login):
-        raise Refusal(400, "Compte Tailscale invalide : c'est l'adresse avec laquelle la personne se connecte à Tailscale.")
+        raise Refusal(
+            400, "Compte Tailscale invalide : c'est l'adresse avec laquelle la personne se connecte à Tailscale."
+        )
     return login or None
 
 
@@ -159,14 +183,28 @@ def create(identifiant, name, rank, tailscale, by_identifier, actor_role, forbid
         data = _read()
         if any(account["identifiant"] == identifier for account in data["comptes"]):
             raise Refusal(409, "Cet identifiant existe déjà.")
-        account = {"id": secrets.token_hex(4), "identifiant": identifier, "nom": (name or identifier).strip()[:60], "rang": rank,
-             "tailscale": login, "sel": salt, "empreinte": _password_hash(password, salt), "provisoire": True,
-             "provisoire_exp": time.time() + RESET_LIFETIME, "cree": int(time.time()), "cree_par": by_identifier,
-             "derniere_connexion": None}
+        account = {
+            "id": secrets.token_hex(4),
+            "identifiant": identifier,
+            "nom": (name or identifier).strip()[:60],
+            "rang": rank,
+            "tailscale": login,
+            "sel": salt,
+            "empreinte": _password_hash(password, salt),
+            "provisoire": True,
+            "provisoire_exp": time.time() + RESET_LIFETIME,
+            "cree": int(time.time()),
+            "cree_par": by_identifier,
+            "derniere_connexion": None,
+        }
         data["comptes"].append(account)
         _write(data)
     if login:
-        _pending_resets[login] = {"identifiant": identifier, "mot_de_passe": password, "exp": time.time() + RESET_LIFETIME}
+        _pending_resets[login] = {
+            "identifiant": identifier,
+            "mot_de_passe": password,
+            "exp": time.time() + RESET_LIFETIME,
+        }
     return _public_view(account), password
 
 
@@ -238,16 +276,30 @@ def request_reset(identifier, login, name):
     """Enregistre la demande. Renvoie le compte concerné, ou None (sans le dire à l'appelant)."""
     with _lock:
         data = _read()
-        account = next((entry for entry in data["comptes"] if entry["identifiant"] == (identifier or "").strip().lower()), None)
+        account = next(
+            (entry for entry in data["comptes"] if entry["identifiant"] == (identifier or "").strip().lower()), None
+        )
         # Seul le compte Tailscale relié au compte peut demander : le mot de passe provisoire
         # ne doit jamais pouvoir arriver chez quelqu'un d'autre (un autre admin, par exemple).
         # Compte non relié : pas de demande possible, il faut voir un super admin.
         if not account or not account.get("tailscale") or account["tailscale"] != login:
             return None
-        data["demandes"] = [entry for entry in data["demandes"] if not (entry["compte"] == account["id"] and entry["etat"] == "attente")]
-        data["demandes"].append({"id": secrets.token_hex(4), "compte": account["id"], "identifiant": account["identifiant"],
-                              "nom": account["nom"], "login": login, "demandeur": name, "t": int(time.time()), "etat": "attente",
-                              "autre_personne": False})
+        data["demandes"] = [
+            entry for entry in data["demandes"] if not (entry["compte"] == account["id"] and entry["etat"] == "attente")
+        ]
+        data["demandes"].append(
+            {
+                "id": secrets.token_hex(4),
+                "compte": account["id"],
+                "identifiant": account["identifiant"],
+                "nom": account["nom"],
+                "login": login,
+                "demandeur": name,
+                "t": int(time.time()),
+                "etat": "attente",
+                "autre_personne": False,
+            }
+        )
         data["demandes"] = data["demandes"][-50:]
         _write(data)
         return _public_view(account)
@@ -256,7 +308,9 @@ def request_reset(identifier, login, name):
 def answer_reset(did, accept, by_identifier):
     with _lock:
         data = _read()
-        reset_request = next((entry for entry in data["demandes"] if entry["id"] == did and entry["etat"] == "attente"), None)
+        reset_request = next(
+            (entry for entry in data["demandes"] if entry["id"] == did and entry["etat"] == "attente"), None
+        )
         if not reset_request:
             raise Refusal(404, "Demande introuvable ou déjà traitée.")
         reset_request["etat"] = "acceptee" if accept else "refusee"
@@ -273,7 +327,11 @@ def answer_reset(did, accept, by_identifier):
             if not account.get("tailscale"):
                 raise Refusal(409, "Ce compte n'est plus relié à un compte Tailscale : supprime-le et recrée-le.")
             reset_request["remis_a"] = account["tailscale"]
-            _pending_resets[reset_request["remis_a"]] = {"identifiant": account["identifiant"], "mot_de_passe": password, "exp": time.time() + RESET_LIFETIME}
+            _pending_resets[reset_request["remis_a"]] = {
+                "identifiant": account["identifiant"],
+                "mot_de_passe": password,
+                "exp": time.time() + RESET_LIFETIME,
+            }
         _write(data)
         return reset_request, password
 
@@ -330,5 +388,9 @@ def recent_logins():
         data = _read()
         visits = dict(data["visites"])
         visits.update(_visits)
-        return {"visites": sorted(({"login": key, **visit} for key, visit in visits.items()), key=lambda entry: -entry.get("derniere", 0)),
-                "refus": list(reversed(data["refus"]))[:20]}
+        return {
+            "visites": sorted(
+                ({"login": key, **visit} for key, visit in visits.items()), key=lambda entry: -entry.get("derniere", 0)
+            ),
+            "refus": list(reversed(data["refus"]))[:20],
+        }

@@ -1,4 +1,5 @@
 """routes.cloud"""
+
 from security import accounts
 from services import activity_log
 from services import nextcloud_accounts
@@ -11,9 +12,14 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 def format_gigabytes(gigabytes):
     """12.5 → « 12,5 Go » ; None → « illimité »."""
-    return "illimité" if gigabytes is None else str(round(float(gigabytes), 1)).removesuffix(".0").replace(".", ",") + " Go"
+    return (
+        "illimité"
+        if gigabytes is None
+        else str(round(float(gigabytes), 1)).removesuffix(".0").replace(".", ",") + " Go"
+    )
 
 
 def run_cloud_action(function, *a):
@@ -27,16 +33,28 @@ def run_cloud_action(function, *a):
 def cloud_overview(request: Request):
     session = guard.require_admin(request)
     from concurrent.futures import ThreadPoolExecutor
+
     with ThreadPoolExecutor(4) as executor:
         state_future = executor.submit(nextcloud_accounts.overview, commands.occ)
         accounts_future = executor.submit(nextcloud_accounts.accounts, commands.occ)
         groups_future = executor.submit(nextcloud_accounts.groups, commands.occ)
-        folders_future = executor.submit(lambda entry: nextcloud_accounts.team_folders(entry) if ("groupfolders" in entry(["app:list", "--enabled", "--output=json"])[1]) else [], commands.occ)
+        folders_future = executor.submit(
+            lambda entry: (
+                nextcloud_accounts.team_folders(entry)
+                if ("groupfolders" in entry(["app:list", "--enabled", "--output=json"])[1])
+                else []
+            ),
+            commands.occ,
+        )
         state = state_future.result()
         if not state["present"]:
             return {"etat": state, "rang": session["rang"]}
         try:
-            accounts_list, groups_list, folders_list = accounts_future.result(), groups_future.result(), folders_future.result()
+            accounts_list, groups_list, folders_list = (
+                accounts_future.result(),
+                groups_future.result(),
+                folders_future.result(),
+            )
         except nextcloud_accounts.CloudError as error_output:
             raise HTTPException(500, str(error_output))
     nextcloud_accounts.refresh_usage_in_background()
@@ -46,26 +64,57 @@ def cloud_overview(request: Request):
     with nextcloud_accounts._lock:
         cloud_state = nextcloud_accounts.read()
         if cloud_state["en_attente_vus"] != pending and set(pending) <= set(cloud_state["en_attente_vus"]):
-            cloud_state["en_attente_vus"] = pending     # validées ou refusées entre-temps (les nouvelles, c'est la surveillance qui les signale)
+            cloud_state["en_attente_vus"] = (
+                pending  # validées ou refusées entre-temps (les nouvelles, c'est la surveillance qui les signale)
+            )
             nextcloud_accounts.write(cloud_state)
     all_groups = {group["id"]: group["membres"] for group in groups_list}
     for account in accounts_list:
-        account["rang_nuage"] = cloud_state.get("rang_de", {}).get(account["id"]) if cloud_state.get("rangs_actif") else None
-    ranks = [{"id": rank["id"], "nom": rank["nom"], "membres": sum(1 for value in cloud_state.get("rang_de", {}).values() if value == rank["id"]),
-              "voient": len(all_groups.get(rank["id"], []))} for rank in nextcloud_accounts.ranks_of(cloud_state)]
+        account["rang_nuage"] = (
+            cloud_state.get("rang_de", {}).get(account["id"]) if cloud_state.get("rangs_actif") else None
+        )
+    ranks = [
+        {
+            "id": rank["id"],
+            "nom": rank["nom"],
+            "membres": sum(1 for value in cloud_state.get("rang_de", {}).values() if value == rank["id"]),
+            "voient": len(all_groups.get(rank["id"], [])),
+        }
+        for rank in nextcloud_accounts.ranks_of(cloud_state)
+    ]
     groups_list = [group for group in groups_list if not group["id"].startswith(nextcloud_accounts.RANK_PREFIX)]
-    return {"etat": state, "rang": session["rang"], "plafond_go": cloud_state["plafond_go"], "comptes": accounts_list, "groupes": groups_list,
-            "rangs_actif": bool(cloud_state.get("rangs_actif")), "rangs": ranks, "createur": session["identifiant"] == guard.hostname(),
-            "charte": nextcloud_accounts.charter(commands.occ), "charte_defaut": nextcloud_accounts.DEFAULT_CHARTER, "charte_max": nextcloud_accounts.CHARTER_MAX,
-            "dossiers": folders_list, "modes": {other_index: {"nom": value[1], "detail": value[2]} for other_index, value in nextcloud_accounts.MODES.items()},
-            "tous": nextcloud_accounts.MEMBERS_GROUP, "promis": promised, "espace": None if config.DEMO else measurements.disk_space(["/srv/data"]).get("/srv/data")}
+    return {
+        "etat": state,
+        "rang": session["rang"],
+        "plafond_go": cloud_state["plafond_go"],
+        "comptes": accounts_list,
+        "groupes": groups_list,
+        "rangs_actif": bool(cloud_state.get("rangs_actif")),
+        "rangs": ranks,
+        "createur": session["identifiant"] == guard.hostname(),
+        "charte": nextcloud_accounts.charter(commands.occ),
+        "charte_defaut": nextcloud_accounts.DEFAULT_CHARTER,
+        "charte_max": nextcloud_accounts.CHARTER_MAX,
+        "dossiers": folders_list,
+        "modes": {
+            other_index: {"nom": value[1], "detail": value[2]}
+            for other_index, value in nextcloud_accounts.MODES.items()
+        },
+        "tous": nextcloud_accounts.MEMBERS_GROUP,
+        "promis": promised,
+        "espace": None if config.DEMO else measurements.disk_space(["/srv/data"]).get("/srv/data"),
+    }
 
 
 @router.post("/api/nuage/mettre-en-route")
 def set_up_cloud(request: Request):
     guard.require_super_admin(request, strong=True)
     run_cloud_action(nextcloud_accounts.set_up)
-    activity_log.record("nuage", "Comptes Nextcloud mis en route : inscription avec validation, 5 Go par défaut, dossiers communs", request.state.nom)
+    activity_log.record(
+        "nuage",
+        "Comptes Nextcloud mis en route : inscription avec validation, 5 Go par défaut, dossiers communs",
+        request.state.nom,
+    )
     return {"ok": True}
 
 
@@ -86,7 +135,9 @@ async def cloud_settings(request: Request):
         if not isinstance(gigabytes, (int, float)) or not 0 < gigabytes <= cloud_state["plafond_go"]:
             raise HTTPException(400, f"Espace par défaut : entre 0 et {cloud_state['plafond_go']} Go (le plafond).")
         run_cloud_action(nextcloud_accounts.set_default_quota, gigabytes)
-        activity_log.record("nuage", f"Espace par défaut des nouveaux comptes : {format_gigabytes(gigabytes)}", request.state.nom)
+        activity_log.record(
+            "nuage", f"Espace par défaut des nouveaux comptes : {format_gigabytes(gigabytes)}", request.state.nom
+        )
     return {"ok": True}
 
 
@@ -96,7 +147,9 @@ async def cloud_charter(request: Request):
     guard.require_super_admin(request)
     text = (await request.json()).get("texte", "")
     run_cloud_action(nextcloud_accounts.set_charter, text)
-    activity_log.record("nuage", "Charte d'inscription " + ("modifiée" if str(text).strip() else "retirée"), request.state.nom)
+    activity_log.record(
+        "nuage", "Charte d'inscription " + ("modifiée" if str(text).strip() else "retirée"), request.state.nom
+    )
     return {"ok": True}
 
 
@@ -114,7 +167,13 @@ async def add_cloud_account(request: Request):
     body = await request.json()
     user_id = str(body.get("id", "")).strip().lower()
     password = accounts.temporary_password()
-    run_cloud_action(nextcloud_accounts.add, user_id, str(body.get("nom", "")).strip()[:60], str(body.get("email", "")).strip()[:120], password)
+    run_cloud_action(
+        nextcloud_accounts.add,
+        user_id,
+        str(body.get("nom", "")).strip()[:60],
+        str(body.get("email", "")).strip()[:120],
+        password,
+    )
     text = set_rank(user_id, body.get("rang")) if body.get("rang") else ""
     activity_log.record("nuage", f"Compte Nextcloud créé : {user_id}{text}", request.state.nom)
     nextcloud_accounts.refresh_usage_in_background([user_id])
@@ -126,7 +185,9 @@ async def cloud_account_action(uid: str, request: Request):
     body = await request.json()
     action = body.get("action")
     strong = action in ("refuser", "supprimer", "mdp")
-    session = guard.require_admin(request, "admin" if action in ("quota", "groupe") else "super", strong=strong)  # rang, valider : super
+    session = guard.require_admin(
+        request, "admin" if action in ("quota", "groupe") else "super", strong=strong
+    )  # rang, valider : super
     items = {account["id"]: account for account in run_cloud_action(nextcloud_accounts.accounts)}
     account = items.get(uid)
     if not account:
@@ -150,7 +211,11 @@ async def cloud_account_action(uid: str, request: Request):
         cloud_state = nextcloud_accounts.read()
         previous_value = nextcloud_accounts.rank_name(cloud_state, cloud_state.get("rang_de", {}).get(uid)) or "aucun"
         text = set_rank(uid, body.get("rang"))
-        activity_log.record("nuage", f"Rang de {account['nom']} ({uid}) : {previous_value} → {nextcloud_accounts.rank_name(nextcloud_accounts.read(), body.get('rang')) or 'aucun'}", who)
+        activity_log.record(
+            "nuage",
+            f"Rang de {account['nom']} ({uid}) : {previous_value} → {nextcloud_accounts.rank_name(nextcloud_accounts.read(), body.get('rang')) or 'aucun'}",
+            who,
+        )
     elif action == "supprimer":
         run_cloud_action(nextcloud_accounts.delete, uid)
         cloud_state = nextcloud_accounts.read()
@@ -167,15 +232,21 @@ async def cloud_account_action(uid: str, request: Request):
             raise HTTPException(400, "Espace invalide.")
         elif gigabytes > limit and session["rang"] != "super":
             raise HTTPException(403, f"Au-delà du plafond ({limit} Go) : seul un super admin peut le faire.")
-        previous_value = "illimité" if account["illimite"] else format_gigabytes(account['quota'] / nextcloud_accounts.GIGABYTE)
+        previous_value = (
+            "illimité" if account["illimite"] else format_gigabytes(account["quota"] / nextcloud_accounts.GIGABYTE)
+        )
         run_cloud_action(nextcloud_accounts.set_quota, uid, gigabytes)
-        activity_log.record("nuage", f"Espace de {account['nom']} ({uid}) : {previous_value} → {format_gigabytes(gigabytes)}", who)
+        activity_log.record(
+            "nuage", f"Espace de {account['nom']} ({uid}) : {previous_value} → {format_gigabytes(gigabytes)}", who
+        )
     elif action == "groupe":
         group, member = str(body.get("groupe", "")), bool(body.get("dedans"))
         if group.startswith(nextcloud_accounts.RANK_PREFIX):
             raise HTTPException(400, "Pour les rangs, change le rang de la personne.")
         run_cloud_action(nextcloud_accounts.set_group_member, group, uid, member)
-        activity_log.record("nuage", f"{account['nom']} ({uid}) {'ajouté au' if member else 'retiré du'} groupe {group}", who)
+        activity_log.record(
+            "nuage", f"{account['nom']} ({uid}) {'ajouté au' if member else 'retiré du'} groupe {group}", who
+        )
     elif action == "mdp":
         password = accounts.temporary_password()
         run_cloud_action(nextcloud_accounts.set_password, uid, password)
@@ -226,7 +297,11 @@ async def rank_action(request: Request):
         if action == "activer":
             cloud_state["rangs_actif"] = bool(body.get("actif"))
             everyone = True
-            text = "Rangs activés" if cloud_state["rangs_actif"] else "Rangs désactivés (chacun garde son rang, sans effet jusqu'à la réactivation)"
+            text = (
+                "Rangs activés"
+                if cloud_state["rangs_actif"]
+                else "Rangs désactivés (chacun garde son rang, sans effet jusqu'à la réactivation)"
+            )
         elif action == "creer":
             name = str(body.get("nom", ""))
             run_cloud_action(nextcloud_accounts.create_rank, cloud_state, name)
@@ -237,14 +312,19 @@ async def rank_action(request: Request):
                 raise HTTPException(400, "Nom vide.")
             previous_value = nextcloud_accounts.rank_name(cloud_state, rank_id)
             next(rank for rank in cloud_state["rangs"] if rank["id"] == rank_id)["nom"] = name
-            commands.occ(["group:add", "--display-name", name, rank_id])   # sans effet si le groupe existe ; le nom affiché vient de Jabba
+            commands.occ(
+                ["group:add", "--display-name", name, rank_id]
+            )  # sans effet si le groupe existe ; le nom affiché vient de Jabba
             text = f"Rang {previous_value} renommé en {name}"
         elif action == "deplacer":
             index = ids.index(rank_id)
             other_index = index + (1 if body.get("sens") == "haut" else -1)
             if not 0 <= other_index < len(ids):
                 return {"ok": True}
-            cloud_state["rangs"][index], cloud_state["rangs"][other_index] = cloud_state["rangs"][other_index], cloud_state["rangs"][index]
+            cloud_state["rangs"][index], cloud_state["rangs"][other_index] = (
+                cloud_state["rangs"][other_index],
+                cloud_state["rangs"][index],
+            )
             everyone = True
             text = "Ordre des rangs : " + " < ".join(rank["nom"] for rank in cloud_state["rangs"])
         elif action == "supprimer":
@@ -292,7 +372,11 @@ async def team_folder_action(request: Request):
         if mode not in nextcloud_accounts.MODES:
             raise HTTPException(400, "Mode inconnu.")
         run_cloud_action(nextcloud_accounts.set_team_folder_access, folder_id, group, mode)
-        activity_log.record("nuage", f"Dossier commun créé : {name} ({cloud_group_name(group)}, {nextcloud_accounts.MODES[mode][1].lower()})", who)
+        activity_log.record(
+            "nuage",
+            f"Dossier commun créé : {name} ({cloud_group_name(group)}, {nextcloud_accounts.MODES[mode][1].lower()})",
+            who,
+        )
         return {"ok": True, "id": folder_id}
     name = names[folder_id]
     if action == "acces":
@@ -300,13 +384,21 @@ async def team_folder_action(request: Request):
         if mode is not None and mode not in nextcloud_accounts.MODES:
             raise HTTPException(400, "Mode inconnu.")
         run_cloud_action(nextcloud_accounts.set_team_folder_access, folder_id, group, mode)
-        activity_log.record("nuage", f"Dossier {name} : {cloud_group_name(group)} → {'plus d’accès' if mode is None else nextcloud_accounts.MODES[mode][1].lower()}", who)
+        activity_log.record(
+            "nuage",
+            f"Dossier {name} : {cloud_group_name(group)} → {'plus d’accès' if mode is None else nextcloud_accounts.MODES[mode][1].lower()}",
+            who,
+        )
     elif action == "quota":
         gigabytes = body.get("go")
         if gigabytes is not None and (not isinstance(gigabytes, (int, float)) or gigabytes <= 0):
             raise HTTPException(400, "Taille invalide.")
         run_cloud_action(nextcloud_accounts.set_team_folder_quota, folder_id, gigabytes)
-        activity_log.record("nuage", f"Dossier {name} : taille {'illimitée' if gigabytes is None else format_gigabytes(gigabytes) + ' au plus'}", who)
+        activity_log.record(
+            "nuage",
+            f"Dossier {name} : taille {'illimitée' if gigabytes is None else format_gigabytes(gigabytes) + ' au plus'}",
+            who,
+        )
     elif action == "renommer":
         run_cloud_action(nextcloud_accounts.rename_team_folder, folder_id, str(body.get("nom", "")))
         activity_log.record("nuage", f"Dossier {name} renommé en {body.get('nom')}", who)

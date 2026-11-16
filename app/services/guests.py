@@ -13,6 +13,7 @@ Sur le Wi-Fi, il faut le code à 4 chiffres (ou le QR code qui le contient).
 L'appareil est ensuite reconnu 7 jours, sauf si l'admin change le code.
 Les invités ne voient que les dossiers et les outils choisis par l'admin.
 """
+
 import hashlib
 import hmac
 import json
@@ -34,7 +35,7 @@ import config
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 # État partagé entre l'appli (qui l'écrit) et la porte du Wi-Fi (qui le lit) : un dossier à part.
 STATE_FILE = os.environ.get("JABBA_INVITES_ETAT", os.path.join(DATA_DIR, "porte-wifi", "etat.json"))
-OLD_STATE_FILE = os.path.join(DATA_DIR, "invites.json")    # avant la 0.11
+OLD_STATE_FILE = os.path.join(DATA_DIR, "invites.json")  # avant la 0.11
 GUEST_FOLDER = os.environ.get("JABBA_DOSSIER_INVITES", "/srv/data/invites")
 COOKIE = "jabba_invite"
 COOKIE_LIFETIME = 7 * 86400
@@ -55,9 +56,9 @@ def read():
     state.setdefault("generation", 1)
     state.setdefault("secret", secrets.token_hex(32))
     state.setdefault("dossiers", [{"id": "invites", "nom": "Invités", "chemin": GUEST_FOLDER, "mode": "depot"}])
-    state.setdefault("wifi", {"jellyfin": True})   # outils joignables depuis le Wi-Fi
-    state.setdefault("outils", [])                 # copie tenue à jour par l'appli : {id, nom, role, port, actif}
-    state.setdefault("adresse", None)              # adresse IP du serveur sur le Wi-Fi
+    state.setdefault("wifi", {"jellyfin": True})  # outils joignables depuis le Wi-Fi
+    state.setdefault("outils", [])  # copie tenue à jour par l'appli : {id, nom, role, port, actif}
+    state.setdefault("adresse", None)  # adresse IP du serveur sur le Wi-Fi
     return state
 
 
@@ -92,7 +93,7 @@ def prepare_state():
     if os.path.exists(OLD_STATE_FILE) and not os.path.exists(STATE_FILE):
         os.replace(OLD_STATE_FILE, STATE_FILE)
     if not os.path.exists(STATE_FILE):
-        write(read())          # code et secret créés une fois pour toutes, ici
+        write(read())  # code et secret créés une fois pour toutes, ici
     if os.geteuid() == 0:
         os.chmod(folder, 0o700)
         _give_to_guest_account(folder)
@@ -110,8 +111,9 @@ def update(function):
 def new_code():
     def f(state):
         state["code"] = "%04d" % secrets.randbelow(10000)
-        state["generation"] += 1   # les invités déjà reconnus doivent ressaisir le code
+        state["generation"] += 1  # les invités déjà reconnus doivent ressaisir le code
         return state["code"]
+
     return update(f)
 
 
@@ -140,8 +142,11 @@ def cookie_is_valid(state, value):
         generation, expiry, signature = (value or "").split(".")
     except ValueError:
         return False
-    return (hmac.compare_digest(signature, _sign(state, f"{generation}.{expiry}")) and int(generation) == state["generation"]
-            and int(expiry) > time.time())
+    return (
+        hmac.compare_digest(signature, _sign(state, f"{generation}.{expiry}"))
+        and int(generation) == state["generation"]
+        and int(expiry) > time.time()
+    )
 
 
 def is_blocked(address):
@@ -195,11 +200,23 @@ def guest_state(request: Request):
     if allowed:
         for tool in state["outils"]:
             if tool.get("actif") and state["wifi"].get(tool["id"]) and (on_lan or tool.get("lien_tailscale")):
-                tools_list.append({"id": tool["id"], "nom": tool["nom"], "role": tool.get("role", ""),
-                               "lien": f"http://{host_runner}:{tool['port']}" if on_lan else tool.get("lien_tailscale")})
-    return {"actif": state["actif"] or not on_lan, "entre": allowed, "lan": on_lan,
-            "dossiers": [{"id": folder["id"], "nom": folder["nom"], "mode": folder["mode"]} for folder in state["dossiers"]] if allowed else [],
-            "outils": tools_list}
+                tools_list.append(
+                    {
+                        "id": tool["id"],
+                        "nom": tool["nom"],
+                        "role": tool.get("role", ""),
+                        "lien": f"http://{host_runner}:{tool['port']}" if on_lan else tool.get("lien_tailscale"),
+                    }
+                )
+    return {
+        "actif": state["actif"] or not on_lan,
+        "entre": allowed,
+        "lan": on_lan,
+        "dossiers": [{"id": folder["id"], "nom": folder["nom"], "mode": folder["mode"]} for folder in state["dossiers"]]
+        if allowed
+        else [],
+        "outils": tools_list,
+    }
 
 
 @router.post("/api/invite/entrer")
@@ -237,11 +254,21 @@ def list_files(request: Request, d: str, chemin: str = "/"):
         except OSError:
             continue
         relative_path = (chemin.rstrip("/") + "/" + name) if chemin != "/" else "/" + name
-        entries.append({"nom": name, "chemin": relative_path, "dossier": os.path.isdir(item_path),
-                         "taille": None if os.path.isdir(item_path) else stat.st_size,
-                         "modifie": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()})
+        entries.append(
+            {
+                "nom": name,
+                "chemin": relative_path,
+                "dossier": os.path.isdir(item_path),
+                "taille": None if os.path.isdir(item_path) else stat.st_size,
+                "modifie": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+            }
+        )
     entries.sort(key=lambda entry: (not entry["dossier"], entry["nom"].lower()))
-    return {"dossier": {"id": folder["id"], "nom": folder["nom"], "mode": folder["mode"]}, "chemin": chemin, "elements": entries}
+    return {
+        "dossier": {"id": folder["id"], "nom": folder["nom"], "mode": folder["mode"]},
+        "chemin": chemin,
+        "elements": entries,
+    }
 
 
 @router.get("/api/invite/fichier")
@@ -252,9 +279,12 @@ def get_file(request: Request, d: str, chemin: str, voir: int = 0):
         raise HTTPException(404, "Fichier introuvable")
     name = os.path.basename(real_path)
     import mimetypes
+
     media_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
     if voir and media_type.startswith(("image/", "video/", "audio/")) and media_type != "image/svg+xml":
-        return FileResponse(real_path, media_type=media_type, headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"})
+        return FileResponse(
+            real_path, media_type=media_type, headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"}
+        )
     return FileResponse(real_path, filename=name)
 
 
@@ -275,7 +305,7 @@ async def upload(request: Request, d: str, chemin: str = "/"):
         name = os.path.basename(file.filename.replace("\\", "/")).lstrip(".") or "fichier"
         base, extension = os.path.splitext(name)
         real_path, counter = os.path.join(target, name), 2
-        while os.path.exists(real_path):   # jamais d'écrasement : « photo (2).jpg »
+        while os.path.exists(real_path):  # jamais d'écrasement : « photo (2).jpg »
             real_path, counter = os.path.join(target, f"{base} ({counter}){extension}"), counter + 1
         with open(real_path, "wb") as output:
             shutil.copyfileobj(file.file, output, 1024 * 1024)
@@ -285,5 +315,8 @@ async def upload(request: Request, d: str, chemin: str = "/"):
             pass
         uploaded.append(os.path.basename(real_path))
     if uploaded:
-        activity_log.record("invite", f"Invité : {len(uploaded)} fichier{'s' if len(uploaded) > 1 else ''} déposé{'s' if len(uploaded) > 1 else ''} dans {folder['nom']}{chemin if chemin != '/' else ''}")
+        activity_log.record(
+            "invite",
+            f"Invité : {len(uploaded)} fichier{'s' if len(uploaded) > 1 else ''} déposé{'s' if len(uploaded) > 1 else ''} dans {folder['nom']}{chemin if chemin != '/' else ''}",
+        )
     return {"envoyes": uploaded}

@@ -8,6 +8,7 @@ Déroulé : l'appli demande un ticket (requête HTTP ordinaire, donc contrôlée
 comme les autres : Tailscale, session, rang, mot de passe récent), puis ouvre
 la connexion WebSocket avec ce ticket, valable 30 secondes et une seule fois.
 """
+
 import asyncio
 import fcntl
 import json
@@ -20,9 +21,9 @@ import subprocess
 import termios
 import time
 
-TICKETS = {}          # ticket -> {qui, nom, expire}
+TICKETS = {}  # ticket -> {qui, nom, expire}
 TICKET_LIFETIME = 30
-OPEN_TERMINALS = {}          # pid -> {qui, debut}
+OPEN_TERMINALS = {}  # pid -> {qui, debut}
 
 
 def new_ticket(who, name):
@@ -67,10 +68,10 @@ DEMO_LOG = "/tmp/jabba-terminal-demo.log"
 
 def prepare_rc(ecrire):
     """Écrit le fichier de démarrage du shell sur le serveur (ou en démo, à côté) et renvoie son chemin."""
-    if ecrire is None:   # démo : pas de journal système, on note dans un fichier
+    if ecrire is None:  # démo : pas de journal système, on note dans un fichier
         path = "/tmp/jabba-terminal.bashrc"
         with open(path, "w") as file:
-            file.write(RC.replace('logger -t jabba-terminal -- ', f'echo >> {DEMO_LOG} '))
+            file.write(RC.replace("logger -t jabba-terminal -- ", f"echo >> {DEMO_LOG} "))
         return path
     ecrire(RC)
     return RC_PATH
@@ -84,12 +85,14 @@ def command_log(session_id, debut, host_runner):
         except OSError:
             lines = []
     else:
-        _, output, _ = host_runner(["journalctl", "-t", "jabba-terminal", "--since", f"@{int(debut) - 1}", "-o", "cat", "--no-pager"])
+        _, output, _ = host_runner(
+            ["journalctl", "-t", "jabba-terminal", "--since", f"@{int(debut) - 1}", "-o", "cat", "--no-pager"]
+        )
         lines = output.splitlines()
     result = []
     for line in lines:
         if line.startswith(session_id + " "):
-            command = line[len(session_id) + 1:].split(" : ", 1)[-1].strip()
+            command = line[len(session_id) + 1 :].split(" : ", 1)[-1].strip()
             if command:
                 result.append(command[:300])
     return result[:200]
@@ -103,12 +106,17 @@ def start(command, demo=False, extra_env=None):
         os.setsid()
         fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
 
-    env = {"TERM": "xterm-256color", "LANG": "C.UTF-8", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
+    env = {
+        "TERM": "xterm-256color",
+        "LANG": "C.UTF-8",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    }
     if demo:
         env["HOME"] = "/tmp"
     env.update(extra_env or {})
-    process = subprocess.Popen(command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, preexec_fn=prepare,
-                         close_fds=True, env=env)
+    process = subprocess.Popen(
+        command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, preexec_fn=prepare, close_fds=True, env=env
+    )
     os.close(slave_fd)
     os.set_blocking(master_fd, False)
     return process, master_fd

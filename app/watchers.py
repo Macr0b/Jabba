@@ -1,4 +1,5 @@
 """watchers"""
+
 import time
 from services import restart_policy
 from services import video_player
@@ -19,8 +20,14 @@ from services import power
 from services import tools
 
 
-WATCH_STATE = {"disques_pleins": set(), "pannes": {}, "redemarrage_signale": False, "maj_signalee": None,
-        "derniere_purge": 0, "dernier_lien_nc": 0}
+WATCH_STATE = {
+    "disques_pleins": set(),
+    "pannes": {},
+    "redemarrage_signale": False,
+    "maj_signalee": None,
+    "derniere_purge": 0,
+    "dernier_lien_nc": 0,
+}
 
 
 def watch_power():
@@ -32,17 +39,41 @@ def watch_power():
     power.POWER_STATE["secteur"] = on_mains
     name = measurements.server_name()
     if previous_value is True and not on_mains:
-        notifications.send("courant", "Coupure de courant", f"{name} tourne sur batterie ({battery} %). Il s'éteindra proprement sous {config.BATTERY_THRESHOLD} %.", "/#/systeme", family="courant")
+        notifications.send(
+            "courant",
+            "Coupure de courant",
+            f"{name} tourne sur batterie ({battery} %). Il s'éteindra proprement sous {config.BATTERY_THRESHOLD} %.",
+            "/#/systeme",
+            family="courant",
+        )
     elif previous_value is False and on_mains:
         if power.POWER_STATE["arret_prevu"]:
             commands.run_on_host(["systemctl", "stop", "jabba-arret.timer"])
             power.POWER_STATE["arret_prevu"] = False
-        notifications.send("courant", "Courant revenu", f"{name} est de nouveau sur secteur ({battery} %).", "/#/systeme", family="courant")
-    if not on_mains and battery is not None and battery <= config.BATTERY_THRESHOLD and not power.POWER_STATE["arret_prevu"]:
+        notifications.send(
+            "courant",
+            "Courant revenu",
+            f"{name} est de nouveau sur secteur ({battery} %).",
+            "/#/systeme",
+            family="courant",
+        )
+    if (
+        not on_mains
+        and battery is not None
+        and battery <= config.BATTERY_THRESHOLD
+        and not power.POWER_STATE["arret_prevu"]
+    ):
         power.POWER_STATE["arret_prevu"] = True
-        notifications.send("courant", "Batterie faible : arrêt dans 1 minute",
-                       f"{name} s'éteint proprement pour protéger les disques. Rallume-le avec son bouton quand le courant est revenu.", "/#/systeme", family="courant")
-        commands.run_on_host(["systemd-run", "--unit=jabba-arret", "--collect", "--on-active=60", "systemctl", "poweroff"])
+        notifications.send(
+            "courant",
+            "Batterie faible : arrêt dans 1 minute",
+            f"{name} s'éteint proprement pour protéger les disques. Rallume-le avec son bouton quand le courant est revenu.",
+            "/#/systeme",
+            family="courant",
+        )
+        commands.run_on_host(
+            ["systemd-run", "--unit=jabba-arret", "--collect", "--on-active=60", "systemctl", "poweroff"]
+        )
 
 
 def watch_space():
@@ -54,7 +85,13 @@ def watch_space():
         percent = 100 * usage_entry["utilise"] / max(1, usage_entry["total"])
         if percent >= 90 and path not in WATCH_STATE["disques_pleins"]:
             WATCH_STATE["disques_pleins"].add(path)
-            notifications.send("disque_plein", f"{paths.get(path, path)} presque plein", f"Rempli à {round(percent)} %. Fais de la place, ou vide la corbeille.", "/#/disques", family="disque")
+            notifications.send(
+                "disque_plein",
+                f"{paths.get(path, path)} presque plein",
+                f"Rempli à {round(percent)} %. Fais de la place, ou vide la corbeille.",
+                "/#/disques",
+                family="disque",
+            )
         elif percent < 85:
             WATCH_STATE["disques_pleins"].discard(path)
 
@@ -68,7 +105,13 @@ def watch_tools():
         if problem:
             WATCH_STATE["pannes"][pid] = failures + 1
             if failures + 1 == 2:  # deux passages de suite (2 minutes) : ce n'est pas un simple redémarrage
-                notifications.send("outil_panne", f"{tool['nom']} en panne", "Ouvre l'Établi et essaie « Redémarrer ».", "/#/outils", family="outil")
+                notifications.send(
+                    "outil_panne",
+                    f"{tool['nom']} en panne",
+                    "Ouvre l'Établi et essaie « Redémarrer ».",
+                    "/#/outils",
+                    family="outil",
+                )
         else:
             if failures >= 2 and tool["etat"] == "actif":
                 notifications.send("outil_panne", f"{tool['nom']} est reparti", "", "/#/outils", family="outil")
@@ -80,14 +123,26 @@ def watch_system_updates():
         if not WATCH_STATE["redemarrage_signale"]:
             WATCH_STATE["redemarrage_signale"] = True
             auto = restart_policy.current_mode()["mode"] == "auto"
-            notifications.send("mises_a_jour", "Redémarrage en attente", restart_policy.message(auto), "/#/systeme", family="systeme")
+            notifications.send(
+                "mises_a_jour", "Redémarrage en attente", restart_policy.message(auto), "/#/systeme", family="systeme"
+            )
     else:
         WATCH_STATE["redemarrage_signale"] = False
     if config.REPOSITORY:
         latest = app_update.latest_release(config.REPOSITORY)
-        if latest and app_update.is_newer(VERSION, latest["version"]) and WATCH_STATE["maj_signalee"] != latest["version"]:
+        if (
+            latest
+            and app_update.is_newer(VERSION, latest["version"])
+            and WATCH_STATE["maj_signalee"] != latest["version"]
+        ):
             WATCH_STATE["maj_signalee"] = latest["version"]
-            notifications.send("mises_a_jour", f"Appli Jabba {latest['version']} disponible", "Installe-la depuis l'écran Système.", "/#/systeme", family="appli")
+            notifications.send(
+                "mises_a_jour",
+                f"Appli Jabba {latest['version']} disponible",
+                "Installe-la depuis l'écran Système.",
+                "/#/systeme",
+                family="appli",
+            )
 
 
 def watch_forever():
@@ -96,9 +151,22 @@ def watch_forever():
     tick = 0
     while True:
         steps = [auto_disks.scan_disks]
-        if tick % 4 == 0:   # toutes les minutes
-            steps += [backups.watch_backups, video_player.clean_up, lambda: app_update.CURRENT_UPDATE["unite"] and not app_update.CURRENT_UPDATE["signale"] and app_update.update_state(), watch_power, watch_space, watch_tools, guest_network.sync_guest_tools, guest_network.apply_firewall]
-        if tick % 8 == 0:   # toutes les 2 minutes
+        if tick % 4 == 0:  # toutes les minutes
+            steps += [
+                backups.watch_backups,
+                video_player.clean_up,
+                lambda: (
+                    app_update.CURRENT_UPDATE["unite"]
+                    and not app_update.CURRENT_UPDATE["signale"]
+                    and app_update.update_state()
+                ),
+                watch_power,
+                watch_space,
+                watch_tools,
+                guest_network.sync_guest_tools,
+                guest_network.apply_firewall,
+            ]
+        if tick % 8 == 0:  # toutes les 2 minutes
             steps += [nextcloud_accounts.watch_signups]
         if tick % 40 == 0:  # toutes les 10 minutes
             steps += [auto_disks.link_disks_to_nextcloud]

@@ -8,6 +8,7 @@ Tailscale (tailscale serve). Ce fichier ne fait que brancher les morceaux :
   3. le démarrage (journal de version, invités, surveillance en fond : watchers.py) ;
   4. l'interface (fichiers de static/), servie en dernier.
 """
+
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -18,8 +19,21 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import watchers
-from routes import (accounts, admin_session, alerts, app_update, backups, cloud, disks, files, guests_admin, player,
-                    system, terminal, tools)
+from routes import (
+    accounts,
+    admin_session,
+    alerts,
+    app_update,
+    backups,
+    cloud,
+    disks,
+    files,
+    guests_admin,
+    player,
+    system,
+    terminal,
+    tools,
+)
 from security import guard
 from services import activity_log, guests
 from version import VERSION
@@ -62,16 +76,30 @@ app.middleware("http")(guard.guard)
 
 # Pages invités : ouvertes tant qu'on n'est pas connecté en admin.
 app.include_router(guests.router)
-for module in (admin_session, accounts, system, tools, terminal, files, disks, player, alerts, cloud, backups,
-               app_update, guests_admin):
+for module in (
+    admin_session,
+    accounts,
+    system,
+    tools,
+    terminal,
+    files,
+    disks,
+    player,
+    alerts,
+    cloud,
+    backups,
+    app_update,
+    guests_admin,
+):
     app.include_router(module.router)
 
 
 # ---------------------------------------------------------------- interface (toujours en dernier)
 @app.get("/sw.js")
 def service_worker():
-    return FileResponse(os.path.join(config.STATIC, "sw.js"), media_type="application/javascript",
-                        headers={"Cache-Control": "no-cache"})
+    return FileResponse(
+        os.path.join(config.STATIC, "sw.js"), media_type="application/javascript", headers={"Cache-Control": "no-cache"}
+    )
 
 
 app.mount("/static", StaticFiles(directory=config.STATIC), name="static")

@@ -11,6 +11,7 @@
 Tout passe par `occ`, la commande d'administration de Nextcloud. Ce module ne
 connaît que la fonction `occ(args, input_text=None, timeout=60) -> (code, sortie, erreur)`.
 """
+
 import json
 import os
 import re
@@ -21,13 +22,13 @@ DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "nuage.json")
 MEMBERS_GROUP = "membres"
 APPS = ("registration", "groupfolders")
-MODES = {   # droits Nextcloud : lire 1, modifier 2, créer 4, supprimer 8, partager 16
+MODES = {  # droits Nextcloud : lire 1, modifier 2, créer 4, supprimer 8, partager 16
     "lecture": (["read"], "Lecture seule", "Voir et télécharger."),
     "depot": (["read", "write"], "Dépôt", "Voir, ajouter et modifier, sans rien supprimer."),
     "complet": (["read", "write", "share", "delete"], "Accès complet", "Tout faire, y compris supprimer et partager."),
 }
 MODES_BY_PERMISSIONS = {1: "lecture", 7: "depot", 31: "complet", 15: "complet", 23: "depot"}
-GIGABYTE = 1024 ** 3
+GIGABYTE = 1024**3
 # Charte affichée sur le formulaire d'inscription (modifiable dans Jabba).
 CHARTER_MAX = 1500
 DEFAULT_CHARTER = (
@@ -40,7 +41,7 @@ DEFAULT_CHARTER = (
     "En créant ton compte, tu acceptes cette charte."
 )
 _lock = threading.RLock()
-USAGE_CACHE = {"t": 0, "v": {}}   # identifiant -> octets utilisés (lu à part : une commande par compte)
+USAGE_CACHE = {"t": 0, "v": {}}  # identifiant -> octets utilisés (lu à part : une commande par compte)
 
 
 class CloudError(Exception):
@@ -55,7 +56,7 @@ def read():
     except (OSError, ValueError):
         state = {}
     state.setdefault("plafond_go", 50)
-    state.setdefault("en_attente_vus", [])    # inscriptions déjà signalées
+    state.setdefault("en_attente_vus", [])  # inscriptions déjà signalées
     return state
 
 
@@ -109,11 +110,18 @@ def overview(occ):
     except ValueError:
         return {"present": False}
     apps = _occ_json(occ, ["app:list"]).get("enabled", {})
-    settings = {key: occ(["config:app:get", "registration", key])[1].strip()
-                for key in ("admin_approval_required", "registered_user_group")} if "registration" in apps else {}
+    settings = (
+        {
+            key: occ(["config:app:get", "registration", key])[1].strip()
+            for key in ("admin_approval_required", "registered_user_group")
+        }
+        if "registration" in apps
+        else {}
+    )
     default = occ(["config:app:get", "files", "default_quota"])[1].strip() or "none"
     return {
-        "present": True, "version": status.get("versionstring"),
+        "present": True,
+        "version": status.get("versionstring"),
         "applis": {app: app in apps for app in APPS},
         "pret": all(app in apps for app in APPS) and settings.get("admin_approval_required") == "yes",
         "quota_defaut": default,
@@ -130,15 +138,22 @@ def accounts(occ):
             code, output, _ = occ(["user:setting", user_id, "registration", "send_welcome_mail_on_enable"])
             pending = code == 0 and output.strip() == "yes"
         quota = to_bytes(user.get("quota"))
-        result.append({
-            "id": user_id, "nom": user.get("display_name") or user_id, "email": user.get("email") or "",
-            "etat": "actif" if user.get("enabled") else ("attente" if pending else "suspendu"),
-            "groupes": user.get("groups") or [], "admin": "admin" in (user.get("groups") or []),
-            "quota": quota, "illimite": quota is None, "quota_texte": user.get("quota"),
-            "utilise": USAGE_CACHE["v"].get(user_id),
-            "vu": None if user.get("last_seen") in (None, "never") else user.get("last_seen"),
-            "cree": None if user.get("first_seen") in (None, "never") else user.get("first_seen"),
-        })
+        result.append(
+            {
+                "id": user_id,
+                "nom": user.get("display_name") or user_id,
+                "email": user.get("email") or "",
+                "etat": "actif" if user.get("enabled") else ("attente" if pending else "suspendu"),
+                "groupes": user.get("groups") or [],
+                "admin": "admin" in (user.get("groups") or []),
+                "quota": quota,
+                "illimite": quota is None,
+                "quota_texte": user.get("quota"),
+                "utilise": USAGE_CACHE["v"].get(user_id),
+                "vu": None if user.get("last_seen") in (None, "never") else user.get("last_seen"),
+                "cree": None if user.get("first_seen") in (None, "never") else user.get("first_seen"),
+            }
+        )
     result.sort(key=lambda c: ({"attente": 0, "actif": 1, "suspendu": 2}[c["etat"]], c["nom"].lower()))
     return result
 
@@ -168,14 +183,28 @@ def team_folders(occ):
         raw = list(raw.values())
     result = []
     for folder in raw:
-        access = folder.get("groups_list") or {group: value.get("permissions") if isinstance(value, dict) else value
-                                         for group, value in (folder.get("groups") or {}).items()}
-        result.append({
-            "id": folder["id"], "nom": folder.get("mountPoint") or folder.get("mount_point"),
-            "quota": None if (folder.get("quota") or -3) < 0 else folder["quota"], "taille": folder.get("size") or 0,
-            "acces": [{"groupe": group, "mode": MODES_BY_PERMISSIONS.get(int(permissions), "complet" if int(permissions) & 8 else "depot" if int(permissions) & 4 else "lecture")}
-                      for group, permissions in sorted(access.items())],
-        })
+        access = folder.get("groups_list") or {
+            group: value.get("permissions") if isinstance(value, dict) else value
+            for group, value in (folder.get("groups") or {}).items()
+        }
+        result.append(
+            {
+                "id": folder["id"],
+                "nom": folder.get("mountPoint") or folder.get("mount_point"),
+                "quota": None if (folder.get("quota") or -3) < 0 else folder["quota"],
+                "taille": folder.get("size") or 0,
+                "acces": [
+                    {
+                        "groupe": group,
+                        "mode": MODES_BY_PERMISSIONS.get(
+                            int(permissions),
+                            "complet" if int(permissions) & 8 else "depot" if int(permissions) & 4 else "lecture",
+                        ),
+                    }
+                    for group, permissions in sorted(access.items())
+                ],
+            }
+        )
     result.sort(key=lambda folder: folder["nom"].lower())
     return result
 
@@ -198,9 +227,10 @@ def set_up(occ, default_quota_gb=5):
     if code != 0:
         _occ_or_fail(occ, ["group:add", "--display-name", "Tous les membres", MEMBERS_GROUP])
     settings = {
-        "admin_approval_required": "yes",          # le compte attend la validation
-        "registered_user_group": MEMBERS_GROUP,      # et rejoint « Tous les membres »
-        "show_fullname": "yes", "enforce_fullname": "yes",
+        "admin_approval_required": "yes",  # le compte attend la validation
+        "registered_user_group": MEMBERS_GROUP,  # et rejoint « Tous les membres »
+        "show_fullname": "yes",
+        "enforce_fullname": "yes",
         # Pas encore de serveur d'e-mails : on ne vérifie pas l'adresse (à activer avec le domaine).
         "disable_email_verification": "yes",
     }
@@ -218,7 +248,7 @@ def charter(occ):
 
 
 def set_charter(occ, text):
-    text = " ".join(str(text or "").split())       # une seule ligne : le formulaire n'affiche pas les retours
+    text = " ".join(str(text or "").split())  # une seule ligne : le formulaire n'affiche pas les retours
     if len(text) > CHARTER_MAX:
         raise CloudError(f"Charte trop longue ({CHARTER_MAX} caractères au plus).")
     if text:
@@ -239,7 +269,7 @@ def reserve_disks_for_admins(occ):
     Un disque déjà réservé à des personnes ou des groupes précis n'est pas touché."""
     code, output, _ = occ(["files_external:list", "--output=json"])
     if code != 0:
-        return []          # appli des stockages externes absente : aucun disque dans Nextcloud
+        return []  # appli des stockages externes absente : aucun disque dans Nextcloud
     try:
         mounts = json.loads(output)
     except ValueError:
@@ -329,7 +359,9 @@ def set_team_folder_access(occ, folder_id, group, mode):
 
 
 def set_team_folder_quota(occ, folder_id, gigabytes):
-    _occ_or_fail(occ, ["groupfolders:quota", str(folder_id), "unlimited" if gigabytes is None else quota_text(gigabytes)])
+    _occ_or_fail(
+        occ, ["groupfolders:quota", str(folder_id), "unlimited" if gigabytes is None else quota_text(gigabytes)]
+    )
 
 
 def rename_team_folder(occ, folder_id, name):
@@ -389,6 +421,7 @@ def sync_ranks(occ, state, user_ids=None):
 
 def create_rank(occ, state, name):
     import secrets
+
     name = name.strip()
     if not name or len(name) > 40:
         raise CloudError("Nom de rang : 1 à 40 caractères.")
@@ -396,7 +429,7 @@ def create_rank(occ, state, name):
         raise CloudError("Ce rang existe déjà.")
     rank_id = RANK_PREFIX + secrets.token_hex(3)
     _occ_or_fail(occ, ["group:add", "--display-name", name, rank_id])
-    ranks_of(state).append({"id": rank_id, "nom": name})   # tout en haut ; on le déplace ensuite si besoin
+    ranks_of(state).append({"id": rank_id, "nom": name})  # tout en haut ; on le déplace ensuite si besoin
     return rank_id
 
 
@@ -447,14 +480,22 @@ def watch_signups():
         if c == 0 and setting.strip() == "yes":
             pending.add(user_id)
             if user_id not in seen:
-                notifications.send("comptes", "Inscription à valider", f"{name} ({user_id}) demande un compte Nextcloud.", "/#/nuage",
-                               family="nuage", recipients=guard.super_admin_logins())
+                notifications.send(
+                    "comptes",
+                    "Inscription à valider",
+                    f"{name} ({user_id}) demande un compte Nextcloud.",
+                    "/#/nuage",
+                    family="nuage",
+                    recipients=guard.super_admin_logins(),
+                )
     if pending != seen:
         state["en_attente_vus"] = sorted(pending)
         write(state)
     # Un disque ajouté à la main dans Nextcloud (ou avant cette version) serait vu par tous les comptes.
     try:
         for name in reserve_disks_for_admins(commands.occ):
-            activity_log.record("nuage", f"Disque {name} réservé aux admins dans Nextcloud (il était visible par tous les comptes)")
+            activity_log.record(
+                "nuage", f"Disque {name} réservé aux admins dans Nextcloud (il était visible par tous les comptes)"
+            )
     except CloudError:
         pass

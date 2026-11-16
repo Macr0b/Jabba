@@ -2,6 +2,7 @@
 
 Une ligne JSON par événement. On ne garde que les 2000 derniers.
 """
+
 import json
 import os
 import threading
@@ -14,7 +15,19 @@ MAX_EVENTS = 2000
 _LOCK = threading.Lock()
 
 # Familles d'événements (pour l'icône et le filtre dans l'appli).
-FAMILIES = {"outil", "admin", "disque", "courant", "fichier", "appli", "alerte", "systeme", "invite", "sauvegardes", "nuage"}
+FAMILIES = {
+    "outil",
+    "admin",
+    "disque",
+    "courant",
+    "fichier",
+    "appli",
+    "alerte",
+    "systeme",
+    "invite",
+    "sauvegardes",
+    "nuage",
+}
 
 
 def record(family, text, who=None):

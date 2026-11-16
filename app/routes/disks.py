@@ -1,4 +1,5 @@
 """routes.disks"""
+
 import json
 import re
 import threading
@@ -15,14 +16,18 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------- disques
 @router.get("/api/disques")
 def list_disks():
     if config.DEMO:
         from services.demo_data import DISKS
+
         return DISKS
     files_source.wake_disks()
-    code, output, error_output = commands.run_on_host(["lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,RM,TRAN,TYPE,MODEL"])
+    code, output, error_output = commands.run_on_host(
+        ["lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,RM,TRAN,TYPE,MODEL"]
+    )
     if code != 0:
         raise HTTPException(500, error_output[:200])
     tree = json.loads(output)["blockdevices"]
@@ -44,21 +49,48 @@ def list_disks():
         for partition in device.get("children") or []:
             if partition.get("fstype") in (None, "swap") and not partition.get("mountpoint"):
                 continue
-            if partition.get("mountpoint") and partition["mountpoint"].startswith("/boot/") and partition["mountpoint"] != "/boot/efi":
+            if (
+                partition.get("mountpoint")
+                and partition["mountpoint"].startswith("/boot/")
+                and partition["mountpoint"] != "/boot/efi"
+            ):
                 continue
             mountpoint = partition.get("mountpoint")
-            shares.append({
-                "nom": partition["name"], "taille": partition["size"], "type": partition.get("fstype"), "etiquette": partition.get("label"),
-                "montage": mountpoint, "role": ("Disque externe" if mountpoint in known else roles.get(mountpoint, "Non utilisé" if not mountpoint else mountpoint)),
-                "usage": usage.get(mountpoint),
-                "disque_jabba": {"nom": known[mountpoint], "ecriture": files_source.is_writable(mountpoint), "auto": mountpoint in auto} if mountpoint in known else None,
-                "oublie": (partition.get("uuid") or "").lower() if (partition.get("uuid") or "").lower() in forgotten and not mountpoint else None,
-                "illisible": auto_disks.UNREADABLE.get((partition.get("fstype") or "").lower()),
-            })
-        result.append({
-            "nom": device["name"], "modele": (device.get("model") or "").strip(), "taille": device["size"],
-            "externe": bool(device.get("rm")) or device.get("tran") == "usb", "partitions": shares,
-        })
+            shares.append(
+                {
+                    "nom": partition["name"],
+                    "taille": partition["size"],
+                    "type": partition.get("fstype"),
+                    "etiquette": partition.get("label"),
+                    "montage": mountpoint,
+                    "role": (
+                        "Disque externe"
+                        if mountpoint in known
+                        else roles.get(mountpoint, "Non utilisé" if not mountpoint else mountpoint)
+                    ),
+                    "usage": usage.get(mountpoint),
+                    "disque_jabba": {
+                        "nom": known[mountpoint],
+                        "ecriture": files_source.is_writable(mountpoint),
+                        "auto": mountpoint in auto,
+                    }
+                    if mountpoint in known
+                    else None,
+                    "oublie": (partition.get("uuid") or "").lower()
+                    if (partition.get("uuid") or "").lower() in forgotten and not mountpoint
+                    else None,
+                    "illisible": auto_disks.UNREADABLE.get((partition.get("fstype") or "").lower()),
+                }
+            )
+        result.append(
+            {
+                "nom": device["name"],
+                "modele": (device.get("model") or "").strip(),
+                "taille": device["size"],
+                "externe": bool(device.get("rm")) or device.get("tran") == "usb",
+                "partitions": shares,
+            }
+        )
     return result
 
 
@@ -81,19 +113,41 @@ async def set_disk_mode(nom: str, request: Request):
         lines.append(line)
     if not found:
         raise HTTPException(404, "Ce disque n'est pas déclaré sur le serveur.")
-    code, _, error_output = commands.run_on_host_with_input(["sh", "-c", "cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab"], "\n".join(lines) + "\n")
+    code, _, error_output = commands.run_on_host_with_input(
+        ["sh", "-c", "cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab"], "\n".join(lines) + "\n"
+    )
     if code != 0:
         raise HTTPException(500, "Impossible d'enregistrer le réglage : " + error_output[:200])
     _, unit, _ = commands.run_on_host(["systemd-escape", "--path", "--suffix=automount", path])
-    commands.run_shell_on_host(f"systemctl daemon-reload; umount '{path}' 2>/dev/null; systemctl restart '{unit.strip()}'; ls '{path}' >/dev/null 2>&1", timeout=30)
+    commands.run_shell_on_host(
+        f"systemctl daemon-reload; umount '{path}' 2>/dev/null; systemctl restart '{unit.strip()}'; ls '{path}' >/dev/null 2>&1",
+        timeout=30,
+    )
     # Même réglage côté Nextcloud, s'il est activé.
-    code, output, _ = commands.run_on_host(["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:list", "--output=json"], timeout=60)
+    code, output, _ = commands.run_on_host(
+        ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:list", "--output=json"],
+        timeout=60,
+    )
     if code == 0:
         try:
             for mount in json.loads(output):
                 if mount.get("mount_point", "").strip("/") == nom:
-                    commands.run_on_host(["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:option",
-                          str(mount["mount_id"]), "readonly", "false" if writable else "true"], timeout=60)
+                    commands.run_on_host(
+                        [
+                            "docker",
+                            "exec",
+                            "-u",
+                            "www-data",
+                            "nextcloud",
+                            "php",
+                            "occ",
+                            "files_external:option",
+                            str(mount["mount_id"]),
+                            "readonly",
+                            "false" if writable else "true",
+                        ],
+                        timeout=60,
+                    )
         except ValueError:
             pass
     activity_log.record("disque", f"{nom} : {'écriture autorisée' if writable else 'lecture seule'}", request.state.nom)
@@ -108,7 +162,10 @@ def eject_disk(nom: str, request: Request):
         return {"ok": True}
     code, _, error_output = commands.run_shell_on_host(f"sync && umount '{path}'", timeout=120)
     if code != 0 and "not mounted" not in error_output:
-        raise HTTPException(409, "Le disque est en cours d'utilisation (lecture d'un film, copie…). Arrête ce qui l'utilise et réessaie.")
+        raise HTTPException(
+            409,
+            "Le disque est en cours d'utilisation (lecture d'un film, copie…). Arrête ce qui l'utilise et réessaie.",
+        )
     files_source.EJECTED[nom] = time.time()
     activity_log.record("disque", f"{nom} éjecté", request.state.nom)
     return {"ok": True}

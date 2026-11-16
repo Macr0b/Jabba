@@ -1,4 +1,5 @@
 """Structure du code : chaque import mène à un module qui existe, même dans une fonction rarement appelée."""
+
 import ast
 import glob
 import importlib.util

@@ -1,4 +1,5 @@
 """Vérification du mot de passe du serveur (empreintes de /etc/shadow), sans le module « crypt »."""
+
 import subprocess
 
 import pytest
@@ -8,7 +9,9 @@ from security import server_password
 
 
 def _empreinte_openssl(mdp, sel, option):
-    return subprocess.run(["openssl", "passwd", option, "-salt", sel, mdp], capture_output=True, text=True, check=True).stdout.strip()
+    return subprocess.run(
+        ["openssl", "passwd", option, "-salt", sel, mdp], capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 @pytest.mark.parametrize("option", ["-6", "-5", "-1"])

@@ -1,4 +1,5 @@
 """routes.files"""
+
 import asyncio
 import mimetypes
 import os
@@ -19,6 +20,7 @@ from services import nextcloud_files
 from fastapi import APIRouter
 
 router = APIRouter()
+
 
 @router.get("/api/fichiers")
 async def list_folder(chemin: str = "/"):
@@ -46,7 +48,9 @@ async def home_folders():
     essentials = [{"nom": "Mes fichiers", "chemin": "/", "type": "racine"}]
     for entry in root["elements"]:
         if files_source.files_source() == "disque" and entry["dossier"]:
-            essentials.append({"nom": entry["nom"], "chemin": entry["chemin"], "type": "disque" if entry["externe"] else "espace"})
+            essentials.append(
+                {"nom": entry["nom"], "chemin": entry["chemin"], "type": "disque" if entry["externe"] else "espace"}
+            )
         elif entry["dossier"] and entry["externe"]:
             if entry["nom"] in known:
                 if entry["nom"] in plugged:
@@ -59,7 +63,11 @@ async def home_folders():
     suggestions = []
     for client, timestamps in listing["visites"].items():
         count = sum(1 for media_type in timestamps if media_type > cutoff)
-        if count >= home_data.SUGGESTION_THRESHOLD and client not in listing["favoris"] and client not in listing["ignores"]:
+        if (
+            count >= home_data.SUGGESTION_THRESHOLD
+            and client not in listing["favoris"]
+            and client not in listing["ignores"]
+        ):
             suggestions.append({"nom": client.rsplit("/", 1)[-1], "chemin": client, "ouvertures": count})
     suggestions.sort(key=lambda source_name: -source_name["ouvertures"])
     return {"essentiels": essentials, "favoris": favorites, "suggestions": suggestions[:2]}
@@ -147,7 +155,9 @@ async def upload_files(request: Request, chemin: str = "/"):
 def log_upload(request, path, uploaded):
     if uploaded:
         what = f"« {uploaded[0]} »" if len(uploaded) == 1 else f"{len(uploaded)} fichiers"
-        activity_log.record("fichier", f"{what} envoyé{'s' if len(uploaded) > 1 else ''} dans {path}", request.state.nom)
+        activity_log.record(
+            "fichier", f"{what} envoyé{'s' if len(uploaded) > 1 else ''} dans {path}", request.state.nom
+        )
 
 
 @router.get("/api/fichiers/telecharger")
@@ -179,13 +189,18 @@ async def download_file(chemin: str):
     headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"}
     if "content-length" in response.headers:
         headers["Content-Length"] = response.headers["content-length"]
-    return StreamingResponse(flux(), media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers)
+    return StreamingResponse(
+        flux(), media_type=response.headers.get("content-type", "application/octet-stream"), headers=headers
+    )
 
 
 @router.post("/api/fichiers/deplacer")
 async def move_item(request: Request):
     body = await request.json()
-    source_path, destination = nextcloud_files.clean_path(body.get("de", "")), nextcloud_files.clean_path(body.get("vers", ""))
+    source_path, destination = (
+        nextcloud_files.clean_path(body.get("de", "")),
+        nextcloud_files.clean_path(body.get("vers", "")),
+    )
     if source_path == "/" or destination == "/":
         raise HTTPException(400, "Chemin invalide")
     if files_source.files_source() == "disque":
@@ -195,7 +210,11 @@ async def move_item(request: Request):
     if config.DEMO:
         return {"ok": True}
     async with nextcloud_files.client() as client:
-        response = await client.request("MOVE", nextcloud_files.dav_url(source_path), headers={"Destination": nextcloud_files.dav_url(destination), "Overwrite": "F"})
+        response = await client.request(
+            "MOVE",
+            nextcloud_files.dav_url(source_path),
+            headers={"Destination": nextcloud_files.dav_url(destination), "Overwrite": "F"},
+        )
     await nextcloud_files.check_response(response, "Renommage")
     return {"ok": True}
 
@@ -204,7 +223,11 @@ async def move_item(request: Request):
 async def delete_item(request: Request):
     body = await request.json()
     path = nextcloud_files.clean_path(body.get("chemin", ""))
-    if path == "/" or len([parts_list for parts_list in path.split("/") if parts_list]) < 2 and files_source.files_source() == "disque":
+    if (
+        path == "/"
+        or len([parts_list for parts_list in path.split("/") if parts_list]) < 2
+        and files_source.files_source() == "disque"
+    ):
         raise HTTPException(400, "Ce dossier ne peut pas être supprimé.")
     if files_source.files_source() == "disque":
         params = files_source.disk_params()
@@ -229,7 +252,21 @@ async def delete_item(request: Request):
 
 # ---------------------------------------------------------------- aperçus et visionneuse
 VIEWABLE_TYPES = ("image/", "video/", "audio/", "application/pdf", "text/plain")
-TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".log", ".json", ".yaml", ".yml", ".ini", ".conf", ".srt", ".nfo", ".py", ".sh"}
+TEXT_EXTENSIONS = {
+    ".txt",
+    ".md",
+    ".csv",
+    ".log",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".ini",
+    ".conf",
+    ".srt",
+    ".nfo",
+    ".py",
+    ".sh",
+}
 mimetypes.add_type("image/heic", ".heic")
 mimetypes.add_type("image/webp", ".webp")
 mimetypes.add_type("video/x-matroska", ".mkv")
@@ -245,11 +282,16 @@ def viewable_type(name):
 
 
 def viewer_headers(media_type, name):
-    entry = {"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}", "X-Frame-Options": "SAMEORIGIN",
-         "Cache-Control": "private, max-age=300"}
+    entry = {
+        "Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Cache-Control": "private, max-age=300",
+    }
     if media_type != "application/pdf":
         # Une image SVG ou un texte ouvert seul ne peut lancer aucun script.
-        entry["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'"
+        entry["Content-Security-Policy"] = (
+            "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'"
+        )
     return entry
 
 
@@ -270,11 +312,17 @@ async def thumbnail(chemin: str, taille: int = 128):
         return FileResponse(cache, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
     nextcloud_files.require_nextcloud()
     async with nextcloud_files.client() as client:
-        response = await client.get(config.NC_URL + "/index.php/core/preview.png",
-                        params={"file": chemin, "x": taille, "y": taille, "a": "1", "mode": "cover"})
+        response = await client.get(
+            config.NC_URL + "/index.php/core/preview.png",
+            params={"file": chemin, "x": taille, "y": taille, "a": "1", "mode": "cover"},
+        )
     if response.status_code != 200 or not response.headers.get("content-type", "").startswith("image/"):
         raise HTTPException(404, "Pas d'aperçu")
-    return Response(response.content, media_type=response.headers["content-type"], headers={"Cache-Control": "private, max-age=86400"})
+    return Response(
+        response.content,
+        media_type=response.headers["content-type"],
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
 
 
 @router.get("/api/fichiers/voir")
@@ -293,7 +341,9 @@ async def view_file(chemin: str, request: Request):
     nextcloud_files.require_nextcloud()
     client = nextcloud_files.client()
     headers = {"Range": request.headers["range"]} if "range" in request.headers else {}
-    response = await client.send(client.build_request("GET", nextcloud_files.dav_url(chemin), headers=headers), stream=True)
+    response = await client.send(
+        client.build_request("GET", nextcloud_files.dav_url(chemin), headers=headers), stream=True
+    )
     if response.status_code >= 400:
         await response.aclose()
         await client.aclose()
@@ -323,6 +373,7 @@ async def search(q: str = ""):
         raise HTTPException(400, "Tape au moins 2 lettres.")
     if config.DEMO and files_source.files_source() != "disque":
         from services.demo_data import search_results
+
         return search_results(q)
     disks, read_only = files_source.disk_params()
     if files_source.files_source() == "disque":
@@ -330,8 +381,12 @@ async def search(q: str = ""):
         return {"elements": result, "complet": full_command}
     nextcloud_files.require_nextcloud()
     async with nextcloud_files.client() as client:
-        response = await client.request("SEARCH", config.NC_URL + "/remote.php/dav/", headers={"Content-Type": "text/xml"},
-                            content=nextcloud_files.SEARCH.format(user=xml_escape(config.NC_USER), texte=xml_escape(q)).encode())
+        response = await client.request(
+            "SEARCH",
+            config.NC_URL + "/remote.php/dav/",
+            headers={"Content-Type": "text/xml"},
+            content=nextcloud_files.SEARCH.format(user=xml_escape(config.NC_USER), texte=xml_escape(q)).encode(),
+        )
     result = []
     if response.status_code < 400:
         for rep in ET.fromstring(response.content).findall("d:response", nextcloud_files.DAV_NS):
@@ -344,7 +399,9 @@ async def search(q: str = ""):
     direct_play, full_command = await asyncio.to_thread(disk_browser.search, q, disks, read_only, external_disks)
     seen = {entry["chemin"] for entry in result}
     result += [entry for entry in direct_play if entry["chemin"] not in seen]
-    result.sort(key=lambda entry: (not entry["nom"].lower().startswith(q.lower()), not entry["dossier"], entry["nom"].lower()))
+    result.sort(
+        key=lambda entry: (not entry["nom"].lower().startswith(q.lower()), not entry["dossier"], entry["nom"].lower())
+    )
     return {"elements": result[:100], "complet": full_command and len(result) <= 100}
 
 
@@ -352,6 +409,7 @@ async def search(q: str = ""):
 async def list_trash():
     if config.DEMO and files_source.files_source() != "disque":
         from services.demo_data import TRASH
+
         return {"elements": TRASH, "garde": 30}
     entries = await asyncio.to_thread(disk_browser.list_trash)
     if files_source.files_source() == "nextcloud":
@@ -374,8 +432,14 @@ async def restore_from_trash(request: Request):
         if "/" in identifier:
             raise HTTPException(400, "Élément invalide")
         async with nextcloud_files.client() as client:
-            response = await client.request("MOVE", nextcloud_files.trash_url(identifier),
-                                headers={"Destination": config.NC_URL + f"/remote.php/dav/trashbin/{quote(config.NC_USER)}/restore/{quote(identifier, safe='')}"})
+            response = await client.request(
+                "MOVE",
+                nextcloud_files.trash_url(identifier),
+                headers={
+                    "Destination": config.NC_URL
+                    + f"/remote.php/dav/trashbin/{quote(config.NC_USER)}/restore/{quote(identifier, safe='')}"
+                },
+            )
         await nextcloud_files.check_response(response, "Restauration")
         path = body.get("origine") or "/"
     activity_log.record("fichier", f"{path} restauré depuis la corbeille", request.state.nom)

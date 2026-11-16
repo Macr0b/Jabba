@@ -1,4 +1,5 @@
 """Mises à jour : rien ne s'installe sans une signature faite avec la clé attendue (revue, point 5)."""
+
 import os
 import subprocess
 
@@ -46,10 +47,19 @@ def depots(tmp_path):
     # Faux docker : on note qu'il a été appelé (la reconstruction).
     bin_ = tmp_path / "bin"
     bin_.mkdir()
-    (bin_ / "docker").write_text(f"#!/bin/sh\necho \"$@\" >> {tmp_path}/docker.log\n")
+    (bin_ / "docker").write_text(f'#!/bin/sh\necho "$@" >> {tmp_path}/docker.log\n')
     os.chmod(bin_ / "docker", 0o755)
-    return {"origine": origine, "install": install, "sha": sha, "bonne": bonne, "mauvaise": mauvaise,
-            "pub": pub, "git": git, "tmp": tmp_path, "path": f"{bin_}:{os.environ['PATH']}"}
+    return {
+        "origine": origine,
+        "install": install,
+        "sha": sha,
+        "bonne": bonne,
+        "mauvaise": mauvaise,
+        "pub": pub,
+        "git": git,
+        "tmp": tmp_path,
+        "path": f"{bin_}:{os.environ['PATH']}",
+    }
 
 
 def publier(d, tag, signature=None, sur=None, ligne=None):
@@ -122,7 +132,7 @@ def test_etiquette_deplacee_sans_effet(depots):
     (d["origine"] / "app.txt").write_text("piège\n")
     sh(*d["git"], "commit", "-qam", "piège", cwd=d["origine"])
     piege = sh("git", "rev-parse", "HEAD", cwd=d["origine"])
-    publier(d, "v2.0.0", signature)                      # fichier signé : le bon commit
+    publier(d, "v2.0.0", signature)  # fichier signé : le bon commit
     sh(*d["git"], "tag", "-f", "v2.0.0", piege, cwd=d["origine"])
     r, contenu, _ = installer(d, "v2.0.0")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -133,7 +143,9 @@ def test_etiquette_deplacee_sans_effet(depots):
 def test_signature_d_une_autre_version_refusee(depots):
     """Une signature valable pour v2.0.0 ne vaut pas pour v9.0.0."""
     d = depots
-    publier(d, "v9.0.0", signer(d["bonne"], "v2.0.0", d["sha"]), d["sha"], ligne=app_update.signed_text("v2.0.0", d["sha"]))
+    publier(
+        d, "v9.0.0", signer(d["bonne"], "v2.0.0", d["sha"]), d["sha"], ligne=app_update.signed_text("v2.0.0", d["sha"])
+    )
     r, contenu, _ = installer(d, "v9.0.0")
     assert r.returncode != 0 and contenu == "v1"
 
@@ -142,7 +154,9 @@ def test_signature_d_une_autre_version_refusee(depots):
 def test_signature_pour_un_autre_usage_refusee(depots):
     """Une signature SSH faite pour autre chose (autre « namespace ») ne vaut rien."""
     d = depots
-    autre = sh("ssh-keygen", "-Y", "sign", "-f", d["bonne"], "-n", "git", entree=app_update.signed_text("v2.0.0", d["sha"]))
+    autre = sh(
+        "ssh-keygen", "-Y", "sign", "-f", d["bonne"], "-n", "git", entree=app_update.signed_text("v2.0.0", d["sha"])
+    )
     publier(d, "v2.0.0", autre, d["sha"])
     r, contenu, _ = installer(d, "v2.0.0")
     assert r.returncode != 0 and contenu == "v1"

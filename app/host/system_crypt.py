@@ -4,11 +4,12 @@ Le module Python « crypt » disparaît avec Python 3.13. On appelle directement
 bibliothèque du système (libcrypt, présente sur toute Debian), qui connaît tous les
 formats d'empreinte : yescrypt ($y$, Debian 11 et après), SHA-512 ($6$), etc.
 """
+
 import ctypes
 import ctypes.util
 import threading
 
-_lock = threading.Lock()   # crypt() n'est pas réentrant : un appel à la fois
+_lock = threading.Lock()  # crypt() n'est pas réentrant : un appel à la fois
 _library = None
 
 

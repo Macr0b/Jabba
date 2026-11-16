@@ -3,6 +3,7 @@
 Les clés (VAPID) sont créées sur le serveur au premier lancement et ne le
 quittent jamais. Les appareils abonnés et les réglages restent dans /data.
 """
+
 import base64
 import json
 import os
@@ -61,14 +62,17 @@ def public_key():
         if not os.path.exists(KEY_FILE):
             os.makedirs(DATA_DIR, exist_ok=True)
             private_key = ec.generate_private_key(ec.SECP256R1())
-            pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                  serialization.NoEncryption())
+            pem = private_key.private_bytes(
+                serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+            )
             descriptor = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(descriptor, "wb") as file:
                 file.write(pem)
         with open(KEY_FILE, "rb") as file:
             private_key = serialization.load_pem_private_key(file.read(), None)
-    public = private_key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    public = private_key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
     return _b64(public)
 
 
@@ -78,7 +82,10 @@ def settings():
         "cle": public_key(),
         "appareils": len(data["abonnements"]),
         "endpoints": [subscription["endpoint"] for subscription in data["abonnements"]],
-        "types": [{"id": alert_type, "nom": name, "detail": entry, "actif": data["types"][alert_type]} for alert_type, (name, entry) in TYPES.items()],
+        "types": [
+            {"id": alert_type, "nom": name, "detail": entry, "actif": data["types"][alert_type]}
+            for alert_type, (name, entry) in TYPES.items()
+        ],
     }
 
 
@@ -90,16 +97,28 @@ def subscribe(abonnement, contact, device="", who=None):
         raise ValueError("Abonnement invalide.")
     with _LOCK:
         data = _read()
-        data["abonnements"] = [subscription for subscription in data["abonnements"] if subscription["endpoint"] != abonnement["endpoint"]]
-        data["abonnements"].append({"endpoint": abonnement["endpoint"], "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]},
-                                 "contact": contact, "appareil": device[:80], "qui": who, "depuis": int(time.time())})
+        data["abonnements"] = [
+            subscription for subscription in data["abonnements"] if subscription["endpoint"] != abonnement["endpoint"]
+        ]
+        data["abonnements"].append(
+            {
+                "endpoint": abonnement["endpoint"],
+                "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]},
+                "contact": contact,
+                "appareil": device[:80],
+                "qui": who,
+                "depuis": int(time.time()),
+            }
+        )
         _write(data)
 
 
 def unsubscribe(endpoint):
     with _LOCK:
         data = _read()
-        data["abonnements"] = [subscription for subscription in data["abonnements"] if subscription["endpoint"] != endpoint]
+        data["abonnements"] = [
+            subscription for subscription in data["abonnements"] if subscription["endpoint"] != endpoint
+        ]
         _write(data)
 
 
@@ -122,7 +141,11 @@ def send(media_type, title, text, url="/", force=False, family="alerte", recipie
     data = _read()
     if not force and not data["types"].get(media_type, True):
         return 0
-    targets = [subscription for subscription in data["abonnements"] if recipients is None or subscription.get("qui") in recipients]
+    targets = [
+        subscription
+        for subscription in data["abonnements"]
+        if recipients is None or subscription.get("qui") in recipients
+    ]
     if not targets:
         return 0
     threading.Thread(target=_push, args=(targets, title, text, url), daemon=True).start()
@@ -132,6 +155,7 @@ def send(media_type, title, text, url="/", force=False, family="alerte", recipie
 def valid_contact(contact):
     """Adresse de contact acceptée par la signature des alertes : https://hôte (sans port) ou mailto:."""
     from urllib.parse import urlparse
+
     if contact and contact.startswith("https://"):
         host_runner = urlparse(contact).hostname
         if host_runner:
@@ -151,9 +175,14 @@ def _push(subscriptions, title, text, url):
     expired = []
     for subscription in subscriptions:
         try:
-            webpush(subscription_info={"endpoint": subscription["endpoint"], "keys": subscription["keys"]}, data=message,
-                    vapid_private_key=KEY_FILE, vapid_claims={"sub": valid_contact(subscription.get("contact"))},
-                    ttl=24 * 3600, timeout=15)
+            webpush(
+                subscription_info={"endpoint": subscription["endpoint"], "keys": subscription["keys"]},
+                data=message,
+                vapid_private_key=KEY_FILE,
+                vapid_claims={"sub": valid_contact(subscription.get("contact"))},
+                ttl=24 * 3600,
+                timeout=15,
+            )
         except WebPushException as e:
             code = getattr(e.response, "status_code", None)
             if code in (404, 410):

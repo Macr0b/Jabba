@@ -13,6 +13,7 @@ navigateurs savent lire : Safari directement, les autres avec hls.js.
 
 Aller à un autre moment du film relance la conversion à partir de ce moment.
 """
+
 import json
 import os
 import secrets
@@ -26,7 +27,7 @@ import time
 WORK_DIR = os.environ.get("JABBA_LECTURE", "/tmp/jabba-lecture")
 SEGMENT_SECONDS = 4
 MAX_SESSIONS = 3
-IDLE_TIMEOUT = 120          # s sans demande de morceau : la conversion s'arrête
+IDLE_TIMEOUT = 120  # s sans demande de morceau : la conversion s'arrête
 TEXT_SUBTITLE_CODECS = {"subrip", "ass", "ssa", "webvtt", "mov_text", "text"}
 _SESSIONS = {}
 _LOCK = threading.Lock()
@@ -39,30 +40,66 @@ _HARDWARE = {"teste": False, "options": None}
 def probe(source):
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
     with sandbox.open_input(source) as (input_path, file_descriptors):
-        completed = sandbox.run(args + sandbox.without_input_option(input_path), file_descriptors, capture_output=True, text=True, timeout=30)
+        completed = sandbox.run(
+            args + sandbox.without_input_option(input_path),
+            file_descriptors,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
     if completed.returncode != 0:
         raise RuntimeError("Fichier illisible : " + (completed.stderr.strip()[:200] or "format inconnu"))
     probe_data = json.loads(completed.stdout or "{}")
     streams = probe_data.get("streams", [])
-    video_stream = next((stream for stream in streams if stream.get("codec_type") == "video" and not (stream.get("disposition") or {}).get("attached_pic")), None)
+    video_stream = next(
+        (
+            stream
+            for stream in streams
+            if stream.get("codec_type") == "video" and not (stream.get("disposition") or {}).get("attached_pic")
+        ),
+        None,
+    )
 
     def etiquette(stream, count):
         tags = stream.get("tags") or {}
-        shares = [tags.get("title"), (tags.get("language") or "").upper() if tags.get("language") not in (None, "und") else None]
+        shares = [
+            tags.get("title"),
+            (tags.get("language") or "").upper() if tags.get("language") not in (None, "und") else None,
+        ]
         return " · ".join(minutes for minutes in shares if minutes) or f"Piste {count}"
 
-    audio_tracks = [{"index": stream["index"], "codec": stream.get("codec_name"), "canaux": stream.get("channels"),
-               "nom": etiquette(stream, index + 1), "defaut": bool((stream.get("disposition") or {}).get("default"))}
-              for index, stream in enumerate(value for value in streams if value.get("codec_type") == "audio")]
-    soustitres = [{"index": stream["index"], "codec": stream.get("codec_name"), "nom": etiquette(stream, index + 1),
-                   "texte": stream.get("codec_name") in TEXT_SUBTITLE_CODECS}
-                  for index, stream in enumerate(value for value in streams if value.get("codec_type") == "subtitle")]
+    audio_tracks = [
+        {
+            "index": stream["index"],
+            "codec": stream.get("codec_name"),
+            "canaux": stream.get("channels"),
+            "nom": etiquette(stream, index + 1),
+            "defaut": bool((stream.get("disposition") or {}).get("default")),
+        }
+        for index, stream in enumerate(value for value in streams if value.get("codec_type") == "audio")
+    ]
+    soustitres = [
+        {
+            "index": stream["index"],
+            "codec": stream.get("codec_name"),
+            "nom": etiquette(stream, index + 1),
+            "texte": stream.get("codec_name") in TEXT_SUBTITLE_CODECS,
+        }
+        for index, stream in enumerate(value for value in streams if value.get("codec_type") == "subtitle")
+    ]
     format_name = probe_data.get("format", {})
     return {
         "duree": float(format_name.get("duration") or 0),
         "conteneur": format_name.get("format_name", ""),
-        "video": {"codec": video_stream.get("codec_name"), "largeur": video_stream.get("width"), "hauteur": video_stream.get("height"),
-                  "pix_fmt": video_stream.get("pix_fmt"), "index": video_stream["index"]} if video_stream else None,
+        "video": {
+            "codec": video_stream.get("codec_name"),
+            "largeur": video_stream.get("width"),
+            "hauteur": video_stream.get("height"),
+            "pix_fmt": video_stream.get("pix_fmt"),
+            "index": video_stream["index"],
+        }
+        if video_stream
+        else None,
         "audios": audio_tracks,
         "soustitres": soustitres,
     }
@@ -71,8 +108,14 @@ def probe(source):
 def plays_directly(media):
     """Le navigateur sait-il lire le fichier tel quel ?"""
     video_stream, first = media["video"], media["audios"]
-    container_ok = any(container_format in media["conteneur"] for container_format in ("mp4", "mov"))   # MKV (même « matroska,webm ») : converti
-    video_ok = video_stream is not None and video_stream["codec"] in ("h264", "vp9", "av1") and video_stream["pix_fmt"] in (None, "yuv420p")
+    container_ok = any(
+        container_format in media["conteneur"] for container_format in ("mp4", "mov")
+    )  # MKV (même « matroska,webm ») : converti
+    video_ok = (
+        video_stream is not None
+        and video_stream["codec"] in ("h264", "vp9", "av1")
+        and video_stream["pix_fmt"] in (None, "yuv420p")
+    )
     audio_ok = not first or all(value["codec"] in ("aac", "mp3", "opus", "vorbis") for value in first[:1])
     return container_ok and video_ok and audio_ok and len(first) <= 1
 
@@ -89,9 +132,25 @@ def _hardware_options():
         env = dict(os.environ)
         if driver:
             env["LIBVA_DRIVER_NAME"] = driver
-        attempt = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-vaapi_device", "/dev/dri/renderD128",
-                 "-f", "lavfi", "-i", "testsrc=duration=1:size=640x360:rate=25",
-                 "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-f", "null", "-"]
+        attempt = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-vaapi_device",
+            "/dev/dri/renderD128",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=1:size=640x360:rate=25",
+            "-vf",
+            "format=nv12,hwupload",
+            "-c:v",
+            "h264_vaapi",
+            "-f",
+            "null",
+            "-",
+        ]
         try:
             if sandbox.run(attempt, gpu=True, capture_output=True, env=env, timeout=30).returncode == 0:
                 _HARDWARE["options"] = {"pilote": driver}
@@ -111,25 +170,78 @@ def _video(media):
     hardware = _hardware_options()
     if hardware is not None:
         env = {"LIBVA_DRIVER_NAME": hardware["pilote"]} if hardware["pilote"] else {}
-        return (["-vaapi_device", "/dev/dri/renderD128", "-map", f"0:{video_stream['index']}",
-                 "-vf", f"{scale},format=nv12,hwupload", "-c:v", "h264_vaapi", "-qp", "24",
-                 "-g", str(SEGMENT_SECONDS * 25)], env)
-    return (["-map", f"0:{video_stream['index']}", "-vf", f"{scale},format=yuv420p", "-c:v", "libx264",
-             "-preset", "veryfast", "-crf", "23", "-g", str(SEGMENT_SECONDS * 25), "-sc_threshold", "0"], {})
+        return (
+            [
+                "-vaapi_device",
+                "/dev/dri/renderD128",
+                "-map",
+                f"0:{video_stream['index']}",
+                "-vf",
+                f"{scale},format=nv12,hwupload",
+                "-c:v",
+                "h264_vaapi",
+                "-qp",
+                "24",
+                "-g",
+                str(SEGMENT_SECONDS * 25),
+            ],
+            env,
+        )
+    return (
+        [
+            "-map",
+            f"0:{video_stream['index']}",
+            "-vf",
+            f"{scale},format=yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-g",
+            str(SEGMENT_SECONDS * 25),
+            "-sc_threshold",
+            "0",
+        ],
+        {},
+    )
 
 
 def keyframe(source, media, debut):
     """Quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`.
     On part donc de là, pour que le temps affiché et les sous-titres tombent juste."""
     video_stream = media["video"]
-    if debut <= 0 or not video_stream or not (video_stream["codec"] == "h264" and video_stream["pix_fmt"] in (None, "yuv420p")):
+    if (
+        debut <= 0
+        or not video_stream
+        or not (video_stream["codec"] == "h264" and video_stream["pix_fmt"] in (None, "yuv420p"))
+    ):
         return debut
-    args = ["ffprobe", "-v", "error", "-select_streams", f"{video_stream['index']}", "-skip_frame", "nokey",
-            "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
-            "-read_intervals", f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}"]
+    args = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        f"{video_stream['index']}",
+        "-skip_frame",
+        "nokey",
+        "-show_entries",
+        "frame=pts_time,best_effort_timestamp_time",
+        "-of",
+        "csv=p=0",
+        "-read_intervals",
+        f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}",
+    ]
     try:
         with sandbox.open_input(source) as (input_path, file_descriptors):
-            completed = sandbox.run(args + sandbox.without_input_option(input_path), file_descriptors, capture_output=True, text=True, timeout=20)
+            completed = sandbox.run(
+                args + sandbox.without_input_option(input_path),
+                file_descriptors,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
     except (subprocess.TimeoutExpired, OSError, RuntimeError):
         return debut
     elapsed = []
@@ -148,7 +260,7 @@ def start(source, media, debut=0.0, audio=None):
     """Lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)."""
     debut = keyframe(source, media, max(0.0, float(debut)))
     with _LOCK:
-        while len(_SESSIONS) >= MAX_SESSIONS:   # trop de films en même temps : on arrête le plus ancien
+        while len(_SESSIONS) >= MAX_SESSIONS:  # trop de films en même temps : on arrête le plus ancien
             stop(min(_SESSIONS, key=lambda key: _SESSIONS[key]["vu"]), lock=False)
     session_id = secrets.token_urlsafe(18)
     folder = os.path.join(WORK_DIR, session_id)
@@ -157,32 +269,70 @@ def start(source, media, debut=0.0, audio=None):
     video_stream, extra_env = _video(media)
     tracks = [first for first in media["audios"] if audio is None or first["index"] == audio] or media["audios"]
     audio_stream = ["-map", f"0:{tracks[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if tracks else []
-    command = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(debut)):.3f}"]
-           + ([first for first in video_stream[:2]] if video_stream[:1] == ["-vaapi_device"] else [])
-           + ["ENTREE"]
-           + (video_stream[2:] if video_stream[:1] == ["-vaapi_device"] else video_stream)
-           + audio_stream
-           + (["-force_key_frames", "expr:gte(t,n_forced*2)"] if video_stream[-2:] != ["-c:v", "copy"] and "copy" not in video_stream else [])
-           # horodatages à partir de 0 : la vidéo et les sous-titres partent du même instant, sur tous les navigateurs
-           + ["-muxdelay", "0", "-muxpreload", "0"]
-           + ["-max_muxing_queue_size", "4096", "-f", "hls", "-hls_init_time", "1", "-hls_time", str(SEGMENT_SECONDS),
-              "-hls_list_size", "0", "-hls_playlist_type", "event",
-              "-hls_segment_filename", os.path.join(folder, "m%05d.ts"), os.path.join(folder, "index.m3u8")])
+    command = (
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(debut)):.3f}"]
+        + ([first for first in video_stream[:2]] if video_stream[:1] == ["-vaapi_device"] else [])
+        + ["ENTREE"]
+        + (video_stream[2:] if video_stream[:1] == ["-vaapi_device"] else video_stream)
+        + audio_stream
+        + (
+            ["-force_key_frames", "expr:gte(t,n_forced*2)"]
+            if video_stream[-2:] != ["-c:v", "copy"] and "copy" not in video_stream
+            else []
+        )
+        # horodatages à partir de 0 : la vidéo et les sous-titres partent du même instant, sur tous les navigateurs
+        + ["-muxdelay", "0", "-muxpreload", "0"]
+        + [
+            "-max_muxing_queue_size",
+            "4096",
+            "-f",
+            "hls",
+            "-hls_init_time",
+            "1",
+            "-hls_time",
+            str(SEGMENT_SECONDS),
+            "-hls_list_size",
+            "0",
+            "-hls_playlist_type",
+            "event",
+            "-hls_segment_filename",
+            os.path.join(folder, "m%05d.ts"),
+            os.path.join(folder, "index.m3u8"),
+        ]
+    )
     env = dict(os.environ, **extra_env)
-    with sandbox.open_input(source) as (input_path, file_descriptors), open(os.path.join(folder, "erreurs.txt"), "w") as error_output:
+    with (
+        sandbox.open_input(source) as (input_path, file_descriptors),
+        open(os.path.join(folder, "erreurs.txt"), "w") as error_output,
+    ):
         index = command.index("ENTREE")
-        command[index:index + 1] = input_path
-        process = sandbox.popen(command, file_descriptors, gpu=bool(extra_env) or "-vaapi_device" in command, stdin=subprocess.DEVNULL,
-                              stdout=subprocess.DEVNULL, stderr=error_output, env=env)
+        command[index : index + 1] = input_path
+        process = sandbox.popen(
+            command,
+            file_descriptors,
+            gpu=bool(extra_env) or "-vaapi_device" in command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=error_output,
+            env=env,
+        )
     with _LOCK:
-        _SESSIONS[session_id] = {"p": process, "dossier": folder, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
+        _SESSIONS[session_id] = {
+            "p": process,
+            "dossier": folder,
+            "vu": time.time(),
+            "cree": time.time(),
+            "debut": float(debut),
+        }
     return session_id, debut
 
 
 def session_file(session_id, name, wait=20):
     """Chemin d'un morceau ou de la liste de lecture, une fois prêt."""
     stream = _SESSIONS.get(session_id)
-    if not stream or not (name == "index.m3u8" or (name.startswith("m") and name.endswith(".ts") and name[1:-3].isdigit())):
+    if not stream or not (
+        name == "index.m3u8" or (name.startswith("m") and name.endswith(".ts") and name[1:-3].isdigit())
+    ):
         return None
     stream["vu"] = time.time()
     path = os.path.join(stream["dossier"], name)
@@ -201,7 +351,7 @@ def session_file(session_id, name, wait=20):
                 pass
         elif os.path.exists(path):
             next_value = os.path.join(stream["dossier"], f"m{int(name[1:-3]) + 1:05d}.ts")
-            if os.path.exists(next_value) or stream["p"].poll() is not None:   # morceau terminé
+            if os.path.exists(next_value) or stream["p"].poll() is not None:  # morceau terminé
                 return path
         if stream["p"].poll() not in (None, 0) and not os.path.exists(path):
             return None
@@ -215,7 +365,10 @@ def session_error(session_id):
         return "Lecture arrêtée."
     if stream["p"].poll() not in (None, 0):
         try:
-            return open(os.path.join(stream["dossier"], "erreurs.txt")).read().strip()[-300:] or "La conversion s'est arrêtée."
+            return (
+                open(os.path.join(stream["dossier"], "erreurs.txt")).read().strip()[-300:]
+                or "La conversion s'est arrêtée."
+            )
         except OSError:
             return "La conversion s'est arrêtée."
     return None
@@ -233,6 +386,7 @@ def stop(session_id, lock=True):
             except subprocess.TimeoutExpired:
                 stream["p"].kill()
         shutil.rmtree(stream["dossier"], ignore_errors=True)
+
     if lock:
         with _LOCK:
             faire()
@@ -249,7 +403,7 @@ def clean_up():
 
 def _seconds(tags):
     shares = tags.replace(",", ".").split(":")
-    return sum(float(minutes) * 60 ** key for key, minutes in enumerate(reversed(shares)))
+    return sum(float(minutes) * 60**key for key, minutes in enumerate(reversed(shares)))
 
 
 def _timestamp(value):
@@ -270,7 +424,7 @@ def shift_vtt(vtt_text, debut):
             first, _, second = timing.partition("-->")
             cue_end = _seconds(second.split()[0]) - debut
             if cue_end > 0:
-                text = chunk[chunk.index(timing) + 1:]
+                text = chunk[chunk.index(timing) + 1 :]
                 output += [f"{_timestamp(_seconds(first.strip()) - debut)} --> {_timestamp(cue_end)}"] + text + [""]
         chunk = []
     return "\n".join(output)
@@ -279,8 +433,11 @@ def shift_vtt(vtt_text, debut):
 def subtitles(source, index, debut=0.0):
     """Une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé."""
     with sandbox.open_input(source) as (input_path, file_descriptors):
-        command = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
-               + input_path + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
+        command = (
+            ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
+            + input_path
+            + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"]
+        )
         completed = sandbox.run(command, file_descriptors, capture_output=True, timeout=180)
     if completed.returncode != 0:
         raise RuntimeError("Sous-titres illisibles.")

@@ -1,4 +1,5 @@
 """Sauvegardes : quand partir, quoi copier, comment lire le résultat."""
+
 import re
 from datetime import datetime
 
@@ -6,8 +7,15 @@ from services import backups
 
 
 def reglages(**k):
-    d = {"actif": True, "chemin": "/srv/disques/D", "disque": "D", "heure": "03:30", "lancee": 0,
-         "derniere_reussie": None, "sources": {"fichiers": True, "outils": True, "systeme": True}}
+    d = {
+        "actif": True,
+        "chemin": "/srv/disques/D",
+        "disque": "D",
+        "heure": "03:30",
+        "lancee": 0,
+        "derniere_reussie": None,
+        "sources": {"fichiers": True, "outils": True, "systeme": True},
+    }
     d.update(k)
     return d
 
@@ -16,8 +24,8 @@ def test_quand_partir():
     n = datetime(2026, 11, 10, 4, 0)
     assert backups.is_due(reglages(), n)
     assert not backups.is_due(reglages(derniere_reussie={"fin": n.timestamp() - 600}), n)
-    assert not backups.is_due(reglages(lancee=n.timestamp() - 600), n)          # essai il y a 10 min : on attend
-    assert backups.is_due(reglages(lancee=n.timestamp() - 4000), n)             # plus d'une heure : on réessaie
+    assert not backups.is_due(reglages(lancee=n.timestamp() - 600), n)  # essai il y a 10 min : on attend
+    assert backups.is_due(reglages(lancee=n.timestamp() - 4000), n)  # plus d'une heure : on réessaie
     avant = datetime(2026, 11, 10, 2, 0)
     assert not backups.is_due(reglages(derniere_reussie={"fin": datetime(2026, 11, 9, 3, 40).timestamp()}), avant)
     assert not backups.is_due(reglages(actif=False), n)

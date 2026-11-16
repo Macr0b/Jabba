@@ -1,4 +1,5 @@
 """Les écrans principaux s'affichent et répondent, sur ordinateur et sur iPhone."""
+
 import re
 import urllib.parse
 
@@ -24,7 +25,10 @@ def test_lecteur(page):
     """Le lecteur : vidéo convertie par le serveur, commandes par-dessus l'image, menu, plein écran, ±10 s."""
     aller(page, "fichiers?chemin=" + urllib.parse.quote("/Films et séries/Films"))
     page.get_by_text("Film test.mkv").click()
-    page.wait_for_function("(() => { const v = document.querySelector('#lecteur video'); return v && v.readyState >= 3 && v.currentTime > 0.3; })()", timeout=30000)
+    page.wait_for_function(
+        "(() => { const v = document.querySelector('#lecteur video'); return v && v.readyState >= 3 && v.currentTime > 0.3; })()",
+        timeout=30000,
+    )
     commandes = page.locator("#lecteur .commandes")
     video = page.locator("#lecteur video").bounding_box()
     boite = commandes.bounding_box()
@@ -37,7 +41,9 @@ def test_lecteur(page):
     expect(page.locator("#lect-menu")).to_be_hidden()
     page.click("#lect-plein")
     page.wait_for_timeout(400)
-    assert page.evaluate("!!document.fullscreenElement || document.querySelector('#lecteur').classList.contains('plein')")
+    assert page.evaluate(
+        "!!document.fullscreenElement || document.querySelector('#lecteur').classList.contains('plein')"
+    )
     page.click("#lect-plein")
     page.wait_for_timeout(400)
     if page.appareil == "ordinateur":
@@ -46,7 +52,9 @@ def test_lecteur(page):
         page.wait_for_timeout(800)
         assert page.evaluate("+document.querySelector('#lect-barre').value") >= avant + 8
     page.wait_for_timeout(3500)
-    assert page.evaluate("document.querySelector('#lecteur').classList.contains('repos')"), "les commandes doivent se cacher pendant la lecture"
+    assert page.evaluate("document.querySelector('#lecteur').classList.contains('repos')"), (
+        "les commandes doivent se cacher pendant la lecture"
+    )
 
 
 def test_systeme(page):
@@ -61,7 +69,7 @@ def test_terminal(page):
     page.wait_for_function("document.querySelector('#terminal .xterm')", timeout=10000)
     assert page.evaluate("document.querySelector('#terminal textarea').getAttribute('autocomplete')") == "off"
     if page.appareil == "ordinateur":
-        return       # sur ordinateur, copier-coller passe par le clavier (barre de touches réservée aux écrans tactiles)
+        return  # sur ordinateur, copier-coller passe par le clavier (barre de touches réservée aux écrans tactiles)
     page.evaluate("navigator.clipboard.writeText('echo jabba-ui-ok')")
     page.click("#t-coller")
     page.keyboard.press("Enter")

@@ -8,6 +8,7 @@ Deux façons de faire :
 Le choix est rangé dans /etc/jabba/redemarrage. Le minuteur de 4 h ne redémarre que
 si ce fichier dit « auto » (ExecCondition) : changer d'avis ne demande que ce fichier.
 """
+
 CHOICE_FILE = "/etc/jabba/redemarrage"
 MODES = ("auto", "manuel")
 UNIT = "jabba-redemarrage-auto"

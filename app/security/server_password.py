@@ -5,6 +5,7 @@
 - 5 essais ratés = blocage 10 minutes ;
 - changement du mot de passe, et code de secours en cas d'oubli.
 """
+
 import hashlib
 import hmac
 import json
@@ -44,8 +45,8 @@ sorbet tartine tilleul toucan vigne""".split()
 assert len(set(WORDS)) >= 256
 
 _lock = threading.Lock()
-_tokens = {}          # jeton -> expiration
-_failures = []          # horodatages des essais ratés
+_tokens = {}  # jeton -> expiration
+_failures = []  # horodatages des essais ratés
 
 
 def _read():
@@ -116,7 +117,11 @@ def token_info(token):
 def forget_tokens(identifier=None):
     """Déconnecte un compte (ou tout le monde)."""
     with _lock:
-        for token in [token for token, token_data in _tokens.items() if identifier is None or token_data["identifiant"] == identifier]:
+        for token in [
+            token
+            for token, token_data in _tokens.items()
+            if identifier is None or token_data["identifiant"] == identifier
+        ]:
             del _tokens[token]
 
 
@@ -138,7 +143,7 @@ def change_password(host_input_runner, user, new_value):
 # ---------------------------------------------------------------- code de secours
 def _code_hash(code, salt):
     normalized = " ".join(code.lower().split())
-    return hashlib.scrypt(normalized.encode(), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1).hex()
+    return hashlib.scrypt(normalized.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex()
 
 
 def generate_recovery_code():

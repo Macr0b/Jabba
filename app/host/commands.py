@@ -1,4 +1,5 @@
 """host.commands"""
+
 import os
 import re
 import subprocess
@@ -22,8 +23,11 @@ TASKS_DIR = "/var/lib/jabba/taches"
 
 def task_command(unit, interpreter="sh", properties=()):
     """La commande systemd-run qui lance le script déjà posé pour `unite` (voir lancer_sur_serveur)."""
-    return (["systemd-run", f"--unit={unit}", "--collect"] + [argument for prop in properties for argument in ("-p", prop)]
-            + [interpreter, f"{TASKS_DIR}/{unit}.sh"])
+    return (
+        ["systemd-run", f"--unit={unit}", "--collect"]
+        + [argument for prop in properties for argument in ("-p", prop)]
+        + [interpreter, f"{TASKS_DIR}/{unit}.sh"]
+    )
 
 
 def start_on_host(unit, script, interpreter="sh", properties=()):
@@ -36,8 +40,9 @@ def start_on_host(unit, script, interpreter="sh", properties=()):
     if not re.fullmatch(r"[a-z0-9-]{3,60}", unit):
         raise ValueError("Nom de tâche inattendu")
     path = f"{TASKS_DIR}/{unit}.sh"
-    code, _, error_output = run_on_host_with_input(["sh", "-c", f"umask 077 && mkdir -p {TASKS_DIR} && cat > {path}"],
-                               'rm -f "$0"\n' + script)
+    code, _, error_output = run_on_host_with_input(
+        ["sh", "-c", f"umask 077 && mkdir -p {TASKS_DIR} && cat > {path}"], 'rm -f "$0"\n' + script
+    )
     if code != 0:
         return code, "", error_output
     return run_on_host(task_command(unit, interpreter, properties))
@@ -48,7 +53,7 @@ def run_shell_on_host(script, timeout=30):
 
 
 # ---------------------------------------------------------------- comptes Nextcloud
-DEMO_OCC = os.environ.get("JABBA_DEMO_OCC")   # démo : « php /chemin/vers/nextcloud/occ »
+DEMO_OCC = os.environ.get("JABBA_DEMO_OCC")  # démo : « php /chemin/vers/nextcloud/occ »
 
 
 def occ(args, input_text=None, is_password=False, timeout=60):
@@ -60,14 +65,22 @@ def occ(args, input_text=None, is_password=False, timeout=60):
         if is_password:
             env["OC_PASS"], input_text = input_text, None
         try:
-            completed = subprocess.run(DEMO_OCC.split() + args, capture_output=True, text=True, timeout=timeout, input=input_text, env=env)
+            completed = subprocess.run(
+                DEMO_OCC.split() + args, capture_output=True, text=True, timeout=timeout, input=input_text, env=env
+            )
         except subprocess.TimeoutExpired:
             return 1, "", "Nextcloud ne répond pas."
         return completed.returncode, completed.stdout, completed.stderr
-    base = ["docker", "exec"] + (["-e", "OC_PASS"] if is_password else []) + ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
+    base = (
+        ["docker", "exec"]
+        + (["-e", "OC_PASS"] if is_password else [])
+        + ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
+    )
     try:
         if is_password:
-            return run_on_host(["sh", "-c", 'export OC_PASS="$(cat)"; exec "$@"', "sh"] + base + args, timeout, input_text)
+            return run_on_host(
+                ["sh", "-c", 'export OC_PASS="$(cat)"; exec "$@"', "sh"] + base + args, timeout, input_text
+            )
         return run_on_host(base + args, timeout)
     except subprocess.TimeoutExpired:
         return 1, "", "Nextcloud ne répond pas."

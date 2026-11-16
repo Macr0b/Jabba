@@ -12,6 +12,7 @@ ffmpeg ou de Pillow ne doit rien pouvoir faire. Ces programmes tournent donc :
 L'appli vérifie le chemin avant d'ouvrir (comme pour tout fichier), puis le
 programme sans droits ne voit que ce qu'on lui a passé.
 """
+
 import os
 import resource
 import shutil
@@ -23,7 +24,7 @@ import config
 
 NOBODY = 65534
 GPU_DEVICE = "/dev/dri/renderD128"
-IMAGE_MEMORY_LIMIT = 1024 ** 3      # 1 Go au plus pour décoder une image
+IMAGE_MEMORY_LIMIT = 1024**3  # 1 Go au plus pour décoder une image
 
 
 def is_active():
@@ -44,8 +45,16 @@ def prefix(gpu=False):
         return []
     group = gpu_group() if gpu else None
     groups_list = [f"--groups={group}"] if group else ["--clear-groups"]
-    return ["setpriv", f"--reuid={NOBODY}", f"--regid={NOBODY}", *groups_list,
-            "--inh-caps=-all", "--bounding-set=-all", "--no-new-privs", "--"]
+    return [
+        "setpriv",
+        f"--reuid={NOBODY}",
+        f"--regid={NOBODY}",
+        *groups_list,
+        "--inh-caps=-all",
+        "--bounding-set=-all",
+        "--no-new-privs",
+        "--",
+    ]
 
 
 def local_command(source):
@@ -76,7 +85,7 @@ def without_input_option(args):
     """ffprobe prend l'entrée sans « -i » devant."""
     arguments = list(args)
     index = arguments.index("-i")
-    return arguments[:index] + arguments[index + 1:]
+    return arguments[:index] + arguments[index + 1 :]
 
 
 def run(command, file_descriptors=(), gpu=False, **kw):
@@ -92,7 +101,7 @@ def writable_dir(path):
     os.makedirs(path, exist_ok=True)
     if is_active():
         parent = os.path.dirname(path)
-        os.chmod(parent, os.stat(parent).st_mode | 0o111)   # il doit pouvoir traverser le dossier parent
+        os.chmod(parent, os.stat(parent).st_mode | 0o111)  # il doit pouvoir traverser le dossier parent
         os.chown(path, NOBODY, NOBODY)
         os.chmod(path, 0o700)
 
@@ -107,8 +116,13 @@ def thumbnail(real_path, size, timeout=30):
     with open(os.path.join(config.APP_DIR, "vignette_seule.py")) as file:
         code = file.read()
     with open(real_path, "rb") as file:
-        completed = subprocess.run(prefix() + [sys.executable, "-I", "-c", code, str(int(size))], stdin=file,
-                           capture_output=True, timeout=timeout, preexec_fn=_limit_memory)
+        completed = subprocess.run(
+            prefix() + [sys.executable, "-I", "-c", code, str(int(size))],
+            stdin=file,
+            capture_output=True,
+            timeout=timeout,
+            preexec_fn=_limit_memory,
+        )
     if completed.returncode != 0 or not completed.stdout:
         raise RuntimeError("Aperçu impossible.")
     return completed.stdout

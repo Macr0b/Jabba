@@ -1,4 +1,5 @@
 """routes.backups"""
+
 import re
 from services import backups
 from services import activity_log
@@ -12,6 +13,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+
 @router.get("/api/sauvegardes")
 def backup_state(request: Request):
     guard.require_admin(request)
@@ -19,12 +21,22 @@ def backup_state(request: Request):
     running = backups.is_running(settings)
     disks = [{"nom": name, "chemin": disk_path} for name, disk_path in sorted(files_source.known_disks().items())]
     return {
-        "actif": settings["actif"], "pret": bool(settings["chemin"] and backups.passphrase()),
-        "disque": settings["disque"], "chemin": settings["chemin"], "branche": backups.disk_is_present(settings) if settings["chemin"] else None,
-        "heure": settings["heure"], "prochaine": backups.next_run(settings) if settings["actif"] else None,
-        "sources": [{"id": key, "nom": name, "detail": label, "actif": settings["sources"].get(key, True)} for key, (name, label) in backups.SOURCES.items()],
-        "garder": backups.KEEP, "en_cours": running, "depuis": settings["lancee"] if running else None,
-        "dernier": settings.get("dernier"), "derniere_reussie": settings.get("derniere_reussie"),
+        "actif": settings["actif"],
+        "pret": bool(settings["chemin"] and backups.passphrase()),
+        "disque": settings["disque"],
+        "chemin": settings["chemin"],
+        "branche": backups.disk_is_present(settings) if settings["chemin"] else None,
+        "heure": settings["heure"],
+        "prochaine": backups.next_run(settings) if settings["actif"] else None,
+        "sources": [
+            {"id": key, "nom": name, "detail": label, "actif": settings["sources"].get(key, True)}
+            for key, (name, label) in backups.SOURCES.items()
+        ],
+        "garder": backups.KEEP,
+        "en_cours": running,
+        "depuis": settings["lancee"] if running else None,
+        "dernier": settings.get("dernier"),
+        "derniere_reussie": settings.get("derniere_reussie"),
         "disques": disks,
     }
 
@@ -77,7 +89,9 @@ async def backup_settings(request: Request):
                 settings["sources"][key] = bool(value)
         if not any(settings["sources"].values()):
             raise HTTPException(400, "Garde au moins une chose à sauvegarder.")
-        changed.append("contenu : " + ", ".join(backups.SOURCES[key][0] for key, value in settings["sources"].items() if value))
+        changed.append(
+            "contenu : " + ", ".join(backups.SOURCES[key][0] for key, value in settings["sources"].items() if value)
+        )
     backups.write(settings)
     if changed:
         activity_log.record("sauvegardes", "Sauvegardes " + " ; ".join(changed), request.state.nom)
@@ -112,7 +126,9 @@ def browse_backup(request: Request, id: str, chemin: str = "/"):
     settings = backups.read()
     backups.require_readable(settings)
     try:
-        return {"elements": backups.browse(backups.run_restic, settings, backups.host_data_dir(), id, chemin, config.DEMO)}
+        return {
+            "elements": backups.browse(backups.run_restic, settings, backups.host_data_dir(), id, chemin, config.DEMO)
+        }
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
@@ -143,6 +159,12 @@ def show_passphrase(request: Request):
     if not phrase:
         raise HTTPException(404, "Pas encore de phrase de passe.")
     activity_log.record("sauvegardes", "Phrase de passe des sauvegardes affichée", request.state.nom)
-    notifications.send("securite", "Phrase des sauvegardes affichée",
-                   f"{request.state.nom} a affiché la phrase de passe des sauvegardes.", "/#/journal", family="admin", log=False)
+    notifications.send(
+        "securite",
+        "Phrase des sauvegardes affichée",
+        f"{request.state.nom} a affiché la phrase de passe des sauvegardes.",
+        "/#/journal",
+        family="admin",
+        log=False,
+    )
     return {"phrase": phrase}

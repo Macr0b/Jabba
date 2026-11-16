@@ -1,4 +1,5 @@
 """Emplacements fixes de l'appli (dossiers du code), communs à tous les modules."""
+
 import os
 
 # Dossier racine du code de l'appli (app/ dans le dépôt, /app dans le conteneur).
@@ -10,7 +11,6 @@ STATIC_DIR = os.path.join(APP_DIR, "static")
 # ---- ajouté au découpage de main.py
 import os
 import config
-
 
 
 DEMO = os.environ.get("JABBA_DEMO") == "1"

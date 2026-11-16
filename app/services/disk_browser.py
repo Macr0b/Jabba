@@ -3,6 +3,7 @@
 La racine est virtuelle : chaque entrée est un dossier du serveur, monté dans le
 conteneur sous /srv. Rien n'est jamais lu ni écrit en dehors de ces dossiers.
 """
+
 import hashlib
 import json
 import os
@@ -16,8 +17,10 @@ UID, GID = 1000, 1000
 
 def roots():
     """Nom affiché -> chemin sur le serveur. Réglable par DOSSIERS_DISQUE (« nom=chemin,… »)."""
-    raw = os.environ.get("DOSSIERS_DISQUE",
-                          "Films et séries=/srv/data/media,Téléchargements=/srv/data/downloads,Mes dossiers=/srv/data/dossiers")
+    raw = os.environ.get(
+        "DOSSIERS_DISQUE",
+        "Films et séries=/srv/data/media,Téléchargements=/srv/data/downloads,Mes dossiers=/srv/data/dossiers",
+    )
     result = {}
     for share in raw.split(","):
         if "=" in share:
@@ -54,10 +57,14 @@ def _entry(virtual_path, real_path, writable, external):
     stat = os.stat(real_path)
     folder = os.path.isdir(real_path)
     return {
-        "nom": virtual_path.rsplit("/", 1)[-1], "chemin": virtual_path, "dossier": folder,
+        "nom": virtual_path.rsplit("/", 1)[-1],
+        "chemin": virtual_path,
+        "dossier": folder,
         "taille": None if folder else stat.st_size,
         "modifie": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-        "type": None, "ecriture": writable, "externe": external,
+        "type": None,
+        "ecriture": writable,
+        "externe": external,
     }
 
 
@@ -181,8 +188,17 @@ def list_trash():
     for identifier, trash_dir, name, metadata in _trash_dirs():
         real_path = os.path.join(trash_dir, name)
         origin = metadata.get("chemin")
-        result.append({"id": identifier, "nom": name, "origine": (origin.rsplit("/", 1)[0] or "/") if origin else None, "supprime": metadata["t"],
-                    "dossier": os.path.isdir(real_path), "taille": metadata.get("taille"), "source": "disque"})
+        result.append(
+            {
+                "id": identifier,
+                "nom": name,
+                "origine": (origin.rsplit("/", 1)[0] or "/") if origin else None,
+                "supprime": metadata["t"],
+                "dossier": os.path.isdir(real_path),
+                "taille": metadata.get("taille"),
+                "source": "disque",
+            }
+        )
     return result
 
 
@@ -270,7 +286,9 @@ def search(text, disks, read_only, names=None, cutoff=60, delay=6.0):
                     continue
                 real_path = os.path.join(folder, name)
                 try:
-                    result.append(_entry(virtual_path + "/" + name, real_path, root_name not in read_only, root_name in disks))
+                    result.append(
+                        _entry(virtual_path + "/" + name, real_path, root_name not in read_only, root_name in disks)
+                    )
                 except OSError:
                     continue
                 if len(result) >= cutoff:
@@ -296,6 +314,7 @@ def thumbnail(real_path, size):
     cache = os.path.join(THUMBNAILS_DIR, key[:2], key + ".jpg")
     if not os.path.exists(cache):
         from services import sandbox
+
         # Pillow tourne à part, sans aucun droit : une image piégée ne peut rien faire.
         try:
             jpeg = sandbox.thumbnail(real_path, size)
