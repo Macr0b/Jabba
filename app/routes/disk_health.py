@@ -4,6 +4,10 @@ Sommaire :
   GET  /api/disques/sante            health_summary
   POST /api/disques/sante/activer    enable_health_checks (installe smartmontools : clic d'un super admin)
   POST /api/disques/sante/verifier   check_now
+  GET  /api/disques/entretien        maintenance_summary (TRIM du SSD, fragmentation)
+  POST /api/disques/entretien/trim   enable_trim (super admin)
+  POST /api/disques/entretien/mesurer measure_fragmentation
+  POST /api/disques/entretien/defragmenter defragment_disk
 """
 
 import asyncio
@@ -11,9 +15,9 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 
 import config
-from host import commands
+from host import actions, commands
 from security import guard
-from services import activity_log, disk_health
+from services import activity_log, disk_health, disk_maintenance
 
 router = APIRouter()
 
@@ -45,3 +49,43 @@ async def check_now(request: Request):
         raise HTTPException(409, "Active d'abord la surveillance.")
     await asyncio.to_thread(disk_health.check_all)
     return disk_health.summary()
+
+
+@router.get("/api/disques/entretien")
+async def maintenance_summary(request: Request):
+    guard.require_admin(request)
+    return await asyncio.to_thread(disk_maintenance.summary)
+
+
+@router.post("/api/disques/entretien/trim")
+async def enable_trim(request: Request):
+    guard.require_admin(request, "super", strong=True)
+    if not await asyncio.to_thread(disk_maintenance.enable_trim):
+        raise HTTPException(500, "Activation du TRIM impossible.")
+    activity_log.record("disque", "TRIM hebdomadaire du SSD activé", request.state.nom)
+    return await asyncio.to_thread(disk_maintenance.summary)
+
+
+@router.post("/api/disques/entretien/mesurer")
+def measure_fragmentation(request: Request):
+    guard.require_admin(request)
+    if not disk_maintenance.start_measure():
+        raise HTTPException(409, "Une mesure ou une défragmentation est déjà en cours.")
+    return {"ok": True}
+
+
+@router.post("/api/disques/entretien/defragmenter")
+async def defragment_disk(request: Request):
+    guard.require_admin(request, strong=True)
+    path = str((await request.json()).get("chemin", ""))
+    known = {disk["chemin"] for disk in disk_maintenance.summary()["disques"]}
+    if path not in known:
+        raise HTTPException(400, "Disque inconnu ou pas en ext4 à plateaux.")
+    try:
+        started = disk_maintenance.start_defragment(path, request.state.nom)
+    except actions.ActionError as error:
+        raise HTTPException(400, str(error))
+    if not started:
+        raise HTTPException(409, "Une mesure ou une défragmentation est déjà en cours.")
+    activity_log.record("disque", f"Défragmentation de {path} lancée", request.state.nom)
+    return {"ok": True}

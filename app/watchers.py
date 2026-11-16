@@ -6,6 +6,7 @@ Sommaire :
   watch_power : secteur coupé, batterie faible
   watch_space : disques presque pleins
   disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
+  disk_maintenance.watch_fragmentation : fragmentation des disques à plateaux (une fois par mois)
   mass_deletion.watch_mass_deletion : beaucoup de fichiers supprimés d'un coup
   tool_updates.watch_tool_updates : nouvelle version d'un outil (une fois par jour)
   public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
@@ -25,6 +26,7 @@ from services import (
     backups,
     disk_browser,
     disk_health,
+    disk_maintenance,
     files_source,
     guest_network,
     mass_deletion,
@@ -192,6 +194,7 @@ def watch_forever():
             steps += [
                 auto_disks.link_disks_to_nextcloud,
                 disk_health.watch_disk_health,
+                disk_maintenance.watch_fragmentation,
                 mass_deletion.watch_mass_deletion,
                 tool_updates.watch_tool_updates,
                 lambda: public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts),

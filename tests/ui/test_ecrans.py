@@ -123,3 +123,11 @@ def test_chaque_ecran_s_ouvre_sans_erreur(page):
 def test_consommation_des_outils(page):
     aller(page, "outils")
     expect(page.locator('[data-conso="nextcloud"]')).to_have_text("Mémoire 610 Mo · processeur 2,4 %")
+
+
+def test_entretien_des_disques(page):
+    aller(page, "disques")
+    carte = page.locator("#sante-disques")
+    expect(carte).to_contain_text("SSD : TRIM chaque semaine")
+    expect(carte).to_contain_text("R2-D2 : fragmentation faible")
+    expect(carte.locator("[data-defragmenter]")).to_have_count(0)  # rien à défragmenter sous 31

@@ -90,6 +90,36 @@ def _eject(args):
     return ["sh", "-c", 'sync && umount "$1"', "ejecter", _folder_path(args.get("chemin"))], 120
 
 
+def _partitions(args):
+    return ["lsblk", "-J", "-b", "-o", "NAME,PATH,FSTYPE,MOUNTPOINT,ROTA,TYPE,MODEL"], 30
+
+
+def _trim_state(args):
+    return [
+        "systemctl",
+        "show",
+        "fstrim.timer",
+        "-p",
+        "UnitFileState",
+        "-p",
+        "ActiveState",
+        "-p",
+        "LastTriggerUSec",
+    ], 10
+
+
+def _enable_trim(args):
+    return ["systemctl", "enable", "--now", "fstrim.timer"], 60
+
+
+def _measure_fragmentation(args):
+    return ["e4defrag", "-c", _folder_path(args.get("chemin"))], 3600
+
+
+def _defragment(args):
+    return ["e4defrag", _folder_path(args.get("chemin"))], 6 * 3600
+
+
 ACTIONS = {
     "nom_du_serveur": _server_name,
     "espace_disques": _disk_space,
@@ -99,6 +129,11 @@ ACTIONS = {
     "est_monte": _is_mounted,
     "lire_fstab": _read_fstab,
     "ejecter": _eject,
+    "liste_partitions": _partitions,
+    "etat_trim": _trim_state,
+    "activer_trim": _enable_trim,
+    "mesurer_fragmentation": _measure_fragmentation,
+    "defragmenter": _defragment,
 }
 NAMES = tuple(ACTIONS)
 
