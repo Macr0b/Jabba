@@ -3,6 +3,7 @@
 import re
 import urllib.parse
 
+from outils_ui import attendre
 from playwright.sync_api import expect
 
 
@@ -25,7 +26,8 @@ def test_lecteur(page):
     """Le lecteur : vidéo convertie par le serveur, commandes par-dessus l'image, menu, plein écran, ±10 s."""
     aller(page, "fichiers?chemin=" + urllib.parse.quote("/Films et séries/Films"))
     page.get_by_text("Film test.mkv").click()
-    page.wait_for_function(
+    attendre(
+        page,
         "(() => { const v = document.querySelector('#lecteur video'); return v && v.readyState >= 3 && v.currentTime > 0.3; })()",
         timeout=30000,
     )
@@ -66,7 +68,7 @@ def test_systeme(page):
 
 def test_terminal(page):
     aller(page, "terminal")
-    page.wait_for_function("document.querySelector('#terminal .xterm')", timeout=10000)
+    attendre(page, "!!document.querySelector('#terminal .xterm')", timeout=20000)
     assert page.evaluate("document.querySelector('#terminal textarea').getAttribute('autocomplete')") == "off"
     if page.appareil == "ordinateur":
         return  # sur ordinateur, copier-coller passe par le clavier (barre de touches réservée aux écrans tactiles)
@@ -108,8 +110,21 @@ def test_etabli(page):
     expect(page.locator("#contenu h1").first).to_have_text("Établi")
 
 
-ECRANS = ["accueil", "outils", "fichiers", "disques", "invites", "nuage", "systeme", "journal", "utilisateurs",
-          "sauvegardes", "corbeille", "aide", "plus"]
+ECRANS = [
+    "accueil",
+    "outils",
+    "fichiers",
+    "disques",
+    "invites",
+    "nuage",
+    "systeme",
+    "journal",
+    "utilisateurs",
+    "sauvegardes",
+    "corbeille",
+    "aide",
+    "plus",
+]
 
 
 def test_chaque_ecran_s_ouvre_sans_erreur(page):

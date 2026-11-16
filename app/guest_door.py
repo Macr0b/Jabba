@@ -16,6 +16,15 @@ from services import guests
 
 
 # ---------------------------------------------------------------- la porte du Wi-Fi (port 80)
+def guard_policy():
+    """Même politique de sécurité que l'appli, sans cadres : la page invités n'ouvre rien dedans."""
+    return (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+        "media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self'; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    )
+
+
 def use_disk_for_uploads():
     """Les envois en cours de réception vont sur le disque des invités, pas en mémoire.
 
@@ -55,6 +64,7 @@ async def wifi_guard(request: Request, call_next):
         return JSONResponse({"erreur": "Requête refusée."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Content-Security-Policy", guard_policy())
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     return response

@@ -104,8 +104,14 @@ def test_mauvais_mots_de_passe_ne_bloquent_que_leur_auteur(client, monkeypatch):
     client.cookies.clear()
     curieux = {**H, "X-Demo-Login": "curieux@exemple.fr"}
     for _ in range(server_password.MAX_ATTEMPTS):
-        client.post("/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "faux"}, headers=curieux)
-    r = client.post("/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "faux"}, headers=curieux)
+        client.post(
+            "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "faux"}, headers=curieux
+        )
+    r = client.post(
+        "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "faux"}, headers=curieux
+    )
     assert r.status_code == 429
-    r = client.post("/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"}, headers=H)
+    r = client.post(
+        "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"}, headers=H
+    )
     assert r.status_code == 200  # l'admin, lui, se connecte normalement

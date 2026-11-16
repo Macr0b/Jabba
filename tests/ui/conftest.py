@@ -10,6 +10,7 @@ import time
 import urllib.request
 
 import pytest
+from outils_ui import attendre
 
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "app")
 playwright = pytest.importorskip("playwright.sync_api")
@@ -142,6 +143,8 @@ def page(request, navigateur, appli):
     p = ctx.new_page()
     erreurs = []
     p.on("pageerror", lambda e: erreurs.append(str(e)))
+    # Tout ce que la politique de sécurité de la page bloque est une erreur aussi.
+    p.on("console", lambda m: erreurs.append(m.text) if "Content Security Policy" in m.text else None)
     p.appareil = request.param
     p.goto(appli + "/")
     p.wait_for_selector("#connexion", state="attached")
@@ -149,7 +152,7 @@ def page(request, navigateur, appli):
     p.fill("input[name=identifiant]", "serveur-demo")
     p.fill("input[name=mdp]", "demo-mot-de-passe")
     p.press("input[name=mdp]", "Enter")
-    p.wait_for_function("!document.querySelector('dialog[open]')")
+    attendre(p, "!document.querySelector('dialog[open]')")
     p.wait_for_timeout(500)
     p.racine = appli
     yield p

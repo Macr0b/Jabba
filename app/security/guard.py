@@ -65,6 +65,7 @@ async def guard(request: Request, call_next):
         return JSONResponse({"erreur": "Requête refusée."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Content-Security-Policy", PAGE_POLICY)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     return response
@@ -124,6 +125,15 @@ def record_refusal(login, request):
     except OSError:
         pass
 
+
+# Politique de sécurité des pages : seuls les scripts de l'appli elle-même peuvent tourner
+# (aucun script venu d'ailleurs, aucun script écrit dans la page). Les outils ouverts dans
+# l'appli (Jellyfin…) s'affichent dans un cadre : seulement en https.
+PAGE_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+    "media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' https:; "
+    "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+)
 
 # Ce qui reste ouvert sans connexion admin (pages invités, connexion, mot de passe oublié).
 PUBLIC_PATHS = (
