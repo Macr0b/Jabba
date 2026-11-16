@@ -28,7 +28,6 @@ Une appli web installable (écran d'accueil de l'iPhone, Dock du Mac) qui sert d
   - journal d'activité ;
   - mise à jour de l'appli en un clic ;
   - historique des versions ;
-  - terminal du serveur (compte du serveur seulement, mot de passe redemandé) ;
   - sauvegardes.
 - **Comptes Nextcloud** (façon Dropbox) : inscription libre validée par un super admin, 5 Go par défaut, espace changé par les admins sous un plafond fixé par le super admin, groupes, dossiers communs (lecture seule, dépôt ou accès complet) pour tous les membres, un groupe ou un rang (rangs en option, nommés librement : un dossier donné à un rang est vu par ce rang et ceux au-dessus). Tout passe par les applis officielles de Nextcloud (Registration, Team folders) et est noté au Journal.
 - **Serveur ouvert au public** (option) : pour un fablab ou une association ; liens publics protégés, mentions RGPD, comptes inactifs signalés, demandes de fichiers par lien.
@@ -36,7 +35,7 @@ Une appli web installable (écran d'accueil de l'iPhone, Dock du Mac) qui sert d
 - **Dossiers partagés** : depuis Fichiers, « Partager avec… » un rang ou un groupe, même pour un dossier d'un disque branché (la personne ne voit que ce dossier). Lecture seule ou modification, arrêt d'un clic.
 - **Sauvegardes** : chaque nuit, une copie chiffrée ([restic](https://restic.net)) des fichiers, des réglages des outils (avec une copie propre de leurs bases de données) et de ceux du serveur part sur le disque choisi, dans un dossier caché. Seules les nouveautés prennent de la place ; on garde 7 jours, 4 semaines et 6 mois. Une sauvegarde manquée (disque absent, serveur éteint) part dès que possible. Pour récupérer un fichier : choisir une date, puis le fichier ; il revient à côté, dans « Mes dossiers › Restaurations », sans rien écraser. La phrase de passe est montrée une seule fois : sans elle, les sauvegardes sont illisibles.
 
-Tout est en français. Aucune dépendance externe dans l'interface : xterm.js (terminal) et hls.js (lecteur vidéo) sont livrés avec l'appli.
+Tout est en français. Aucune dépendance externe dans l'interface : hls.js (lecteur vidéo) est livré avec l'appli.
 
 ## Sécurité
 
@@ -50,12 +49,13 @@ Tout est en français. Aucune dépendance externe dans l'interface : xterm.js (t
 - **Ce dépôt ne contient aucun secret** : ni adresse, ni nom de serveur, ni mot de passe. Chaque serveur garde ses réglages dans son propre `.env` et ses données dans `donnees/`, jamais publiés.
 - **Le dépôt ne peut rien envoyer à un serveur.** C'est le serveur qui regarde s'il existe une nouvelle version, et rien ne s'installe sans le clic d'un admin.
 - **Les mises à jour sont signées.** Chaque version a sa signature SSH (`signatures/`), faite avec une clé qui ne quitte pas l'ordinateur du mainteneur. Avant d'installer quoi que ce soit, le serveur la vérifie avec la clé de la version **qu'il a déjà** (`app/cle_publication.pub`) : un compte GitHub piraté ne suffit pas à faire installer du code. Sans signature valable, rien ne s'installe et une alerte part. (Limite : le script d'installation, lui, se télécharge sans vérification ; lis-le avant de le lancer.)
-- Le terminal de l'appli ouvre un shell sur le serveur avec le compte du serveur : **il donne tous les pouvoirs sur la machine**. Il est donc réservé au compte du serveur (son propriétaire), demande un mot de passe saisi depuis moins de 10 minutes, passe par un ticket à usage unique valable 30 secondes, et chaque ouverture envoie une alerte. Les commandes tapées sont notées au Journal, à titre indicatif seulement (un shell lancé à la main n'est plus noté). Le compte du serveur ne fait pas partie du groupe `docker` : `sudo docker …` redemande son mot de passe.
+- **Moindre privilège, en cours.** Un service à part (`jabba-hote`), sans réseau, n'exécute qu'une liste fermée d'actions aux paramètres vérifiés (`app/host/actions.py`), reçues par une prise locale. Les actions migrent par familles (disques d'abord, en 0.14) ; à la dernière étape, l'appli web n'aura plus aucun droit sur le serveur.
+- Pas de terminal dans l'appli (retiré en 0.14) : un shell complet donnerait tous les pouvoirs à quiconque prendrait la main sur l'interface web. Pour un terminal, on passe par SSH.
 - Dockge pilote Docker, donc tout le serveur : il n'écoute que sur le serveur lui-même et n'est joignable que par Tailscale, jamais depuis le Wi-Fi.
 - Pour piloter le serveur (Docker, disques, courant), le conteneur de l'appli a des droits étendus sur la machine (`privileged`, `pid: host`). C'est pour ça qu'il n'est joignable que par Tailscale, et qu'il ne traite plus rien qui vienne d'inconnus (la page invités et le décodage des fichiers sont ailleurs, sans droits). Étape suivante prévue : un petit service privilégié n'acceptant qu'une liste fermée d'actions, et l'appli elle-même sans droits.
 - **Le serveur se relève seul** : chien de garde matériel, redémarrage après une erreur grave du noyau, démarrage jamais bloqué par un disque absent, veille des disques limitée aux disques internes (jamais l'USB).
 - **Redémarrage après une mise à jour : au choix.** Le script d'installation le demande, et ça se change ensuite dans Système : le serveur redémarre seul à 4 h, ou Jabba prévient et on redémarre quand on est devant (conseillé si la machine a déjà bloqué au démarrage). Le choix est gardé dans `/etc/jabba/redemarrage`.
-- Des tests automatiques (`tests/`, lancés par GitHub à chaque envoi et avant chaque release) vérifient ces protections : signature des mises à jour, mot de passe oublié, terminal, porte du Wi-Fi, bac à sable, Dockge.
+- Des tests automatiques (`tests/`, lancés par GitHub à chaque envoi et avant chaque release) vérifient ces protections : signature des mises à jour, mot de passe oublié, porte du Wi-Fi, bac à sable, Dockge.
 
 ## Organisation du code
 
@@ -65,7 +65,7 @@ app/
   config.py        réglages lus au démarrage (.env)
   guest_door.py    la porte du Wi-Fi (page invités, conteneur sans pouvoirs)
   watchers.py      surveillance en fond (disques, batterie, mises à jour…)
-  host/            commandes envoyées au serveur lui-même
+  host/            actions sur le serveur : liste fermée (actions.py), service privilégié (host_service.py), ancienne voie (commands.py)
   security/        contrôle d'accès, sessions, comptes admin, mot de passe du serveur, règles des mots de passe, double vérification
   services/        le travail : disques, Nextcloud, sauvegardes, invités, lecteur vidéo…
   routes/          l'API, un fichier par partie de l'appli
@@ -138,4 +138,3 @@ The "Jabba" name and logo are not covered by the license: see [TRADEMARK.md](TRA
 
 Composants tiers / Third-party components:
 - `app/static/vendor/hls.js` — hls.js 1.5.20, Dailymotion, Apache License 2.0 (`app/static/vendor/LICENSE-hls.js`)
-- `app/static/vendor/xterm*` — xterm.js et addon-fit, MIT (`app/static/vendor/LICENSE-xterm`)

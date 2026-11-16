@@ -104,7 +104,7 @@ const HELP_TOPICS = [
     [
       "À faire dès aujourd'hui : range la phrase de passe des sauvegardes (montrée une seule fois à leur mise en route) et le code de secours du serveur dans l'app Mots de passe, pas seulement sur le serveur. Sans elle, la sauvegarde est illisible.",
       "Sur une machine neuve : installe Debian, puis suis la méthode d'installation de Jabba (installer.sh). Choisis le même nom de serveur.",
-      "Branche le disque des sauvegardes, puis ouvre Système → Terminal et liste les copies : restic -r /chemin/du/disque/.sauvegardes-jabba snapshots (la phrase de passe est demandée).",
+      "Branche le disque des sauvegardes, puis, depuis le Terminal du Mac, connecte-toi au serveur en SSH (ssh ton-compte@nom-du-serveur) et liste les copies : restic -r /chemin/du/disque/.sauvegardes-jabba snapshots (la phrase de passe est demandée).",
       "Remets les fichiers : restic -r … restore latest --target / --include /srv/data. Fais de même pour /opt/stacks (les outils et leurs réglages). /etc n'est pas à remettre en entier : on y reprend seulement ce dont on a besoin.",
       "Nextcloud : la base de données est dans /opt/stacks/nextcloud/sauvegarde-base.sql ; réimporte-la dans le conteneur nextcloud-db avant de relancer Nextcloud depuis l'Établi.",
       "Fais ce test une fois, à blanc, sur un autre ordinateur : c'est le seul moyen d'être sûr que la sauvegarde sert vraiment.",

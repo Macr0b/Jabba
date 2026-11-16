@@ -36,7 +36,6 @@ from routes import (
     second_factor,
     shares,
     system,
-    terminal,
     tools,
 )
 from security import guard
@@ -86,7 +85,6 @@ for module in (
     accounts,
     system,
     tools,
-    terminal,
     files,
     files_batch,
     disks,

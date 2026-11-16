@@ -4,17 +4,58 @@ L'appli tourne dans un conteneur ; pour agir sur le serveur (disques, Docker, re
 elle entre dans ses espaces de noms avec nsenter. Tout passe par ce fichier.
 
 Sommaire :
+  run_action : une action de la liste fermée (host/actions.py), par le service privilégié
   run_on_host / run_on_host_with_input / run_shell_on_host : lancer une commande et attendre
+                                 (ancienne voie, en cours de remplacement par run_action)
   task_command / start_on_host : lancer un script en tâche de fond (systemd-run), qui survit
                                  au redémarrage de l'appli
   occ : une commande d'administration de Nextcloud
 """
 
+import json
 import os
 import re
+import socket
 import subprocess
 
 import config
+from host import actions
+
+HOST_SOCKET = os.environ.get("JABBA_HOTE_SOCKET", "/run/jabba/hote.sock")
+
+
+# ---------------------------------------------------------------- liste fermée
+def run_action(name, **args):
+    """Demande une action de la liste fermée. (code, sortie, erreur), comme run_on_host.
+
+    Avec le service privilégié (sa prise existe) : la demande lui est envoyée.
+    Sans lui (démo, tests, ancienne installation) : la même commande, construite par
+    host/actions.py, est lancée par l'ancienne voie. Un paramètre refusé lève ActionError
+    dans les deux cas.
+    """
+    command, timeout = actions.build(name, args)
+    if not os.path.exists(HOST_SOCKET):
+        return run_on_host(command, timeout=timeout)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(timeout + 10)
+            connection.connect(HOST_SOCKET)
+            connection.sendall((json.dumps({"action": name, "args": args}) + "\n").encode())
+            answer = b""
+            while not answer.endswith(b"\n"):
+                chunk = connection.recv(65536)
+                if not chunk:
+                    break
+                answer += chunk
+    except OSError:
+        # Service arrêté (prise restée là) : tant que l'appli garde ses droits, l'ancienne voie dépanne.
+        # Cette solution de secours disparaîtra avec la dernière étape (l'appli sans droits).
+        return run_on_host(command, timeout=timeout)
+    try:
+        reply = json.loads(answer)
+    except ValueError:
+        return 1, "", "Le service du serveur ne répond pas."
+    return reply.get("code", 1), reply.get("sortie", ""), reply.get("erreur", "")
 
 
 # ---------------------------------------------------------------- hôte

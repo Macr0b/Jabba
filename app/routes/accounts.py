@@ -3,7 +3,7 @@
 Sommaire :
   GET  /api/comptes                    list_accounts
   POST /api/comptes                    create_account
-  POST /api/comptes/{cid}              update_account (rang, Tailscale, terminal, nom, suppression)
+  POST /api/comptes/{cid}              update_account (rang, Tailscale, nom, suppression)
   POST /api/comptes-reglages           update_account_settings
   POST /api/comptes-moi/mot-de-passe   change_my_password
   POST /api/comptes-oubli              forgotten_password (demande de remise)
@@ -92,7 +92,7 @@ async def update_account(cid: str, request: Request):
     session = guard.require_admin_space(request)
     body = await request.json()
     action = body.get("action")
-    if action in ("supprimer", "rang", "terminal"):
+    if action in ("supprimer", "rang"):
         guard.require_admin(request, strong=True)
     if action == "supprimer":
         account = guard.translate_account_refusal(lambda: accounts.delete(cid, session["rang"]))
@@ -108,11 +108,6 @@ async def update_account(cid: str, request: Request):
             lambda: accounts.update(cid, session["rang"], tailscale=body.get("tailscale") or None)
         )
         text = f"{account['identifiant']} : compte Tailscale {account['tailscale'] or 'retiré'}"
-    elif action == "terminal":
-        account = guard.translate_account_refusal(
-            lambda: accounts.update(cid, session["rang"], terminal_allowed=bool(body.get("terminal")))
-        )
-        text = f"Terminal {'autorisé' if account['terminal'] else 'retiré'} pour {account['identifiant']}"
     elif action == "nom":
         account = guard.translate_account_refusal(
             lambda: accounts.update(cid, session["rang"], display_name=body.get("nom") or "")
@@ -121,7 +116,7 @@ async def update_account(cid: str, request: Request):
     else:
         raise HTTPException(400, "Action inconnue.")
     activity_log.record("admin", f"{text}, par {session['identifiant']}", request.state.nom)
-    if action in ("supprimer", "rang", "terminal"):
+    if action in ("supprimer", "rang"):
         notifications.send(
             "comptes",
             "Comptes modifiés",

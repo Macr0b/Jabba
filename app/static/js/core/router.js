@@ -36,11 +36,9 @@ export async function router() {
       (element.dataset.page === "outils" && page === "ouvrir") ||
       (element.dataset.page === "comptes" && ["nuage", "utilisateurs"].includes(page)) ||
       (element.dataset.page === "plus" &&
-        ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "terminal", "sauvegardes"].includes(
-          page,
-        )) ||
+        ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "sauvegardes"].includes(page)) ||
       (element.dataset.page === "fichiers" && page === "corbeille") ||
-      (element.dataset.page === "systeme" && ["journal", "terminal", "sauvegardes"].includes(page));
+      (element.dataset.page === "systeme" && ["journal", "sauvegardes"].includes(page));
     element.classList.toggle("actif", active);
     if (active) element.setAttribute("aria-current", "page");
     else element.removeAttribute("aria-current");

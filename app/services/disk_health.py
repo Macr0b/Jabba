@@ -19,7 +19,7 @@ import os
 import time
 
 import config
-from host import commands
+from host import actions, commands
 from services import notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
@@ -58,7 +58,7 @@ def _write_state(state):
 def installed():
     if config.DEMO:
         return True
-    return commands.run_on_host(["sh", "-c", "command -v smartctl"])[0] == 0
+    return commands.run_action("smartctl_installe")[0] == 0
 
 
 # ---------------------------------------------------------------- verdict
@@ -113,7 +113,7 @@ def assess(report):
 
 # ---------------------------------------------------------------- lecture
 def _physical_disks():
-    code, output, _ = commands.run_on_host(["lsblk", "-J", "-d", "-b", "-o", "NAME,PATH,MODEL,SERIAL,TRAN,TYPE,SIZE"])
+    code, output, _ = commands.run_action("liste_disques")
     if code != 0:
         return []
     try:
@@ -127,11 +127,12 @@ def _physical_disks():
 
 def _smart_report(path, usb):
     """Le rapport JSON, ou None si le disque dort (ou ne sait pas répondre)."""
-    attempts = [["smartctl", "-j", "-H", "-A", "-n", "standby", path]]
-    if usb:
-        attempts.append(["smartctl", "-j", "-H", "-A", "-n", "standby", "-d", "sat", path])
-    for command in attempts:
-        code, output, _ = commands.run_on_host(command, timeout=60)
+    attempts = [False, True] if usb else [False]  # USB : on essaie aussi le pont « sat »
+    for sat_bridge in attempts:
+        try:
+            code, output, _ = commands.run_action("sante_disque", appareil=path, pont_sat=sat_bridge)
+        except actions.ActionError:
+            return None
         try:
             report = json.loads(output)
         except ValueError:

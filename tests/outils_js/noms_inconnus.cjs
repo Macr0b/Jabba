@@ -8,7 +8,7 @@ const GLOBALS = new Set(Object.getOwnPropertyNames(globalThis).concat([
   "Blob", "File", "FileReader", "Headers", "Request", "Response", "AbortController", "Notification", "WebSocket", "Image",
   "HTMLElement", "HTMLVideoElement", "Event", "CustomEvent", "KeyboardEvent", "MutationObserver", "ResizeObserver", "IntersectionObserver",
   "requestAnimationFrame", "cancelAnimationFrame", "getComputedStyle", "matchMedia", "history", "screen", "alert", "confirm",
-  "self", "caches", "clients", "registration", "Hls", "Terminal", "FitAddon", "atob", "btoa", "crypto", "performance",
+  "self", "caches", "clients", "registration", "Hls", "atob", "btoa", "crypto", "performance",
   "MediaSource", "PushManager", "ServiceWorkerRegistration", "DOMParser", "XMLHttpRequest", "Node", "NodeFilter", "Range",
   "CSS", "DataTransfer", "ClipboardItem", "visualViewport", "innerWidth", "innerHeight", "scrollTo", "open", "close", "print",
 ]));

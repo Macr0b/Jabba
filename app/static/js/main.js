@@ -15,7 +15,6 @@ import "./pages/guests_admin.js";
 import "./pages/help.js";
 import "./pages/home.js";
 import "./pages/system.js";
-import "./pages/terminal.js";
 import "./pages/tools.js";
 import { toast } from "./components/dialogs.js";
 import { showPasswordReset, chooseMyPassword, logOut } from "./core/admin_session.js";

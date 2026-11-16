@@ -12,14 +12,32 @@ services:
     # ni les fichiers à décoder (ffmpeg et Pillow tournent sans droits, bac_a_sable.py).
     pid: host
     privileged: true
+    depends_on: [jabba-hote]
     volumes:
       - ./donnees:/data
+      # La prise du service privilégié (liste fermée des actions sur le serveur).
+      - /run/jabba:/run/jabba
       # Les dossiers du serveur, pour l'écran Fichiers quand Nextcloud est désactivé.
       - type: bind
         source: /srv
         target: /srv
         bind:
           propagation: rslave
+    restart: unless-stopped
+
+  # Le service privilégié : le seul à agir sur le serveur, et seulement par une liste fermée
+  # d'actions (app/host/actions.py). Aucun réseau ; il n'écoute que sur une prise locale
+  # (/run/jabba/hote.sock) partagée avec l'appli. L'appli migre vers lui famille par famille ;
+  # à la dernière étape, elle perdra tous ses droits (recommandation ANSSI).
+  jabba-hote:
+    image: jabba-app:local
+    container_name: jabba-hote
+    command: ["python", "-m", "host.host_service"]
+    network_mode: none
+    pid: host
+    privileged: true
+    volumes:
+      - /run/jabba:/run/jabba
     restart: unless-stopped
 
   # La porte du Wi-Fi : la page invités (http://<serveur>.local), sans aucun pouvoir.

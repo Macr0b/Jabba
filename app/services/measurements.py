@@ -8,7 +8,7 @@ import os
 import time
 
 import config
-from host import commands
+from host import actions, commands
 
 
 # ---------------------------------------------------------------- mesures
@@ -55,7 +55,10 @@ def temperature():
 
 
 def disk_space(paths):
-    code, output, _ = commands.run_on_host(["df", "-B1", "--output=target,size,used"] + paths)
+    try:
+        code, output, _ = commands.run_action("espace_disques", chemins=paths)
+    except actions.ActionError:
+        return {}
     result = {}
     for line in output.splitlines()[1:]:
         shares = line.split()
@@ -71,5 +74,7 @@ def uptime():
 
 def server_name():
     return (
-        "Serveur-démo" if config.DEMO else (commands.run_on_host(["hostname"])[1].strip().capitalize() or "Le serveur")
+        "Serveur-démo"
+        if config.DEMO
+        else (commands.run_action("nom_du_serveur")[1].strip().capitalize() or "Le serveur")
     )

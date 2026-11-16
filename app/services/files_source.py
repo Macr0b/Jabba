@@ -20,7 +20,7 @@ import time
 from fastapi import HTTPException
 
 import config
-from host import commands
+from host import actions, commands
 from services import activity_log, auto_disks, disk_browser
 
 # ---------------------------------------------------------------- source de l'écran Fichiers
@@ -101,9 +101,17 @@ def rescan_in_nextcloud(path):
     activity_log.record("disque", f"Nextcloud a relu {folder}")
 
 
+def is_mounted(path):
+    """Vrai si un disque est monté sur `path` (action « est_monte » de la liste fermée)."""
+    try:
+        return commands.run_action("est_monte", chemin=path)[0] == 0
+    except actions.ActionError:
+        return False
+
+
 def _mount(path):
     commands.run_on_host(["ls", path], timeout=10)
-    if commands.run_on_host(["mountpoint", "-q", path], timeout=10)[0] == 0:
+    if is_mounted(path):
         return True
     _, unit, _ = commands.run_on_host(["systemd-escape", "--path", "--suffix=automount", path])
     unit = unit.strip()
@@ -116,14 +124,14 @@ def _mount(path):
         ],
         timeout=30,
     )
-    return commands.run_on_host(["mountpoint", "-q", path], timeout=10)[0] == 0
+    return is_mounted(path)
 
 
 def is_writable(path):
     """True si le disque monté sur `chemin` est déclaré en écriture dans /etc/fstab."""
     if config.DEMO:
         return bool(os.environ.get("JABBA_DEMO_ECRITURE"))
-    code, fstab, _ = commands.run_on_host(["cat", "/etc/fstab"])
+    code, fstab, _ = commands.run_action("lire_fstab")
     for line in fstab.splitlines():
         fields = line.split()
         if len(fields) >= 4 and not line.lstrip().startswith("#") and fields[1] == path:
@@ -173,7 +181,7 @@ _UUID_CACHE = {"t": 0, "v": {}}
 def disk_uuid(path):
     """Identifiant du disque monté sur `chemin`, lu dans /etc/fstab (gardé 1 minute)."""
     if time.time() - _UUID_CACHE["t"] > 60:
-        _, fstab, _ = commands.run_on_host(["cat", "/etc/fstab"])
+        _, fstab, _ = commands.run_action("lire_fstab")
         value = {}
         for line in fstab.splitlines():
             fields = line.split()

@@ -107,7 +107,7 @@ async def set_disk_mode(nom: str, request: Request):
     writable = bool((await request.json()).get("ecriture"))
     if config.DEMO:
         return {"ok": True, "ecriture": writable}
-    code, fstab, _ = commands.run_on_host(["cat", "/etc/fstab"])
+    code, fstab, _ = commands.run_action("lire_fstab")
     lines, found = [], False
     for line in fstab.splitlines():
         fields = line.split()
@@ -166,7 +166,7 @@ def eject_disk(nom: str, request: Request):
     if config.DEMO:
         files_source.EJECTED[nom] = time.time()
         return {"ok": True}
-    code, _, error_output = commands.run_shell_on_host(f"sync && umount '{path}'", timeout=120)
+    code, _, error_output = commands.run_action("ejecter", chemin=path)
     if code != 0 and "not mounted" not in error_output:
         raise HTTPException(
             409,

@@ -82,7 +82,6 @@ def _public_view(account):
             "derniere_connexion",
         )
     }
-    result["terminal"] = account.get("terminal", True)  # les super admins ont le terminal, sauf s'il leur est retiré
     return result
 
 
@@ -218,7 +217,7 @@ def _account(data, cid):
     raise Refusal(404, "Compte introuvable.")
 
 
-def update(account_id, actor_role, role=None, tailscale=False, display_name=None, terminal_allowed=None):
+def update(account_id, actor_role, role=None, tailscale=False, display_name=None):
     with _lock:
         data = _read()
         account = _account(data, account_id)
@@ -232,10 +231,6 @@ def update(account_id, actor_role, role=None, tailscale=False, display_name=None
             account["tailscale"] = _check_login(tailscale)
         if display_name is not None:
             account["nom"] = display_name.strip()[:60] or account["identifiant"]
-        if terminal_allowed is not None:
-            if actor_role != "super":
-                raise Refusal(403, "Seul un super admin peut régler l'accès au terminal.")
-            account["terminal"] = bool(terminal_allowed)
         _write(data)
         return _public_view(account)
 

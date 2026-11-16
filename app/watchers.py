@@ -99,7 +99,7 @@ def watch_power():
 def watch_space():
     paths = {"/": "Disque système", "/srv/data": "Disque de données"}
     for name, path in files_source.known_disks().items():
-        if commands.run_on_host(["mountpoint", "-q", path], timeout=10)[0] == 0:
+        if files_source.is_mounted(path):
             paths[path] = name
     for path, usage_entry in measurements.disk_space(list(paths)).items():
         percent = 100 * usage_entry["utilise"] / max(1, usage_entry["total"])

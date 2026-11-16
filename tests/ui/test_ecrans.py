@@ -66,21 +66,6 @@ def test_systeme(page):
     expect(page.locator("#maj h2")).to_have_text("Appli Jabba")
 
 
-def test_terminal(page):
-    aller(page, "terminal")
-    attendre(page, "!!document.querySelector('#terminal .xterm')", timeout=20000)
-    assert page.evaluate("document.querySelector('#terminal textarea').getAttribute('autocomplete')") == "off"
-    if page.appareil == "ordinateur":
-        return  # sur ordinateur, copier-coller passe par le clavier (barre de touches réservée aux écrans tactiles)
-    page.evaluate("navigator.clipboard.writeText('echo jabba-ui-ok')")
-    page.click("#t-coller")
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(800)
-    page.click("#t-copier")
-    page.wait_for_timeout(300)
-    assert "jabba-ui-ok" in page.evaluate("navigator.clipboard.readText()")
-
-
 def test_sauvegardes(page):
     aller(page, "sauvegardes")
     expect(page.locator("#contenu h1").first).to_have_text("Sauvegardes")

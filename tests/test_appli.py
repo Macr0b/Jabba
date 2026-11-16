@@ -1,4 +1,4 @@
-"""L'appli en démo : terminal réservé au compte du serveur (point 2), Dockge jamais ouvert au Wi-Fi (point 3)."""
+"""L'appli en démo : plus de terminal (retiré en 0.14), Dockge jamais ouvert au Wi-Fi (point 3)."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,21 +23,10 @@ def connecter(client, ident, mdp):
     return r.json()
 
 
-def test_terminal_pour_le_compte_du_serveur(client):
+def test_le_terminal_n_existe_plus(client):
+    """Retiré en 0.14 : un shell complet ne rentre pas dans la liste fermée des actions du serveur."""
     connecter(client, "serveur-demo", "demo-mot-de-passe")
-    r = client.post("/api/terminal/ticket", headers=H)
-    assert r.status_code == 200 and r.json()["ticket"]
-
-
-def test_terminal_refuse_a_un_autre_super_admin(client):
-    connecter(client, "serveur-demo", "demo-mot-de-passe")
-    c, mdp = accounts.create("second", "Second", "super", None, "test", "super", set())
-    nouveau = "Un-mot-de-passe-solide-42"
-    accounts.change_own_password("second", nouveau)
-    connecter(client, "second", nouveau)
-    r = client.post("/api/terminal/ticket", headers=H)
-    assert r.status_code == 403
-    assert "compte du serveur" in r.json()["detail"]
+    assert client.post("/api/terminal/ticket", headers=H).status_code in (404, 405)
 
 
 def test_dockge_jamais_ouvert_au_wifi(client):

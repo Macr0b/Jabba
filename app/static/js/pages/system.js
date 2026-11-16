@@ -23,7 +23,7 @@ pages.systeme = async () => {
   const [item, entry] = await Promise.all([api("/api/systeme"), api("/api/admin/etat")]);
   content.innerHTML = `
     <div class="entete"><div><h1>Système</h1><p class="sous-titre">${escapeHtml(item.nom)} · ${escapeHtml(item.os)}</p></div>
-      <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a>${state.admin && state.admin.compte_serveur ? '<a class="btn" href="#/terminal">Terminal</a>' : ""}<button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
+      <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a><button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
     ${item.redemarrage_requis ? `<div class="bandeau"><span>${item.redemarrage && item.redemarrage.mode === "manuel" ? "Une mise à jour attend un redémarrage. Fais-le quand tu es devant le serveur, avec le bouton : si la machine bloque au démarrage, tu pourras agir." : "Une mise à jour attend un redémarrage. Il se fera seul à 4 h, ou maintenant avec le bouton."}</span></div>` : ""}
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
@@ -112,7 +112,7 @@ pages.systeme = async () => {
     }
     const answers = await formBody({
       titre: "Changer le mot de passe du serveur",
-      texte: "C'est aussi le mot de passe de sudo dans le Terminal.",
+      texte: "C'est aussi le mot de passe de sudo quand tu te connectes en SSH.",
       champs: [
         { nom: "identifiant", cache: true, valeur: state.serverAccount, autocomplete: "username" },
         { nom: "ancien", type: "password", label: "Mot de passe actuel", autocomplete: "current-password" },
@@ -193,7 +193,6 @@ pages.plus = async () => {
       <a href="#/invites"><span>Invités</span><span>›</span></a>
       <a href="#" id="sortir-mobile"><span>Se déconnecter</span><span>›</span></a>
       <a href="#/journal"><span>Journal</span><span>›</span></a>
-      ${state.admin && state.admin.compte_serveur ? '<a href="#/terminal"><span>Terminal</span><span>›</span></a>' : ""}
       <a href="#/aide"><span>Aide</span><span>›</span></a>
     </section><p class="note" id="qui-mobile"></p>`;
   if (state.me && state.me.admin)
