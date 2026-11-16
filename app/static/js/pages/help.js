@@ -102,6 +102,15 @@ const HELP_TOPICS = [
     ],
   ],
   [
+    "Partager un dossier avec quelqu'un",
+    [
+      "La personne a besoin d'un compte Nextcloud (Comptes) : elle verra le dossier dans son Nextcloud.",
+      "Fichiers, bouton ••• à droite du dossier, « Partager avec… » : choisis un rang (il compte aussi pour les rangs au-dessus), « Tous les membres » ou un groupe, puis « Voir seulement » ou « Voir et modifier ».",
+      "Ça marche aussi pour un dossier d'un disque (R2-D2…) : la personne ne voit que ce dossier, jamais le reste du disque.",
+      "Pour retirer l'accès : Comptes, onglet Dossiers et rangs, « Dossiers partagés », Arrêter. Les fichiers ne bougent pas.",
+    ],
+  ],
+  [
     "Un disque branché n'apparaît pas",
     [
       "Attends 15 secondes, puis Disques → Actualiser.",
