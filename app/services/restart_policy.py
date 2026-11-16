@@ -78,7 +78,6 @@ def message(auto):
 
 # ---- ajouté au découpage de main.py
 import os
-from services import restart_policy
 import config
 from host import commands
 
@@ -91,9 +90,9 @@ def mode_redemarrage():
     """{"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main."""
     if config.DEMO:
         try:
-            return restart_policy.lire(open(REDEM_DEMO).read(), True)
+            return lire(open(REDEM_DEMO).read(), True)
         except OSError:
-            return restart_policy.lire("", True)
-    code, contenu, _ = commands.hote(["cat", restart_policy.FICHIER])
-    actif = commands.hote(["systemctl", "is-enabled", "--quiet", f"{restart_policy.UNITE}.timer"])[0] == 0
-    return restart_policy.lire(contenu if code == 0 else "", actif)
+            return lire("", True)
+    code, contenu, _ = commands.hote(["cat", FICHIER])
+    actif = commands.hote(["systemctl", "is-enabled", "--quiet", f"{UNITE}.timer"])[0] == 0
+    return lire(contenu if code == 0 else "", actif)

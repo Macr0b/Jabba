@@ -271,7 +271,6 @@ def restaurer(executer, d, donnees_hote, ident, chemin, demo=False):
 import os
 import subprocess
 import threading
-from services import backups
 from services import activity_log
 from services import app_update
 from services import notifications
@@ -296,7 +295,7 @@ def sauv_executer(cmd, timeout=120):
 def sauv_donnees_hote():
     """Le dossier des données de l'appli, vu depuis le serveur (la clé et l'état y sont)."""
     if config.DEMO:
-        return backups.DOSSIER
+        return DOSSIER
     d = app_update.dossier_appli()
     if not d:
         raise HTTPException(500, "Dossier de l'appli introuvable.")
@@ -318,36 +317,36 @@ def sauv_disque_present(d):
 
 
 def lancer_sauvegarde(qui=None):
-    d = backups.lire()
-    if not d["chemin"] or not backups.phrase():
+    d = lire()
+    if not d["chemin"] or not phrase():
         raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
     if sauv_en_cours(d):
         raise HTTPException(409, "Une sauvegarde est déjà en cours.")
     if not sauv_disque_present(d):
         raise HTTPException(409, f"Le disque {d['disque']} n'est pas branché.")
-    script = backups.script(d, sauv_donnees_hote(), config.DEMO)
+    contenu_script = script(d, sauv_donnees_hote(), config.DEMO)
     unite = f"jabba-sauvegarde-{int(time.time())}"
     if config.DEMO:
-        SAUV_DEMO[unite] = subprocess.Popen(["bash", "-c", script])
+        SAUV_DEMO[unite] = subprocess.Popen(["bash", "-c", contenu_script])
     else:
         # Lancée par le serveur lui-même, en douceur (le serveur reste réactif) :
         # elle va au bout même si l'appli redémarre.
-        code, _, err = commands.lancer_sur_serveur(unite, script, "bash", ("Nice=10", "IOSchedulingClass=idle"))
+        code, _, err = commands.lancer_sur_serveur(unite, contenu_script, "bash", ("Nice=10", "IOSchedulingClass=idle"))
         if code != 0:
             raise HTTPException(500, "Lancement impossible : " + err[:200])
     d.update(unite=unite, lancee=int(time.time()))
-    backups.ecrire(d)
+    ecrire(d)
     activity_log.noter("sauvegardes", f"Sauvegarde lancée vers {d['disque']}" + ("" if qui else " (automatique)"), qui)
     return unite
 
 
 def suivre_sauvegarde():
     """Quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté."""
-    d = backups.lire()
+    d = lire()
     if not d["unite"] or sauv_en_cours(d):
         return d
-    e = backups.lire_etat()
-    res = backups.resultat(e) if (e.get("debut") or 0) >= d["lancee"] - 5 else None
+    e = lire_etat()
+    res = resultat(e) if (e.get("debut") or 0) >= d["lancee"] - 5 else None
     if res is None:
         res = {"ok": False, "debut": d["lancee"], "fin": int(time.time()), "duree": 0,
                "erreur": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?)."}
@@ -368,13 +367,13 @@ def suivre_sauvegarde():
         else:
             activity_log.noter("sauvegardes", "Sauvegarde échouée — " + res["erreur"])
         d["alerte_echec"] = jour
-    backups.ecrire(d)
+    ecrire(d)
     return d
 
 
 def surveiller_sauvegardes():
     d = suivre_sauvegarde()
-    if d["unite"] or not backups.due(d):
+    if d["unite"] or not due(d):
         return
     if sauv_disque_present(d):
         lancer_sauvegarde()
@@ -383,14 +382,14 @@ def surveiller_sauvegardes():
     jour = time.strftime("%Y-%m-%d")
     if d.get("alerte_absent") != jour:
         d["alerte_absent"] = jour
-        backups.ecrire(d)
+        ecrire(d)
         notifications.envoyer("sauvegardes", "Sauvegarde en attente",
                        f"Le disque {d['disque']} n'est pas branché : la sauvegarde partira dès son retour.",
                        "/#/sauvegardes", famille="sauvegardes")
 
 
 def _sauv_lisible(d):
-    if not d["chemin"] or not backups.phrase():
+    if not d["chemin"] or not phrase():
         raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
     if not sauv_disque_present(d):
         raise HTTPException(409, f"Branche le disque {d['disque']} pour voir les sauvegardes.")

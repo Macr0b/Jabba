@@ -420,15 +420,14 @@ import os
 import threading
 from services import activity_log
 from services import notifications
-from services import nextcloud_accounts
 from host import commands
 from security import guard
 
 
 def nuage_usage_en_fond(uids=None):
-    if uids is not None or time.time() - nextcloud_accounts.USAGE["t"] > 600:
-        nextcloud_accounts.USAGE["t"] = time.time()
-        threading.Thread(target=lambda: nextcloud_accounts.actualiser_usage(commands.occ, uids), daemon=True).start()
+    if uids is not None or time.time() - USAGE["t"] > 600:
+        USAGE["t"] = time.time()
+        threading.Thread(target=lambda: actualiser_usage(commands.occ, uids), daemon=True).start()
 
 
 def surveiller_inscriptions():
@@ -440,7 +439,7 @@ def surveiller_inscriptions():
         desactives = json.loads(sortie or "{}")
     except ValueError:
         return
-    d = nextcloud_accounts.lire()
+    d = lire()
     vus = set(d["en_attente_vus"])
     attente = set()
     for uid, nom in desactives.items():
@@ -452,10 +451,10 @@ def surveiller_inscriptions():
                                famille="nuage", pour=guard.pour_super())
     if attente != vus:
         d["en_attente_vus"] = sorted(attente)
-        nextcloud_accounts.ecrire(d)
+        ecrire(d)
     # Un disque ajouté à la main dans Nextcloud (ou avant cette version) serait vu par tous les comptes.
     try:
-        for nom in nextcloud_accounts.reserver_disques(commands.occ):
+        for nom in reserver_disques(commands.occ):
             activity_log.noter("nuage", f"Disque {nom} réservé aux admins dans Nextcloud (il était visible par tous les comptes)")
-    except nextcloud_accounts.Erreur:
+    except Erreur:
         pass

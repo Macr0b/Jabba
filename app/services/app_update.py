@@ -112,7 +112,6 @@ def script(dossier, tag, cle):
 # ---- ajouté au découpage de main.py
 import os
 import re
-from services import app_update
 from services import notifications
 import config
 from host import commands
@@ -138,7 +137,7 @@ def etat_maj():
     lignes = [l for l in log.splitlines() if l.strip()]
     if actif.strip() in ("active", "activating", "reloading"):
         return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"]), **avancement_maj(lignes)}
-    if any(app_update.MARQUE_REFUS in l for l in lignes):
+    if any(MARQUE_REFUS in l for l in lignes):
         if not MAJ["signale"]:
             MAJ["signale"] = True
             notifications.envoyer("securite", "Mise à jour refusée",
