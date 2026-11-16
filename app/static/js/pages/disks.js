@@ -2,8 +2,9 @@
 //
 // Sommaire :
 //   partagé : pages.disques (écran)
-//   interne : disksRefresh
+//   interne : disksRefresh (la carte Santé des disques : components/disk_health_card.js)
 import { confirmAction, dialogElement, toast } from "../components/dialogs.js";
+import { diskHealthCard } from "../components/disk_health_card.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatBytes, formatPercent } from "../core/format.js";
@@ -32,6 +33,7 @@ pages.disques = async () => {
   content.innerHTML = `
     <div class="entete"><div><h1>Disques</h1><p class="sous-titre">Ce qui est branché sur le serveur</p></div>
       <button class="btn" id="rafraichir">Actualiser</button></div>
+    <section class="carte pad" id="sante-disques"><h2>Santé des disques</h2><div class="squelette" style="margin-top:10px"></div></section>
     <div class="grille g2">${disks
       .map(
         (item) => `
@@ -70,6 +72,10 @@ pages.disques = async () => {
     </div>
     <p class="note">Branche un disque USB : il est ajouté tout seul en quelques secondes, en lecture seule, et apparaît dans Fichiers, Nextcloud et Jellyfin (dossier /disques). Formats lisibles : exFAT, FAT, NTFS, ext4. Le réglage « Écriture autorisée » et « Oublier » demandent le mot de passe du serveur ; « Éjecter » est toujours libre.</p>`;
   $("#rafraichir").onclick = () => pages.disques().catch(showError);
+  diskHealthCard().catch((error) => {
+    const element = $("#sante-disques");
+    if (element) element.innerHTML = `<h2>Santé des disques</h2><p class="note">${escapeHtml(error.message)}</p>`;
+  });
   content.querySelectorAll("[data-mode]").forEach((element) =>
     element.addEventListener("click", async () => {
       const name = element.dataset.mode,

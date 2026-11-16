@@ -7,14 +7,18 @@ Sommaire :
   POST /api/outils/{pid}/demarrer        start_tool
   POST /api/outils/{pid}/arreter         stop_tool
   POST /api/outils/{pid}/mettre-a-jour   update_tool
+  GET  /api/outils-versions              tool_versions (mise à jour disponible ?)
+  POST /api/outils-versions/verifier     check_tool_versions
 """
+
+import asyncio
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 import config
 from security import guard
-from services import background_tasks, tools
+from services import background_tasks, tool_updates, tools
 
 router = APIRouter()
 
@@ -72,4 +76,19 @@ def update_tool(pid: str, request: Request):
     guard.require_admin(request)
     tool = tools.find_tool(pid)
     script = f"cd '{tool['dossier']}' && docker compose pull && docker compose up -d && docker image prune -f"
+    tool_updates.forget(pid)
     return background_tasks.start_task(f"Mise à jour de {tool['nom']}", script, request.state.nom, pid)
+
+
+@router.get("/api/outils-versions")
+def tool_versions(request: Request):
+    guard.require_admin(request)
+    return tool_updates.summary()
+
+
+@router.post("/api/outils-versions/verifier")
+async def check_tool_versions(request: Request):
+    guard.require_admin(request)
+    if config.DEMO:
+        return tool_updates.summary()
+    return await asyncio.to_thread(tool_updates.check_all)

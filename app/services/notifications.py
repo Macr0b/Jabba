@@ -24,9 +24,13 @@ TYPES = {
     "courant": ("Coupure de courant", "Coupure, retour du courant, batterie faible et arrêt propre."),
     "disque_plein": ("Disque presque plein", "Quand un disque dépasse 90 %."),
     "outil_panne": ("Outil en panne", "Quand un outil plante, puis quand il repart."),
+    "sante_disques": ("Santé des disques", "Quand un disque montre des signes de fatigue (lecture SMART chaque jour)."),
     "nouveau_disque": ("Nouveau disque", "Quand un disque branché est ajouté tout seul, ou s'il est illisible."),
     "mises_a_jour": ("Mises à jour", "Nouvelle version de l'appli, ou redémarrage en attente."),
-    "securite": ("Sécurité", "Mot de passe raté 5 fois, mot de passe changé, accès refusé à un inconnu."),
+    "securite": (
+        "Sécurité",
+        "Mot de passe raté 5 fois, mot de passe changé, accès refusé à un inconnu, suppression massive de fichiers.",
+    ),
     "sauvegardes": ("Sauvegardes", "Sauvegarde échouée, incomplète, ou en attente du disque."),
     "comptes": ("Comptes", "Demande de mot de passe oublié, compte ajouté ou retiré, rang changé."),
 }

@@ -5,6 +5,9 @@ Chaque tour lance certaines vérifications ; les plus lourdes moins souvent.
 Sommaire :
   watch_power : secteur coupé, batterie faible
   watch_space : disques presque pleins
+  disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
+  mass_deletion.watch_mass_deletion : beaucoup de fichiers supprimés d'un coup
+  tool_updates.watch_tool_updates : nouvelle version d'un outil (une fois par jour)
   watch_tools : outil en panne
   watch_system_updates : mises à jour du système, redémarrage en attente
   watch_forever : la boucle (voir le détail des fréquences dedans)
@@ -20,13 +23,16 @@ from services import (
     background_tasks,
     backups,
     disk_browser,
+    disk_health,
     files_source,
     guest_network,
+    mass_deletion,
     measurements,
     nextcloud_accounts,
     notifications,
     power,
     restart_policy,
+    tool_updates,
     tools,
     video_player,
 )
@@ -181,7 +187,12 @@ def watch_forever():
         if tick % 8 == 0:  # toutes les 2 minutes
             steps += [nextcloud_accounts.watch_signups]
         if tick % 40 == 0:  # toutes les 10 minutes
-            steps += [auto_disks.link_disks_to_nextcloud]
+            steps += [
+                auto_disks.link_disks_to_nextcloud,
+                disk_health.watch_disk_health,
+                mass_deletion.watch_mass_deletion,
+                tool_updates.watch_tool_updates,
+            ]
         if tick % 240 == 0:  # toutes les heures
             steps += [watch_system_updates]
         if time.time() - WATCH_STATE["derniere_purge"] > 86400:

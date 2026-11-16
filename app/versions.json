@@ -24,7 +24,11 @@
       "Fichiers : plusieurs éléments ou un dossier se téléchargent en un seul .zip.",
       "Fichiers : plus de confirmation avant de mettre à la corbeille, de déplacer ou de renommer : le message propose « Annuler » pendant 10 secondes.",
       "Envois : une barre d'avancement par fichier ; un fichier en erreur garde son bouton « Réessayer » sans renvoyer les autres.",
-      "Accessibilité (WCAG 2.2 niveau AA) : textes gris plus contrastés, outils arrêtés lisibles, liens soulignés dans les phrases, toutes les zones cliquables d'au moins 24 px, champ des fenêtres nommé pour les lecteurs d'écran, focus jamais caché sous la barre d'onglets. Chaque écran est désormais vérifié automatiquement (axe), en clair et en sombre, sur ordinateur et sur iPhone."
+      "Accessibilité (WCAG 2.2 niveau AA) : textes gris plus contrastés, outils arrêtés lisibles, liens soulignés dans les phrases, toutes les zones cliquables d'au moins 24 px, champ des fenêtres nommé pour les lecteurs d'écran, focus jamais caché sous la barre d'onglets. Chaque écran est désormais vérifié automatiquement (axe), en clair et en sombre, sur ordinateur et sur iPhone.",
+      "Santé des disques (écran Disques) : lecture SMART chaque jour, sans réveiller un disque endormi ; alerte sur l'iPhone au premier signe de fatigue (secteurs abîmés, panne annoncée, usure, chaleur). S'active d'un clic (installe smartmontools).",
+      "Alerte « suppression massive » : 200 éléments mis à la corbeille en moins d'une heure (rançongiciel, synchronisation qui déraille, fausse manœuvre).",
+      "Établi : la version de chaque outil, et « Une version plus récente est disponible » quand Nextcloud, Jellyfin ou Dockge peuvent être mis à jour (vérifié chaque jour, avec une alerte).",
+      "Aide : plan de reprise (tout réinstaller depuis la sauvegarde) et connexion sans son téléphone."
     ]
   },
   {
