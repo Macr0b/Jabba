@@ -5,10 +5,6 @@
 - 5 essais ratés = blocage 10 minutes ;
 - changement du mot de passe, et code de secours en cas d'oubli.
 """
-try:
-    import crypt  # présent en 3.12 (image du serveur) ; gère yescrypt via libxcrypt
-except ImportError:  # tests hors serveur
-    crypt = None
 import hashlib
 import hmac
 import json
@@ -16,6 +12,8 @@ import os
 import secrets
 import threading
 import time
+
+from host import system_crypt
 
 DUREE_JETON = 10 * 60
 ESSAIS_MAX = 5
@@ -89,7 +87,7 @@ def verifier_mot_de_passe(hote, utilisateur, mot_de_passe):
     empreinte = sortie.split(":")[1]
     if not empreinte or empreinte[0] in "!*":
         return False
-    ok = hmac.compare_digest(crypt.crypt(mot_de_passe, empreinte) or "", empreinte)
+    ok = hmac.compare_digest(system_crypt.hash_with_setting(mot_de_passe, empreinte) or "", empreinte)
     if not ok:
         _echec()
     return ok

@@ -15,7 +15,6 @@ Les invités ne voient que les dossiers et les outils choisis par l'admin.
 """
 import hashlib
 import hmac
-import ipaddress
 import json
 import os
 import secrets
@@ -25,12 +24,12 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import UploadFile
 
-import journal
+from services import activity_log
+import config
 
 DOSSIER = os.environ.get("JABBA_DATA", "/data")
 # État partagé entre l'appli (qui l'écrit) et la porte du Wi-Fi (qui le lit) : un dossier à part.
@@ -39,7 +38,7 @@ ANCIEN_FICHIER = os.path.join(DOSSIER, "invites.json")    # avant la 0.11
 DOSSIER_INVITES = os.environ.get("JABBA_DOSSIER_INVITES", "/srv/data/invites")
 COOKIE = "jabba_invite"
 DUREE = 7 * 86400
-STATIC = os.path.join(os.path.dirname(__file__), "static")
+STATIC = config.STATIC_DIR
 _verrou = threading.RLock()
 _echecs = {}  # ip -> [horodatages]
 
@@ -217,7 +216,7 @@ async def entrer(request: Request):
         raise HTTPException(403, "Code incorrect.")
     r = JSONResponse({"ok": True})
     r.set_cookie(COOKIE, cookie_invite(d), max_age=DUREE, httponly=True, samesite="strict")
-    journal.noter("invite", f"Un invité est entré ({ip})")
+    activity_log.noter("invite", f"Un invité est entré ({ip})")
     return r
 
 
@@ -286,56 +285,5 @@ async def envoyer(request: Request, d: str, chemin: str = "/"):
             pass
         envoyes.append(os.path.basename(reel))
     if envoyes:
-        journal.noter("invite", f"Invité : {len(envoyes)} fichier{'s' if len(envoyes) > 1 else ''} déposé{'s' if len(envoyes) > 1 else ''} dans {dossier['nom']}{chemin if chemin != '/' else ''}")
+        activity_log.noter("invite", f"Invité : {len(envoyes)} fichier{'s' if len(envoyes) > 1 else ''} déposé{'s' if len(envoyes) > 1 else ''} dans {dossier['nom']}{chemin if chemin != '/' else ''}")
     return {"envoyes": envoyes}
-
-
-# ---------------------------------------------------------------- la porte du Wi-Fi (port 80)
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-
-RESEAUX_LOCAUX = [ipaddress.ip_network(n) for n in
-                  ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8", "100.64.0.0/10")]
-
-
-@app.middleware("http")
-async def garde_wifi(request: Request, call_next):
-    try:
-        ip = ipaddress.ip_address((request.client.host if request.client else "").split("%")[0])
-        local = any(ip in n for n in RESEAUX_LOCAUX)
-    except ValueError:
-        local = False
-    if not local:
-        return JSONResponse({"erreur": "Réservé au réseau local."}, status_code=403)
-    request.state.via = "lan"
-    if request.method not in ("GET", "HEAD") and request.headers.get("x-jabba") != "1":
-        return JSONResponse({"erreur": "Requête refusée."}, status_code=403)
-    reponse = await call_next(request)
-    reponse.headers.setdefault("X-Frame-Options", "DENY")
-    reponse.headers["X-Content-Type-Options"] = "nosniff"
-    reponse.headers["Referrer-Policy"] = "no-referrer"
-    return reponse
-
-
-app.include_router(routeur)
-
-
-@app.get("/api/moi")
-def moi_wifi():
-    import socket
-    from version import VERSION
-    return {"mode": "invite", "serveur": lire().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
-
-
-@app.get("/api/{reste:path}")
-@app.post("/api/{reste:path}")
-def interdit(reste: str):
-    raise HTTPException(404, "Indisponible sur le Wi-Fi : l'administration passe par Tailscale.")
-
-
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
-
-
-@app.get("/")
-@app.get("/{reste:path}")
-def page_wifi(reste: str = ""):
-    return FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})

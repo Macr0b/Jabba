@@ -12,7 +12,7 @@ import time
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-import journal
+from services import activity_log
 
 DOSSIER = os.environ.get("JABBA_DATA", "/data")
 CLE = os.path.join(DOSSIER, "vapid.pem")
@@ -118,7 +118,7 @@ def envoyer(type_, titre, texte, url="/", forcer=False, famille="alerte", pour=N
     `pour` : ensemble de comptes Tailscale ; seuls leurs appareils reçoivent l'alerte.
     """
     if noter:
-        journal.noter(famille, f"{titre} — {texte}" if texte else titre)
+        activity_log.noter(famille, f"{titre} — {texte}" if texte else titre)
     d = _lire()
     if not forcer and not d["types"].get(type_, True):
         return 0

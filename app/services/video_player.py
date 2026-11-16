@@ -19,7 +19,7 @@ import secrets
 import shutil
 import subprocess
 
-import bac_a_sable
+from services import sandbox
 import threading
 import time
 
@@ -38,8 +38,8 @@ _MATERIEL = {"teste": False, "options": None}
 # fichier à lire, déjà ouvert par l'appli.
 def sonder(source):
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
-    with bac_a_sable.entree(source) as (entree, fds):
-        r = bac_a_sable.run(args + bac_a_sable.sans_i(entree), fds, capture_output=True, text=True, timeout=30)
+    with sandbox.entree(source) as (entree, fds):
+        r = sandbox.run(args + sandbox.sans_i(entree), fds, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
         raise RuntimeError("Fichier illisible : " + (r.stderr.strip()[:200] or "format inconnu"))
     d = json.loads(r.stdout or "{}")
@@ -93,7 +93,7 @@ def _options_materiel():
                  "-f", "lavfi", "-i", "testsrc=duration=1:size=640x360:rate=25",
                  "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-f", "null", "-"]
         try:
-            if bac_a_sable.run(essai, puce=True, capture_output=True, env=env, timeout=30).returncode == 0:
+            if sandbox.run(essai, puce=True, capture_output=True, env=env, timeout=30).returncode == 0:
                 _MATERIEL["options"] = {"pilote": pilote}
                 return _MATERIEL["options"]
         except (OSError, subprocess.TimeoutExpired):
@@ -128,8 +128,8 @@ def image_cle(source, infos, debut):
             "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
             "-read_intervals", f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}"]
     try:
-        with bac_a_sable.entree(source) as (entree, fds):
-            r = bac_a_sable.run(args + bac_a_sable.sans_i(entree), fds, capture_output=True, text=True, timeout=20)
+        with sandbox.entree(source) as (entree, fds):
+            r = sandbox.run(args + sandbox.sans_i(entree), fds, capture_output=True, text=True, timeout=20)
     except (subprocess.TimeoutExpired, OSError, RuntimeError):
         return debut
     temps = []
@@ -153,7 +153,7 @@ def demarrer(source, infos, debut=0.0, audio=None):
     sid = secrets.token_urlsafe(18)
     dossier = os.path.join(RACINE, sid)
     os.makedirs(RACINE, exist_ok=True)
-    bac_a_sable.dossier_ecrivable(dossier)
+    sandbox.dossier_ecrivable(dossier)
     video, env_sup = _video(infos)
     pistes = [a for a in infos["audios"] if audio is None or a["index"] == audio] or infos["audios"]
     son = ["-map", f"0:{pistes[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if pistes else []
@@ -169,10 +169,10 @@ def demarrer(source, infos, debut=0.0, audio=None):
               "-hls_list_size", "0", "-hls_playlist_type", "event",
               "-hls_segment_filename", os.path.join(dossier, "m%05d.ts"), os.path.join(dossier, "index.m3u8")])
     env = dict(os.environ, **env_sup)
-    with bac_a_sable.entree(source) as (entree, fds), open(os.path.join(dossier, "erreurs.txt"), "w") as err:
+    with sandbox.entree(source) as (entree, fds), open(os.path.join(dossier, "erreurs.txt"), "w") as err:
         i = cmd.index("ENTREE")
         cmd[i:i + 1] = entree
-        p = bac_a_sable.popen(cmd, fds, puce=bool(env_sup) or "-vaapi_device" in cmd, stdin=subprocess.DEVNULL,
+        p = sandbox.popen(cmd, fds, puce=bool(env_sup) or "-vaapi_device" in cmd, stdin=subprocess.DEVNULL,
                               stdout=subprocess.DEVNULL, stderr=err, env=env)
     with _VERROU:
         _SESSIONS[sid] = {"p": p, "dossier": dossier, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
@@ -278,10 +278,10 @@ def decaler_vtt(vtt, debut):
 
 def soustitres(source, index, debut=0.0):
     """Une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé."""
-    with bac_a_sable.entree(source) as (entree, fds):
+    with sandbox.entree(source) as (entree, fds):
         cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
                + entree + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
-        r = bac_a_sable.run(cmd, fds, capture_output=True, timeout=180)
+        r = sandbox.run(cmd, fds, capture_output=True, timeout=180)
     if r.returncode != 0:
         raise RuntimeError("Sous-titres illisibles.")
     return decaler_vtt(r.stdout.decode("utf-8", "replace"), float(debut)).encode()

@@ -6,8 +6,9 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-import invites
-import journal
+import guest_door
+from services import guests
+from services import activity_log
 from conftest import RACINE
 
 H = {"X-Jabba": "1"}
@@ -16,13 +17,13 @@ H = {"X-Jabba": "1"}
 @pytest.fixture
 def etat(tmp_path, monkeypatch):
     f = tmp_path / "porte-wifi" / "etat.json"
-    monkeypatch.setattr(invites, "FICHIER", str(f))
-    monkeypatch.setattr(invites, "ANCIEN_FICHIER", str(tmp_path / "invites.json"))
+    monkeypatch.setattr(guests, "FICHIER", str(f))
+    monkeypatch.setattr(guests, "ANCIEN_FICHIER", str(tmp_path / "invites.json"))
     partage = tmp_path / "partage"
     partage.mkdir()
     (partage / "menu.txt").write_text("menu")
-    invites.preparer_etat()
-    invites.modifier(lambda d: d.update(actif=True, code="1234", serveur="holo",
+    guests.preparer_etat()
+    guests.modifier(lambda d: d.update(actif=True, code="1234", serveur="holo",
                                         dossiers=[{"id": "p", "nom": "Partage", "chemin": str(partage), "mode": "depot"}]))
     return f, partage
 
@@ -32,7 +33,7 @@ def wifi(ip="192.168.1.20"):
     async def depuis(scope, receive, send):
         if scope["type"] in ("http", "websocket"):
             scope = dict(scope, client=(ip, 5000))
-        await invites.app(scope, receive, send)
+        await guest_door.app(scope, receive, send)
     return TestClient(depuis)
 
 
@@ -47,10 +48,10 @@ def test_etat_cree_une_fois_et_garde(etat):
 def test_reprise_de_l_ancien_emplacement(tmp_path, monkeypatch):
     ancien = tmp_path / "invites.json"
     ancien.write_text(json.dumps({"code": "9876", "secret": "s" * 64}))
-    monkeypatch.setattr(invites, "FICHIER", str(tmp_path / "porte-wifi" / "etat.json"))
-    monkeypatch.setattr(invites, "ANCIEN_FICHIER", str(ancien))
-    invites.preparer_etat()
-    assert invites.lire()["code"] == "9876" and not ancien.exists()
+    monkeypatch.setattr(guests, "FICHIER", str(tmp_path / "porte-wifi" / "etat.json"))
+    monkeypatch.setattr(guests, "ANCIEN_FICHIER", str(ancien))
+    guests.preparer_etat()
+    assert guests.lire()["code"] == "9876" and not ancien.exists()
 
 
 def test_parcours_invite(etat):
@@ -91,12 +92,12 @@ def test_trop_d_essais(etat):
 def test_journal_de_la_porte_ne_peut_pas_se_faire_passer_pour_l_appli(tmp_path, monkeypatch):
     principal = tmp_path / "journal.jsonl"
     autre = tmp_path / "journal-invites.jsonl"
-    monkeypatch.setattr(journal, "FICHIER", str(principal))
-    monkeypatch.setattr(journal, "AUTRES", [str(autre)])
-    journal.noter("admin", "vrai événement", "Rob")
+    monkeypatch.setattr(activity_log, "FICHIER", str(principal))
+    monkeypatch.setattr(activity_log, "AUTRES", [str(autre)])
+    activity_log.noter("admin", "vrai événement", "Rob")
     autre.write_text(json.dumps({"t": 1, "famille": "admin", "texte": "Faux : mot de passe changé", "qui": "Rob"}) + "\n"
                      + "pas du json\n")
-    evs = journal.lire()
+    evs = activity_log.lire()
     faux = [e for e in evs if e["texte"].startswith("Faux")][0]
     assert faux["famille"] == "invite" and "qui" not in faux
     assert evs[0]["texte"] == "vrai événement"
@@ -112,11 +113,11 @@ def test_conteneur_de_la_porte_sans_pouvoirs():
     montages = [v if isinstance(v, str) else f"{v['source']}:{v['target']}" for v in s["volumes"]]
     assert "./donnees/porte-wifi:/etat" in montages
     assert not any(m.startswith("./donnees:") for m in montages), "la porte ne doit pas voir les données de l'appli"
-    assert "invites:app" in " ".join(s["command"])
+    assert "guest_door:app" in " ".join(s["command"])
     app = compose["services"]["jabba-app"]
-    assert "invites" not in " ".join(app.get("command", []) or [])
+    assert "guest_door" not in " ".join(app.get("command", []) or [])
     dockerfile = open(os.path.join(RACINE, "Dockerfile")).read()
-    assert "invites:app" not in dockerfile.split("CMD", 1)[1]
+    assert "guest_door:app" not in dockerfile.split("CMD", 1)[1]
 
 
 def test_etat_hors_des_dossiers_des_invites():
@@ -128,10 +129,10 @@ def test_etat_hors_des_dossiers_des_invites():
     os.environ.update(env)
     os.environ.pop("JABBA_INVITES_ETAT", None)
     try:
-        m = importlib.reload(sys.modules["invites"])
+        m = importlib.reload(sys.modules["services.guests"])
         assert not os.path.commonpath([m.FICHIER, "/srv"]) == "/srv"
         assert m.FICHIER == "/data/porte-wifi/etat.json"
     finally:
         for k, v in sauve.items():
             os.environ[k] = v
-        importlib.reload(sys.modules["invites"])
+        importlib.reload(sys.modules["services.guests"])

@@ -5,7 +5,7 @@ import subprocess
 
 import yaml
 
-import redemarrage
+from services import restart_policy
 
 from conftest import RACINE
 
@@ -59,7 +59,7 @@ def test_redemarrer_classique_et_note_au_journal(tmp_path):
     assert "kexec" not in SCRIPT
     _, log = _executer(_bloc("/usr/local/sbin/redemarrer"), tmp_path)
     assert log.splitlines() == ["logger -t redemarrer Redémarrage du serveur", "systemctl reboot"]
-    assert redemarrage.REDEMARRER.strip() == _bloc("/usr/local/sbin/redemarrer").strip()
+    assert restart_policy.REDEMARRER.strip() == _bloc("/usr/local/sbin/redemarrer").strip()
 
 
 def test_redemarrage_de_4h_seulement_si_choisi(tmp_path):
@@ -70,9 +70,9 @@ def test_redemarrage_de_4h_seulement_si_choisi(tmp_path):
     for contenu in ("manuel\n", "", "automatique\n", None):      # tout autre contenu, ou pas de fichier : on ne redémarre pas
         assert _executer(condition, tmp_path, contenu)[0] != 0
     # Jabba réécrit exactement les mêmes unités quand on change d'avis dans Système.
-    assert service.strip() == redemarrage.SERVICE.strip()
-    assert _bloc("/etc/systemd/system/jabba-redemarrage-auto.timer").strip() == redemarrage.TIMER.strip()
-    assert "OnCalendar=*-*-* 04:00" in redemarrage.TIMER
+    assert service.strip() == restart_policy.SERVICE.strip()
+    assert _bloc("/etc/systemd/system/jabba-redemarrage-auto.timer").strip() == restart_policy.TIMER.strip()
+    assert "OnCalendar=*-*-* 04:00" in restart_policy.TIMER
 
 
 def test_question_du_redemarrage_a_l_installation():

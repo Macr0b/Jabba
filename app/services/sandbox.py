@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 from contextlib import contextmanager
+import config
 
 NOBODY = 65534
 PUCE = "/dev/dri/renderD128"
@@ -103,7 +104,7 @@ def _limiter_memoire():
 def vignette(reel, taille, timeout=30):
     """JPEG de l'image `reel` réduite à `taille` px, calculé par Pillow sans droits. Renvoie les octets."""
     # Le code est passé en ligne de commande : le programme sans droits n'a besoin de lire aucun fichier de l'appli.
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vignette_seule.py")) as f:
+    with open(os.path.join(config.APP_DIR, "vignette_seule.py")) as f:
         code = f.read()
     with open(reel, "rb") as f:
         r = subprocess.run(prefixe() + [sys.executable, "-I", "-c", code, str(int(taille))], stdin=f,

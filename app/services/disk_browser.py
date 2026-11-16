@@ -295,10 +295,10 @@ def vignette(reel, taille):
     cle = hashlib.sha1(f"{reel}|{st.st_mtime_ns}|{st.st_size}|{taille}".encode()).hexdigest()
     cache = os.path.join(VIGNETTES, cle[:2], cle + ".jpg")
     if not os.path.exists(cache):
-        import bac_a_sable
+        from services import sandbox
         # Pillow tourne à part, sans aucun droit : une image piégée ne peut rien faire.
         try:
-            jpeg = bac_a_sable.vignette(reel, taille)
+            jpeg = sandbox.vignette(reel, taille)
         except (RuntimeError, OSError, subprocess.SubprocessError):
             raise Refus(404, "Pas d'aperçu")
         os.makedirs(os.path.dirname(cache), exist_ok=True)

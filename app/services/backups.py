@@ -21,7 +21,6 @@ import json
 import os
 import secrets
 import shlex
-import subprocess
 import threading
 import time
 from datetime import datetime

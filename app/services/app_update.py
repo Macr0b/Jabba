@@ -17,9 +17,10 @@ import re
 import time
 
 import httpx
+import config
 
 RE_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
-FICHIER_CLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cle_publication.pub")
+FICHIER_CLE = os.path.join(config.APP_DIR, "cle_publication.pub")
 RE_CLE = re.compile(r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]{40,800}( [\w@.+ -]{0,100})?$")
 ESPACE_SIGNATURE = "jabba"   # « namespace » de ssh-keygen -Y : une signature faite pour autre chose ne vaut rien ici
 MARQUE_REFUS = "JABBA-SIGNATURE-REFUSEE"

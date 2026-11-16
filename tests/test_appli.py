@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-import comptes
+from security import accounts
 import main
 
 H = {"X-Jabba": "1"}
@@ -29,9 +29,9 @@ def test_terminal_pour_le_compte_du_serveur(client):
 
 def test_terminal_refuse_a_un_autre_super_admin(client):
     connecter(client, "serveur-demo", "demo-mot-de-passe")
-    c, mdp = comptes.creer("second", "Second", "super", None, "test", "super", set())
+    c, mdp = accounts.creer("second", "Second", "super", None, "test", "super", set())
     nouveau = "Un-mot-de-passe-solide-42"
-    comptes.changer_mien("second", nouveau)
+    accounts.changer_mien("second", nouveau)
     connecter(client, "second", nouveau)
     r = client.post("/api/terminal/ticket", headers=H)
     assert r.status_code == 403
@@ -65,15 +65,15 @@ def test_choix_du_redemarrage(client):
     assert client.post("/api/systeme/redemarrage", json={"mode": "reboot"}, headers=H).status_code == 400
     assert client.post("/api/systeme/redemarrage", json={"mode": "auto"}, headers=H).status_code == 200
     assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] == "auto"
-    import journal
-    assert any("Redémarrage après une mise à jour" in str(e) for e in journal.lire(20))
+    from services import activity_log
+    assert any("Redémarrage après une mise à jour" in str(e) for e in activity_log.lire(20))
 
 
 def test_choix_du_redemarrage_reserve_au_super_admin(client):
     connecter(client, "serveur-demo", "demo-mot-de-passe")
-    c, _ = comptes.creer("simple", "Simple", "admin", None, "test", "admin", set())
+    c, _ = accounts.creer("simple", "Simple", "admin", None, "test", "admin", set())
     nouveau = "Un-mot-de-passe-solide-43"
-    comptes.changer_mien("simple", nouveau)
+    accounts.changer_mien("simple", nouveau)
     connecter(client, "simple", nouveau)
     assert client.get("/api/systeme/redemarrage", headers=H).status_code == 200
     assert client.post("/api/systeme/redemarrage", json={"mode": "manuel"}, headers=H).status_code == 403

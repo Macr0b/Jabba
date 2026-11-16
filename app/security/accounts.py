@@ -79,7 +79,7 @@ def valider_mot_de_passe(mdp):
 
 def provisoire():
     """Mot de passe provisoire lisible : 3 mots et 2 chiffres."""
-    from admin import MOTS
+    from security.server_password import MOTS
     return "-".join(secrets.choice(MOTS) for _ in range(3)) + "-" + str(secrets.randbelow(90) + 10)
 
 

@@ -20,21 +20,21 @@ from urllib.parse import quote, unquote, urljoin
 
 import httpx
 
-import admin
-import redemarrage
-import comptes
-import invites
+from security import server_password
+from services import restart_policy
+from security import accounts
+from services import guests
 import secrets
-import lecture
-import sauvegardes
-import sessions
-import terminal
-import disque
-import disques_auto
-import journal
-import maj
-import notifs
-import nuage
+from services import video_player
+from services import backups
+from security import sessions
+from services import terminal
+from services import disk_browser
+from services import auto_disks
+from services import activity_log
+from services import app_update
+from services import notifications
+from services import nextcloud_accounts
 from fastapi import FastAPI, HTTPException, Request, WebSocket
 from starlette.datastructures import UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -42,6 +42,7 @@ from xml.sax.saxutils import escape as xml_escape
 from fastapi.staticfiles import StaticFiles
 
 from version import VERSION  # noqa: E402
+import config
 DEMO = os.environ.get("JABBA_DEMO") == "1"
 UTILISATEURS = {u.strip().lower() for u in os.environ.get("TS_USERS", "").split(",") if u.strip()}
 NC_URL = os.environ.get("NC_URL", "http://127.0.0.1:8081").rstrip("/")
@@ -49,7 +50,7 @@ NC_HOST = os.environ.get("NC_HOST", "")
 NC_USER = os.environ.get("NC_USER", "")
 NC_PASS = os.environ.get("NC_APP_PASSWORD", "")
 NC_PUBLIC = os.environ.get("NC_PUBLIC_URL", "").rstrip("/")
-STATIC = os.path.join(os.path.dirname(__file__), "static")
+STATIC = config.STATIC_DIR
 ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
 DEPOT = os.environ.get("JABBA_DEPOT", "").strip()
 SEUIL_BATTERIE = int(os.environ.get("SEUIL_BATTERIE", "15"))
@@ -67,7 +68,7 @@ def lire_liens():
 LIENS = lire_liens()
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-app.include_router(invites.routeur)   # pages invités : ouvertes tant qu'on n'est pas connecté en admin
+app.include_router(guests.routeur)   # pages invités : ouvertes tant qu'on n'est pas connecté en admin
 
 
 # ---------------------------------------------------------------- sécurité
@@ -114,7 +115,7 @@ _CACHE_LOGINS = {"t": 0, "v": set()}
 def logins_autorises():
     """Qui peut ouvrir l'appli : les comptes Tailscale du .env, et ceux reliés à un compte admin."""
     if time.time() - _CACHE_LOGINS["t"] > 5:
-        _CACHE_LOGINS.update(t=time.time(), v=UTILISATEURS | comptes.logins_autorises())
+        _CACHE_LOGINS.update(t=time.time(), v=UTILISATEURS | accounts.logins_autorises())
     return _CACHE_LOGINS["v"]
 
 
@@ -141,7 +142,7 @@ def appareil_de(request):
 
 def visite(login, nom, request):
     try:
-        if comptes.noter_visite(login, nom, appareil_de(request)):
+        if accounts.noter_visite(login, nom, appareil_de(request)):
             pass
     except OSError:
         pass
@@ -150,8 +151,8 @@ def visite(login, nom, request):
 def refus_acces(login, request):
     try:
         appareil = appareil_de(request)
-        if comptes.noter_refus(login, appareil):
-            notifs.envoyer("securite", "Accès refusé", f"{login}{' (' + appareil + ')' if appareil else ''} a essayé d'ouvrir l'appli.",
+        if accounts.noter_refus(login, appareil):
+            notifications.envoyer("securite", "Accès refusé", f"{login}{' (' + appareil + ')' if appareil else ''} a essayé d'ouvrir l'appli.",
                            "/#/utilisateurs", famille="admin", pour=pour_super())
     except OSError:
         pass
@@ -256,27 +257,27 @@ def identifiants_serveur():
 def verifier_admin(mot_de_passe):
     if DEMO:
         return mot_de_passe == "demo-mot-de-passe"
-    return admin.verifier_mot_de_passe(hote, admin_user(), mot_de_passe)
+    return server_password.verifier_mot_de_passe(hote, admin_user(), mot_de_passe)
 
 
 def pour_super():
     """Comptes Tailscale des super admins (et appareils abonnés avant la v0.6)."""
-    return UTILISATEURS | comptes.logins_super() | {None}
+    return UTILISATEURS | accounts.logins_super() | {None}
 
 
 def verifier_identifiants(request, ident, mdp):
     """Le compte si identifiant et mot de passe sont bons, sinon une erreur (et l'échec est compté)."""
-    if admin.bloque():
+    if server_password.bloque():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
     ident = (ident or nom_hote()).strip().lower()
     if ident in identifiants_serveur():
         if verifier_admin(mdp):
             return {"identifiant": nom_hote(), "nom": "Compte du serveur", "rang": "super", "provisoire": False}
     else:
-        compte = comptes.verifier(ident, mdp)
+        compte = accounts.verifier(ident, mdp)
         if compte:
             return compte
-        admin.echec()
+        server_password.echec()
     echec_admin(request, ident)
     raise HTTPException(403, "Identifiant ou mot de passe incorrect.")
 
@@ -299,7 +300,7 @@ async def api_admin_connexion(request: Request):
     corps = await request.json()
     compte = verifier_identifiants(request, corps.get("identifiant"), corps.get("mot_de_passe", ""))
     provisoire = bool(compte.get("provisoire"))
-    journal.noter("admin", f"Connexion admin : {compte['identifiant']}" + (" (mot de passe provisoire)" if provisoire else ""), request.state.nom)
+    activity_log.noter("admin", f"Connexion admin : {compte['identifiant']}" + (" (mot de passe provisoire)" if provisoire else ""), request.state.nom)
     sessions.fermer(request.state.jeton)
     r = JSONResponse(infos_session(compte))
     poser_session(r, request, compte)
@@ -342,14 +343,14 @@ def api_sessions_fermer(sid: str, request: Request):
     if cible["identifiant"] != j["identifiant"] and j["rang"] != "super":
         raise HTTPException(403, "Tu ne peux déconnecter que tes propres appareils.")
     sessions.fermer_id(sid)
-    journal.noter("admin", f"Appareil déconnecté : {cible['identifiant']}{' (' + cible['appareil'] + ')' if cible.get('appareil') else ''}, par {j['identifiant']}", request.state.nom)
+    activity_log.noter("admin", f"Appareil déconnecté : {cible['identifiant']}{' (' + cible['appareil'] + ')' if cible.get('appareil') else ''}, par {j['identifiant']}", request.state.nom)
     return {"ok": True}
 
 
 def echec_admin(request, ident=""):
-    journal.noter("admin", f"Connexion admin refusée{' : ' + ident if ident else ''}", request.state.nom)
-    if admin.bloque():
-        notifs.envoyer("securite", "Mot de passe raté 5 fois",
+    activity_log.noter("admin", f"Connexion admin refusée{' : ' + ident if ident else ''}", request.state.nom)
+    if server_password.bloque():
+        notifications.envoyer("securite", "Mot de passe raté 5 fois",
                        f"Depuis l'appareil de {request.state.nom}. Les connexions admin sont bloquées 10 minutes.", "/#/systeme",
                        pour=pour_super())
 
@@ -357,7 +358,7 @@ def echec_admin(request, ident=""):
 @app.get("/api/admin/etat")
 def api_admin_etat(request: Request):
     j = request.state.session
-    return {"code_existe": admin.code_existe(), "utilisateur": admin_user(), "serveur": nom_hote(),
+    return {"code_existe": server_password.code_existe(), "utilisateur": admin_user(), "serveur": nom_hote(),
             "connecte": {"identifiant": j["identifiant"], "rang": j["rang"]} if j else None}
 
 
@@ -367,7 +368,7 @@ def _changer(nouveau):
             raise HTTPException(400, "Le nouveau mot de passe doit faire au moins 10 caractères.")
         return
     try:
-        admin.changer_mot_de_passe(hote_entree, admin_user(), nouveau)
+        server_password.changer_mot_de_passe(hote_entree, admin_user(), nouveau)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except RuntimeError as e:
@@ -378,51 +379,51 @@ def _changer(nouveau):
 async def api_admin_mdp(request: Request):
     """Mot de passe du compte du serveur (super admin principal) : c'est aussi celui de sudo."""
     corps = await request.json()
-    if admin.bloque():
+    if server_password.bloque():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
     if not verifier_admin(corps.get("ancien", "")):
         echec_admin(request, nom_hote())
         raise HTTPException(403, "L'ancien mot de passe est incorrect.")
     _changer(corps.get("nouveau", ""))
     sessions.fermer_compte(nom_hote())   # ses appareils devront se reconnecter avec le nouveau
-    notifs.envoyer("securite", "Mot de passe du serveur changé", f"Par {request.state.nom}.", "/#/systeme", famille="admin", pour=pour_super())
+    notifications.envoyer("securite", "Mot de passe du serveur changé", f"Par {request.state.nom}.", "/#/systeme", famille="admin", pour=pour_super())
     return {"ok": True}
 
 
 @app.post("/api/admin/code")
 def api_admin_code(request: Request):
     exiger_compte_serveur(request)
-    journal.noter("admin", "Nouveau code de secours créé", request.state.nom)
-    return {"code": admin.generer_code()}
+    activity_log.noter("admin", "Nouveau code de secours créé", request.state.nom)
+    return {"code": server_password.generer_code()}
 
 
 @app.post("/api/admin/secours")
 async def api_admin_secours(request: Request):
     corps = await request.json()
-    if admin.bloque():
+    if server_password.bloque():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
-    if not admin.verifier_code(corps.get("code", "")):
+    if not server_password.verifier_code(corps.get("code", "")):
         echec_admin(request, "code de secours")
         raise HTTPException(403, "Code de secours incorrect.")
     _changer(corps.get("nouveau", ""))
     sessions.fermer_compte(nom_hote())
-    notifs.envoyer("securite", "Mot de passe du serveur changé", f"Avec le code de secours, par {request.state.nom}.", "/#/systeme",
+    notifications.envoyer("securite", "Mot de passe du serveur changé", f"Avec le code de secours, par {request.state.nom}.", "/#/systeme",
                    famille="admin", pour=pour_super())
-    return {"ok": True, "code": admin.generer_code()}
+    return {"ok": True, "code": server_password.generer_code()}
 
 
 # ---------------------------------------------------------------- comptes : gestion
 def cmp(fonction):
     try:
         return fonction()
-    except comptes.Refus as e:
+    except accounts.Refus as e:
         raise HTTPException(e.code, e.message)
 
 
 def exiger_espace(request: Request):
     """L'espace Utilisateurs : tous les admins, ou le super admin seul selon le réglage."""
     j = exiger_admin(request)
-    if j["rang"] != "super" and not comptes.espace_ouvert_aux_admins():
+    if j["rang"] != "super" and not accounts.espace_ouvert_aux_admins():
         raise HTTPException(403, "L'espace Utilisateurs est réservé au super admin.")
     return j
 
@@ -430,25 +431,25 @@ def exiger_espace(request: Request):
 @app.get("/api/comptes")
 def api_comptes(request: Request):
     j = exiger_espace(request)
-    d = comptes.lister()
+    d = accounts.lister()
     serveur = {"id": "serveur", "identifiant": nom_hote(), "nom": "Compte du serveur", "rang": "super",
                "tailscale": None, "systeme": True}
     return {"moi": {"identifiant": j["identifiant"], "rang": j["rang"]}, "comptes": [serveur] + d["comptes"],
             "reglages": d["reglages"], "demandes": d["demandes"] if j["rang"] == "super" else [],
-            "demandes_n": len(d["demandes"]), "proprietaires": sorted(UTILISATEURS), **comptes.connexions()}
+            "demandes_n": len(d["demandes"]), "proprietaires": sorted(UTILISATEURS), **accounts.connexions()}
 
 
 @app.post("/api/comptes")
 async def api_comptes_creer(request: Request):
     j = exiger_espace(request)
     corps = await request.json()
-    compte, mdp = cmp(lambda: comptes.creer(corps.get("identifiant"), corps.get("nom"), corps.get("rang", "admin"),
+    compte, mdp = cmp(lambda: accounts.creer(corps.get("identifiant"), corps.get("nom"), corps.get("rang", "admin"),
                                             corps.get("tailscale"), j["identifiant"], j["rang"], identifiants_serveur()))
-    journal.noter("admin", f"Compte ajouté : {compte['identifiant']} ({'super admin' if compte['rang'] == 'super' else 'admin'}), par {j['identifiant']}", request.state.nom)
-    notifs.envoyer("comptes", "Compte ajouté", f"{compte['nom']} ({compte['identifiant']}), par {j['identifiant']}.", "/#/utilisateurs",
+    activity_log.noter("admin", f"Compte ajouté : {compte['identifiant']} ({'super admin' if compte['rang'] == 'super' else 'admin'}), par {j['identifiant']}", request.state.nom)
+    notifications.envoyer("comptes", "Compte ajouté", f"{compte['nom']} ({compte['identifiant']}), par {j['identifiant']}.", "/#/utilisateurs",
                    famille="admin", pour=pour_super(), noter=False)
     if compte["tailscale"]:
-        notifs.envoyer("comptes", "Ton compte admin est prêt", "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.", "/",
+        notifications.envoyer("comptes", "Ton compte admin est prêt", "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.", "/",
                        pour={compte["tailscale"]}, noter=False, forcer=True)
         return {"compte": compte, "remis": True}
     return {"compte": compte, "mot_de_passe": mdp}
@@ -462,27 +463,27 @@ async def api_comptes_modifier(cid: str, request: Request):
     if action in ("supprimer", "rang", "terminal"):
         exiger_admin(request, fort=True)
     if action == "supprimer":
-        c = cmp(lambda: comptes.supprimer(cid, j["rang"]))
+        c = cmp(lambda: accounts.supprimer(cid, j["rang"]))
         sessions.fermer_compte(c["identifiant"])
         texte = f"Compte retiré : {c['identifiant']}"
     elif action == "rang":
-        c = cmp(lambda: comptes.modifier(cid, j["rang"], rang=corps.get("rang")))
+        c = cmp(lambda: accounts.modifier(cid, j["rang"], rang=corps.get("rang")))
         sessions.fermer_compte(c["identifiant"])
         texte = f"{c['identifiant']} est maintenant {'super admin' if c['rang'] == 'super' else 'admin'}"
     elif action == "tailscale":
-        c = cmp(lambda: comptes.modifier(cid, j["rang"], tailscale=corps.get("tailscale") or None))
+        c = cmp(lambda: accounts.modifier(cid, j["rang"], tailscale=corps.get("tailscale") or None))
         texte = f"{c['identifiant']} : compte Tailscale {c['tailscale'] or 'retiré'}"
     elif action == "terminal":
-        c = cmp(lambda: comptes.modifier(cid, j["rang"], terminal=bool(corps.get("terminal"))))
+        c = cmp(lambda: accounts.modifier(cid, j["rang"], terminal=bool(corps.get("terminal"))))
         texte = f"Terminal {'autorisé' if c['terminal'] else 'retiré'} pour {c['identifiant']}"
     elif action == "nom":
-        c = cmp(lambda: comptes.modifier(cid, j["rang"], nom=corps.get("nom") or ""))
+        c = cmp(lambda: accounts.modifier(cid, j["rang"], nom=corps.get("nom") or ""))
         texte = f"{c['identifiant']} renommé « {c['nom']} »"
     else:
         raise HTTPException(400, "Action inconnue.")
-    journal.noter("admin", f"{texte}, par {j['identifiant']}", request.state.nom)
+    activity_log.noter("admin", f"{texte}, par {j['identifiant']}", request.state.nom)
     if action in ("supprimer", "rang", "terminal"):
-        notifs.envoyer("comptes", "Comptes modifiés", f"{texte}, par {j['identifiant']}.", "/#/utilisateurs",
+        notifications.envoyer("comptes", "Comptes modifiés", f"{texte}, par {j['identifiant']}.", "/#/utilisateurs",
                        famille="admin", pour=pour_super(), noter=False)
     return {"ok": True, "compte": c}
 
@@ -491,8 +492,8 @@ async def api_comptes_modifier(cid: str, request: Request):
 async def api_comptes_reglages(request: Request):
     j = exiger_super(request, fort=True)
     ouvert = bool((await request.json()).get("espace_admins"))
-    comptes.regler(ouvert)
-    journal.noter("admin", f"Espace Utilisateurs {'ouvert à tous les admins' if ouvert else 'réservé au super admin'}, par {j['identifiant']}", request.state.nom)
+    accounts.regler(ouvert)
+    activity_log.noter("admin", f"Espace Utilisateurs {'ouvert à tous les admins' if ouvert else 'réservé au super admin'}, par {j['identifiant']}", request.state.nom)
     return {"ok": True}
 
 
@@ -503,12 +504,12 @@ async def api_comptes_mien(request: Request):
     if not j or j["identifiant"] == nom_hote():
         raise HTTPException(401, {"admin": True, "message": "Connexion admin demandée."})
     corps = await request.json()
-    if not j.get("provisoire") and not comptes.verifier(j["identifiant"], corps.get("ancien", "")):
+    if not j.get("provisoire") and not accounts.verifier(j["identifiant"], corps.get("ancien", "")):
         raise HTTPException(403, "L'ancien mot de passe est incorrect.")
-    cmp(lambda: comptes.changer_mien(j["identifiant"], corps.get("nouveau", "")))
+    cmp(lambda: accounts.changer_mien(j["identifiant"], corps.get("nouveau", "")))
     sessions.fermer_compte(j["identifiant"])   # déconnecte ses autres appareils
-    compte = comptes.trouver(j["identifiant"])
-    journal.noter("admin", f"{j['identifiant']} a choisi un nouveau mot de passe", request.state.nom)
+    compte = accounts.trouver(j["identifiant"])
+    activity_log.noter("admin", f"{j['identifiant']} a choisi un nouveau mot de passe", request.state.nom)
     r = JSONResponse(infos_session({**compte, "provisoire": False}))
     poser_session(r, request, {**compte, "provisoire": False})
     return r
@@ -518,18 +519,18 @@ async def api_comptes_mien(request: Request):
 @app.post("/api/comptes-oubli")
 async def api_comptes_oubli(request: Request):
     corps = await request.json()
-    if admin.bloque():
+    if server_password.bloque():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
     ident = (corps.get("identifiant") or "").strip().lower()
     if ident in identifiants_serveur():
         return {"ok": True, "serveur": True}
-    c = comptes.demander(ident, request.state.user, request.state.nom)
+    c = accounts.demander(ident, request.state.user, request.state.nom)
     if c:
-        journal.noter("admin", f"Mot de passe oublié : demande pour {c['identifiant']}", request.state.nom)
-        notifs.envoyer("comptes", "Demande de mot de passe", f"{c['nom']} ({c['identifiant']}) a oublié son mot de passe. Ouvre l'appli pour accepter ou refuser.",
+        activity_log.noter("admin", f"Mot de passe oublié : demande pour {c['identifiant']}", request.state.nom)
+        notifications.envoyer("comptes", "Demande de mot de passe", f"{c['nom']} ({c['identifiant']}) a oublié son mot de passe. Ouvre l'appli pour accepter ou refuser.",
                        "/#/utilisateurs", famille="admin", pour=pour_super(), noter=False)
     else:
-        admin.echec()
+        server_password.echec()
     # Même réponse dans tous les cas : on ne dit pas si l'identifiant existe.
     return {"ok": True}
 
@@ -538,24 +539,24 @@ async def api_comptes_oubli(request: Request):
 async def api_comptes_repondre(did: str, request: Request):
     j = exiger_super(request, fort=True)
     accepter = bool((await request.json()).get("accepter"))
-    dem, _ = cmp(lambda: comptes.repondre(did, accepter, j["identifiant"]))
+    dem, _ = cmp(lambda: accounts.repondre(did, accepter, j["identifiant"]))
     sessions.fermer_compte(dem["identifiant"])
-    journal.noter("admin", f"Demande de {dem['identifiant']} {'acceptée' if accepter else 'refusée'}, par {j['identifiant']}", request.state.nom)
+    activity_log.noter("admin", f"Demande de {dem['identifiant']} {'acceptée' if accepter else 'refusée'}, par {j['identifiant']}", request.state.nom)
     if accepter:
-        notifs.envoyer("comptes", "Demande acceptée", "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.", "/",
+        notifications.envoyer("comptes", "Demande acceptée", "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.", "/",
                        pour={dem.get("remis_a") or dem["login"]}, noter=False, forcer=True)
     else:
-        notifs.envoyer("comptes", "Demande refusée", "Vois avec le super admin.", "/", pour={dem["login"]}, noter=False, forcer=True)
+        notifications.envoyer("comptes", "Demande refusée", "Vois avec le super admin.", "/", pour={dem["login"]}, noter=False, forcer=True)
     return {"ok": True}
 
 
 @app.post("/api/comptes-remise")
 def api_comptes_remise(request: Request):
     """Le mot de passe provisoire, une seule fois, sur l'appareil de la personne concernée."""
-    r = comptes.prendre_remise(request.state.user)
+    r = accounts.prendre_remise(request.state.user)
     if not r:
         raise HTTPException(404, "Rien à récupérer.")
-    journal.noter("admin", f"Mot de passe provisoire affiché pour {r['identifiant']}", request.state.nom)
+    activity_log.noter("admin", f"Mot de passe provisoire affiché pour {r['identifiant']}", request.state.nom)
     return r
 
 
@@ -584,7 +585,7 @@ def lancer_tache(titre, script, qui=None, outil=None):
             TACHES[tid]["journal"] = str(e)
             TACHES[tid]["etat"] = "erreur"
         TACHES[tid]["fin"] = time.time()
-        journal.noter("outil", titre + (" : terminé" if TACHES[tid]["etat"] == "terminé" else " : erreur"), qui)
+        activity_log.noter("outil", titre + (" : terminé" if TACHES[tid]["etat"] == "terminé" else " : erreur"), qui)
 
     threading.Thread(target=travail, daemon=True).start()
     return TACHES[tid]
@@ -683,7 +684,7 @@ HORS_APPLI = {"nextcloud"}
 
 def lister_outils():
     if DEMO:
-        from demo import OUTILS
+        from services.demo_data import OUTILS
         return OUTILS
     code, sortie, err = hote(["docker", "ps", "-a", "--format", "{{json .}}"])
     if code != 0:
@@ -819,7 +820,7 @@ def api_moi(request: Request):
     serveur = "serveur-demo" if DEMO else hote(["hostname"])[1].strip()
     j = request.state.session
     return {"login": request.state.user, "nom": request.state.nom, "version": VERSION, "serveur": serveur,
-            "remise": comptes.remise_en_attente(request.state.user),
+            "remise": accounts.remise_en_attente(request.state.user),
             "mode": "admin" if j and not j.get("provisoire") else "invite",
             "admin": {"identifiant": j["identifiant"], "rang": j["rang"], "provisoire": j.get("provisoire", False)} if j else None}
 
@@ -827,7 +828,7 @@ def api_moi(request: Request):
 @app.get("/api/etat")
 def api_etat():
     if DEMO:
-        from demo import ETAT
+        from services.demo_data import ETAT
         return ETAT
     reveiller_disques()
     disques = espace(["/", "/srv/data"])
@@ -852,7 +853,7 @@ def api_etat():
 @app.get("/api/systeme")
 def api_systeme():
     if DEMO:
-        from demo import SYSTEME
+        from services.demo_data import SYSTEME
         return SYSTEME
     _, nom, _ = hote(["hostname"])
     _, osr, _ = hote(["cat", "/etc/os-release"])
@@ -895,7 +896,7 @@ def api_terminal_ticket(request: Request):
     j = exiger_admin(request, "super", fort=True)
     if j["identifiant"] != nom_hote():
         raise HTTPException(403, "Le terminal donne tous les pouvoirs sur le serveur : il est réservé au compte du serveur.")
-    notifs.envoyer("securite", "Terminal ouvert", f"{j['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
+    notifications.envoyer("securite", "Terminal ouvert", f"{j['identifiant']} ({request.state.nom}) a ouvert le terminal du serveur.",
                    "/#/journal", famille="admin")
     return {"ticket": terminal.nouveau_ticket(j["identifiant"], request.state.nom), "compte": admin_user()}
 
@@ -922,11 +923,11 @@ async def ws_terminal(ws: WebSocket, ticket: str = ""):
         commande = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--",
                     "runuser", "-u", compte, "--", "bash", "--rcfile", rc, "-i"]
     debut = time.time()
-    journal.noter("admin", f"Terminal ouvert par {qui['qui']} (compte {compte} du serveur)", qui["nom"])
+    activity_log.noter("admin", f"Terminal ouvert par {qui['qui']} (compte {compte} du serveur)", qui["nom"])
     await terminal.relier(ws, commande, demo=DEMO, env=env)
     for cmd in terminal.commandes(sid, debut, None if DEMO else hote):
-        journal.noter("admin", f"Terminal · {qui['qui']} : {cmd}", qui["nom"])
-    journal.noter("admin", f"Terminal fermé ({qui['qui']}, {max(1, round((time.time() - debut) / 60))} min)", qui["nom"])
+        activity_log.noter("admin", f"Terminal · {qui['qui']} : {cmd}", qui["nom"])
+    activity_log.noter("admin", f"Terminal fermé ({qui['qui']}, {max(1, round((time.time() - debut) / 60))} min)", qui["nom"])
 
 
 # ---------------------------------------------------------------- redémarrage après une mise à jour
@@ -937,12 +938,12 @@ def mode_redemarrage():
     """{"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main."""
     if DEMO:
         try:
-            return redemarrage.lire(open(REDEM_DEMO).read(), True)
+            return restart_policy.lire(open(REDEM_DEMO).read(), True)
         except OSError:
-            return redemarrage.lire("", True)
-    code, contenu, _ = hote(["cat", redemarrage.FICHIER])
-    actif = hote(["systemctl", "is-enabled", "--quiet", f"{redemarrage.UNITE}.timer"])[0] == 0
-    return redemarrage.lire(contenu if code == 0 else "", actif)
+            return restart_policy.lire("", True)
+    code, contenu, _ = hote(["cat", restart_policy.FICHIER])
+    actif = hote(["systemctl", "is-enabled", "--quiet", f"{restart_policy.UNITE}.timer"])[0] == 0
+    return restart_policy.lire(contenu if code == 0 else "", actif)
 
 
 @app.get("/api/systeme/redemarrage")
@@ -956,16 +957,16 @@ async def api_redemarrage_regler(request: Request):
     """Choisit : redémarrage automatique à 4 h, ou à la main. Super admin, mot de passe récent."""
     exiger_super(request, fort=True)
     mode = str((await request.json()).get("mode") or "")
-    if mode not in redemarrage.MODES:
+    if mode not in restart_policy.MODES:
         raise HTTPException(400, "Choix inconnu.")
     if DEMO:
         with open(REDEM_DEMO, "w") as f:
             f.write(mode + "\n")
     else:
-        code, _, err = hote_sh(redemarrage.script(mode), timeout=60)
+        code, _, err = hote_sh(restart_policy.script(mode), timeout=60)
         if code != 0:
             raise HTTPException(500, err.strip()[-200:] or "Échec du réglage.")
-    journal.noter("systeme", "Redémarrage après une mise à jour : " + ("automatique à 4 h" if mode == "auto" else "à la main"), request.state.nom)
+    activity_log.noter("systeme", "Redémarrage après une mise à jour : " + ("automatique à 4 h" if mode == "auto" else "à la main"), request.state.nom)
     return {"ok": True}
 
 
@@ -974,7 +975,7 @@ def api_reboot(request: Request):
     exiger_admin(request, fort=True)
     if DEMO:
         return {"ok": True}
-    journal.noter("systeme", "Redémarrage du serveur demandé", request.state.nom)
+    activity_log.noter("systeme", "Redémarrage du serveur demandé", request.state.nom)
     # « redemarrer » (posé par le script d'installation) note le redémarrage au journal du serveur.
     hote(["systemd-run", "--on-active=3", "sh", "-c", "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"])
     return {"ok": True}
@@ -984,7 +985,7 @@ def api_reboot(request: Request):
 @app.get("/api/disques")
 def api_disques():
     if DEMO:
-        from demo import DISQUES
+        from services.demo_data import DISQUES
         return DISQUES
     reveiller_disques()
     code, sortie, err = hote(["lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,RM,TRAN,TYPE,MODEL"])
@@ -999,8 +1000,8 @@ def api_disques():
     usage = espace([m for m in montes if m.startswith("/")]) if montes else {}
     roles = {"/": "Système", "/boot/efi": "Démarrage", "/srv/data": "Données"}
     connus = {chemin: nom for nom, chemin in disques_connus().items()}
-    auto = {x["chemin"] for x in disques_auto.lire()["disques"]}
-    oublies = set(disques_auto.lire()["oublies"])
+    auto = {x["chemin"] for x in auto_disks.lire()["disques"]}
+    oublies = set(auto_disks.lire()["oublies"])
     res = []
     for d in arbre:
         if d.get("type") != "disk" or d["name"].startswith(("loop", "zram", "sr")):
@@ -1018,7 +1019,7 @@ def api_disques():
                 "usage": usage.get(mp),
                 "disque_jabba": {"nom": connus[mp], "ecriture": mode_ecriture(mp), "auto": mp in auto} if mp in connus else None,
                 "oublie": (p.get("uuid") or "").lower() if (p.get("uuid") or "").lower() in oublies and not mp else None,
-                "illisible": disques_auto.ILLISIBLES.get((p.get("fstype") or "").lower()),
+                "illisible": auto_disks.ILLISIBLES.get((p.get("fstype") or "").lower()),
             })
         res.append({
             "nom": d["name"], "modele": (d.get("model") or "").strip(), "taille": d["size"],
@@ -1081,7 +1082,7 @@ def item_dav(rep):
 
 async def lire_dossier(chemin):
     if DEMO:
-        from demo import fichiers
+        from services.demo_data import fichiers
         return fichiers(chemin)
     async with client() as c:
         r = await c.request("PROPFIND", dav_url(chemin), content=PROPFIND, headers={"Depth": "1", "Content-Type": "application/xml"})
@@ -1112,7 +1113,7 @@ async def lire_dossier(chemin):
 async def api_fichiers(chemin: str = "/"):
     chemin = chemin_propre(chemin)
     if source() == "disque":
-        d = fs(lambda: disque.lister(chemin, *disques_fs()))
+        d = fs(lambda: disk_browser.lister(chemin, *disques_fs()))
     else:
         nc_pret()
         d = await lire_dossier(chemin)
@@ -1195,7 +1196,7 @@ def actualiser_nextcloud(chemin):
         point = m.get("mount_point", "").strip("/")
         for u in m.get("applicable_users") or utilisateurs:
             hote(occ + ["files:scan", f"--path=/{u}/files/{point}"], timeout=3600)
-    journal.noter("disque", f"Nextcloud a relu {dossier}")
+    activity_log.noter("disque", f"Nextcloud a relu {dossier}")
 
 
 def _ouvrir(chemin):
@@ -1233,7 +1234,7 @@ def disques_fs():
 def fs(fonction):
     try:
         return fonction()
-    except disque.Refus as e:
+    except disk_browser.Refus as e:
         raise HTTPException(e.code, e.message)
     except PermissionError:
         raise HTTPException(403, "Le serveur refuse : droits insuffisants sur ce dossier.")
@@ -1289,7 +1290,7 @@ def disques_connus():
     """Disques externes : « nom -> chemin sur le serveur ». Ceux du .env, puis ceux ajoutés tout seuls."""
     res = disques_env()
     if not DEMO:
-        for nom, chemin in disques_auto.connus().items():
+        for nom, chemin in auto_disks.connus().items():
             res.setdefault(nom, chemin)
     return res
 
@@ -1312,7 +1313,7 @@ def uuid_disque(chemin):
 
 def disque_present(chemin):
     """Branché ? Vérifié sans réveiller l'ouverture automatique (qui attendrait 5 s si débranché)."""
-    return disques_auto.present(hote, uuid_disque(chemin))
+    return auto_disks.present(hote, uuid_disque(chemin))
 
 
 def disques_branches():
@@ -1331,7 +1332,7 @@ def disques_branches():
 @app.get("/api/accueil/dossiers")
 async def api_accueil_dossiers():
     if source() == "disque":
-        racine = fs(lambda: disque.lister("/", *disques_fs()))
+        racine = fs(lambda: disk_browser.lister("/", *disques_fs()))
     else:
         nc_pret()
         racine = await lire_dossier("/")
@@ -1402,7 +1403,7 @@ async def api_mkdir(request: Request):
     corps = await request.json()
     chemin = chemin_propre(corps.get("chemin", ""))
     if source() == "disque":
-        fs(lambda: disque.creer_dossier(chemin, *disques_fs()))
+        fs(lambda: disk_browser.creer_dossier(chemin, *disques_fs()))
         return {"ok": True}
     nc_pret()
     if DEMO:
@@ -1426,13 +1427,13 @@ async def api_envoyer(request: Request, chemin: str = "/"):
             if not isinstance(f, UploadFile) or not f.filename:
                 continue
             nom = os.path.basename(f.filename.replace("\\", "/"))
-            reel = fs(lambda: disque.chemin_envoi(chemin, nom, *params))
+            reel = fs(lambda: disk_browser.chemin_envoi(chemin, nom, *params))
             if os.path.exists(reel):
                 raise HTTPException(409, f"« {nom} » existe déjà dans ce dossier.")
             with open(reel, "wb") as sortie:
                 while bloc := await f.read(1024 * 1024):
                     sortie.write(bloc)
-            disque.fin_envoi(reel)
+            disk_browser.fin_envoi(reel)
             envoyes.append(nom)
         noter_envoi(request, chemin, envoyes)
         return {"envoyes": envoyes}
@@ -1460,14 +1461,14 @@ async def api_envoyer(request: Request, chemin: str = "/"):
 def noter_envoi(request, chemin, envoyes):
     if envoyes:
         quoi = f"« {envoyes[0]} »" if len(envoyes) == 1 else f"{len(envoyes)} fichiers"
-        journal.noter("fichier", f"{quoi} envoyé{'s' if len(envoyes) > 1 else ''} dans {chemin}", request.state.nom)
+        activity_log.noter("fichier", f"{quoi} envoyé{'s' if len(envoyes) > 1 else ''} dans {chemin}", request.state.nom)
 
 
 @app.get("/api/fichiers/telecharger")
 async def api_telecharger(chemin: str):
     chemin = chemin_propre(chemin)
     if source() == "disque":
-        reel = fs(lambda: disque.chemin_lecture(chemin, *disques_fs()))
+        reel = fs(lambda: disk_browser.chemin_lecture(chemin, *disques_fs()))
         return FileResponse(reel, filename=os.path.basename(reel))
     nc_pret()
     if DEMO:
@@ -1502,7 +1503,7 @@ async def api_deplacer(request: Request):
     if de == "/" or vers == "/":
         raise HTTPException(400, "Chemin invalide")
     if source() == "disque":
-        fs(lambda: disque.deplacer(de, vers, *disques_fs()))
+        fs(lambda: disk_browser.deplacer(de, vers, *disques_fs()))
         return {"ok": True}
     nc_pret()
     if DEMO:
@@ -1521,10 +1522,10 @@ async def api_supprimer(request: Request):
         raise HTTPException(400, "Ce dossier ne peut pas être supprimé.")
     if source() == "disque":
         params = disques_fs()
-        if fs(lambda: disque.est_dossier(chemin, *params)):
+        if fs(lambda: disk_browser.est_dossier(chemin, *params)):
             exiger_admin(request)  # supprimer un dossier entier demande le mot de passe
-        fs(lambda: disque.supprimer(chemin, *params))
-        journal.noter("fichier", f"{chemin} mis à la corbeille", request.state.nom)
+        fs(lambda: disk_browser.supprimer(chemin, *params))
+        activity_log.noter("fichier", f"{chemin} mis à la corbeille", request.state.nom)
         return {"ok": True}
     nc_pret()
     if DEMO:
@@ -1536,7 +1537,7 @@ async def api_supprimer(request: Request):
     async with client() as c:
         r = await c.delete(dav_url(chemin))
     await verifier(r, "Suppression")
-    journal.noter("fichier", f"{chemin} mis à la corbeille", request.state.nom)
+    activity_log.noter("fichier", f"{chemin} mis à la corbeille", request.state.nom)
     return {"ok": True}
 
 
@@ -1582,7 +1583,7 @@ async def api_disque_mode(nom: str, request: Request):
                           str(m["mount_id"]), "readonly", "false" if ecriture else "true"], timeout=60)
         except ValueError:
             pass
-    journal.noter("disque", f"{nom} : {'écriture autorisée' if ecriture else 'lecture seule'}", request.state.nom)
+    activity_log.noter("disque", f"{nom} : {'écriture autorisée' if ecriture else 'lecture seule'}", request.state.nom)
     return {"ok": True, "ecriture": ecriture}
 
 
@@ -1596,7 +1597,7 @@ def api_disque_ejecter(nom: str, request: Request):
     if code != 0 and "not mounted" not in err:
         raise HTTPException(409, "Le disque est en cours d'utilisation (lecture d'un film, copie…). Arrête ce qui l'utilise et réessaie.")
     EJECTES[nom] = time.time()
-    journal.noter("disque", f"{nom} éjecté", request.state.nom)
+    activity_log.noter("disque", f"{nom} éjecté", request.state.nom)
     return {"ok": True}
 
 
@@ -1606,10 +1607,10 @@ def api_disque_oublier(nom: str, request: Request):
     if DEMO:
         return {"ok": True}
     try:
-        x = disques_auto.oublier(hote, hote_entree, nom)
+        x = auto_disks.oublier(hote, hote_entree, nom)
     except KeyError:
         raise HTTPException(404, "Seuls les disques ajoutés automatiquement peuvent être oubliés ici.")
-    journal.noter("disque", f"{x['nom']} oublié : il ne sera plus ajouté tout seul", request.state.nom)
+    activity_log.noter("disque", f"{x['nom']} oublié : il ne sera plus ajouté tout seul", request.state.nom)
     return {"ok": True}
 
 
@@ -1620,9 +1621,9 @@ async def api_disque_reprendre(request: Request):
     if not re.fullmatch(r"[\w-]{4,64}", uuid_):
         raise HTTPException(400, "Disque invalide")
     if not DEMO:
-        disques_auto.reprendre(uuid_)
+        auto_disks.reprendre(uuid_)
         threading.Thread(target=scruter_disques, daemon=True).start()
-    journal.noter("disque", "Disque remis en ajout automatique", request.state.nom)
+    activity_log.noter("disque", "Disque remis en ajout automatique", request.state.nom)
     return {"ok": True}
 
 
@@ -1659,10 +1660,10 @@ async def api_apercu(chemin: str, taille: int = 128):
     if DEMO and source() != "disque":
         raise HTTPException(404)
     if source() == "disque":
-        reel = fs(lambda: disque.chemin_lecture(chemin, *disques_fs()))
+        reel = fs(lambda: disk_browser.chemin_lecture(chemin, *disques_fs()))
         try:
-            cache = await asyncio.to_thread(disque.vignette, reel, taille)
-        except disque.Refus as e:
+            cache = await asyncio.to_thread(disk_browser.vignette, reel, taille)
+        except disk_browser.Refus as e:
             raise HTTPException(e.code, e.message)
         except Exception:  # noqa: BLE001 — image abîmée ou format inconnu
             raise HTTPException(404, "Pas d'aperçu")
@@ -1687,7 +1688,7 @@ async def api_voir(chemin: str, request: Request):
     if DEMO and source() != "disque":
         raise HTTPException(404, "Pas de fichiers en démo")
     if source() == "disque":
-        reel = fs(lambda: disque.chemin_lecture(chemin, *disques_fs()))
+        reel = fs(lambda: disk_browser.chemin_lecture(chemin, *disques_fs()))
         return FileResponse(reel, media_type=type_, headers=entetes_visionneuse(type_, nom))
     nc_pret()
     c = client()
@@ -1719,7 +1720,7 @@ def source_lecture(chemin):
     """Où ffmpeg lit le fichier : sur le disque si possible, sinon par Nextcloud."""
     chemin = chemin_propre(chemin)
     if source() == "disque":
-        return {"entree": fs(lambda: disque.chemin_lecture(chemin, *disques_fs()))}
+        return {"entree": fs(lambda: disk_browser.chemin_lecture(chemin, *disques_fs()))}
     premier, _, reste = chemin.strip("/").partition("/")
     connus = disques_connus()
     if premier in connus:   # un disque externe : lu directement, sans passer par Nextcloud
@@ -1740,7 +1741,7 @@ def infos_lecture(chemin):
     if deja and time.time() - deja[0] < 600:
         return dict(deja[1])
     try:
-        infos = lecture.sonder(source_lecture(chemin))
+        infos = video_player.sonder(source_lecture(chemin))
     except RuntimeError as e:
         raise HTTPException(415, str(e))
     except FileNotFoundError:
@@ -1811,14 +1812,14 @@ async def api_jellyfin_cle(request: Request):
     with open(FICHIER_JELLYFIN, "w") as f:
         json.dump({"cle": cle}, f)
     os.chmod(FICHIER_JELLYFIN, 0o600)
-    journal.noter("admin", f"Jabba relié à Jellyfin, par {j['identifiant']}", request.state.nom)
+    activity_log.noter("admin", f"Jabba relié à Jellyfin, par {j['identifiant']}", request.state.nom)
     return {"ok": True}
 
 
 @app.get("/api/lecture/infos")
 def api_lecture_infos(chemin: str):
     infos = infos_lecture(chemin)
-    infos["directe"] = lecture.lecture_directe(infos)
+    infos["directe"] = video_player.lecture_directe(infos)
     return infos
 
 
@@ -1830,8 +1831,8 @@ async def api_lecture_demarrer(request: Request):
     if not infos["video"]:
         raise HTTPException(415, "Pas d'image dans ce fichier.")
     if corps.get("remplace"):
-        lecture.arreter(str(corps["remplace"]))
-    sid, debut = await asyncio.to_thread(lecture.demarrer, source_lecture(chemin), infos,
+        video_player.arreter(str(corps["remplace"]))
+    sid, debut = await asyncio.to_thread(video_player.demarrer, source_lecture(chemin), infos,
                                          float(corps.get("debut") or 0), corps.get("audio"))
     return {"id": sid, "url": f"/api/lecture/{sid}/index.m3u8", "duree": infos["duree"], "debut": debut}
 
@@ -1839,7 +1840,7 @@ async def api_lecture_demarrer(request: Request):
 @app.get("/api/lecture/soustitres")
 def api_lecture_soustitres(chemin: str, piste: int, debut: float = 0):
     try:
-        vtt = lecture.soustitres(source_lecture(chemin), piste, debut)
+        vtt = video_player.soustitres(source_lecture(chemin), piste, debut)
     except (RuntimeError, subprocess.TimeoutExpired):
         raise HTTPException(415, "Sous-titres illisibles.")
     return Response(vtt, media_type="text/vtt; charset=utf-8")
@@ -1847,9 +1848,9 @@ def api_lecture_soustitres(chemin: str, piste: int, debut: float = 0):
 
 @app.get("/api/lecture/{sid}/{nom}")
 def api_lecture_morceau(sid: str, nom: str):
-    chemin = lecture.fichier(sid, nom)
+    chemin = video_player.fichier(sid, nom)
     if not chemin:
-        raise HTTPException(404 if lecture.erreur(sid) is None else 500, lecture.erreur(sid) or "Pas encore prêt.")
+        raise HTTPException(404 if video_player.erreur(sid) is None else 500, video_player.erreur(sid) or "Pas encore prêt.")
     if nom.endswith(".m3u8"):
         # Lecture depuis le début de la liste (et pas « en direct », au dernier morceau produit)
         texte = open(chemin).read().replace("#EXTM3U\n", "#EXTM3U\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES\n", 1)
@@ -1859,7 +1860,7 @@ def api_lecture_morceau(sid: str, nom: str):
 
 @app.post("/api/lecture/{sid}/arreter")
 def api_lecture_arreter(sid: str):
-    lecture.arreter(sid)
+    video_player.arreter(sid)
     return {"ok": True}
 
 
@@ -1883,11 +1884,11 @@ async def api_recherche(q: str = ""):
     if len(q) < 2:
         raise HTTPException(400, "Tape au moins 2 lettres.")
     if DEMO and source() != "disque":
-        from demo import recherche
+        from services.demo_data import recherche
         return recherche(q)
     disques, lecture_seule = disques_fs()
     if source() == "disque":
-        res, complet = await asyncio.to_thread(disque.rechercher, q, disques, lecture_seule)
+        res, complet = await asyncio.to_thread(disk_browser.rechercher, q, disques, lecture_seule)
         return {"elements": res, "complet": complet}
     nc_pret()
     async with client() as c:
@@ -1902,7 +1903,7 @@ async def api_recherche(q: str = ""):
     # tous indexés par Nextcloud : on les parcourt directement.
     racine = await lire_dossier("/")
     externes = {e["nom"] for e in racine["elements"] if e["externe"]}
-    direct, complet = await asyncio.to_thread(disque.rechercher, q, disques, lecture_seule, externes)
+    direct, complet = await asyncio.to_thread(disk_browser.rechercher, q, disques, lecture_seule, externes)
     vus = {e["chemin"] for e in res}
     res += [e for e in direct if e["chemin"] not in vus]
     res.sort(key=lambda e: (not e["nom"].lower().startswith(q.lower()), not e["dossier"], e["nom"].lower()))
@@ -1948,9 +1949,9 @@ async def corbeille_nc():
 @app.get("/api/corbeille")
 async def api_corbeille():
     if DEMO and source() != "disque":
-        from demo import CORBEILLE
+        from services.demo_data import CORBEILLE
         return {"elements": CORBEILLE, "garde": 30}
-    elements = await asyncio.to_thread(disque.lister_corbeille)
+    elements = await asyncio.to_thread(disk_browser.lister_corbeille)
     if source() == "nextcloud":
         nc_pret()
         elements = await corbeille_nc() + elements
@@ -1965,7 +1966,7 @@ async def api_corbeille_restaurer(request: Request):
     if DEMO and src != "disque":
         return {"ok": True, "chemin": "/Documents"}
     if src == "disque":
-        chemin = fs(lambda: disque.restaurer(ident, *disques_fs()))
+        chemin = fs(lambda: disk_browser.restaurer(ident, *disques_fs()))
     else:
         nc_pret()
         if "/" in ident:
@@ -1975,7 +1976,7 @@ async def api_corbeille_restaurer(request: Request):
                                 headers={"Destination": NC_URL + f"/remote.php/dav/trashbin/{quote(NC_USER)}/restore/{quote(ident, safe='')}"})
         await verifier(r, "Restauration")
         chemin = corps.get("origine") or "/"
-    journal.noter("fichier", f"{chemin} restauré depuis la corbeille", request.state.nom)
+    activity_log.noter("fichier", f"{chemin} restauré depuis la corbeille", request.state.nom)
     return {"ok": True, "chemin": chemin}
 
 
@@ -1988,14 +1989,14 @@ async def api_corbeille_effacer(request: Request):
     if DEMO and source() != "disque":
         return {"ok": True}
     if tout:
-        await asyncio.to_thread(disque.vider)
+        await asyncio.to_thread(disk_browser.vider)
         if source() == "nextcloud" and NC_USER:
             async with client() as c:
                 await c.delete(url_corbeille())
-        journal.noter("fichier", "Corbeille vidée", request.state.nom)
+        activity_log.noter("fichier", "Corbeille vidée", request.state.nom)
         return {"ok": True}
     if src == "disque":
-        fs(lambda: disque.effacer(ident))
+        fs(lambda: disk_browser.effacer(ident))
     else:
         nc_pret()
         if "/" in ident:
@@ -2003,16 +2004,16 @@ async def api_corbeille_effacer(request: Request):
         async with client() as c:
             r = await c.delete(url_corbeille(ident))
         await verifier(r, "Effacement")
-    journal.noter("fichier", f"« {corps.get('nom', ident)} » effacé définitivement", request.state.nom)
+    activity_log.noter("fichier", f"« {corps.get('nom', ident)} » effacé définitivement", request.state.nom)
     return {"ok": True}
 
 
 # ---------------------------------------------------------------- journal d'activité
 @app.get("/api/journal")
 def api_journal(n: int = 100, famille: str = ""):
-    res = journal.lire(min(max(n, 1), 500), famille or None)
+    res = activity_log.lire(min(max(n, 1), 500), famille or None)
     if DEMO:
-        from demo import JOURNAL
+        from services.demo_data import JOURNAL
         res += [e for e in JOURNAL if not famille or e["famille"] == famille]
     return res
 
@@ -2020,7 +2021,7 @@ def api_journal(n: int = 100, famille: str = ""):
 # ---------------------------------------------------------------- alertes (notifications)
 @app.get("/api/alertes")
 def api_alertes():
-    e = notifs.etat()
+    e = notifications.etat()
     e.pop("endpoints")
     return e
 
@@ -2031,30 +2032,30 @@ async def api_alertes_abonner(request: Request):
     origine = request.headers.get("origin") or ""
     contact = origine if origine.startswith("https://") else "mailto:jabba@example.org"
     try:
-        notifs.abonner(corps.get("abonnement"), contact, str(corps.get("appareil", "")), request.state.user)
+        notifications.abonner(corps.get("abonnement"), contact, str(corps.get("appareil", "")), request.state.user)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    journal.noter("alerte", "Alertes activées sur un appareil", request.state.nom)
+    activity_log.noter("alerte", "Alertes activées sur un appareil", request.state.nom)
     return {"ok": True}
 
 
 @app.post("/api/alertes/abonnement/retirer")
 async def api_alertes_desabonner(request: Request):
-    notifs.desabonner(str((await request.json()).get("endpoint", "")))
+    notifications.desabonner(str((await request.json()).get("endpoint", "")))
     return {"ok": True}
 
 
 @app.post("/api/alertes/abonnement/etat")
 async def api_alertes_cet_appareil(request: Request):
     endpoint = str((await request.json()).get("endpoint", ""))
-    return {"abonne": endpoint in notifs.etat()["endpoints"]}
+    return {"abonne": endpoint in notifications.etat()["endpoints"]}
 
 
 @app.post("/api/alertes/types")
 async def api_alertes_types(request: Request):
     corps = await request.json()
     try:
-        notifs.regler(corps.get("type"), corps.get("actif"))
+        notifications.regler(corps.get("type"), corps.get("actif"))
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True}
@@ -2062,7 +2063,7 @@ async def api_alertes_types(request: Request):
 
 @app.post("/api/alertes/essai")
 def api_alertes_essai(request: Request):
-    n = notifs.envoyer("essai", "Alerte d'essai", f"Tout marche : {nom_serveur()} peut te prévenir.", "/#/systeme", forcer=True)
+    n = notifications.envoyer("essai", "Alerte d'essai", f"Tout marche : {nom_serveur()} peut te prévenir.", "/#/systeme", forcer=True)
     return {"ok": True, "appareils": n}
 
 
@@ -2100,14 +2101,14 @@ def fgo(go):
 def _nuage(f, *a):
     try:
         return f(occ, *a)
-    except nuage.Erreur as e:
+    except nextcloud_accounts.Erreur as e:
         raise HTTPException(400, str(e))
 
 
 def nuage_usage_en_fond(uids=None):
-    if uids is not None or time.time() - nuage.USAGE["t"] > 600:
-        nuage.USAGE["t"] = time.time()
-        threading.Thread(target=lambda: nuage.actualiser_usage(occ, uids), daemon=True).start()
+    if uids is not None or time.time() - nextcloud_accounts.USAGE["t"] > 600:
+        nextcloud_accounts.USAGE["t"] = time.time()
+        threading.Thread(target=lambda: nextcloud_accounts.actualiser_usage(occ, uids), daemon=True).start()
 
 
 @app.get("/api/nuage")
@@ -2115,44 +2116,44 @@ def api_nuage(request: Request):
     j = exiger_admin(request)
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(4) as ex:
-        f_etat = ex.submit(nuage.etat, occ)
-        f_comptes = ex.submit(nuage.comptes, occ)
-        f_groupes = ex.submit(nuage.groupes, occ)
-        f_dossiers = ex.submit(lambda o: nuage.dossiers(o) if ("groupfolders" in o(["app:list", "--enabled", "--output=json"])[1]) else [], occ)
+        f_etat = ex.submit(nextcloud_accounts.etat, occ)
+        f_comptes = ex.submit(nextcloud_accounts.comptes, occ)
+        f_groupes = ex.submit(nextcloud_accounts.groupes, occ)
+        f_dossiers = ex.submit(lambda o: nextcloud_accounts.dossiers(o) if ("groupfolders" in o(["app:list", "--enabled", "--output=json"])[1]) else [], occ)
         e = f_etat.result()
         if not e["present"]:
             return {"etat": e, "rang": j["rang"]}
         try:
             comptes_, groupes_, dossiers_ = f_comptes.result(), f_groupes.result(), f_dossiers.result()
-        except nuage.Erreur as err:
+        except nextcloud_accounts.Erreur as err:
             raise HTTPException(500, str(err))
     nuage_usage_en_fond()
-    d = nuage.lire()
+    d = nextcloud_accounts.lire()
     promis = sum(c["quota"] or 0 for c in comptes_ if c["etat"] == "actif")
     attente = sorted(c["id"] for c in comptes_ if c["etat"] == "attente")
-    with nuage._verrou:
-        d = nuage.lire()
+    with nextcloud_accounts._verrou:
+        d = nextcloud_accounts.lire()
         if d["en_attente_vus"] != attente and set(attente) <= set(d["en_attente_vus"]):
             d["en_attente_vus"] = attente     # validées ou refusées entre-temps (les nouvelles, c'est la surveillance qui les signale)
-            nuage.ecrire(d)
+            nextcloud_accounts.ecrire(d)
     tous_groupes = {g["id"]: g["membres"] for g in groupes_}
     for c in comptes_:
         c["rang_nuage"] = d.get("rang_de", {}).get(c["id"]) if d.get("rangs_actif") else None
     rangs = [{"id": r["id"], "nom": r["nom"], "membres": sum(1 for v in d.get("rang_de", {}).values() if v == r["id"]),
-              "voient": len(tous_groupes.get(r["id"], []))} for r in nuage.rangs_de(d)]
-    groupes_ = [g for g in groupes_ if not g["id"].startswith(nuage.PREFIXE_RANG)]
+              "voient": len(tous_groupes.get(r["id"], []))} for r in nextcloud_accounts.rangs_de(d)]
+    groupes_ = [g for g in groupes_ if not g["id"].startswith(nextcloud_accounts.PREFIXE_RANG)]
     return {"etat": e, "rang": j["rang"], "plafond_go": d["plafond_go"], "comptes": comptes_, "groupes": groupes_,
             "rangs_actif": bool(d.get("rangs_actif")), "rangs": rangs, "createur": j["identifiant"] == nom_hote(),
-            "charte": nuage.charte(occ), "charte_defaut": nuage.CHARTE_DEFAUT, "charte_max": nuage.CHARTE_MAX,
-            "dossiers": dossiers_, "modes": {k: {"nom": v[1], "detail": v[2]} for k, v in nuage.MODES.items()},
-            "tous": nuage.GROUPE_TOUS, "promis": promis, "espace": None if DEMO else espace(["/srv/data"]).get("/srv/data")}
+            "charte": nextcloud_accounts.charte(occ), "charte_defaut": nextcloud_accounts.CHARTE_DEFAUT, "charte_max": nextcloud_accounts.CHARTE_MAX,
+            "dossiers": dossiers_, "modes": {k: {"nom": v[1], "detail": v[2]} for k, v in nextcloud_accounts.MODES.items()},
+            "tous": nextcloud_accounts.GROUPE_TOUS, "promis": promis, "espace": None if DEMO else espace(["/srv/data"]).get("/srv/data")}
 
 
 @app.post("/api/nuage/mettre-en-route")
 def api_nuage_en_route(request: Request):
     exiger_super(request, fort=True)
-    _nuage(nuage.mettre_en_route)
-    journal.noter("nuage", "Comptes Nextcloud mis en route : inscription avec validation, 5 Go par défaut, dossiers communs", request.state.nom)
+    _nuage(nextcloud_accounts.mettre_en_route)
+    activity_log.noter("nuage", "Comptes Nextcloud mis en route : inscription avec validation, 5 Go par défaut, dossiers communs", request.state.nom)
     return {"ok": True}
 
 
@@ -2160,20 +2161,20 @@ def api_nuage_en_route(request: Request):
 async def api_nuage_reglages(request: Request):
     exiger_super(request)
     corps = await request.json()
-    d = nuage.lire()
+    d = nextcloud_accounts.lire()
     if "plafond_go" in corps:
         go = corps["plafond_go"]
         if not isinstance(go, (int, float)) or not 1 <= go <= 100000:
             raise HTTPException(400, "Plafond invalide.")
         d["plafond_go"] = go
-        nuage.ecrire(d)
-        journal.noter("nuage", f"Plafond d'espace par compte : {fgo(go)}", request.state.nom)
+        nextcloud_accounts.ecrire(d)
+        activity_log.noter("nuage", f"Plafond d'espace par compte : {fgo(go)}", request.state.nom)
     if "quota_defaut_go" in corps:
         go = corps["quota_defaut_go"]
         if not isinstance(go, (int, float)) or not 0 < go <= d["plafond_go"]:
             raise HTTPException(400, f"Espace par défaut : entre 0 et {d['plafond_go']} Go (le plafond).")
-        _nuage(nuage.quota_defaut, go)
-        journal.noter("nuage", f"Espace par défaut des nouveaux comptes : {fgo(go)}", request.state.nom)
+        _nuage(nextcloud_accounts.quota_defaut, go)
+        activity_log.noter("nuage", f"Espace par défaut des nouveaux comptes : {fgo(go)}", request.state.nom)
     return {"ok": True}
 
 
@@ -2182,8 +2183,8 @@ async def api_nuage_charte(request: Request):
     """La charte affichée sur le formulaire d'inscription (super admin)."""
     exiger_super(request)
     texte = (await request.json()).get("texte", "")
-    _nuage(nuage.poser_charte, texte)
-    journal.noter("nuage", "Charte d'inscription " + ("modifiée" if str(texte).strip() else "retirée"), request.state.nom)
+    _nuage(nextcloud_accounts.poser_charte, texte)
+    activity_log.noter("nuage", "Charte d'inscription " + ("modifiée" if str(texte).strip() else "retirée"), request.state.nom)
     return {"ok": True}
 
 
@@ -2191,7 +2192,7 @@ async def api_nuage_charte(request: Request):
 def api_nuage_attente(request: Request):
     """Nombre d'inscriptions qui attendent (léger : pour la pastille de l'Établi)."""
     exiger_admin(request)
-    return {"attente": len(nuage.lire()["en_attente_vus"])}
+    return {"attente": len(nextcloud_accounts.lire()["en_attente_vus"])}
 
 
 @app.post("/api/nuage/comptes")
@@ -2200,10 +2201,10 @@ async def api_nuage_ajouter(request: Request):
     exiger_super(request)
     corps = await request.json()
     uid = str(corps.get("id", "")).strip().lower()
-    mdp = comptes.provisoire()
-    _nuage(nuage.ajouter, uid, str(corps.get("nom", "")).strip()[:60], str(corps.get("email", "")).strip()[:120], mdp)
+    mdp = accounts.provisoire()
+    _nuage(nextcloud_accounts.ajouter, uid, str(corps.get("nom", "")).strip()[:60], str(corps.get("email", "")).strip()[:120], mdp)
     texte = poser_rang(uid, corps.get("rang")) if corps.get("rang") else ""
-    journal.noter("nuage", f"Compte Nextcloud créé : {uid}{texte}", request.state.nom)
+    activity_log.noter("nuage", f"Compte Nextcloud créé : {uid}{texte}", request.state.nom)
     nuage_usage_en_fond([uid])
     return {"ok": True, "mdp": mdp}
 
@@ -2214,7 +2215,7 @@ async def api_nuage_compte(uid: str, request: Request):
     action = corps.get("action")
     fort = action in ("refuser", "supprimer", "mdp")
     j = exiger_admin(request, "admin" if action in ("quota", "groupe") else "super", fort=fort)  # rang, valider : super
-    liste = {c["id"]: c for c in _nuage(nuage.comptes)}
+    liste = {c["id"]: c for c in _nuage(nextcloud_accounts.comptes)}
     c = liste.get(uid)
     if not c:
         raise HTTPException(404, "Compte inconnu.")
@@ -2222,31 +2223,31 @@ async def api_nuage_compte(uid: str, request: Request):
         raise HTTPException(403, "C'est un compte administrateur de Nextcloud : à gérer dans Nextcloud.")
     qui = request.state.nom
     if action == "valider":
-        _nuage(nuage.valider, uid)
+        _nuage(nextcloud_accounts.valider, uid)
         rid = corps.get("rang")
         texte = poser_rang(uid, rid) if rid else ""
-        journal.noter("nuage", f"Inscription validée : {c['nom']} ({uid}){texte}", qui)
+        activity_log.noter("nuage", f"Inscription validée : {c['nom']} ({uid}){texte}", qui)
     elif action == "refuser":
-        _nuage(nuage.supprimer, uid)
-        journal.noter("nuage", f"Inscription refusée : {c['nom']} ({uid}), compte supprimé", qui)
+        _nuage(nextcloud_accounts.supprimer, uid)
+        activity_log.noter("nuage", f"Inscription refusée : {c['nom']} ({uid}), compte supprimé", qui)
     elif action == "suspendre":
         actif = bool(corps.get("actif"))
-        _nuage(nuage.suspendre, uid, actif)
-        journal.noter("nuage", f"Compte {'réactivé' if actif else 'suspendu'} : {c['nom']} ({uid})", qui)
+        _nuage(nextcloud_accounts.suspendre, uid, actif)
+        activity_log.noter("nuage", f"Compte {'réactivé' if actif else 'suspendu'} : {c['nom']} ({uid})", qui)
     elif action == "rang":
-        d = nuage.lire()
-        avant = nuage.nom_rang(d, d.get("rang_de", {}).get(uid)) or "aucun"
+        d = nextcloud_accounts.lire()
+        avant = nextcloud_accounts.nom_rang(d, d.get("rang_de", {}).get(uid)) or "aucun"
         texte = poser_rang(uid, corps.get("rang"))
-        journal.noter("nuage", f"Rang de {c['nom']} ({uid}) : {avant} → {nuage.nom_rang(nuage.lire(), corps.get('rang')) or 'aucun'}", qui)
+        activity_log.noter("nuage", f"Rang de {c['nom']} ({uid}) : {avant} → {nextcloud_accounts.nom_rang(nextcloud_accounts.lire(), corps.get('rang')) or 'aucun'}", qui)
     elif action == "supprimer":
-        _nuage(nuage.supprimer, uid)
-        d = nuage.lire()
+        _nuage(nextcloud_accounts.supprimer, uid)
+        d = nextcloud_accounts.lire()
         if d.get("rang_de", {}).pop(uid, None):
-            nuage.ecrire(d)
-        journal.noter("nuage", f"Compte supprimé avec ses fichiers : {c['nom']} ({uid})", qui)
+            nextcloud_accounts.ecrire(d)
+        activity_log.noter("nuage", f"Compte supprimé avec ses fichiers : {c['nom']} ({uid})", qui)
     elif action == "quota":
         go = corps.get("go")
-        plafond = nuage.lire()["plafond_go"]
+        plafond = nextcloud_accounts.lire()["plafond_go"]
         if go is None:
             if j["rang"] != "super":
                 raise HTTPException(403, "Seul un super admin peut donner un espace illimité.")
@@ -2254,19 +2255,19 @@ async def api_nuage_compte(uid: str, request: Request):
             raise HTTPException(400, "Espace invalide.")
         elif go > plafond and j["rang"] != "super":
             raise HTTPException(403, f"Au-delà du plafond ({plafond} Go) : seul un super admin peut le faire.")
-        avant = "illimité" if c["illimite"] else fgo(c['quota'] / nuage.GO)
-        _nuage(nuage.changer_quota, uid, go)
-        journal.noter("nuage", f"Espace de {c['nom']} ({uid}) : {avant} → {fgo(go)}", qui)
+        avant = "illimité" if c["illimite"] else fgo(c['quota'] / nextcloud_accounts.GO)
+        _nuage(nextcloud_accounts.changer_quota, uid, go)
+        activity_log.noter("nuage", f"Espace de {c['nom']} ({uid}) : {avant} → {fgo(go)}", qui)
     elif action == "groupe":
         g, dedans = str(corps.get("groupe", "")), bool(corps.get("dedans"))
-        if g.startswith(nuage.PREFIXE_RANG):
+        if g.startswith(nextcloud_accounts.PREFIXE_RANG):
             raise HTTPException(400, "Pour les rangs, change le rang de la personne.")
-        _nuage(nuage.groupe_membres, g, uid, dedans)
-        journal.noter("nuage", f"{c['nom']} ({uid}) {'ajouté au' if dedans else 'retiré du'} groupe {g}", qui)
+        _nuage(nextcloud_accounts.groupe_membres, g, uid, dedans)
+        activity_log.noter("nuage", f"{c['nom']} ({uid}) {'ajouté au' if dedans else 'retiré du'} groupe {g}", qui)
     elif action == "mdp":
-        mdp = comptes.provisoire()
-        _nuage(nuage.nouveau_mdp, uid, mdp)
-        journal.noter("nuage", f"Nouveau mot de passe Nextcloud pour {c['nom']} ({uid})", qui)
+        mdp = accounts.provisoire()
+        _nuage(nextcloud_accounts.nouveau_mdp, uid, mdp)
+        activity_log.noter("nuage", f"Nouveau mot de passe Nextcloud pour {c['nom']} ({uid})", qui)
         return {"ok": True, "mdp": mdp}
     else:
         raise HTTPException(400, "Action inconnue.")
@@ -2274,25 +2275,25 @@ async def api_nuage_compte(uid: str, request: Request):
 
 
 def nom_groupe_nuage(g):
-    if g == nuage.GROUPE_TOUS:
+    if g == nextcloud_accounts.GROUPE_TOUS:
         return "tous les membres"
-    r = nuage.nom_rang(nuage.lire(), g)
+    r = nextcloud_accounts.nom_rang(nextcloud_accounts.lire(), g)
     return f"rang {r} et au-dessus" if r else g
 
 
 def poser_rang(uid, rid):
     """Donne le rang `rid` (None : aucun) et met les groupes à jour. Renvoie « , rang X » pour le Journal."""
-    with nuage._verrou:
-        d = nuage.lire()
-        if rid and rid not in [r["id"] for r in nuage.rangs_de(d)]:
+    with nextcloud_accounts._verrou:
+        d = nextcloud_accounts.lire()
+        if rid and rid not in [r["id"] for r in nextcloud_accounts.rangs_de(d)]:
             raise HTTPException(400, "Rang inconnu.")
         if rid:
             d.setdefault("rang_de", {})[uid] = rid
         else:
             d.setdefault("rang_de", {}).pop(uid, None)
-        nuage.ecrire(d)
-    _nuage(nuage.synchroniser, d, {uid})
-    return f", rang {nuage.nom_rang(d, rid)}" if rid else ""
+        nextcloud_accounts.ecrire(d)
+    _nuage(nextcloud_accounts.synchroniser, d, {uid})
+    return f", rang {nextcloud_accounts.nom_rang(d, rid)}" if rid else ""
 
 
 @app.post("/api/nuage/rangs")
@@ -2303,9 +2304,9 @@ async def api_nuage_rangs(request: Request):
         raise HTTPException(403, "Seul le compte du serveur règle les rangs.")
     corps = await request.json()
     action, qui = corps.get("action"), request.state.nom
-    with nuage._verrou:
-        d = nuage.lire()
-        ids = [r["id"] for r in nuage.rangs_de(d)]
+    with nextcloud_accounts._verrou:
+        d = nextcloud_accounts.lire()
+        ids = [r["id"] for r in nextcloud_accounts.rangs_de(d)]
         rid = corps.get("id")
         if action not in ("activer", "creer") and rid not in ids:
             raise HTTPException(404, "Rang inconnu.")
@@ -2316,13 +2317,13 @@ async def api_nuage_rangs(request: Request):
             texte = "Rangs activés" if d["rangs_actif"] else "Rangs désactivés (chacun garde son rang, sans effet jusqu'à la réactivation)"
         elif action == "creer":
             nom = str(corps.get("nom", ""))
-            _nuage(nuage.creer_rang, d, nom)
+            _nuage(nextcloud_accounts.creer_rang, d, nom)
             texte = f"Nouveau rang : {nom.strip()}"
         elif action == "renommer":
             nom = str(corps.get("nom", "")).strip()[:40]
             if not nom:
                 raise HTTPException(400, "Nom vide.")
-            avant = nuage.nom_rang(d, rid)
+            avant = nextcloud_accounts.nom_rang(d, rid)
             next(r for r in d["rangs"] if r["id"] == rid)["nom"] = nom
             occ(["group:add", "--display-name", nom, rid])   # sans effet si le groupe existe ; le nom affiché vient de Jabba
             texte = f"Rang {avant} renommé en {nom}"
@@ -2335,16 +2336,16 @@ async def api_nuage_rangs(request: Request):
             tous = True
             texte = "Ordre des rangs : " + " < ".join(r["nom"] for r in d["rangs"])
         elif action == "supprimer":
-            nom = nuage.nom_rang(d, rid)
-            nuage.supprimer_rang(occ, d, rid)
+            nom = nextcloud_accounts.nom_rang(d, rid)
+            nextcloud_accounts.supprimer_rang(occ, d, rid)
             tous = True
             texte = f"Rang supprimé : {nom} (ses membres descendent d'un rang)"
         else:
             raise HTTPException(400, "Action inconnue.")
-        nuage.ecrire(d)
+        nextcloud_accounts.ecrire(d)
     if tous:
-        _nuage(nuage.synchroniser, d)
-    journal.noter("nuage", texte, qui)
+        _nuage(nextcloud_accounts.synchroniser, d)
+    activity_log.noter("nuage", texte, qui)
     return {"ok": True}
 
 
@@ -2354,11 +2355,11 @@ async def api_nuage_groupes(request: Request):
     corps = await request.json()
     nom = str(corps.get("nom", "")).strip()
     if corps.get("supprimer"):
-        _nuage(nuage.supprimer_groupe, nom)
-        journal.noter("nuage", f"Groupe supprimé : {nom}", request.state.nom)
+        _nuage(nextcloud_accounts.supprimer_groupe, nom)
+        activity_log.noter("nuage", f"Groupe supprimé : {nom}", request.state.nom)
     else:
-        _nuage(nuage.nouveau_groupe, nom)
-        journal.noter("nuage", f"Groupe créé : {nom}", request.state.nom)
+        _nuage(nextcloud_accounts.nouveau_groupe, nom)
+        activity_log.noter("nuage", f"Groupe créé : {nom}", request.state.nom)
     return {"ok": True}
 
 
@@ -2369,37 +2370,37 @@ async def api_nuage_dossiers(request: Request):
     exiger_admin(request, fort=action == "supprimer")
     qui = request.state.nom
     fid = corps.get("id")
-    noms = {f["id"]: f["nom"] for f in _nuage(nuage.dossiers)}
+    noms = {f["id"]: f["nom"] for f in _nuage(nextcloud_accounts.dossiers)}
     if action != "creer" and fid not in noms:
         raise HTTPException(404, "Dossier inconnu.")
     if action == "creer":
         nom = str(corps.get("nom", "")).strip()
-        fid = _nuage(nuage.nouveau_dossier, nom)
-        groupe, mode = corps.get("groupe") or nuage.GROUPE_TOUS, corps.get("mode") or "lecture"
-        if mode not in nuage.MODES:
+        fid = _nuage(nextcloud_accounts.nouveau_dossier, nom)
+        groupe, mode = corps.get("groupe") or nextcloud_accounts.GROUPE_TOUS, corps.get("mode") or "lecture"
+        if mode not in nextcloud_accounts.MODES:
             raise HTTPException(400, "Mode inconnu.")
-        _nuage(nuage.dossier_acces, fid, groupe, mode)
-        journal.noter("nuage", f"Dossier commun créé : {nom} ({nom_groupe_nuage(groupe)}, {nuage.MODES[mode][1].lower()})", qui)
+        _nuage(nextcloud_accounts.dossier_acces, fid, groupe, mode)
+        activity_log.noter("nuage", f"Dossier commun créé : {nom} ({nom_groupe_nuage(groupe)}, {nextcloud_accounts.MODES[mode][1].lower()})", qui)
         return {"ok": True, "id": fid}
     nom = noms[fid]
     if action == "acces":
         groupe, mode = str(corps.get("groupe", "")), corps.get("mode")
-        if mode is not None and mode not in nuage.MODES:
+        if mode is not None and mode not in nextcloud_accounts.MODES:
             raise HTTPException(400, "Mode inconnu.")
-        _nuage(nuage.dossier_acces, fid, groupe, mode)
-        journal.noter("nuage", f"Dossier {nom} : {nom_groupe_nuage(groupe)} → {'plus d’accès' if mode is None else nuage.MODES[mode][1].lower()}", qui)
+        _nuage(nextcloud_accounts.dossier_acces, fid, groupe, mode)
+        activity_log.noter("nuage", f"Dossier {nom} : {nom_groupe_nuage(groupe)} → {'plus d’accès' if mode is None else nextcloud_accounts.MODES[mode][1].lower()}", qui)
     elif action == "quota":
         go = corps.get("go")
         if go is not None and (not isinstance(go, (int, float)) or go <= 0):
             raise HTTPException(400, "Taille invalide.")
-        _nuage(nuage.dossier_quota, fid, go)
-        journal.noter("nuage", f"Dossier {nom} : taille {'illimitée' if go is None else fgo(go) + ' au plus'}", qui)
+        _nuage(nextcloud_accounts.dossier_quota, fid, go)
+        activity_log.noter("nuage", f"Dossier {nom} : taille {'illimitée' if go is None else fgo(go) + ' au plus'}", qui)
     elif action == "renommer":
-        _nuage(nuage.renommer_dossier, fid, str(corps.get("nom", "")))
-        journal.noter("nuage", f"Dossier {nom} renommé en {corps.get('nom')}", qui)
+        _nuage(nextcloud_accounts.renommer_dossier, fid, str(corps.get("nom", "")))
+        activity_log.noter("nuage", f"Dossier {nom} renommé en {corps.get('nom')}", qui)
     elif action == "supprimer":
-        _nuage(nuage.supprimer_dossier, fid)
-        journal.noter("nuage", f"Dossier commun supprimé avec son contenu : {nom}", qui)
+        _nuage(nextcloud_accounts.supprimer_dossier, fid)
+        activity_log.noter("nuage", f"Dossier commun supprimé avec son contenu : {nom}", qui)
     else:
         raise HTTPException(400, "Action inconnue.")
     return {"ok": True}
@@ -2414,7 +2415,7 @@ def surveiller_inscriptions():
         desactives = json.loads(sortie or "{}")
     except ValueError:
         return
-    d = nuage.lire()
+    d = nextcloud_accounts.lire()
     vus = set(d["en_attente_vus"])
     attente = set()
     for uid, nom in desactives.items():
@@ -2422,16 +2423,16 @@ def surveiller_inscriptions():
         if c == 0 and s.strip() == "yes":
             attente.add(uid)
             if uid not in vus:
-                notifs.envoyer("comptes", "Inscription à valider", f"{nom} ({uid}) demande un compte Nextcloud.", "/#/nuage",
+                notifications.envoyer("comptes", "Inscription à valider", f"{nom} ({uid}) demande un compte Nextcloud.", "/#/nuage",
                                famille="nuage", pour=pour_super())
     if attente != vus:
         d["en_attente_vus"] = sorted(attente)
-        nuage.ecrire(d)
+        nextcloud_accounts.ecrire(d)
     # Un disque ajouté à la main dans Nextcloud (ou avant cette version) serait vu par tous les comptes.
     try:
-        for nom in nuage.reserver_disques(occ):
-            journal.noter("nuage", f"Disque {nom} réservé aux admins dans Nextcloud (il était visible par tous les comptes)")
-    except nuage.Erreur:
+        for nom in nextcloud_accounts.reserver_disques(occ):
+            activity_log.noter("nuage", f"Disque {nom} réservé aux admins dans Nextcloud (il était visible par tous les comptes)")
+    except nextcloud_accounts.Erreur:
         pass
 
 
@@ -2450,7 +2451,7 @@ def sauv_executer(cmd, timeout=120):
 def sauv_donnees_hote():
     """Le dossier des données de l'appli, vu depuis le serveur (la clé et l'état y sont)."""
     if DEMO:
-        return sauvegardes.DOSSIER
+        return backups.DOSSIER
     d = dossier_appli()
     if not d:
         raise HTTPException(500, "Dossier de l'appli introuvable.")
@@ -2472,14 +2473,14 @@ def sauv_disque_present(d):
 
 
 def lancer_sauvegarde(qui=None):
-    d = sauvegardes.lire()
-    if not d["chemin"] or not sauvegardes.phrase():
+    d = backups.lire()
+    if not d["chemin"] or not backups.phrase():
         raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
     if sauv_en_cours(d):
         raise HTTPException(409, "Une sauvegarde est déjà en cours.")
     if not sauv_disque_present(d):
         raise HTTPException(409, f"Le disque {d['disque']} n'est pas branché.")
-    script = sauvegardes.script(d, sauv_donnees_hote(), DEMO)
+    script = backups.script(d, sauv_donnees_hote(), DEMO)
     unite = f"jabba-sauvegarde-{int(time.time())}"
     if DEMO:
         SAUV_DEMO[unite] = subprocess.Popen(["bash", "-c", script])
@@ -2490,18 +2491,18 @@ def lancer_sauvegarde(qui=None):
         if code != 0:
             raise HTTPException(500, "Lancement impossible : " + err[:200])
     d.update(unite=unite, lancee=int(time.time()))
-    sauvegardes.ecrire(d)
-    journal.noter("sauvegardes", f"Sauvegarde lancée vers {d['disque']}" + ("" if qui else " (automatique)"), qui)
+    backups.ecrire(d)
+    activity_log.noter("sauvegardes", f"Sauvegarde lancée vers {d['disque']}" + ("" if qui else " (automatique)"), qui)
     return unite
 
 
 def suivre_sauvegarde():
     """Quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté."""
-    d = sauvegardes.lire()
+    d = backups.lire()
     if not d["unite"] or sauv_en_cours(d):
         return d
-    e = sauvegardes.lire_etat()
-    res = sauvegardes.resultat(e) if (e.get("debut") or 0) >= d["lancee"] - 5 else None
+    e = backups.lire_etat()
+    res = backups.resultat(e) if (e.get("debut") or 0) >= d["lancee"] - 5 else None
     if res is None:
         res = {"ok": False, "debut": d["lancee"], "fin": int(time.time()), "duree": 0,
                "erreur": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?)."}
@@ -2510,25 +2511,25 @@ def suivre_sauvegarde():
     if res["ok"]:
         d["derniere_reussie"] = res
         d["alerte_absent"] = None
-        journal.noter("sauvegardes", "Sauvegarde terminée" + (f" ({res['avert'].strip()})" if res.get("avert") else ""), None)
+        activity_log.noter("sauvegardes", "Sauvegarde terminée" + (f" ({res['avert'].strip()})" if res.get("avert") else ""), None)
         if res.get("avert"):
-            notifs.envoyer("sauvegardes", "Sauvegarde incomplète", res["avert"], "/#/sauvegardes", famille="sauvegardes", noter=False)
+            notifications.envoyer("sauvegardes", "Sauvegarde incomplète", res["avert"], "/#/sauvegardes", famille="sauvegardes", noter=False)
     else:
         # Une alerte par jour au plus (la sauvegarde est retentée chaque heure).
         jour = time.strftime("%Y-%m-%d")
         if d.get("alerte_echec") != jour:
-            notifs.envoyer("sauvegardes", "Sauvegarde échouée", res["erreur"] + (" Nouvel essai dans une heure." if d["actif"] else ""),
+            notifications.envoyer("sauvegardes", "Sauvegarde échouée", res["erreur"] + (" Nouvel essai dans une heure." if d["actif"] else ""),
                            "/#/sauvegardes", famille="sauvegardes")
         else:
-            journal.noter("sauvegardes", "Sauvegarde échouée — " + res["erreur"])
+            activity_log.noter("sauvegardes", "Sauvegarde échouée — " + res["erreur"])
         d["alerte_echec"] = jour
-    sauvegardes.ecrire(d)
+    backups.ecrire(d)
     return d
 
 
 def surveiller_sauvegardes():
     d = suivre_sauvegarde()
-    if d["unite"] or not sauvegardes.due(d):
+    if d["unite"] or not backups.due(d):
         return
     if sauv_disque_present(d):
         lancer_sauvegarde()
@@ -2537,8 +2538,8 @@ def surveiller_sauvegardes():
     jour = time.strftime("%Y-%m-%d")
     if d.get("alerte_absent") != jour:
         d["alerte_absent"] = jour
-        sauvegardes.ecrire(d)
-        notifs.envoyer("sauvegardes", "Sauvegarde en attente",
+        backups.ecrire(d)
+        notifications.envoyer("sauvegardes", "Sauvegarde en attente",
                        f"Le disque {d['disque']} n'est pas branché : la sauvegarde partira dès son retour.",
                        "/#/sauvegardes", famille="sauvegardes")
 
@@ -2550,11 +2551,11 @@ def api_sauvegardes(request: Request):
     en_cours = sauv_en_cours(d)
     disques = [{"nom": n, "chemin": c} for n, c in sorted(disques_connus().items())]
     return {
-        "actif": d["actif"], "pret": bool(d["chemin"] and sauvegardes.phrase()),
+        "actif": d["actif"], "pret": bool(d["chemin"] and backups.phrase()),
         "disque": d["disque"], "chemin": d["chemin"], "branche": sauv_disque_present(d) if d["chemin"] else None,
-        "heure": d["heure"], "prochaine": sauvegardes.prochaine(d) if d["actif"] else None,
-        "sources": [{"id": k, "nom": n, "detail": x, "actif": d["sources"].get(k, True)} for k, (n, x) in sauvegardes.SOURCES.items()],
-        "garder": sauvegardes.GARDER, "en_cours": en_cours, "depuis": d["lancee"] if en_cours else None,
+        "heure": d["heure"], "prochaine": backups.prochaine(d) if d["actif"] else None,
+        "sources": [{"id": k, "nom": n, "detail": x, "actif": d["sources"].get(k, True)} for k, (n, x) in backups.SOURCES.items()],
+        "garder": backups.GARDER, "en_cours": en_cours, "depuis": d["lancee"] if en_cours else None,
         "dernier": d.get("dernier"), "derniere_reussie": d.get("derniere_reussie"),
         "disques": disques,
     }
@@ -2569,7 +2570,7 @@ async def api_sauvegardes_activer(request: Request):
     chemin = disques_connus().get(nom)
     if not chemin:
         raise HTTPException(400, "Disque inconnu.")
-    d = sauvegardes.lire()
+    d = backups.lire()
     if sauv_en_cours(d):
         raise HTTPException(409, "Une sauvegarde est en cours.")
     if not DEMO:
@@ -2579,12 +2580,12 @@ async def api_sauvegardes_activer(request: Request):
             if code != 0:
                 raise HTTPException(500, "Installation de restic impossible : " + err[-200:])
     nouvelle = None
-    if not sauvegardes.phrase():
-        nouvelle = sauvegardes.nouvelle_phrase()
-        sauvegardes.poser_phrase(nouvelle)
+    if not backups.phrase():
+        nouvelle = backups.nouvelle_phrase()
+        backups.poser_phrase(nouvelle)
     d.update(actif=True, disque=nom, chemin=chemin)
-    sauvegardes.ecrire(d)
-    journal.noter("sauvegardes", f"Sauvegardes mises en route vers {nom}", request.state.nom)
+    backups.ecrire(d)
+    activity_log.noter("sauvegardes", f"Sauvegardes mises en route vers {nom}", request.state.nom)
     return {"ok": True, "phrase": nouvelle, "qui": j["identifiant"]}
 
 
@@ -2592,7 +2593,7 @@ async def api_sauvegardes_activer(request: Request):
 async def api_sauvegardes_reglages(request: Request):
     exiger_admin(request, "super")
     corps = await request.json()
-    d = sauvegardes.lire()
+    d = backups.lire()
     changes = []
     if "actif" in corps:
         d["actif"] = bool(corps["actif"]) and bool(d["chemin"])
@@ -2604,14 +2605,14 @@ async def api_sauvegardes_reglages(request: Request):
         changes.append(f"chaque nuit à {d['heure']}")
     if isinstance(corps.get("sources"), dict):
         for k, v in corps["sources"].items():
-            if k in sauvegardes.SOURCES:
+            if k in backups.SOURCES:
                 d["sources"][k] = bool(v)
         if not any(d["sources"].values()):
             raise HTTPException(400, "Garde au moins une chose à sauvegarder.")
-        changes.append("contenu : " + ", ".join(sauvegardes.SOURCES[k][0] for k, v in d["sources"].items() if v))
-    sauvegardes.ecrire(d)
+        changes.append("contenu : " + ", ".join(backups.SOURCES[k][0] for k, v in d["sources"].items() if v))
+    backups.ecrire(d)
     if changes:
-        journal.noter("sauvegardes", "Sauvegardes " + " ; ".join(changes), request.state.nom)
+        activity_log.noter("sauvegardes", "Sauvegardes " + " ; ".join(changes), request.state.nom)
     return {"ok": True}
 
 
@@ -2623,7 +2624,7 @@ def api_sauvegardes_lancer(request: Request):
 
 
 def _sauv_lisible(d):
-    if not d["chemin"] or not sauvegardes.phrase():
+    if not d["chemin"] or not backups.phrase():
         raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
     if not sauv_disque_present(d):
         raise HTTPException(409, f"Branche le disque {d['disque']} pour voir les sauvegardes.")
@@ -2632,10 +2633,10 @@ def _sauv_lisible(d):
 @app.get("/api/sauvegardes/historique")
 def api_sauvegardes_historique(request: Request):
     exiger_admin(request)
-    d = sauvegardes.lire()
+    d = backups.lire()
     _sauv_lisible(d)
     try:
-        return {"copies": sauvegardes.instantanes(sauv_executer, d, sauv_donnees_hote(), DEMO)}
+        return {"copies": backups.instantanes(sauv_executer, d, sauv_donnees_hote(), DEMO)}
     except RuntimeError as e:
         if "does not exist" in str(e) or "unable to open config" in str(e):
             return {"copies": []}
@@ -2647,10 +2648,10 @@ def api_sauvegardes_parcourir(request: Request, id: str, chemin: str = "/"):
     exiger_admin(request)
     if not re.fullmatch(r"[0-9a-f]{8,64}", id):
         raise HTTPException(400, "Copie inconnue.")
-    d = sauvegardes.lire()
+    d = backups.lire()
     _sauv_lisible(d)
     try:
-        return {"elements": sauvegardes.parcourir(sauv_executer, d, sauv_donnees_hote(), id, chemin, DEMO)}
+        return {"elements": backups.parcourir(sauv_executer, d, sauv_donnees_hote(), id, chemin, DEMO)}
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
@@ -2663,13 +2664,13 @@ async def api_sauvegardes_restaurer(request: Request):
     ident, chemin = str(corps.get("id", "")), str(corps.get("chemin", ""))
     if not re.fullmatch(r"[0-9a-f]{8,64}", ident) or not chemin.strip("/") or ".." in chemin.split("/"):
         raise HTTPException(400, "Demande invalide.")
-    d = sauvegardes.lire()
+    d = backups.lire()
     _sauv_lisible(d)
     try:
-        cible = sauvegardes.restaurer(sauv_executer, d, sauv_donnees_hote(), ident, chemin, DEMO)
+        cible = backups.restaurer(sauv_executer, d, sauv_donnees_hote(), ident, chemin, DEMO)
     except RuntimeError as e:
         raise HTTPException(500, str(e))
-    journal.noter("sauvegardes", f"Restauré : {chemin} (copie {ident}) → {cible}", request.state.nom)
+    activity_log.noter("sauvegardes", f"Restauré : {chemin} (copie {ident}) → {cible}", request.state.nom)
     return {"ok": True, "cible": cible}
 
 
@@ -2677,11 +2678,11 @@ async def api_sauvegardes_restaurer(request: Request):
 def api_sauvegardes_phrase(request: Request):
     """La phrase de passe, pour la recopier (super admin, mot de passe redemandé, noté au Journal)."""
     exiger_admin(request, "super", fort=True)
-    p = sauvegardes.phrase()
+    p = backups.phrase()
     if not p:
         raise HTTPException(404, "Pas encore de phrase de passe.")
-    journal.noter("sauvegardes", "Phrase de passe des sauvegardes affichée", request.state.nom)
-    notifs.envoyer("securite", "Phrase des sauvegardes affichée",
+    activity_log.noter("sauvegardes", "Phrase de passe des sauvegardes affichée", request.state.nom)
+    notifications.envoyer("securite", "Phrase des sauvegardes affichée",
                    f"{request.state.nom} a affiché la phrase de passe des sauvegardes.", "/#/journal", famille="admin", noter=False)
     return {"phrase": p}
 
@@ -2701,16 +2702,16 @@ def api_appli_maj(verifier: int = 0):
                 "disponible": True}
     d = dossier_appli()
     pret = bool(DEPOT and d and hote(["test", "-d", d + "/.git"])[0] == 0 and hote(["sh", "-c", "command -v git"])[0] == 0)
-    der = maj.derniere(DEPOT, forcer=bool(verifier)) if DEPOT else None
+    der = app_update.derniere(DEPOT, forcer=bool(verifier)) if DEPOT else None
     return {"actuelle": VERSION, "depot": DEPOT or None, "pret": pret, "derniere": der,
-            "disponible": bool(der and maj.plus_recente(VERSION, der["version"]))}
+            "disponible": bool(der and app_update.plus_recente(VERSION, der["version"]))}
 
 
 @app.get("/api/appli/versions")
 def api_appli_versions():
     """Historique des versions de l'appli : ce qui a changé à chaque mise à jour."""
     try:
-        with open(os.path.join(os.path.dirname(__file__), "versions.json")) as f:
+        with open(os.path.join(config.APP_DIR, "versions.json")) as f:
             return json.load(f)
     except (OSError, ValueError):
         return []
@@ -2721,15 +2722,15 @@ def api_appli_installer(request: Request):
     exiger_admin(request, fort=True)
     if DEMO:
         return {"ok": True}
-    der = maj.derniere(DEPOT, forcer=True)
+    der = app_update.derniere(DEPOT, forcer=True)
     d = dossier_appli()
-    if not (der and d and maj.plus_recente(VERSION, der["version"])):
+    if not (der and d and app_update.plus_recente(VERSION, der["version"])):
         raise HTTPException(409, "Pas de nouvelle version à installer.")
-    cle = maj.cle_publication()
+    cle = app_update.cle_publication()
     if not cle:
         raise HTTPException(409, "Cette appli n'a pas de clé de publication (cle_publication.pub) : impossible de vérifier une nouvelle version.")
-    script = maj.script(d, der["tag"], cle)
-    journal.noter("appli", f"Mise à jour de l'appli vers {der['version']} lancée", request.state.nom)
+    script = app_update.script(d, der["tag"], cle)
+    activity_log.noter("appli", f"Mise à jour de l'appli vers {der['version']} lancée", request.state.nom)
     # Lancée par le serveur lui-même : elle continue pendant que l'appli redémarre.
     unite = f"jabba-maj-{int(time.time())}"
     code, _, err = lancer_sur_serveur(unite, script)
@@ -2752,10 +2753,10 @@ def etat_maj():
     lignes = [l for l in log.splitlines() if l.strip()]
     if actif.strip() in ("active", "activating", "reloading"):
         return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"]), **avancement_maj(lignes)}
-    if any(maj.MARQUE_REFUS in l for l in lignes):
+    if any(app_update.MARQUE_REFUS in l for l in lignes):
         if not MAJ["signale"]:
             MAJ["signale"] = True
-            notifs.envoyer("securite", "Mise à jour refusée",
+            notifications.envoyer("securite", "Mise à jour refusée",
                            f"La version {MAJ['version']} publiée sur GitHub n'est pas signée par la clé attendue : rien n'a été installé. "
                            "Si tu n'as rien publié toi-même, ton compte GitHub est peut-être piraté.", "/#/systeme", famille="appli")
         return {"statut": "echec", "version": MAJ["version"],
@@ -2764,7 +2765,7 @@ def etat_maj():
         detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
         if not MAJ["signale"]:
             MAJ["signale"] = True
-            notifs.envoyer("mises_a_jour", "Mise à jour échouée",
+            notifications.envoyer("mises_a_jour", "Mise à jour échouée",
                            f"La version {MAJ['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", famille="appli")
         return {"statut": "echec", "version": MAJ["version"], "detail": detail}
     return {"statut": "termine", "version": MAJ["version"]}
@@ -2820,7 +2821,7 @@ def synchroniser_outils_invites():
 
     def f(d):
         d["outils"], d["adresse"] = outils, ip
-    invites.modifier(f)
+    guests.modifier(f)
 
 
 CHAINE = "JABBA-WIFI"
@@ -2842,7 +2843,7 @@ def appliquer_pare_feu():
     interface, _ = adresse_wifi()
     if not interface or not re.fullmatch(r"[\w.-]+", interface):
         return False
-    voulues = regles_voulues(interface, invites.lire())
+    voulues = regles_voulues(interface, guests.lire())
     ok = True
     for outil_ipt in ("iptables", "ip6tables"):
         if hote([outil_ipt, "-S", "DOCKER-USER"])[0] != 0:
@@ -2874,7 +2875,7 @@ def api_invites(request: Request):
         synchroniser_outils_invites()
     except HTTPException:
         pass
-    d = invites.lire()
+    d = guests.lire()
     return {"actif": d["actif"], "code": d["code"], "url": url_invites(d), "nom_local": f"http://{nom_hote()}.local",
             "dossiers": d["dossiers"], "wifi": d["wifi"],
             "outils": [{**o, "wifi": bool(d["wifi"].get(o["id"]))} for o in d["outils"]]}
@@ -2885,7 +2886,7 @@ def api_invites_qr(request: Request):
     exiger_admin(request)
     import io
     import segno
-    url = url_invites(invites.lire())
+    url = url_invites(guests.lire())
     if not url:
         raise HTTPException(404, "Adresse du serveur introuvable.")
     tampon = io.BytesIO()
@@ -2900,12 +2901,12 @@ async def api_invites_regler(request: Request):
     action = corps.get("action")
     if action == "actif":
         actif = bool(corps.get("actif"))
-        invites.modifier(lambda d: d.update(actif=actif))
+        guests.modifier(lambda d: d.update(actif=actif))
         if actif:
-            invites.preparer_dossier_invites()
+            guests.preparer_dossier_invites()
         texte = f"Accès invités {'ouvert' if actif else 'fermé'}"
     elif action == "code":
-        invites.nouveau_code()
+        guests.nouveau_code()
         texte = "Nouveau code invités (les invités déjà entrés devront le ressaisir)"
     elif action == "wifi":
         pid, ouvert = corps.get("outil"), bool(corps.get("wifi"))
@@ -2913,13 +2914,13 @@ async def api_invites_regler(request: Request):
             raise HTTPException(400, "Outil inconnu.")
         if pid in JAMAIS_WIFI and ouvert:
             raise HTTPException(403, "Cet outil donne la main sur le serveur : il reste réservé à Tailscale.")
-        invites.modifier(lambda d: d["wifi"].update({pid: ouvert}))
+        guests.modifier(lambda d: d["wifi"].update({pid: ouvert}))
         if not appliquer_pare_feu():
             raise HTTPException(500, "Le réglage est noté, mais le filtre réseau n'a pas pu être appliqué.")
         texte = f"{NOMS.get(pid, (pid,))[0]} {'joignable' if ouvert else 'plus joignable'} depuis le Wi-Fi"
     elif action == "ajouter_dossier":
         virtuel, mode = chemin_propre(corps.get("chemin", "")), corps.get("mode", "lecture")
-        reel, _ = fs(lambda: disque.resoudre(virtuel, racines_partageables(), set()))
+        reel, _ = fs(lambda: disk_browser.resoudre(virtuel, racines_partageables(), set()))
         if not reel or not os.path.isdir(reel):
             raise HTTPException(404, "Dossier introuvable.")
         if mode not in ("lecture", "depot"):
@@ -2930,7 +2931,7 @@ async def api_invites_regler(request: Request):
             if any(x["chemin"] == reel for x in d["dossiers"]):
                 raise HTTPException(409, "Ce dossier est déjà partagé.")
             d["dossiers"].append({"id": uuid.uuid4().hex[:8], "nom": nom, "chemin": reel, "mode": mode})
-        invites.modifier(f)
+        guests.modifier(f)
         texte = f"Dossier « {nom} » partagé avec les invités ({'dépôt autorisé' if mode == 'depot' else 'lecture seule'})"
     elif action in ("retirer_dossier", "mode_dossier"):
         did = corps.get("id")
@@ -2945,11 +2946,11 @@ async def api_invites_regler(request: Request):
             elif mode in ("lecture", "depot"):
                 x["mode"] = mode
             return x["nom"]
-        nom = invites.modifier(f)
+        nom = guests.modifier(f)
         texte = f"Dossier « {nom} » " + ("retiré des invités" if action == "retirer_dossier" else f"en {'dépôt autorisé' if mode == 'depot' else 'lecture seule'} pour les invités")
     else:
         raise HTTPException(400, "Action inconnue.")
-    journal.noter("invite", f"{texte}, par {j['identifiant']}", request.state.nom)
+    activity_log.noter("invite", f"{texte}, par {j['identifiant']}", request.state.nom)
     return {"ok": True}
 
 
@@ -2959,18 +2960,18 @@ def api_invites_parcourir(request: Request, chemin: str = "/"):
     exiger_admin(request)
     chemin = chemin_propre(chemin)
     if chemin == "/":
-        invites.preparer_dossier_invites()
-        toutes = {**disque.racines(), **racines_partageables()}
+        guests.preparer_dossier_invites()
+        toutes = {**disk_browser.racines(), **racines_partageables()}
         elements = [{"nom": n, "chemin": "/" + n} for n, c in toutes.items() if os.path.isdir(c)]
         return {"chemin": "/", "elements": elements}
-    d = fs(lambda: disque.lister(chemin, racines_partageables(), set()))
+    d = fs(lambda: disk_browser.lister(chemin, racines_partageables(), set()))
     return {"chemin": chemin, "elements": [{"nom": e["nom"], "chemin": e["chemin"]} for e in d["elements"] if e["dossier"]]}
 
 
 def racines_partageables():
     """Disques branchés et dossier Invités, en plus des dossiers du serveur."""
     r = {n: c for n, c in disques_connus().items() if n in disques_branches()}
-    r["Invités"] = invites.DOSSIER_INVITES
+    r["Invités"] = guests.DOSSIER_INVITES
     return r
 
 
@@ -3039,15 +3040,15 @@ def surveiller_courant():
     COURANT["secteur"] = secteur
     n = nom_serveur()
     if avant is True and not secteur:
-        notifs.envoyer("courant", "Coupure de courant", f"{n} tourne sur batterie ({batterie} %). Il s'éteindra proprement sous {SEUIL_BATTERIE} %.", "/#/systeme", famille="courant")
+        notifications.envoyer("courant", "Coupure de courant", f"{n} tourne sur batterie ({batterie} %). Il s'éteindra proprement sous {SEUIL_BATTERIE} %.", "/#/systeme", famille="courant")
     elif avant is False and secteur:
         if COURANT["arret_prevu"]:
             hote(["systemctl", "stop", "jabba-arret.timer"])
             COURANT["arret_prevu"] = False
-        notifs.envoyer("courant", "Courant revenu", f"{n} est de nouveau sur secteur ({batterie} %).", "/#/systeme", famille="courant")
+        notifications.envoyer("courant", "Courant revenu", f"{n} est de nouveau sur secteur ({batterie} %).", "/#/systeme", famille="courant")
     if not secteur and batterie is not None and batterie <= SEUIL_BATTERIE and not COURANT["arret_prevu"]:
         COURANT["arret_prevu"] = True
-        notifs.envoyer("courant", "Batterie faible : arrêt dans 1 minute",
+        notifications.envoyer("courant", "Batterie faible : arrêt dans 1 minute",
                        f"{n} s'éteint proprement pour protéger les disques. Rallume-le avec son bouton quand le courant est revenu.", "/#/systeme", famille="courant")
         hote(["systemd-run", "--unit=jabba-arret", "--collect", "--on-active=60", "systemctl", "poweroff"])
 
@@ -3061,7 +3062,7 @@ def surveiller_espace():
         p = 100 * u["utilise"] / max(1, u["total"])
         if p >= 90 and chemin not in SURV["disques_pleins"]:
             SURV["disques_pleins"].add(chemin)
-            notifs.envoyer("disque_plein", f"{chemins.get(chemin, chemin)} presque plein", f"Rempli à {round(p)} %. Fais de la place, ou vide la corbeille.", "/#/disques", famille="disque")
+            notifications.envoyer("disque_plein", f"{chemins.get(chemin, chemin)} presque plein", f"Rempli à {round(p)} %. Fais de la place, ou vide la corbeille.", "/#/disques", famille="disque")
         elif p < 85:
             SURV["disques_pleins"].discard(chemin)
 
@@ -3075,10 +3076,10 @@ def surveiller_outils():
         if souci:
             SURV["pannes"][pid] = vu + 1
             if vu + 1 == 2:  # deux passages de suite (2 minutes) : ce n'est pas un simple redémarrage
-                notifs.envoyer("outil_panne", f"{o['nom']} en panne", "Ouvre l'Établi et essaie « Redémarrer ».", "/#/outils", famille="outil")
+                notifications.envoyer("outil_panne", f"{o['nom']} en panne", "Ouvre l'Établi et essaie « Redémarrer ».", "/#/outils", famille="outil")
         else:
             if vu >= 2 and o["etat"] == "actif":
-                notifs.envoyer("outil_panne", f"{o['nom']} est reparti", "", "/#/outils", famille="outil")
+                notifications.envoyer("outil_panne", f"{o['nom']} est reparti", "", "/#/outils", famille="outil")
             SURV["pannes"].pop(pid, None)
 
 
@@ -3087,29 +3088,29 @@ def surveiller_maj():
         if not SURV["redemarrage_signale"]:
             SURV["redemarrage_signale"] = True
             auto = mode_redemarrage()["mode"] == "auto"
-            notifs.envoyer("mises_a_jour", "Redémarrage en attente", redemarrage.message(auto), "/#/systeme", famille="systeme")
+            notifications.envoyer("mises_a_jour", "Redémarrage en attente", restart_policy.message(auto), "/#/systeme", famille="systeme")
     else:
         SURV["redemarrage_signale"] = False
     if DEPOT:
-        der = maj.derniere(DEPOT)
-        if der and maj.plus_recente(VERSION, der["version"]) and SURV["maj_signalee"] != der["version"]:
+        der = app_update.derniere(DEPOT)
+        if der and app_update.plus_recente(VERSION, der["version"]) and SURV["maj_signalee"] != der["version"]:
             SURV["maj_signalee"] = der["version"]
-            notifs.envoyer("mises_a_jour", f"Appli Jabba {der['version']} disponible", "Installe-la depuis l'écran Système.", "/#/systeme", famille="appli")
+            notifications.envoyer("mises_a_jour", f"Appli Jabba {der['version']} disponible", "Installe-la depuis l'écran Système.", "/#/systeme", famille="appli")
 
 
 def scruter_disques():
     reveiller_disques()   # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
-    disques_auto.scruter(hote, hote_entree, lambda: source() == "nextcloud",
-                         lambda t, ti, tx, u: notifs.envoyer(t, ti, tx, u, famille="disque"),
-                         lambda: list(disques_env()) + list(disque.racines()))
+    auto_disks.scruter(hote, hote_entree, lambda: source() == "nextcloud",
+                         lambda t, ti, tx, u: notifications.envoyer(t, ti, tx, u, famille="disque"),
+                         lambda: list(disques_env()) + list(disk_browser.racines()))
 
 
 def relier_disques_nextcloud():
     if source() != "nextcloud":
         return
-    for x in disques_auto.lire()["disques"]:
+    for x in auto_disks.lire()["disques"]:
         if not x.get("nextcloud"):
-            disques_auto.relier_nextcloud(hote, x)
+            auto_disks.relier_nextcloud(hote, x)
 
 
 def surveiller():
@@ -3119,7 +3120,7 @@ def surveiller():
     while True:
         etapes = [scruter_disques]
         if tour % 4 == 0:   # toutes les minutes
-            etapes += [surveiller_sauvegardes, lecture.nettoyer, lambda: MAJ["unite"] and not MAJ["signale"] and etat_maj(), surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
+            etapes += [surveiller_sauvegardes, video_player.nettoyer, lambda: MAJ["unite"] and not MAJ["signale"] and etat_maj(), surveiller_courant, surveiller_espace, surveiller_outils, synchroniser_outils_invites, appliquer_pare_feu]
         if tour % 8 == 0:   # toutes les 2 minutes
             etapes += [surveiller_inscriptions]
         if tour % 40 == 0:  # toutes les 10 minutes
@@ -3128,7 +3129,7 @@ def surveiller():
             etapes += [surveiller_maj]
         if time.time() - SURV["derniere_purge"] > 86400:
             SURV["derniere_purge"] = time.time()
-            etapes += [disque.purger]
+            etapes += [disk_browser.purger]
         for etape in etapes:
             try:
                 etape()
@@ -3140,21 +3141,21 @@ def surveiller():
 
 @app.on_event("startup")
 def demarrage():
-    fichier = os.path.join(os.path.dirname(journal.FICHIER), "version.txt")
+    fichier = os.path.join(os.path.dirname(activity_log.FICHIER), "version.txt")
     try:
         avant = open(fichier).read().strip()
     except OSError:
         avant = None
     if avant != VERSION:
-        journal.noter("appli", f"Appli Jabba {VERSION} installée" + (f" (avant : {avant})" if avant else ""))
+        activity_log.noter("appli", f"Appli Jabba {VERSION} installée" + (f" (avant : {avant})" if avant else ""))
         try:
             os.makedirs(os.path.dirname(fichier), exist_ok=True)
             open(fichier, "w").write(VERSION)
         except OSError:
             pass
     try:
-        invites.preparer_etat()
-        invites.modifier(lambda d: d.update(serveur=nom_hote()))
+        guests.preparer_etat()
+        guests.modifier(lambda d: d.update(serveur=nom_hote()))
     except OSError as e:
         print("invités :", e, flush=True)
     threading.Thread(target=surveiller, daemon=True, name="surveillance").start()

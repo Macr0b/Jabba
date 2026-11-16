@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-import nuage
+from services import nextcloud_accounts
 
 
 class FauxOcc:
@@ -11,7 +11,7 @@ class FauxOcc:
 
     def __init__(self):
         self.users = {}       # uid -> dict
-        self.groups = {"admin": [], nuage.GROUPE_TOUS: []}
+        self.groups = {"admin": [], nextcloud_accounts.GROUPE_TOUS: []}
         self.reglages = {}
         self.appels = []
 
@@ -96,130 +96,130 @@ class FauxOcc:
 
 @pytest.fixture
 def occ(tmp_path, monkeypatch):
-    monkeypatch.setattr(nuage, "FICHIER", str(tmp_path / "nuage.json"))
-    nuage.USAGE["v"].clear()
+    monkeypatch.setattr(nextcloud_accounts, "FICHIER", str(tmp_path / "nuage.json"))
+    nextcloud_accounts.USAGE["v"].clear()
     f = FauxOcc()
-    f.ajouter("rob", groupes=["admin", nuage.GROUPE_TOUS])
-    f.ajouter("alice", groupes=[nuage.GROUPE_TOUS])
+    f.ajouter("rob", groupes=["admin", nextcloud_accounts.GROUPE_TOUS])
+    f.ajouter("alice", groupes=[nextcloud_accounts.GROUPE_TOUS])
     f.ajouter("bob", enabled=False, attente=True)
     f.ajouter("carole", enabled=False)
     return f
 
 
 def test_tailles():
-    assert nuage.en_octets("5 GB") == 5 * 1024 ** 3
-    assert nuage.en_octets("500 MB") == 500 * 1024 ** 2
-    assert nuage.en_octets("none") is None
-    assert nuage.texte_quota(5) == "5 GB" and nuage.texte_quota(2.5) == "2560 MB" and nuage.texte_quota(None) == "none"
+    assert nextcloud_accounts.en_octets("5 GB") == 5 * 1024 ** 3
+    assert nextcloud_accounts.en_octets("500 MB") == 500 * 1024 ** 2
+    assert nextcloud_accounts.en_octets("none") is None
+    assert nextcloud_accounts.texte_quota(5) == "5 GB" and nextcloud_accounts.texte_quota(2.5) == "2560 MB" and nextcloud_accounts.texte_quota(None) == "none"
 
 
 def test_etats_des_comptes(occ):
-    c = {x["id"]: x for x in nuage.comptes(occ)}
+    c = {x["id"]: x for x in nextcloud_accounts.comptes(occ)}
     assert c["bob"]["etat"] == "attente"          # inscrit, en attente de validation
     assert c["carole"]["etat"] == "suspendu"      # désactivé par un admin
     assert c["alice"]["etat"] == "actif" and c["rob"]["admin"]
-    assert [x["id"] for x in nuage.comptes(occ)][0] == "bob"   # les demandes d'abord
+    assert [x["id"] for x in nextcloud_accounts.comptes(occ)][0] == "bob"   # les demandes d'abord
 
 
 def test_valider(occ):
-    nuage.valider(occ, "bob")
-    assert occ.users["bob"]["enabled"] and "bob" in occ.groups[nuage.GROUPE_TOUS]
+    nextcloud_accounts.valider(occ, "bob")
+    assert occ.users["bob"]["enabled"] and "bob" in occ.groups[nextcloud_accounts.GROUPE_TOUS]
 
 
 def test_ajouter_mot_de_passe_jamais_en_ligne_de_commande(occ):
-    nuage.ajouter(occ, "denis", "Denis", "", "Mot-de-passe-123456")
+    nextcloud_accounts.ajouter(occ, "denis", "Denis", "", "Mot-de-passe-123456")
     assert occ.mdp == "Mot-de-passe-123456"
     assert not any("Mot-de-passe-123456" in " ".join(a) for a in occ.appels)
-    assert "denis" in occ.groups[nuage.GROUPE_TOUS]
+    assert "denis" in occ.groups[nextcloud_accounts.GROUPE_TOUS]
 
 
 def test_identifiant_invalide(occ):
     for mauvais in ("Denis", "a", "d e", "../x", "x" * 40):
-        with pytest.raises(nuage.Erreur):
-            nuage.ajouter(occ, mauvais, "", "", "Mot-de-passe-123456")
+        with pytest.raises(nextcloud_accounts.Erreur):
+            nextcloud_accounts.ajouter(occ, mauvais, "", "", "Mot-de-passe-123456")
 
 
 def test_mise_en_route(occ):
-    nuage.mettre_en_route(occ)
+    nextcloud_accounts.mettre_en_route(occ)
     assert occ.reglages[("registration", "admin_approval_required")] == "yes"
-    assert occ.reglages[("registration", "registered_user_group")] == nuage.GROUPE_TOUS
+    assert occ.reglages[("registration", "registered_user_group")] == nextcloud_accounts.GROUPE_TOUS
     assert occ.reglages[("files", "default_quota")] == "5 GB"
 
 
 def test_rangs_cumulatifs(occ):
-    d = nuage.lire()
+    d = nextcloud_accounts.lire()
     d["rangs_actif"] = True
-    adherent = nuage.creer_rang(occ, d, "Adhérent")
-    employe = nuage.creer_rang(occ, d, "Employé")
-    gerant = nuage.creer_rang(occ, d, "Gérant")
+    adherent = nextcloud_accounts.creer_rang(occ, d, "Adhérent")
+    employe = nextcloud_accounts.creer_rang(occ, d, "Employé")
+    gerant = nextcloud_accounts.creer_rang(occ, d, "Gérant")
     d["rang_de"] = {"alice": gerant, "rob": adherent}
-    nuage.synchroniser(occ, d)
+    nextcloud_accounts.synchroniser(occ, d)
     assert set(occ.groups[adherent]) == {"alice", "rob"}
     assert occ.groups[employe] == ["alice"] and occ.groups[gerant] == ["alice"]
     # On descend Employé sous Adhérent : rob (Adhérent) entre dans Employé.
     d["rangs"][0], d["rangs"][1] = d["rangs"][1], d["rangs"][0]
-    nuage.synchroniser(occ, d)
+    nextcloud_accounts.synchroniser(occ, d)
     assert set(occ.groups[employe]) == {"alice", "rob"} and set(occ.groups[adherent]) == {"alice", "rob"}
     assert occ.groups[gerant] == ["alice"]
     # Rangs désactivés : plus personne dans les groupes de rang (les rangs restent notés).
     d["rangs_actif"] = False
-    nuage.synchroniser(occ, d)
+    nextcloud_accounts.synchroniser(occ, d)
     assert all(not occ.groups[r] for r in (adherent, employe, gerant)) and d["rang_de"]["alice"] == gerant
 
 
 def test_supprimer_un_rang_fait_descendre(occ):
-    d = nuage.lire()
+    d = nextcloud_accounts.lire()
     d["rangs_actif"] = True
-    bas = nuage.creer_rang(occ, d, "Bas")
-    haut = nuage.creer_rang(occ, d, "Haut")
+    bas = nextcloud_accounts.creer_rang(occ, d, "Bas")
+    haut = nextcloud_accounts.creer_rang(occ, d, "Haut")
     d["rang_de"] = {"alice": haut, "rob": bas}
-    nuage.supprimer_rang(occ, d, haut)
+    nextcloud_accounts.supprimer_rang(occ, d, haut)
     assert d["rang_de"] == {"alice": bas, "rob": bas} and haut not in occ.groups
-    nuage.supprimer_rang(occ, d, bas)
+    nextcloud_accounts.supprimer_rang(occ, d, bas)
     assert d["rang_de"] == {}
 
 
 def test_rang_en_double_refuse(occ):
-    d = nuage.lire()
-    nuage.creer_rang(occ, d, "Adhérent")
-    with pytest.raises(nuage.Erreur):
-        nuage.creer_rang(occ, d, "adhérent")
+    d = nextcloud_accounts.lire()
+    nextcloud_accounts.creer_rang(occ, d, "Adhérent")
+    with pytest.raises(nextcloud_accounts.Erreur):
+        nextcloud_accounts.creer_rang(occ, d, "adhérent")
 
 
 def test_groupes_proteges(occ):
-    for g in ("admin", nuage.GROUPE_TOUS, "rang-abc123"):
-        with pytest.raises(nuage.Erreur):
-            nuage.supprimer_groupe(occ, g)
-    with pytest.raises(nuage.Erreur):
-        nuage.nouveau_groupe(occ, "rang-pirate")
+    for g in ("admin", nextcloud_accounts.GROUPE_TOUS, "rang-abc123"):
+        with pytest.raises(nextcloud_accounts.Erreur):
+            nextcloud_accounts.supprimer_groupe(occ, g)
+    with pytest.raises(nextcloud_accounts.Erreur):
+        nextcloud_accounts.nouveau_groupe(occ, "rang-pirate")
 
 
 def test_modes_des_dossiers():
-    assert nuage.MODES["lecture"][0] == ["read"]
-    assert "delete" not in nuage.MODES["depot"][0] and "share" not in nuage.MODES["depot"][0]
-    assert nuage.NOMBRES_MODES[1] == "lecture" and nuage.NOMBRES_MODES[7] == "depot" and nuage.NOMBRES_MODES[31] == "complet"
+    assert nextcloud_accounts.MODES["lecture"][0] == ["read"]
+    assert "delete" not in nextcloud_accounts.MODES["depot"][0] and "share" not in nextcloud_accounts.MODES["depot"][0]
+    assert nextcloud_accounts.NOMBRES_MODES[1] == "lecture" and nextcloud_accounts.NOMBRES_MODES[7] == "depot" and nextcloud_accounts.NOMBRES_MODES[31] == "complet"
 
 
 def test_charte(occ):
-    assert nuage.charte(occ) == ""
-    nuage.mettre_en_route(occ)
-    assert nuage.charte(occ) == nuage.CHARTE_DEFAUT          # le modèle est posé à la mise en route
-    nuage.poser_charte(occ, "Ligne un.\n\n  Ligne   deux.")
-    assert nuage.charte(occ) == "Ligne un. Ligne deux."      # une seule ligne : le formulaire n'affiche pas les retours
-    with pytest.raises(nuage.Erreur):
-        nuage.poser_charte(occ, "x" * (nuage.CHARTE_MAX + 1))
-    nuage.poser_charte(occ, "")
-    assert nuage.charte(occ) == ""
-    nuage.mettre_en_route(occ)
-    assert nuage.charte(occ) == nuage.CHARTE_DEFAUT
-    nuage.poser_charte(occ, "Ma charte.")
-    nuage.mettre_en_route(occ)
-    assert nuage.charte(occ) == "Ma charte."                 # relancer la mise en route ne l'écrase pas
+    assert nextcloud_accounts.charte(occ) == ""
+    nextcloud_accounts.mettre_en_route(occ)
+    assert nextcloud_accounts.charte(occ) == nextcloud_accounts.CHARTE_DEFAUT          # le modèle est posé à la mise en route
+    nextcloud_accounts.poser_charte(occ, "Ligne un.\n\n  Ligne   deux.")
+    assert nextcloud_accounts.charte(occ) == "Ligne un. Ligne deux."      # une seule ligne : le formulaire n'affiche pas les retours
+    with pytest.raises(nextcloud_accounts.Erreur):
+        nextcloud_accounts.poser_charte(occ, "x" * (nextcloud_accounts.CHARTE_MAX + 1))
+    nextcloud_accounts.poser_charte(occ, "")
+    assert nextcloud_accounts.charte(occ) == ""
+    nextcloud_accounts.mettre_en_route(occ)
+    assert nextcloud_accounts.charte(occ) == nextcloud_accounts.CHARTE_DEFAUT
+    nextcloud_accounts.poser_charte(occ, "Ma charte.")
+    nextcloud_accounts.mettre_en_route(occ)
+    assert nextcloud_accounts.charte(occ) == "Ma charte."                 # relancer la mise en route ne l'écrase pas
 
 
 def test_charte_mentionne_l_essentiel():
     for mot in ("administrateur", "Cryptomator", "sauvegardé", "suppression"):
-        assert mot in nuage.CHARTE_DEFAUT
+        assert mot in nextcloud_accounts.CHARTE_DEFAUT
 
 
 class FauxOccDisques(FauxOcc):
@@ -247,10 +247,10 @@ def _montage(i, nom, users=(), groups=()):
 
 
 def test_disques_reserves_aux_admins_avant_tout_nouveau_compte(tmp_path, monkeypatch):
-    monkeypatch.setattr(nuage, "FICHIER", str(tmp_path / "nuage.json"))
+    monkeypatch.setattr(nextcloud_accounts, "FICHIER", str(tmp_path / "nuage.json"))
     f = FauxOccDisques([_montage(1, "R2-D2"), _montage(2, "Photos", groups=["famille"]), _montage(3, "Perso", users=["rob"])])
     f.ajouter("rob", groupes=["admin"])
-    nuage.ajouter(f, "denis", "Denis", "", "Mot-de-passe-123456")
+    nextcloud_accounts.ajouter(f, "denis", "Denis", "", "Mot-de-passe-123456")
     assert f.montages[0]["applicable_groups"] == ["admin"]          # était ouvert à tous : réservé aux admins
     assert f.montages[1]["applicable_groups"] == ["famille"]        # réglé à la main : pas touché
     assert f.montages[2]["applicable_groups"] == []
@@ -259,15 +259,15 @@ def test_disques_reserves_aux_admins_avant_tout_nouveau_compte(tmp_path, monkeyp
 
 
 def test_disques_reserves_avant_validation(tmp_path, monkeypatch):
-    monkeypatch.setattr(nuage, "FICHIER", str(tmp_path / "nuage.json"))
+    monkeypatch.setattr(nextcloud_accounts, "FICHIER", str(tmp_path / "nuage.json"))
     f = FauxOccDisques([_montage(7, "R2-D2")])
     f.ajouter("bob", enabled=False, attente=True)
-    nuage.valider(f, "bob")
+    nextcloud_accounts.valider(f, "bob")
     ordre = [a[0] for a in f.appels]
     assert f.montages[0]["applicable_groups"] == ["admin"]
     assert ordre.index("files_external:applicable") < ordre.index("user:enable")
-    assert nuage.reserver_disques(f) == []                          # rien à refaire
+    assert nextcloud_accounts.reserver_disques(f) == []                          # rien à refaire
 
 
 def test_disques_sans_appli_stockages_externes(occ):
-    assert nuage.reserver_disques(occ) == []                        # files_external absent : rien à faire, pas d'erreur
+    assert nextcloud_accounts.reserver_disques(occ) == []                        # files_external absent : rien à faire, pas d'erreur
