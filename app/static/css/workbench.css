@@ -1,0 +1,111 @@
+/* Établi : les outils, leurs icônes et leur ouverture dans l'appli. */
+.titre-outil {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.icone {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--accent-doux);
+  color: var(--accent-fonce);
+  font-weight: 700;
+  font-size: 17px;
+  overflow: hidden;
+}
+.icone img {
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+}
+.outil.eteint {
+  opacity: 0.62;
+}
+.outil.eteint .interrupteur {
+  opacity: 1;
+}
+.titre-section {
+  margin: 8px 0 -4px;
+  font-size: 15px;
+  color: var(--texte-3);
+  font-weight: 600;
+}
+.interrupteur {
+  position: relative;
+  width: 52px;
+  height: 32px;
+  border-radius: 99px;
+  border: 0;
+  background: var(--bord);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.interrupteur span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.interrupteur[aria-checked="true"] {
+  background: var(--vert);
+}
+.interrupteur[aria-checked="true"] span {
+  transform: translateX(20px);
+}
+.interrupteur:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.interrupteur:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+body.plein-ecran main {
+  max-width: none;
+  padding: 16px 20px 20px;
+  gap: 10px;
+  height: 100vh;
+}
+.barre-outil {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.barre-outil .titre-outil {
+  gap: 8px;
+}
+.barre-outil .icone {
+  border-radius: 6px;
+  font-size: 12px;
+}
+.cadre-outil {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  background: var(--carte);
+}
+.aide-cadre {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  body.plein-ecran main {
+    padding: calc(env(safe-area-inset-top) + 8px) 8px calc(env(safe-area-inset-bottom) + 76px);
+    height: 100dvh;
+  }
+  .barre-outil .btn:last-child {
+    font-size: 12px;
+  }
+}

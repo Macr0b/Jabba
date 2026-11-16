@@ -1,0 +1,85 @@
+/* Accueil : l'accès rapide. */
+.tuiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+.tuile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  color: var(--texte);
+  min-height: 104px;
+}
+.tuile:hover {
+  background: var(--survol);
+}
+.nom-tuile {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vide-tuile {
+  border: 2px dashed var(--bord);
+  border-radius: 14px;
+  justify-content: center;
+}
+.ic-tuile {
+  width: 30px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--dossier);
+  position: relative;
+}
+.ic-tuile.ext::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--texte-4);
+  border: 2px solid var(--carte);
+}
+.ic-tuile.disque {
+  width: 30px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--texte-3);
+}
+.ic-tuile.disque::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vert);
+}
+.ic-tuile.favori {
+  background: none;
+  width: auto;
+  height: 24px;
+}
+.ic-tuile.favori::before {
+  content: "★";
+  color: #e0a800;
+  font-size: 24px;
+  line-height: 24px;
+}
+.suggestion {
+  margin-bottom: 12px;
+  background: var(--accent-doux);
+  border-color: transparent;
+  color: var(--texte);
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  .tuiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

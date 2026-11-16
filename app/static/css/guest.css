@@ -1,0 +1,88 @@
+/* Mode invité. */
+body.mode-invite .barre-laterale a,
+body.mode-invite .onglets {
+  display: none;
+}
+body.mode-invite main {
+  margin: 0 auto;
+}
+.centre {
+  text-align: center;
+  margin-top: 16px;
+}
+.invite-accueil {
+  text-align: center;
+  padding: 40px 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.logo.grand {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  font-size: 30px;
+}
+.form-code {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.form-code input {
+  font:
+    600 28px/1 ui-monospace,
+    Menlo,
+    monospace;
+  letter-spacing: 0.4em;
+  text-align: center;
+  width: 170px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--bord);
+  background: var(--carte);
+  color: var(--texte);
+}
+.acces-invites {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.acces-invites .qr img {
+  display: block;
+  border-radius: 12px;
+  background: #fff;
+  padding: 6px;
+}
+.acces-invites > div:last-child {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.code-invite {
+  font-family: ui-monospace, Menlo, monospace;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+}
+.liste-dossiers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow: auto;
+}
+.liste-dossiers .btn {
+  justify-content: flex-start;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+}
+.tableau select {
+  width: auto;
+  padding: 6px 8px;
+  font-size: 14px;
+}

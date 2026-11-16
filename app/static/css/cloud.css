@@ -1,0 +1,112 @@
+/* Comptes Nextcloud et sous-onglets. */
+.nuage-compte {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 4px;
+  border: 0;
+  border-top: 1px solid var(--bord-doux);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+.nuage-compte:first-child {
+  border-top: 0;
+}
+.nuage-compte:hover {
+  background: var(--fond);
+}
+.nuage-qui {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nuage-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.nuage-badges:empty {
+  display: none;
+}
+.nuage-espace {
+  flex-shrink: 0;
+  width: 150px;
+  text-align: right;
+  font-size: 14px;
+}
+.nuage-espace .jauge {
+  margin-top: 6px;
+}
+.nuage-attente {
+  border-color: var(--alerte, #d97706);
+  margin-top: 16px;
+}
+.carte .actions .btn-petit {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .nuage-compte {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .nuage-espace {
+    width: auto;
+    text-align: left;
+  }
+}
+.sauv-ligne > span.note {
+  white-space: nowrap;
+}
+
+/* Sous-onglets d'une page (Comptes Nextcloud…) */
+.sous-onglets {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 16px;
+  border-bottom: 1px solid var(--bord);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sous-onglets button {
+  border: 0;
+  background: none;
+  color: var(--texte-3);
+  font: inherit;
+  font-size: 15px;
+  padding: 10px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.sous-onglets button[aria-selected="true"] {
+  color: var(--texte);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.compteur[hidden] {
+  display: none;
+}
+.compteur {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--rouge);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  margin-left: 4px;
+}
+[data-onglet][hidden] {
+  display: none !important;
+}
+.nuage-attente {
+  margin-bottom: 16px;
+}

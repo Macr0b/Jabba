@@ -1,0 +1,28 @@
+/* Terminal du serveur. */
+.terminal-zone {
+  height: calc(100vh - 230px);
+  min-height: 280px;
+  background: #101318;
+  border-radius: 12px;
+  padding: 8px;
+  overflow: hidden;
+}
+.terminal-zone .xterm {
+  height: 100%;
+}
+.touches-terminal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+@media (min-width: 900px) {
+  .touches-terminal {
+    display: none;
+  }
+}
+@media (max-width: 899px) {
+  .terminal-zone {
+    height: calc(100vh - 300px);
+  }
+}

@@ -1,0 +1,36 @@
+/* Sauvegardes. */
+.carte > .ligne-reglage {
+  padding: 10px 0;
+  border-top: 1px solid var(--bord-doux);
+}
+.sauv-liste {
+  display: flex;
+  flex-direction: column;
+}
+.sauv-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 4px;
+  border: 0;
+  border-top: 1px solid var(--bord-doux);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+div.sauv-ligne {
+  cursor: default;
+}
+.sauv-ligne:first-child {
+  border-top: 0;
+}
+.sauv-ligne span {
+  overflow-wrap: anywhere;
+}
+button.sauv-ligne:hover {
+  background: var(--fond);
+}

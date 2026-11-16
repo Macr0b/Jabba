@@ -1,0 +1,51 @@
+/* Couleurs et réglages communs (thème clair et sombre). */
+:root {
+  --fond: #f4f5f7;
+  --carte: #ffffff;
+  --bord: #e3e5ea;
+  --bord-doux: #eef0f3;
+  --texte: #15181e;
+  --texte-2: #3a404c;
+  --texte-3: #5b6270;
+  --texte-4: #8a909c;
+  --accent: #2457c5;
+  --accent-fonce: #1a3f8f;
+  --accent-doux: #e9effc;
+  --survol: #f5f8fe;
+  --vert: #1e8e5a;
+  --vert-texte: #146b43;
+  --vert-doux: #e3f4ea;
+  --alerte-doux: #fff6e5;
+  --alerte-bord: #f3d9a4;
+  --alerte-texte: #7a4a06;
+  --rouge: #c23b32;
+  --rouge-doux: #fdecea;
+  --dossier: #7fa2e8;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #121418;
+    --carte: #1b1e24;
+    --bord: #2c3038;
+    --bord-doux: #252931;
+    --texte: #eceef2;
+    --texte-2: #c9cdd6;
+    --texte-3: #9aa0ac;
+    --texte-4: #747a86;
+    --accent: #6e9bff;
+    --accent-fonce: #9bbbff;
+    --accent-doux: #1f2b47;
+    --survol: #222837;
+    --vert: #3dbf84;
+    --vert-texte: #6fd6a5;
+    --vert-doux: #17352a;
+    --alerte-doux: #3a2c12;
+    --alerte-bord: #5c4618;
+    --alerte-texte: #f2c97a;
+    --rouge: #f07468;
+    --rouge-doux: #3d1c1a;
+    --dossier: #5f86d6;
+    color-scheme: dark;
+  }
+}

@@ -1,0 +1,15 @@
+/* Barre d'avancement des mises à jour. */
+.barre-maj {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--bord);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.barre-maj span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.8s ease;
+}
