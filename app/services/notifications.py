@@ -185,13 +185,13 @@ def _push(subscriptions, title, text, url):
                 ttl=24 * 3600,
                 timeout=15,
             )
-        except WebPushException as e:
-            code = getattr(e.response, "status_code", None)
+        except WebPushException as error:
+            code = getattr(error.response, "status_code", None)
             if code in (404, 410):
                 expired.append(subscription["endpoint"])
             else:
-                print("alerte refusée :", code, getattr(e.response, "text", e), flush=True)
-        except Exception as e:  # noqa: BLE001 — une alerte ratée ne doit jamais faire tomber l'appli
-            print("alerte non envoyée :", type(e).__name__, e, flush=True)
+                print("alerte refusée :", code, getattr(error.response, "text", error), flush=True)
+        except Exception as error:  # noqa: BLE001 — une alerte ratée ne doit jamais faire tomber l'appli
+            print("alerte non envoyée :", type(error).__name__, error, flush=True)
     for expired_list in expired:
         unsubscribe(expired_list)

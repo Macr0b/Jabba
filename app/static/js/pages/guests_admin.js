@@ -13,19 +13,19 @@ import { loadingHtml } from "../core/tasks.js";
 // ------------------------------------------------------------ invités : réglages (admin)
 pages.invites = async () => {
   content.innerHTML = `<div class="entete"><div><h1>Invités</h1></div></div>${loadingHtml(4)}`;
-  const event = await api("/api/invites");
+  const settings = await api("/api/invites");
   content.innerHTML = `
     <div class="entete"><div><h1>Invités</h1><p class="sous-titre">Ce que voient les personnes connectées à ton Wi-Fi, sans compte ni application.</p></div></div>
     <section class="carte pad">
-      <label class="ligne-reglage"><span><strong>Accès invités</strong><br><span class="note">${event.actif ? "Ouvert : avec le code, un invité sur ton Wi-Fi voit les dossiers ci-dessous." : "Fermé : la page invités n'affiche rien."}</span></span>
-        <button class="interrupteur" role="switch" aria-checked="${event.actif}" id="actif"><span></span></button></label>
+      <label class="ligne-reglage"><span><strong>Accès invités</strong><br><span class="note">${settings.actif ? "Ouvert : avec le code, un invité sur ton Wi-Fi voit les dossiers ci-dessous." : "Fermé : la page invités n'affiche rien."}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${settings.actif}" id="actif"><span></span></button></label>
     </section>
     ${
-      event.actif
+      settings.actif
         ? `<section class="carte pad acces-invites">
-      <div class="qr"><img src="/api/invites/qr.svg?c=${escapeHtml(event.code)}" alt="QR code de l'accès invités" width="180" height="180"></div>
-      <div><h2>Code d'accès : <span class="code-invite">${escapeHtml(event.code)}</span></h2>
-        <p class="note">Les invités scannent le QR code, connectés à ton Wi-Fi principal (pas le Wi-Fi invités de la box, isolé du serveur). Sans téléphone : ouvrir <strong>${escapeHtml(event.url ? event.url.split("/?")[0] : event.nom_local)}</strong> ou <strong>${escapeHtml(event.nom_local)}</strong>, puis taper le code.</p>
+      <div class="qr"><img src="/api/invites/qr.svg?c=${escapeHtml(settings.code)}" alt="QR code de l'accès invités" width="180" height="180"></div>
+      <div><h2>Code d'accès : <span class="code-invite">${escapeHtml(settings.code)}</span></h2>
+        <p class="note">Les invités scannent le QR code, connectés à ton Wi-Fi principal (pas le Wi-Fi invités de la box, isolé du serveur). Sans téléphone : ouvrir <strong>${escapeHtml(settings.url ? settings.url.split("/?")[0] : settings.nom_local)}</strong> ou <strong>${escapeHtml(settings.nom_local)}</strong>, puis taper le code.</p>
         <p class="note">Un appareil reste reconnu 7 jours. Changer le code fait sortir tout le monde.</p>
         <div class="actions"><button class="btn" id="code">Nouveau code</button><button class="btn" id="imprimer">Imprimer</button></div></div>
     </section>`
@@ -34,7 +34,7 @@ pages.invites = async () => {
     <h2 class="titre-section">Dossiers partagés</h2>
     <section class="carte tableau">
       ${
-        event.dossiers
+        settings.dossiers
           .map(
             (
               item,
@@ -50,7 +50,7 @@ pages.invites = async () => {
     <section class="carte pad">
       <p class="note" style="margin:0 0 12px">Un outil coché est joignable depuis ton Wi-Fi (par les invités, la télé…) et apparaît sur leur page. Décoché, il n'est joignable que par Tailscale. Chaque outil garde son propre mot de passe.</p>
       ${
-        event.outils
+        settings.outils
           .map(
             (
               item,
@@ -71,7 +71,7 @@ pages.invites = async () => {
     reload();
   };
   $("#actif").onclick = () =>
-    send({ action: "actif", actif: !event.actif }, event.actif ? "Accès invités fermé" : "Accès invités ouvert");
+    send({ action: "actif", actif: !settings.actif }, settings.actif ? "Accès invités fermé" : "Accès invités ouvert");
   const code = $("#code");
   if (code)
     code.onclick = async () => {
@@ -84,15 +84,19 @@ pages.invites = async () => {
       )
         send({ action: "code" }, "Nouveau code créé");
     };
-  const important = $("#imprimer");
-  if (important)
-    important.onclick = () => {
-      const width = window.open("", "_blank");
-      if (!width) return toast("Autorise les fenêtres pour imprimer.", true);
-      width.document.write(
-        `<title>Accès invités</title><body style="font-family:-apple-system,sans-serif;text-align:center;padding:40px"><h1>Wi-Fi : fichiers partagés</h1><img src="${location.origin}/api/invites/qr.svg" width="320"><p style="font-size:22px">Code : <b>${escapeHtml(event.code)}</b></p><p>${escapeHtml(event.url ? event.url.split("/?")[0] : event.nom_local)}</p><script>onload=()=>print()<\/script></body>`,
+  const printButton = $("#imprimer");
+  if (printButton)
+    printButton.onclick = () => {
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return toast("Autorise les fenêtres pour imprimer.", true);
+      printWindow.document.write(
+        `<title>Accès invités</title><body style="font-family:-apple-system,sans-serif;text-align:center;padding:40px"><h1>Wi-Fi : fichiers partagés</h1><img src="${location.origin}/api/invites/qr.svg" width="320"><p style="font-size:22px">Code : <b>${escapeHtml(settings.code)}</b></p><p>${escapeHtml(settings.url ? settings.url.split("/?")[0] : settings.nom_local)}</p></body>`,
       );
-      width.document.close();
+      printWindow.document.close();
+      // Impression dès que le QR code est affiché (lancée d'ici : aucun script dans la page imprimée).
+      const qrImage = printWindow.document.querySelector("img");
+      if (qrImage.complete) printWindow.print();
+      else qrImage.onload = () => printWindow.print();
     };
   content
     .querySelectorAll("[data-mode]")

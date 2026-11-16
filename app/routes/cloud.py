@@ -1,7 +1,7 @@
 """API des comptes Nextcloud : inscriptions, espace, rangs, groupes et dossiers communs.
 
 Sommaire :
-  outils communs : format_gigabytes, run_cloud_action, cloud_group_name, set_rank
+  outils communs : format_gigabytes, run_cloud_action, set_rank
   GET  /api/nuage                    cloud_overview
   POST /api/nuage/mettre-en-route    set_up_cloud
   POST /api/nuage/reglages           cloud_settings
@@ -36,8 +36,8 @@ def format_gigabytes(gigabytes):
 def run_cloud_action(function, *a):
     try:
         return function(commands.occ, *a)
-    except nextcloud_accounts.CloudError as state:
-        raise HTTPException(400, str(state))
+    except nextcloud_accounts.CloudError as error:
+        raise HTTPException(400, str(error))
 
 
 @router.get("/api/nuage")
@@ -66,8 +66,8 @@ def cloud_overview(request: Request):
                 groups_future.result(),
                 folders_future.result(),
             )
-        except nextcloud_accounts.CloudError as error_output:
-            raise HTTPException(500, str(error_output))
+        except nextcloud_accounts.CloudError as error:
+            raise HTTPException(500, str(error))
     nextcloud_accounts.refresh_usage_in_background()
     cloud_state = nextcloud_accounts.read()
     promised = sum(account["quota"] or 0 for account in accounts_list if account["etat"] == "actif")
@@ -268,13 +268,6 @@ async def cloud_account_action(uid: str, request: Request):
     return {"ok": True}
 
 
-def cloud_group_name(group):
-    if group == nextcloud_accounts.MEMBERS_GROUP:
-        return "tous les membres"
-    rank = nextcloud_accounts.rank_name(nextcloud_accounts.read(), group)
-    return f"rang {rank} et au-dessus" if rank else group
-
-
 def set_rank(user_id, rank_id):
     """Donne le rang `rid` (None : aucun) et met les groupes à jour. Renvoie « , rang X » pour le Journal."""
     with nextcloud_accounts._lock:
@@ -385,7 +378,7 @@ async def team_folder_action(request: Request):
         run_cloud_action(nextcloud_accounts.set_team_folder_access, folder_id, group, mode)
         activity_log.record(
             "nuage",
-            f"Dossier commun créé : {name} ({cloud_group_name(group)}, {nextcloud_accounts.MODES[mode][1].lower()})",
+            f"Dossier commun créé : {name} ({nextcloud_accounts.describe_group(group)}, {nextcloud_accounts.MODES[mode][1].lower()})",
             who,
         )
         return {"ok": True, "id": folder_id}
@@ -397,7 +390,7 @@ async def team_folder_action(request: Request):
         run_cloud_action(nextcloud_accounts.set_team_folder_access, folder_id, group, mode)
         activity_log.record(
             "nuage",
-            f"Dossier {name} : {cloud_group_name(group)} → {'plus d’accès' if mode is None else nextcloud_accounts.MODES[mode][1].lower()}",
+            f"Dossier {name} : {nextcloud_accounts.describe_group(group)} → {'plus d’accès' if mode is None else nextcloud_accounts.MODES[mode][1].lower()}",
             who,
         )
     elif action == "quota":

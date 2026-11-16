@@ -316,8 +316,8 @@ async def thumbnail(chemin: str, taille: int = 128):
         real_path = files_source.run_disk_action(lambda: disk_browser.read_path(chemin, *files_source.disk_params()))
         try:
             cache = await asyncio.to_thread(disk_browser.thumbnail, real_path, taille)
-        except disk_browser.Refusal as entry:
-            raise HTTPException(entry.code, entry.message)
+        except disk_browser.Refusal as error:
+            raise HTTPException(error.code, error.message)
         except Exception:  # noqa: BLE001 — image abîmée ou format inconnu
             raise HTTPException(404, "Pas d'aperçu")
         return FileResponse(cache, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})

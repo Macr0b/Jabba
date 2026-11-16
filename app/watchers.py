@@ -190,7 +190,7 @@ def watch_forever():
         for step in steps:
             try:
                 step()
-            except Exception as e:  # noqa: BLE001 — la surveillance ne s'arrête jamais
-                print("surveillance:", step.__name__, e, flush=True)
+            except Exception as error:  # noqa: BLE001 — la surveillance ne s'arrête jamais
+                print("surveillance:", step.__name__, error, flush=True)
         tick += 1
         time.sleep(15)

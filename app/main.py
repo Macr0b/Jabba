@@ -30,6 +30,7 @@ from routes import (
     files,
     guests_admin,
     player,
+    shares,
     system,
     terminal,
     tools,
@@ -90,6 +91,7 @@ for module in (
     backups,
     app_update,
     guests_admin,
+    shares,
 ):
     app.include_router(module.router)
 

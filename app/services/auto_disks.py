@@ -279,9 +279,12 @@ def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names)
         taken = {names.lower() for names in other_names()} | {disk["nom"].lower() for disk in read()["disques"]}
         try:
             input_path = add(host_runner, host_input_runner, good_disk, taken)
-        except RuntimeError as e:
+        except RuntimeError as error:
             notify(
-                "nouveau_disque", "Disque non ajouté", f"« {good_disk['etiquette'] or 'Sans nom'} » : {e}", "/#/disques"
+                "nouveau_disque",
+                "Disque non ajouté",
+                f"« {good_disk['etiquette'] or 'Sans nom'} » : {error}",
+                "/#/disques",
             )
             continue
         linked = nextcloud_running() and link_to_nextcloud(host_runner, input_path)

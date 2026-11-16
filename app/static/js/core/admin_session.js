@@ -226,7 +226,7 @@ export async function showRecoveryCode(code) {
 }
 
 async function recoverPassword() {
-  const event = await formBody({
+  const answers = await formBody({
     titre: "Mot de passe oublié",
     texte: "Tape ton code de secours (les 6 mots), puis choisis un nouveau mot de passe pour le serveur.",
     champs: [
@@ -247,16 +247,16 @@ async function recoverPassword() {
     ],
     valider: "Changer le mot de passe",
   });
-  if (!event || event === "secondaire") return;
-  if (event.nouveau !== event.confirmation) return toast("Les deux mots de passe ne sont pas identiques.", true);
+  if (!answers || answers === "secondaire") return;
+  if (answers.nouveau !== answers.confirmation) return toast("Les deux mots de passe ne sont pas identiques.", true);
   try {
-    const clickEvent = await api(
+    const result = await api(
       "/api/admin/secours",
-      { method: "POST", json: { code: event.code, nouveau: event.nouveau } },
+      { method: "POST", json: { code: answers.code, nouveau: answers.nouveau } },
       true,
     );
     toast("Mot de passe changé");
-    await showRecoveryCode(clickEvent.code);
+    await showRecoveryCode(result.code);
   } catch (error) {
     toast(error.message, true);
   }

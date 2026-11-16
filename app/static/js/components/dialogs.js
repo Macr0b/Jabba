@@ -4,12 +4,12 @@
 //   partagé : toast, dialogElement, dialogForm, confirmAction, chooseFromMenu
 import { $, escapeHtml } from "../core/dom.js";
 
-export function toast(text, erreur = false) {
+export function toast(text, isError = false) {
   const element = document.createElement("div");
-  element.className = "toast" + (erreur ? " err" : "");
+  element.className = "toast" + (isError ? " err" : "");
   element.textContent = text;
   $("#toasts").appendChild(element);
-  setTimeout(() => element.remove(), erreur ? 7000 : 3500);
+  setTimeout(() => element.remove(), isError ? 7000 : 3500);
 }
 
 export const dialogElement = $("#dialogue"),

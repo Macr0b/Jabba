@@ -121,10 +121,10 @@ def backup_history(request: Request):
     backups.require_readable(settings)
     try:
         return {"copies": backups.snapshots(backups.run_restic, settings, backups.host_data_dir(), config.DEMO)}
-    except RuntimeError as e:
-        if "does not exist" in str(e) or "unable to open config" in str(e):
+    except RuntimeError as error:
+        if "does not exist" in str(error) or "unable to open config" in str(error):
             return {"copies": []}
-        raise HTTPException(500, str(e))
+        raise HTTPException(500, str(error))
 
 
 @router.get("/api/sauvegardes/parcourir")
@@ -138,8 +138,8 @@ def browse_backup(request: Request, id: str, chemin: str = "/"):
         return {
             "elements": backups.browse(backups.run_restic, settings, backups.host_data_dir(), id, chemin, config.DEMO)
         }
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
+    except RuntimeError as error:
+        raise HTTPException(500, str(error))
 
 
 @router.post("/api/sauvegardes/restaurer")
@@ -154,8 +154,8 @@ async def restore_from_backup(request: Request):
     backups.require_readable(settings)
     try:
         target = backups.restore(backups.run_restic, settings, backups.host_data_dir(), identifier, path, config.DEMO)
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
+    except RuntimeError as error:
+        raise HTTPException(500, str(error))
     activity_log.record("sauvegardes", f"Restauré : {path} (copie {identifier}) → {target}", request.state.nom)
     return {"ok": True, "cible": target}
 

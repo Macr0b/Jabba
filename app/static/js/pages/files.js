@@ -5,7 +5,9 @@
 //   interne : openEntry, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
 import { confirmAction, dialogElement, chooseFromMenu, toast } from "../components/dialogs.js";
 import { kindOf, entryIcon, downloadUrl, openViewer } from "../components/viewer.js";
+import { shareFolder } from "../components/share.js";
 import { api } from "../core/api.js";
+import { state } from "../core/state.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
@@ -305,6 +307,8 @@ pages.fichiers = async (params) => {
       const choices = [];
       if (entry.dossier) {
         choices.push({ texte: "Ouvrir", f: () => (location.hash = link(entry.chemin)) });
+        if (data.source === "nextcloud" && state.admin)
+          choices.push({ texte: "Partager avec…", f: () => shareFolder(entry.chemin, entry.nom) });
         choices.push({
           texte: "Ajouter à l'accès rapide",
           f: async () => {

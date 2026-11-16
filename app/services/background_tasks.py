@@ -37,8 +37,8 @@ def start_task(title, script, who=None, tool=None):
                 code, output, error_output = commands.run_shell_on_host(script, timeout=1800)
             TASKS[task_id]["journal"] = (output + error_output)[-4000:]
             TASKS[task_id]["etat"] = "terminé" if code == 0 else "erreur"
-        except Exception as e:  # noqa: BLE001
-            TASKS[task_id]["journal"] = str(e)
+        except Exception as error:  # noqa: BLE001
+            TASKS[task_id]["journal"] = str(error)
             TASKS[task_id]["etat"] = "erreur"
         TASKS[task_id]["fin"] = time.time()
         activity_log.record(

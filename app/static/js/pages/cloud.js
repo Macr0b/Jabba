@@ -2,26 +2,16 @@
 //
 // Sommaire :
 //   partagé : pages.nuage (écran)
-//   interne : groupLabel, folderTargets, chooseRank, chooseQuota, CLOUD_TABS, cloudTab, showCloudPassword
+//   interne : chooseRank, chooseQuota, CLOUD_TABS, cloudTab, showCloudPassword
 import { confirmAction, dialogForm, dialogElement, chooseFromMenu, toast } from "../components/dialogs.js";
 import { api, formBody } from "../core/api.js";
+import { folderTargets, groupLabel } from "../components/share.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatGigabytes, formatBytes } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml } from "../core/tasks.js";
 
-const groupLabel = (item, cloud) => {
-  if (item === cloud.tous) return "Tous les membres";
-  const rank = (cloud.rangs || []).find((entry) => entry.id === item);
-  return rank ? `${rank.nom} et au-dessus` : item;
-};
-// À qui donner un dossier : tous, puis les rangs (du plus haut au plus bas), puis les groupes.
-const folderTargets = (cloud) => [
-  ...cloud.groupes.filter((item) => item.id === cloud.tous),
-  ...(cloud.rangs_actif ? [...cloud.rangs].reverse() : []),
-  ...cloud.groupes.filter((item) => item.id !== cloud.tous),
-];
 async function chooseRank(cloud, title, current) {
   const choices = [...cloud.rangs]
     .reverse()
@@ -52,6 +42,45 @@ const CLOUD_TABS = [
   ["reglages", "Charte et réglages"],
 ];
 let cloudTab = "comptes";
+// Les dossiers partagés (avec « Arrêter le partage »), chargés à part : l'écran s'affiche sans les attendre.
+async function loadSharedFolders(cloud) {
+  const list = $("#partages-liste");
+  if (!list) return;
+  let shared;
+  try {
+    shared = await api("/api/partages");
+  } catch (error) {
+    list.innerHTML = `<p class="note">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  list.innerHTML =
+    shared.partages
+      .map(
+        (share) =>
+          `<div class="sauv-ligne"><span><strong>${escapeHtml(share.nom)}</strong><br><span class="note">${escapeHtml(share.chemin)} · ${escapeHtml(groupLabel(share.groupe, cloud))} : ${escapeHtml((shared.modes[share.mode] || "").toLowerCase())}</span></span><button class="btn btn-petit" data-arreter="${escapeHtml(share.id)}">Arrêter</button></div>`,
+      )
+      .join("") || '<p class="note">Aucun pour l\'instant.</p>';
+  list.querySelectorAll("[data-arreter]").forEach((button) =>
+    button.addEventListener("click", async () => {
+      const share = shared.partages.find((item) => item.id === button.dataset.arreter);
+      const confirmed = await confirmAction({
+        titre: `Arrêter le partage de « ${share.nom} » ?`,
+        texte: "Les personnes n'y auront plus accès. Les fichiers ne bougent pas.",
+        valider: "Arrêter",
+        danger: true,
+      });
+      if (!confirmed) return;
+      try {
+        await api(`/api/partages/${encodeURIComponent(share.id)}/arreter`, { method: "POST" });
+        toast("Partage arrêté");
+      } catch (error) {
+        toast(error.message, true);
+      }
+      loadSharedFolders(cloud);
+    }),
+  );
+}
+
 pages.nuage = async () => {
   content.innerHTML = `<div class="entete"><div><h1>Comptes Nextcloud</h1></div></div>${loadingHtml(4)}`;
   const cloud = await api("/api/nuage");
@@ -59,9 +88,9 @@ pages.nuage = async () => {
   const reload = () => pages.nuage().catch(showError);
   const act = async (url, json, ok) => {
     try {
-      const rank = await api(url, { method: "POST", json });
+      const result = await api(url, { method: "POST", json });
       if (ok) toast(ok);
-      return rank;
+      return result;
     } catch (error) {
       toast(error.message, true);
       return null;
@@ -140,6 +169,9 @@ pages.nuage = async () => {
       <section class="carte pad"><div class="entete-carte"><h2>Dossiers communs</h2><button class="btn btn-petit" id="nuage-dossier">Nouveau</button></div>
         <p class="note" style="margin:6px 0 8px">Ils apparaissent dans le Nextcloud de chaque personne qui y a accès.</p>
         <div class="sauv-liste">${cloud.dossiers.map((item) => `<button class="sauv-ligne" data-dossier="${item.id}"><span><strong>${escapeHtml(item.nom)}</strong><br><span class="note">${access(item)}</span></span><span class="note">${formatBytes(item.taille)}${item.quota ? " / " + formatGigabytes(item.quota) : ""}</span></button>`).join("") || '<p class="note">Aucun pour l\'instant.</p>'}</div></section>
+      <section class="carte pad" id="partages"><div class="entete-carte"><h2>Dossiers partagés</h2></div>
+        <p class="note" style="margin:6px 0 8px">Un dossier existant (même sur un disque), donné à voir à un rang ou un groupe. Pour en ajouter : Fichiers, menu du dossier, « Partager avec… ».</p>
+        <div class="sauv-liste" id="partages-liste"><p class="note">Chargement…</p></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Rangs</h2>${cloud.createur ? `<button class="interrupteur" role="switch" aria-checked="${cloud.rangs_actif}" id="rangs-actif" aria-label="Utiliser des rangs"><span></span></button>` : ""}</div>
         <p class="note" style="margin:6px 0 8px">${
           cloud.rangs_actif
@@ -210,9 +242,9 @@ pages.nuage = async () => {
     element.addEventListener("click", async () => {
       let rank = null;
       if (cloud.rangs_actif && cloud.rangs.length) {
-        const r = await chooseRank(cloud, `Rang de ${element.dataset.valider}`, null);
-        if (!r) return;
-        rank = r.id;
+        const chosen = await chooseRank(cloud, `Rang de ${element.dataset.valider}`, null);
+        if (!chosen) return;
+        rank = chosen.id;
       }
       if (
         await act(
@@ -319,8 +351,8 @@ pages.nuage = async () => {
           }))
         )
           return;
-        const rank = await act(url, { action: "mdp" });
-        if (rank) await showCloudPassword(item, rank.mdp);
+        const result = await act(url, { action: "mdp" });
+        if (result) await showCloudPassword(item, result.mdp);
       } else if (choice.f === "suspendre") {
         const active = item.etat === "suspendu";
         if (
@@ -377,14 +409,14 @@ pages.nuage = async () => {
         valider: "Créer",
       });
       if (!answers || answers === "secondaire") return;
-      const rank = await act("/api/nuage/comptes", {
+      const result = await act("/api/nuage/comptes", {
         id: answers.id.trim().toLowerCase(),
         nom: answers.nom,
         email: answers.email,
         rang: answers.rang || null,
       });
-      if (rank) {
-        await showCloudPassword({ nom: answers.nom || answers.id, id: answers.id.trim().toLowerCase() }, rank.mdp);
+      if (result) {
+        await showCloudPassword({ nom: answers.nom || answers.id, id: answers.id.trim().toLowerCase() }, result.mdp);
         reload();
       }
     };
@@ -478,7 +510,7 @@ pages.nuage = async () => {
   );
 
   // rangs (compte du serveur)
-  const ranks = (json, ok) => act("/api/nuage/rangs", json, ok).then((rank) => rank && reload());
+  const ranks = (json, ok) => act("/api/nuage/rangs", json, ok).then((result) => result && reload());
   const rankAction = $("#rangs-actif");
   if (rankAction)
     rankAction.onclick = async () => {

@@ -115,3 +115,14 @@ def test_mauvais_mots_de_passe_ne_bloquent_que_leur_auteur(client, monkeypatch):
         "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"}, headers=H
     )
     assert r.status_code == 200  # l'admin, lui, se connecte normalement
+
+
+def test_partages_api(client):
+    connecter(client, "serveur-demo", "demo-mot-de-passe")
+    r = client.get("/api/partages", headers=H)
+    assert r.status_code == 200 and r.json()["partages"] == [] and set(r.json()["modes"]) == {"lecture", "ecriture"}
+    r = client.post(
+        "/api/partages", json={"chemin": "/R2-D2/Projets", "groupe": "membres", "mode": "lecture"}, headers=H
+    )
+    assert r.status_code == 409  # pas de Nextcloud dans la démo
+    assert client.post("/api/partages/inconnu/arreter", headers=H).status_code == 400

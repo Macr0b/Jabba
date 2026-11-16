@@ -139,8 +139,8 @@ pages.systeme = async () => {
     )
       return;
     try {
-      const event = await api("/api/admin/code", { method: "POST" });
-      await showRecoveryCode(event.code);
+      const result = await api("/api/admin/code", { method: "POST" });
+      await showRecoveryCode(result.code);
       pages.systeme().catch(showError);
     } catch (error) {
       toast(error.message, true);

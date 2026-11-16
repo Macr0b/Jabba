@@ -210,7 +210,7 @@ def team_folders(occ):
 
 
 # ---------------------------------------------------------------- actions
-def _occ_or_fail(occ, args, input_text=None, timeout=60):
+def occ_or_fail(occ, args, input_text=None, timeout=60):
     code, output, error_output = occ(args, input_text=input_text, timeout=timeout)
     if code != 0:
         raise CloudError((error_output or output).strip()[-300:] or "Nextcloud a refusé.")
@@ -222,10 +222,10 @@ def set_up(occ, default_quota_gb=5):
     for app in APPS:
         code, _, _ = occ(["app:enable", app], timeout=120)
         if code != 0:
-            _occ_or_fail(occ, ["app:install", app], timeout=600)
+            occ_or_fail(occ, ["app:install", app], timeout=600)
     code, _, _ = occ(["group:info", MEMBERS_GROUP])
     if code != 0:
-        _occ_or_fail(occ, ["group:add", "--display-name", "Tous les membres", MEMBERS_GROUP])
+        occ_or_fail(occ, ["group:add", "--display-name", "Tous les membres", MEMBERS_GROUP])
     settings = {
         "admin_approval_required": "yes",  # le compte attend la validation
         "registered_user_group": MEMBERS_GROUP,  # et rejoint « Tous les membres »
@@ -235,8 +235,8 @@ def set_up(occ, default_quota_gb=5):
         "disable_email_verification": "yes",
     }
     for key, value in settings.items():
-        _occ_or_fail(occ, ["config:app:set", "registration", key, "--value", value])
-    _occ_or_fail(occ, ["config:app:set", "files", "default_quota", "--value", quota_text(default_quota_gb)])
+        occ_or_fail(occ, ["config:app:set", "registration", key, "--value", value])
+    occ_or_fail(occ, ["config:app:set", "files", "default_quota", "--value", quota_text(default_quota_gb)])
     if not charter(occ):
         set_charter(occ, DEFAULT_CHARTER)
     reserve_disks_for_admins(occ)
@@ -252,13 +252,13 @@ def set_charter(occ, text):
     if len(text) > CHARTER_MAX:
         raise CloudError(f"Charte trop longue ({CHARTER_MAX} caractères au plus).")
     if text:
-        _occ_or_fail(occ, ["config:app:set", "registration", "additional_hint", "--value", text])
+        occ_or_fail(occ, ["config:app:set", "registration", "additional_hint", "--value", text])
     else:
         occ(["config:app:delete", "registration", "additional_hint"])
 
 
 def set_default_quota(occ, gigabytes):
-    _occ_or_fail(occ, ["config:app:set", "files", "default_quota", "--value", quota_text(gigabytes)])
+    occ_or_fail(occ, ["config:app:set", "files", "default_quota", "--value", quota_text(gigabytes)])
 
 
 def reserve_disks_for_admins(occ):
@@ -277,28 +277,28 @@ def reserve_disks_for_admins(occ):
     done = []
     for match in mounts if isinstance(mounts, list) else []:
         if not match.get("applicable_users") and not match.get("applicable_groups"):
-            _occ_or_fail(occ, ["files_external:applicable", "--add-group=admin", str(match["mount_id"])])
+            occ_or_fail(occ, ["files_external:applicable", "--add-group=admin", str(match["mount_id"])])
             done.append(str(match.get("mount_point", "")).strip("/"))
     return done
 
 
 def approve(occ, user_id):
     reserve_disks_for_admins(occ)
-    _occ_or_fail(occ, ["user:enable", user_id])
+    occ_or_fail(occ, ["user:enable", user_id])
     occ(["group:adduser", MEMBERS_GROUP, user_id])
 
 
 def suspend(occ, user_id, active):
-    _occ_or_fail(occ, ["user:enable" if active else "user:disable", user_id])
+    occ_or_fail(occ, ["user:enable" if active else "user:disable", user_id])
 
 
 def delete(occ, user_id):
-    _occ_or_fail(occ, ["user:delete", user_id], timeout=600)
+    occ_or_fail(occ, ["user:delete", user_id], timeout=600)
     USAGE_CACHE["v"].pop(user_id, None)
 
 
 def set_quota(occ, user_id, gigabytes):
-    _occ_or_fail(occ, ["user:setting", user_id, "files", "quota", quota_text(gigabytes)])
+    occ_or_fail(occ, ["user:setting", user_id, "files", "quota", quota_text(gigabytes)])
 
 
 def add(occ, user_id, name, email, password, gigabytes=None):
@@ -311,16 +311,16 @@ def add(occ, user_id, name, email, password, gigabytes=None):
         args += ["--display-name", name]
     if email:
         args += ["--email", email]
-    _occ_with_password(occ, args + [user_id], password)
+    occ_with_password(occ, args + [user_id], password)
     if gigabytes is not None:
         set_quota(occ, user_id, gigabytes)
 
 
 def set_password(occ, user_id, password):
-    _occ_with_password(occ, ["user:resetpassword", "--password-from-env", user_id], password)
+    occ_with_password(occ, ["user:resetpassword", "--password-from-env", user_id], password)
 
 
-def _occ_with_password(occ, args, password):
+def occ_with_password(occ, args, password):
     # Le mot de passe passe par l'entrée standard, jamais dans la ligne de commande.
     code, output, error_output = occ(args, input_text=password, is_password=True, timeout=60)
     if code != 0:
@@ -328,38 +328,38 @@ def _occ_with_password(occ, args, password):
 
 
 def set_group_member(occ, group, user_id, member):
-    _occ_or_fail(occ, ["group:adduser" if member else "group:removeuser", group, user_id])
+    occ_or_fail(occ, ["group:adduser" if member else "group:removeuser", group, user_id])
 
 
 def create_group(occ, name):
     if not re.fullmatch(r"[\w .-]{2,40}", name) or name.lower() == "admin" or name.lower().startswith(RANK_PREFIX):
         raise CloudError("Nom de groupe : 2 à 40 lettres, chiffres, espaces ou tirets.")
-    _occ_or_fail(occ, ["group:add", name])
+    occ_or_fail(occ, ["group:add", name])
 
 
 def delete_group(occ, name):
     if name in ("admin", MEMBERS_GROUP) or name.startswith(RANK_PREFIX):
         raise CloudError("Ce groupe ne se supprime pas.")
-    _occ_or_fail(occ, ["group:delete", name])
+    occ_or_fail(occ, ["group:delete", name])
 
 
 def create_team_folder(occ, name):
     name = name.strip()
     if not name or "/" in name or len(name) > 60:
         raise CloudError("Nom de dossier invalide.")
-    return int(_occ_or_fail(occ, ["groupfolders:create", name]).strip().splitlines()[-1])
+    return int(occ_or_fail(occ, ["groupfolders:create", name]).strip().splitlines()[-1])
 
 
 def set_team_folder_access(occ, folder_id, group, mode):
     """mode : lecture, depot, complet ; ou None pour retirer l'accès au groupe."""
     if mode is None:
-        _occ_or_fail(occ, ["groupfolders:group", "--delete", str(folder_id), group])
+        occ_or_fail(occ, ["groupfolders:group", "--delete", str(folder_id), group])
     else:
-        _occ_or_fail(occ, ["groupfolders:group", str(folder_id), group] + MODES[mode][0])
+        occ_or_fail(occ, ["groupfolders:group", str(folder_id), group] + MODES[mode][0])
 
 
 def set_team_folder_quota(occ, folder_id, gigabytes):
-    _occ_or_fail(
+    occ_or_fail(
         occ, ["groupfolders:quota", str(folder_id), "unlimited" if gigabytes is None else quota_text(gigabytes)]
     )
 
@@ -367,11 +367,11 @@ def set_team_folder_quota(occ, folder_id, gigabytes):
 def rename_team_folder(occ, folder_id, name):
     if not name.strip() or "/" in name:
         raise CloudError("Nom de dossier invalide.")
-    _occ_or_fail(occ, ["groupfolders:rename", str(folder_id), name.strip()])
+    occ_or_fail(occ, ["groupfolders:rename", str(folder_id), name.strip()])
 
 
 def delete_team_folder(occ, folder_id):
-    _occ_or_fail(occ, ["groupfolders:delete", "--force", str(folder_id)], timeout=600)
+    occ_or_fail(occ, ["groupfolders:delete", "--force", str(folder_id)], timeout=600)
 
 
 # ---------------------------------------------------------------- rangs
@@ -428,7 +428,7 @@ def create_rank(occ, state, name):
     if any(rank["nom"].lower() == name.lower() for rank in ranks_of(state)):
         raise CloudError("Ce rang existe déjà.")
     rank_id = RANK_PREFIX + secrets.token_hex(3)
-    _occ_or_fail(occ, ["group:add", "--display-name", name, rank_id])
+    occ_or_fail(occ, ["group:add", "--display-name", name, rank_id])
     ranks_of(state).append({"id": rank_id, "nom": name})  # tout en haut ; on le déplace ensuite si besoin
     return rank_id
 
@@ -499,3 +499,11 @@ def watch_signups():
             )
     except CloudError:
         pass
+
+
+def describe_group(group):
+    """Nom lisible d'un groupe pour le Journal : « tous les membres », « rang Gérant et au-dessus »…"""
+    if group == MEMBERS_GROUP:
+        return "tous les membres"
+    rank = rank_name(read(), group)
+    return f"rang {rank} et au-dessus" if rank else group

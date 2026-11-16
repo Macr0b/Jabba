@@ -31,8 +31,8 @@ async def subscribe(request: Request):
     contact = origin if origin.startswith("https://") else "mailto:jabba@example.org"
     try:
         notifications.subscribe(body.get("abonnement"), contact, str(body.get("appareil", "")), request.state.user)
-    except ValueError as current_settings:
-        raise HTTPException(400, str(current_settings))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
     activity_log.record("alerte", "Alertes activées sur un appareil", request.state.nom)
     return {"ok": True}
 
@@ -54,8 +54,8 @@ async def set_alert_types(request: Request):
     body = await request.json()
     try:
         notifications.set_types(body.get("type"), body.get("actif"))
-    except ValueError as current_settings:
-        raise HTTPException(400, str(current_settings))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
     return {"ok": True}
 
 

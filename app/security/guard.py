@@ -283,18 +283,18 @@ def _change_server_password(new_value):
         return
     try:
         server_password.change_password(commands.run_on_host_with_input, server_user(), new_value)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except RuntimeError as e:
-        raise HTTPException(500, str(e))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    except RuntimeError as error:
+        raise HTTPException(500, str(error))
 
 
 # ---------------------------------------------------------------- comptes : gestion
 def translate_account_refusal(function):
     try:
         return function()
-    except accounts.Refusal as e:
-        raise HTTPException(e.code, e.message)
+    except accounts.Refusal as error:
+        raise HTTPException(error.code, error.message)
 
 
 def require_admin_space(request: Request):

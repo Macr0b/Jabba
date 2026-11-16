@@ -59,8 +59,8 @@ def media_info(path):
         return dict(already[1])
     try:
         media = video_player.probe(playback_source(path))
-    except RuntimeError as e:
-        raise HTTPException(415, str(e))
+    except RuntimeError as error:
+        raise HTTPException(415, str(error))
     except FileNotFoundError:
         raise HTTPException(500, "Le moteur vidéo (ffmpeg) manque dans l'appli.")
     _MEDIA_INFO_CACHE[path] = (time.time(), media)

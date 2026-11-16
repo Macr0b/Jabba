@@ -143,8 +143,8 @@ def disk_params():
 def run_disk_action(function):
     try:
         return function()
-    except disk_browser.Refusal as e:
-        raise HTTPException(e.code, e.message)
+    except disk_browser.Refusal as error:
+        raise HTTPException(error.code, error.message)
     except PermissionError:
         raise HTTPException(403, "Le serveur refuse : droits insuffisants sur ce dossier.")
 
