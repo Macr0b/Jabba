@@ -15,7 +15,8 @@
       "Licence : PolyForm Perimeter 1.0.1 (utilisation libre, revente interdite) ; le nom et le logo sont réservés (TRADEMARK.md).",
       "Aide : « Le serveur ne revient pas après un redémarrage » (trou de secours, réglages du BIOS d'un portable serveur, choix du redémarrage).",
       "Retrait de l'alerte « Si le serveur se tait » (service extérieur), peu utile ici.",
-      "À appliquer : relancer le script d'installation, ou choisir dans Système (Jabba remet alors le minuteur de 4 h à jour)."
+      "À appliquer : relancer le script d'installation, ou choisir dans Système (Jabba remet alors le minuteur de 4 h à jour).",
+      "Mots de passe plus sûrs, selon la règle du NIST (2025) : 15 caractères minimum, aucune obligation de majuscule ou de symbole (une phrase de quelques mots convient), refus des mots de passe courants, des suites de touches (azerty, 123456…), des répétitions, de ceux construits sur ton nom, et de ceux déjà apparus dans une fuite de données (seul le début de leur empreinte est envoyé pour la vérification, jamais le mot de passe). Les mots de passe actuels continuent de marcher."
     ]
   },
   {

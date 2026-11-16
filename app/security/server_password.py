@@ -16,6 +16,7 @@ import threading
 import time
 
 from host import system_crypt
+from security import password_rules
 
 TOKEN_LIFETIME = 10 * 60
 MAX_ATTEMPTS = 5
@@ -145,10 +146,9 @@ def record_failure():
 
 
 def change_password(host_input_runner, user, new_value):
-    if len(new_value) < 10:
-        raise ValueError("Le nouveau mot de passe doit faire au moins 10 caractères.")
-    if any(stored in new_value for stored in "\n\r:"):
-        raise ValueError("Le mot de passe ne peut pas contenir « : » ni de retour à la ligne.")
+    password_rules.check(new_value, (user,))
+    if ":" in new_value:
+        raise ValueError("Le mot de passe du serveur ne peut pas contenir « : ».")
     code, _, error_output = host_input_runner(["chpasswd"], f"{user}:{new_value}\n")
     if code != 0:
         raise RuntimeError("Le serveur a refusé le changement : " + error_output[:200])

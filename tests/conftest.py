@@ -17,6 +17,7 @@ os.chmod(DONNEES, 0o711)  # comme /tmp sur le serveur : traversable par le bac Ã
 os.environ.update(
     {
         "JABBA_DEMO": "1",
+        "JABBA_VERIF_FUITES": "0",  # pas d'appel Ã  Internet pendant les tests
         "TS_USERS": "rob@exemple.fr",
         "JABBA_DATA": DONNEES,
         "JABBA_ADMIN": os.path.join(DONNEES, "admin.json"),

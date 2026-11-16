@@ -103,7 +103,7 @@ pages.systeme = async () => {
         {
           nom: "nouveau",
           type: "password",
-          label: "Nouveau mot de passe (10 caractères minimum)",
+          label: "Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)",
           autocomplete: "new-password",
         },
         {

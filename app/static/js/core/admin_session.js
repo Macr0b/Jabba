@@ -113,7 +113,7 @@ export async function chooseMyPassword(force = false) {
   const answers = await formBody({
     titre: force ? "Choisis ton mot de passe" : "Changer mon mot de passe",
     texte: force
-      ? "Ton mot de passe actuel est provisoire. Choisis le tien (10 caractères minimum) : l'app Mots de passe proposera de l'enregistrer."
+      ? "Ton mot de passe actuel est provisoire. Choisis le tien (15 caractères minimum, une phrase de quelques mots convient) : l'app Mots de passe proposera de l'enregistrer."
       : "",
     champs: [
       {
@@ -235,7 +235,7 @@ async function recoverPassword() {
       {
         nom: "nouveau",
         type: "password",
-        label: "Nouveau mot de passe (10 caractères minimum)",
+        label: "Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)",
         autocomplete: "new-password",
       },
       {

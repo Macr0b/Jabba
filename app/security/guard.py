@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 
 import config
 from host import commands
-from security import accounts, server_password, sessions
+from security import accounts, password_rules, server_password, sessions
 from services import activity_log, notifications
 
 
@@ -276,10 +276,17 @@ def log_failed_login(request, identifier=""):
         )
 
 
+def _no_breach_lookup(prefix):
+    """Mode démo : pas d'appel à Internet."""
+    return ""
+
+
 def _change_server_password(new_value):
     if config.DEMO:
-        if len(new_value) < 10:
-            raise HTTPException(400, "Le nouveau mot de passe doit faire au moins 10 caractères.")
+        try:
+            password_rules.check(new_value, (server_user(),), fetch=_no_breach_lookup)
+        except ValueError as error:
+            raise HTTPException(400, str(error))
         return
     try:
         server_password.change_password(commands.run_on_host_with_input, server_user(), new_value)

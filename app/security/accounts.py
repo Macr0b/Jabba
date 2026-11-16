@@ -21,6 +21,8 @@ import secrets
 import threading
 import time
 
+from security import password_rules
+
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "comptes.json")
 ROLES = ("admin", "super")
@@ -84,11 +86,12 @@ def _public_view(account):
     return result
 
 
-def check_password_strength(password):
-    if len(password or "") < 10:
-        raise Refusal(400, "Le mot de passe doit faire au moins 10 caractères.")
-    if any(account in password for account in "\n\r"):
-        raise Refusal(400, "Le mot de passe ne peut pas contenir de retour à la ligne.")
+def check_password_strength(password, context_words=()):
+    """Applique les règles de security.password_rules (15 caractères, pas de mot courant…)."""
+    try:
+        password_rules.check(password, context_words)
+    except ValueError as error:
+        raise Refusal(400, str(error))
 
 
 def temporary_password():
@@ -250,7 +253,8 @@ def delete(cid, actor_role):
 
 
 def change_own_password(identifier, new_value):
-    check_password_strength(new_value)
+    account = find(identifier) or {}
+    check_password_strength(new_value, (identifier, account.get("nom", "")))
     with _lock:
         data = _read()
         for account in data["comptes"]:
