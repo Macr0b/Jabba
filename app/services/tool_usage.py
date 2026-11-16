@@ -60,7 +60,7 @@ def usage_by_tool(tool_list, stats):
 def read_usage():
     if config.DEMO:
         return {pid: {"processeur": cpu, "memoire": memory} for pid, (cpu, memory) in DEMO_USAGE.items()}
-    code, output, _ = commands.run_on_host(["docker", "stats", "--no-stream", "--format", "{{json .}}"], timeout=30)
+    code, output, _ = commands.run_action("conso_conteneurs")
     if code != 0:
         return {}
     return usage_by_tool(tools.list_tools(), parse_stats(output))

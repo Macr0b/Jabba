@@ -148,3 +148,26 @@ def test_service_isole_dans_compose():
     assert hote["volumes"] == ["/run/jabba:/run/jabba"]  # ne voit ni les données de l'appli, ni /srv
     assert "/run/jabba:/run/jabba" in services["jabba-app"]["volumes"]
     assert "jabba-hote" in services["jabba-app"]["depends_on"]
+
+
+def test_gestes_sur_les_outils():
+    commande, delai = actions.build(
+        "outil", {"dossier": "/opt/stacks/nextcloud", "geste": "demarrer", "adresse": "adresse-nextcloud"}
+    )
+    assert commande[:2] == ["sh", "-c"] and commande[3:] == ["outil", "/opt/stacks/nextcloud", "adresse-nextcloud"]
+    assert '"$1"' in commande[2] and "/opt" not in commande[2]  # le dossier n'est jamais dans le texte du script
+    assert actions.build("outil", {"dossier": "/opt/dockge", "geste": "redemarrer"})[0][-1] == ""
+    for args in (
+        {"dossier": "/opt/stacks/x", "geste": "rm"},
+        {"dossier": "/etc", "geste": "demarrer"},
+        {"dossier": "/opt/stacks/../../etc", "geste": "demarrer"},
+        {"dossier": "/opt/stacks/x; reboot", "geste": "demarrer"},
+        {"dossier": "/opt/stacks/x", "geste": "demarrer", "adresse": "x; reboot"},
+    ):
+        with pytest.raises(actions.ActionError):
+            actions.build("outil", args)
+    for nom in ("", "-rf", "a b", "x;y"):
+        with pytest.raises(actions.ActionError):
+            actions.build("conteneur_actif", {"nom": nom})
+    with pytest.raises(actions.ActionError):
+        actions.build("details_image", {"image": "nextcloud:latest"})

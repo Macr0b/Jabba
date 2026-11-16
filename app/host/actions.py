@@ -152,10 +152,6 @@ def _remove_antivirus(args):
     return ["sh", "-c", f"cd {ANTIVIRUS_FOLDER} && docker compose down -v && rm -rf {ANTIVIRUS_FOLDER}"], 300
 
 
-def _antivirus_running(args):
-    return ["docker", "inspect", "-f", "{{.State.Running}}", "antivirus"], 10
-
-
 def _scan_files(args):
     paths = args.get("chemins") or []
     if not isinstance(paths, list) or not 0 < len(paths) <= MAX_SCAN_FILES:
@@ -166,6 +162,62 @@ def _scan_files(args):
     # --fdpass : le fichier est ouvert ici et transmis à clamd, qui n'a pas besoin d'avoir le droit de le lire.
     command = ["docker", "exec", "antivirus", "clamdscan", "--no-summary", "--infected", "--fdpass", "--"]
     return command + checked, 1800
+
+
+# ---------------------------------------------------------------- outils (conteneurs Docker)
+CONTAINER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
+STACK_FOLDER = re.compile(r"/opt/(stacks/)?[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+# Chaque geste sur un outil : un script fixe ; le dossier ($1) et le conteneur d'adresse ($2) sont
+# passés comme arguments du shell, jamais collés dans le texte.
+TOOL_GESTURES = {
+    "redemarrer": 'cd "$1" && docker compose restart',
+    "demarrer": 'cd "$1" && docker compose up -d && { [ -z "$2" ] || docker start "$2" || true; }',
+    "arreter": 'cd "$1" && docker compose stop && { [ -z "$2" ] || docker stop "$2" || true; }',
+    "mettre_a_jour": 'cd "$1" && docker compose pull && docker compose up -d && docker image prune -f',
+}
+
+
+def _container(value):
+    name = str(value or "")
+    if not CONTAINER.fullmatch(name):
+        raise ActionError(f"Conteneur refusé : {name!r}")
+    return name
+
+
+def _list_containers(args):
+    return ["docker", "ps", "-a", "--format", "{{json .}}"], 30
+
+
+def _containers_usage(args):
+    return ["docker", "stats", "--no-stream", "--format", "{{json .}}"], 30
+
+
+def _container_image(args):
+    return ["docker", "inspect", "--format", "{{.Config.Image}}|{{.Image}}", _container(args.get("nom"))], 10
+
+
+def _image_details(args):
+    image = str(args.get("image") or "")
+    if not IMAGE_ID.fullmatch(image):
+        raise ActionError(f"Image refusée : {image!r}")
+    template = '{{json .RepoDigests}}|{{index .Config.Labels "org.opencontainers.image.version"}}'
+    return ["docker", "image", "inspect", "--format", template, image], 10
+
+
+def _container_running(args):
+    return ["docker", "inspect", "-f", "{{.State.Running}}", _container(args.get("nom"))], 10
+
+
+def _tool(args):
+    gesture = args.get("geste")
+    if gesture not in TOOL_GESTURES:
+        raise ActionError(f"Geste refusé : {gesture!r}")
+    folder = str(args.get("dossier") or "")
+    if not STACK_FOLDER.fullmatch(folder) or ".." in folder:
+        raise ActionError(f"Dossier d'outil refusé : {folder!r}")
+    address = _container(args["adresse"]) if args.get("adresse") else ""
+    return ["sh", "-c", TOOL_GESTURES[gesture], "outil", folder, address], 1800
 
 
 ACTIONS = {
@@ -184,8 +236,13 @@ ACTIONS = {
     "defragmenter": _defragment,
     "installer_antivirus": _install_antivirus,
     "retirer_antivirus": _remove_antivirus,
-    "antivirus_actif": _antivirus_running,
     "analyser_fichiers": _scan_files,
+    "liste_conteneurs": _list_containers,
+    "conso_conteneurs": _containers_usage,
+    "image_du_conteneur": _container_image,
+    "details_image": _image_details,
+    "conteneur_actif": _container_running,
+    "outil": _tool,
 }
 NAMES = tuple(ACTIONS)
 

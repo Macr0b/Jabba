@@ -37,7 +37,7 @@ def files_source():
         return "disque"
     if time.time() - _SOURCE_CACHE["t"] < 15:
         return _SOURCE_CACHE["v"]
-    code, output, _ = commands.run_on_host(["docker", "inspect", "-f", "{{.State.Running}}", "nextcloud"], timeout=10)
+    code, output, _ = commands.run_action("conteneur_actif", nom="nextcloud")
     value = "nextcloud" if code == 0 and output.strip() == "true" else "disque"
     _SOURCE_CACHE.update(t=time.time(), v=value)
     return value

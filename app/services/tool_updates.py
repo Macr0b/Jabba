@@ -21,7 +21,7 @@ import time
 import httpx
 
 import config
-from host import commands
+from host import actions, commands
 from services import json_files, notifications, tools
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
@@ -101,20 +101,14 @@ def _local_images(container_names):
     """Pour chaque conteneur : son image, ses empreintes connues et sa version (étiquette OCI)."""
     found = {}
     for name in container_names:
-        code, output, _ = commands.run_on_host(["docker", "inspect", "--format", "{{.Config.Image}}|{{.Image}}", name])
+        code, output, _ = commands.run_action("image_du_conteneur", nom=name)
         if code != 0 or "|" not in output:
             continue
         image, image_id = output.strip().split("|", 1)
-        code, output, _ = commands.run_on_host(
-            [
-                "docker",
-                "image",
-                "inspect",
-                "--format",
-                '{{json .RepoDigests}}|{{index .Config.Labels "org.opencontainers.image.version"}}',
-                image_id,
-            ]
-        )
+        try:
+            code, output, _ = commands.run_action("details_image", image=image_id)
+        except actions.ActionError:
+            continue
         if code != 0 or "|" not in output:
             continue
         digests_json, version = output.strip().split("|", 1)

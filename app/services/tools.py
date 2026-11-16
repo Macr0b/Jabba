@@ -56,7 +56,7 @@ def list_tools():
         from services.demo_data import TOOLS
 
         return TOOLS
-    code, output, error_output = commands.run_on_host(["docker", "ps", "-a", "--format", "{{json .}}"])
+    code, output, error_output = commands.run_action("liste_conteneurs")
     if code != 0:
         raise HTTPException(500, "Docker ne répond pas : " + error_output[:200])
     projects = {}

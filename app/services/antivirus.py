@@ -46,7 +46,7 @@ def _write(state):
 def installed():
     if config.DEMO:
         return True
-    code, output, _ = commands.run_action("antivirus_actif")
+    code, output, _ = commands.run_action("conteneur_actif", nom="antivirus")
     return code == 0 and output.strip() == "true"
 
 

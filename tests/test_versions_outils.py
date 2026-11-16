@@ -88,7 +88,7 @@ def serveur(tmp_path, monkeypatch):
 
     def hote(commande, timeout=30, input_text=None):
         if commande[:2] == ["docker", "inspect"]:
-            return 0, "nextcloud:32|sha256:image\n", ""
+            return 0, "nextcloud:32|sha256:" + "a" * 64 + "\n", ""
         if commande[:3] == ["docker", "image", "inspect"]:
             depots = json.dumps([f"nextcloud@{e}" for e in locales["empreintes"]])
             return 0, f"{depots}|32.0.1\n", ""

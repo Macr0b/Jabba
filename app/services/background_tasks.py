@@ -2,7 +2,7 @@
 
 Sommaire :
   TASKS : les tâches en cours ou finies (id -> état)
-  start_task : lance une commande dans un fil à part et note son résultat
+  start_task : lance une action de la liste fermée (host/actions.py) dans un fil à part et note son résultat
 """
 
 import threading
@@ -17,7 +17,7 @@ from services import activity_log
 TASKS = {}
 
 
-def start_task(title, script, who=None, tool=None):
+def start_task(title, action, args, who=None, tool=None):
     task_id = uuid.uuid4().hex[:8]
     TASKS[task_id] = {
         "id": task_id,
@@ -34,7 +34,7 @@ def start_task(title, script, who=None, tool=None):
                 time.sleep(3)
                 code, output, error_output = 0, "ok", ""
             else:
-                code, output, error_output = commands.run_shell_on_host(script, timeout=1800)
+                code, output, error_output = commands.run_action(action, **args)
             TASKS[task_id]["journal"] = (output + error_output)[-4000:]
             TASKS[task_id]["etat"] = "terminé" if code == 0 else "erreur"
         except Exception as error:  # noqa: BLE001
