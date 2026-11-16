@@ -7,6 +7,7 @@
 import { api } from "../core/api.js";
 import { state } from "../core/state.js";
 import { confirmAction, toast } from "./dialogs.js";
+import { pickFolder } from "./folder_picker.js";
 import { requestFiles } from "./public_mode_card.js";
 import { shareFolder } from "./share.js";
 import { downloadUrl, kindOf, openViewer } from "./viewer.js";
@@ -52,14 +53,19 @@ async function undoMoves(moves, after) {
   after();
 }
 
-export async function moveEntries(entries, after) {
-  const destination = await confirmAction({
-    titre: entries.length > 1 ? `Déplacer ${entries.length} éléments vers` : `Déplacer « ${entries[0].nom} » vers`,
-    texte: "Chemin du dossier de destination, par exemple /Documents/Archives",
-    champ: parentOf(entries[0].chemin),
-    valider: "Déplacer",
-  });
+// `destination` donné (dépôt sur un dossier) : pas de question. Sinon, le sélecteur de dossier.
+export async function moveEntries(entries, after, destination = null) {
+  if (destination === null)
+    destination = await pickFolder({
+      title: entries.length > 1 ? `Déplacer ${entries.length} éléments` : `Déplacer « ${entries[0].nom} »`,
+      start: parentOf(entries[0].chemin),
+      excluded: entries.filter((entry) => entry.dossier).map((entry) => entry.chemin),
+    });
   if (!destination) return;
+  const inside = entries.find(
+    (entry) => entry.dossier && (destination === entry.chemin || destination.startsWith(entry.chemin + "/")),
+  );
+  if (inside) return toast(`« ${inside.nom} » ne peut pas aller dans lui-même.`, true);
   const folder = destination.replace(/\/$/, "");
   const moves = [];
   const errors = [];

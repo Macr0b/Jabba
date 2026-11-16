@@ -30,7 +30,8 @@ router = APIRouter()
 
 
 @router.get("/api/fichiers")
-async def list_folder(chemin: str = "/"):
+async def list_folder(chemin: str = "/", visite: int = 1):
+    """`visite=0` : simple coup d'œil (sélecteur de dossier), sans compter dans les dossiers récents."""
     chemin = nextcloud_files.clean_path(chemin)
     if files_source.files_source() == "disque":
         listing = files_source.run_disk_action(lambda: disk_browser.list_folder(chemin, *files_source.disk_params()))
@@ -38,7 +39,7 @@ async def list_folder(chemin: str = "/"):
         nextcloud_files.require_nextcloud()
         listing = await nextcloud_files.read_folder(chemin)
         listing["source"] = "nextcloud"
-    if chemin != "/":
+    if chemin != "/" and visite:
         home_data.record_visit(chemin)
     listing["favori"] = chemin in home_data.read()["favoris"]
     return listing

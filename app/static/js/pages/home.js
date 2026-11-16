@@ -1,10 +1,10 @@
 // Écran Accueil : accès rapide, favoris, dossiers suggérés, outils.
 //
 // Sommaire :
-//   partagé : pages.accueil (écran), folderLink, enableDrop, toggleFavorite, toolIcon, COMING_SOON
+//   partagé : pages.accueil (écran), folderLink, toggleFavorite, toolIcon, COMING_SOON
 //   interne : TILE_ICONS, loadQuickAccess
 import { toast } from "../components/dialogs.js";
-import { uploadFiles } from "../components/upload_queue.js";
+import { enableDrop } from "../components/drop_targets.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatDuration, formatBytes, formatPercent } from "../core/format.js";
@@ -92,34 +92,6 @@ async function loadQuickAccess() {
 }
 
 // Fait d'un élément (tuile, ligne de dossier) une cible de dépôt de fichiers.
-export function enableDrop(element, path, after) {
-  let counter = 0;
-  element.addEventListener("dragenter", (event) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault();
-    counter++;
-    element.classList.add("cible");
-  });
-  element.addEventListener("dragover", (event) => {
-    if (event.dataTransfer.types.includes("Files")) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  });
-  element.addEventListener("dragleave", () => {
-    counter = Math.max(0, counter - 1);
-    if (!counter) element.classList.remove("cible");
-  });
-  element.addEventListener("drop", async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.jabbaPris = true;
-    counter = 0;
-    element.classList.remove("cible");
-    uploadFiles(path, [...event.dataTransfer.files], after);
-  });
-}
-
 export async function toggleFavorite(path, favorite) {
   await api("/api/favoris", { method: "POST", json: { chemin: path, action: favorite ? "retirer" : "ajouter" } });
   toast(favorite ? "Retiré de l'accès rapide" : "Ajouté à l'accès rapide");

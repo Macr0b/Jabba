@@ -6,7 +6,8 @@
 import { confirmAction, dialogElement, chooseFromMenu, toast } from "../components/dialogs.js";
 import { attachSelection, SHORTCUTS } from "../components/file_selection.js";
 import { publicModeOpen } from "../components/public_mode_card.js";
-import { uploadFiles } from "../components/upload_queue.js";
+import { enableDrop } from "../components/drop_targets.js";
+import { droppedItems, pickedItems, uploadItems } from "../components/folder_upload.js";
 import { kindOf, entryIcon, downloadUrl, openViewer } from "../components/viewer.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
@@ -14,7 +15,7 @@ import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml } from "../core/tasks.js";
-import { enableDrop, toggleFavorite, folderLink } from "./home.js";
+import { toggleFavorite, folderLink } from "./home.js";
 
 function openEntry(list, index) {
   const entry = list[index];
@@ -243,12 +244,14 @@ pages.fichiers = async (params) => {
   ]);
   const parts = path.split("/").filter(Boolean);
   const link = (item) => "#/fichiers?chemin=" + encodeURIComponent(item);
-  const thread = [`<a href="${link("/")}">${data.source === "disque" ? "Serveur" : "Nextcloud"}</a>`]
+  const thread = [
+    `<a href="${link("/")}"${data.source === "disque" ? "" : ' data-chemin="/"'}>${data.source === "disque" ? "Serveur" : "Nextcloud"}</a>`,
+  ]
     .concat(
       parts.map((value, index) =>
         index === parts.length - 1
           ? `<strong>${escapeHtml(value)}</strong>`
-          : `<a href="${link("/" + parts.slice(0, index + 1).join("/"))}">${escapeHtml(value)}</a>`,
+          : `<a href="${link("/" + parts.slice(0, index + 1).join("/"))}" data-chemin="${escapeHtml("/" + parts.slice(0, index + 1).join("/"))}">${escapeHtml(value)}</a>`,
       ),
     )
     .join('<span class="sep">/</span>');
@@ -268,7 +271,7 @@ pages.fichiers = async (params) => {
         ${path !== "/" ? `<button class="btn" id="etoile" aria-pressed="${data.favori}">${data.favori ? "★ Favori" : "☆ Favori"}</button>` : ""}
         <a class="btn" href="#/corbeille">Corbeille</a>
         ${data.lien_nextcloud ? `<a class="btn" href="${escapeHtml(data.lien_nextcloud)}" target="_blank" rel="noopener">Ouvrir dans Nextcloud</a>` : ""}
-        ${data.ecriture ? `<button class="btn" id="nouveau">Nouveau dossier</button><button class="btn btn-p" id="envoyer">Envoyer des fichiers</button>` : ""}
+        ${data.ecriture ? `<button class="btn" id="nouveau">Nouveau dossier</button><button class="btn" id="envoyer-dossier">Envoyer un dossier</button><button class="btn btn-p" id="envoyer">Envoyer des fichiers</button>` : ""}
       </div>
     </div>
     ${searchBarHtml()}
@@ -294,9 +297,10 @@ pages.fichiers = async (params) => {
             : entries.map((item, index) => rowHtml(item, index, link)).join("")
           : `<div class="vide">Ce dossier est vide.</div>`
       }
-      ${data.ecriture ? `<div class="depot" id="depot">Glisse des fichiers ici pour les envoyer dans « ${escapeHtml(title)} »</div>` : ""}
+      ${data.ecriture ? `<div class="depot" id="depot">Glisse des fichiers ou des dossiers ici pour les envoyer dans « ${escapeHtml(title)} »</div>` : ""}
     </section>
-    <input type="file" id="choix" multiple hidden>`;
+    <input type="file" id="choix" multiple hidden>
+    <input type="file" id="choix-dossier" webkitdirectory multiple hidden>`;
 
   const reload = () => pages.fichiers(params).catch(showError);
   $("#nav-prec").onclick = () => goInHistory(-1);
@@ -353,7 +357,7 @@ pages.fichiers = async (params) => {
       }
       reload();
     };
-  const send = (files) => uploadFiles(path, files, reload);
+  const send = (items) => uploadItems(path, items, reload);
 
   if (data.ecriture) {
     $("#nouveau").onclick = async () => {
@@ -369,32 +373,41 @@ pages.fichiers = async (params) => {
       reload();
     };
     const choices = $("#choix");
+    const folderChoice = $("#choix-dossier");
     $("#envoyer").onclick = () => choices.click();
-    choices.onchange = () => {
-      send([...choices.files]);
-      choices.value = "";
-    };
+    $("#envoyer-dossier").onclick = () => folderChoice.click();
+    [choices, folderChoice].forEach((input) => {
+      input.onchange = () => {
+        send(pickedItems(input.files));
+        input.value = "";
+      };
+    });
     const dropZone = $("#depot"),
       area = $(".tableau");
+    const fromFinder = (event) => event.dataTransfer.types.includes("Files");
     ["dragenter", "dragover"].forEach((value) =>
       area.addEventListener(value, (event) => {
+        if (!fromFinder(event)) return; // un glisser depuis la liste vise un dossier, pas cette zone
         event.preventDefault();
         dropZone.classList.add("survol");
       }),
     );
     ["dragleave", "drop"].forEach((value) =>
       area.addEventListener(value, (event) => {
-        event.preventDefault();
         if (value === "drop" || !area.contains(event.relatedTarget)) dropZone.classList.remove("survol");
       }),
     );
-    area.addEventListener("drop", (event) => {
-      if (!event.defaultPrevented || !event.jabbaPris) send([...event.dataTransfer.files]);
+    area.addEventListener("drop", async (event) => {
+      if (event.jabbaPris || !fromFinder(event)) return; // déjà pris par un dossier de la liste
+      event.preventDefault();
+      send(await droppedItems(event.dataTransfer));
     });
   }
 
-  // Glisser des fichiers directement sur un dossier de la liste.
+  // Glisser sur un dossier de la liste, ou sur le fil d'Ariane : envoi depuis le Finder, ou déplacement.
   content.querySelectorAll(".element[data-dossier]").forEach((row) => enableDrop(row, row.dataset.dossier, reload));
+  if (data.ecriture)
+    content.querySelectorAll(".fil a[data-chemin]").forEach((crumb) => enableDrop(crumb, crumb.dataset.chemin, reload));
 
   attachSelection(entries, {
     folder: data,

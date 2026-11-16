@@ -4,11 +4,13 @@
 //   partagé : attachSelection, SHORTCUTS
 //   interne : current, items, setSelected, refresh, renderBar, openMenu, moveFocus, columnCount, onKey
 //
-// Souris : case à cocher, ⌘/Ctrl + clic pour ajouter, Maj + clic pour une plage, clic droit = menu.
+// Souris : case à cocher, ⌘/Ctrl + clic pour ajouter, Maj + clic pour une plage, clic droit = menu,
+// glisser sur un dossier (de la liste ou du fil d'Ariane) pour déplacer.
 // Téléphone : appui long sur un élément pour commencer une sélection.
 // Clavier : voir SHORTCUTS (affiché dans l'aide de l'écran).
 import { $, content } from "../core/dom.js";
 import { chooseFromMenu, dialogElement } from "./dialogs.js";
+import { startDrag } from "./drop_targets.js";
 import {
   deleteEntries,
   downloadEntries,
@@ -208,6 +210,17 @@ export function attachSelection(entries, context) {
       },
       true,
     );
+    // Glisser un élément (ou toute la sélection) sur un dossier pour l'y déplacer.
+    if (context.folder.ecriture && entries[index].ecriture) {
+      element.draggable = true;
+      element.querySelectorAll("a, img").forEach((inner) => (inner.draggable = false));
+      element.addEventListener("dragstart", (event) => {
+        const moving = current.selected.has(index) ? selectedEntries() : [entries[index]];
+        startDrag(event, moving);
+        element.classList.add("glisse");
+      });
+      element.addEventListener("dragend", () => element.classList.remove("glisse"));
+    }
     element.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       openMenu(index);

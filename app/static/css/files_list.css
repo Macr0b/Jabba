@@ -294,3 +294,59 @@ button.tri.actif {
     display: none;
   }
 }
+
+/* Sélecteur de dossier (Déplacer vers…) */
+.chemin-choisi {
+  margin: 0 0 10px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.liste-dossiers {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 360px);
+  overflow: auto;
+  margin: 0 0 12px;
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+}
+.ligne-dossier {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--bord-doux);
+  background: none;
+  font: inherit;
+  color: var(--texte);
+  text-align: left;
+  cursor: pointer;
+}
+.ligne-dossier:last-child {
+  border-bottom: 0;
+}
+.ligne-dossier:hover,
+.ligne-dossier:focus-visible {
+  background: var(--survol);
+}
+.ligne-dossier > span:last-child {
+  margin-left: auto;
+  color: var(--texte-3);
+}
+.liste-dossiers .note {
+  padding: 10px 12px;
+  margin: 0;
+}
+
+/* Glisser pour déplacer */
+.element.glisse {
+  opacity: 0.5;
+}
+.element.cible,
+.fil a.cible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+  background: var(--accent-doux);
+}

@@ -137,3 +137,74 @@ def test_envoi_en_erreur_puis_reessayer(page, dossier):
     expect(page.locator(".element")).to_have_count(4)
     page.click("#fermer-envois")
     expect(page.locator(".envois")).to_have_count(0)
+
+
+def creer_dossier(page, chemin):
+    page.evaluate(
+        """async (chemin) => { await fetch("/api/fichiers/dossier", {method: "POST",
+           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({chemin})}); }""",
+        chemin,
+    )
+
+
+def test_deplacer_avec_le_selecteur_de_dossier(page, dossier):
+    creer_dossier(page, dossier + "/Archives")
+    creer_dossier(page, dossier + "/Archives/2026")
+    page.reload()
+    expect(page.locator(".element")).to_have_count(4)
+    ligne = page.locator(".element", has_text="a-petit.txt")
+    ligne.locator(".btn-menu").click()
+    page.locator("dialog[open] button", has_text="Déplacer vers…").click()
+    fenetre = page.locator("dialog[open]")
+    expect(fenetre.locator("h2")).to_have_text("Déplacer « a-petit.txt »")
+    fenetre.locator(".ligne-dossier", has_text="Archives").click()
+    expect(fenetre.locator(".chemin-choisi")).to_contain_text("/Archives")
+    fenetre.locator(".ligne-dossier", has_text="2026").click()
+    fenetre.locator("button[value=oui]").click()
+    expect(page.locator(".toast").last).to_contain_text("1 élément déplacé")
+    expect(page.locator(".element")).to_have_count(3)
+    page.locator(".toast-action").last.click()  # Annuler
+    expect(page.locator(".element")).to_have_count(4)
+
+
+def test_un_dossier_ne_peut_pas_aller_dans_lui_meme(page, dossier):
+    creer_dossier(page, dossier + "/Archives")
+    page.reload()
+    page.locator(".element", has_text="Archives").locator(".btn-menu").click()
+    page.locator("dialog[open] button", has_text="Déplacer vers…").click()
+    expect(page.locator("dialog[open] .ligne-dossier", has_text="Archives")).to_have_count(0)  # pas proposé
+    page.keyboard.press("Escape")
+
+
+def test_glisser_sur_un_dossier_puis_sur_le_fil_d_ariane(page, dossier):
+    if page.appareil != "ordinateur":
+        pytest.skip("glisser à la souris : sur ordinateur")
+    creer_dossier(page, dossier + "/Archives")
+    page.reload()
+    expect(page.locator(".element")).to_have_count(4)
+    page.locator(".element", has_text="b-moyen.txt").drag_to(page.locator(".element", has_text="Archives"))
+    expect(page.locator(".toast").last).to_contain_text("1 élément déplacé")
+    expect(page.locator(".element")).to_have_count(3)
+    page.locator(".element", has_text="Archives").locator("a").click()
+    expect(page.locator(".element")).to_have_count(1)
+    # retour vers le dossier parent par le fil d'Ariane
+    nom_parent = dossier.rsplit("/", 1)[1]
+    page.locator(".element", has_text="b-moyen.txt").drag_to(page.locator(".fil a", has_text=nom_parent))
+    expect(page.locator(".toast").last).to_contain_text("1 élément déplacé")
+    expect(page.get_by_text("Ce dossier est vide.")).to_be_visible()
+
+
+def test_envoyer_un_dossier_entier(page, dossier, tmp_path):
+    if page.appareil != "ordinateur":
+        pytest.skip("choix d'un dossier : sur ordinateur")
+    racine = tmp_path / "Vacances"
+    (racine / "Jour 1").mkdir(parents=True)
+    (racine / "Jour 1" / "plage.txt").write_text("sable")
+    (racine / "carte.txt").write_text("carte")
+    page.set_input_files("#choix-dossier", str(racine))
+    expect(page.locator(".element", has_text="Vacances")).to_be_visible()
+    expect(page.locator(".envois")).to_contain_text("2 / 2 envoyés")
+    page.locator(".element", has_text="Vacances").locator("a").click()
+    expect(page.locator(".element a")).to_have_text(["Jour 1", "carte.txt"])
+    page.locator(".element", has_text="Jour 1").locator("a").click()
+    expect(page.locator(".element a")).to_have_text(["plage.txt"])

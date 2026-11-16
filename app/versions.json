@@ -4,7 +4,9 @@
     "date": "2026-11-16",
     "changements": [
       "Apparence (Système) : clair, sombre, ou comme l'appareil. Le choix vaut pour chaque appareil et s'applique dès l'ouverture, sans flash.",
-      "Santé des disques : le temps affiché est le total de fonctionnement depuis la fabrication du disque (et non depuis le dernier démarrage), désormais écrit clairement."
+      "Santé des disques : le temps affiché est le total de fonctionnement depuis la fabrication du disque (et non depuis le dernier démarrage), désormais écrit clairement.",
+      "Fichiers, comme dans le Finder : « Déplacer vers… » ouvre un sélecteur de dossier (plus besoin de taper un chemin) ; on peut glisser un élément, ou toute la sélection, sur un dossier de la liste ou du fil d'Ariane pour l'y déplacer.",
+      "Envoi de dossiers entiers : bouton « Envoyer un dossier », ou glisser un dossier depuis le Finder ; les sous-dossiers sont recréés à l'identique."
     ]
   },
   {
