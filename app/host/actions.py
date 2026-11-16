@@ -8,6 +8,7 @@ n'importe quelle commande sur le serveur (recommandation ANSSI : moindre privil�
 Sommaire
 - ActionError                 : paramètre refusé.
 - build(name, args)           : (commande, délai) pour une action connue, sinon ActionError.
+- check_input(name, text)     : seules certaines actions reçoivent un texte sur l'entrée standard (un mot de passe).
 - NAMES                       : les actions connues.
 - vérifications               : _folder_path, _device
 
@@ -220,6 +221,91 @@ def _tool(args):
     return ["sh", "-c", TOOL_GESTURES[gesture], "outil", folder, address], 1800
 
 
+# ---------------------------------------------------------------- Nextcloud (occ)
+# Les sous-commandes d'administration dont l'appli se sert, et aucune autre.
+OCC_COMMANDS = frozenset(
+    {
+        "status",
+        "app:list",
+        "app:install",
+        "app:enable",
+        "config:app:get",
+        "config:app:set",
+        "config:app:delete",
+        "files:scan",
+        "files_external:list",
+        "files_external:create",
+        "files_external:applicable",
+        "files_external:option",
+        "files_external:delete",
+        "user:list",
+        "user:info",
+        "user:add",
+        "user:delete",
+        "user:enable",
+        "user:disable",
+        "user:resetpassword",
+        "user:setting",
+        "group:list",
+        "group:info",
+        "group:add",
+        "group:delete",
+        "group:adduser",
+        "group:removeuser",
+        "groupfolders:list",
+        "groupfolders:create",
+        "groupfolders:delete",
+        "groupfolders:rename",
+        "groupfolders:group",
+        "groupfolders:quota",
+    }
+)
+OCC_BASE = ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
+# Le mot de passe arrive sur l'entrée standard et devient la variable OC_PASS lue par occ :
+# il n'apparaît jamais dans la liste des processus du serveur.
+WITH_PASSWORD = 'export OC_PASS="$(cat)"; exec "$@"'
+INPUT_ACTIONS = frozenset({"nextcloud"})
+
+
+def _nextcloud(args):
+    command = args.get("commande")
+    if command not in OCC_COMMANDS:
+        raise ActionError(f"Commande Nextcloud refusée : {command!r}")
+    arguments = args.get("arguments") or []
+    if not isinstance(arguments, list) or len(arguments) > 40:
+        raise ActionError("Arguments Nextcloud refusés")
+    for argument in arguments:
+        if not isinstance(argument, str) or len(argument) > 8192 or "\x00" in argument:
+            raise ActionError(f"Argument Nextcloud refusé : {argument!r}"[:200])
+    timeout = args.get("delai", 60)
+    if not isinstance(timeout, int) or not 5 <= timeout <= 3600:
+        raise ActionError(f"Délai refusé : {timeout!r}")
+    if args.get("mot_de_passe"):
+        return [
+            "sh",
+            "-c",
+            WITH_PASSWORD,
+            "sh",
+            "docker",
+            "exec",
+            "-e",
+            "OC_PASS",
+            *OCC_BASE,
+            command,
+            *arguments,
+        ], timeout
+    return ["docker", "exec", *OCC_BASE, command, *arguments], timeout
+
+
+def check_input(name, text):
+    """Un texte pour l'entrée standard n'est accepté que par les actions prévues pour."""
+    if text is None:
+        return None
+    if name not in INPUT_ACTIONS or not isinstance(text, str) or len(text) > 4096:
+        raise ActionError(f"Entrée refusée pour {name!r}")
+    return text
+
+
 ACTIONS = {
     "nom_du_serveur": _server_name,
     "espace_disques": _disk_space,
@@ -243,6 +329,7 @@ ACTIONS = {
     "details_image": _image_details,
     "conteneur_actif": _container_running,
     "outil": _tool,
+    "nextcloud": _nextcloud,
 }
 NAMES = tuple(ACTIONS)
 

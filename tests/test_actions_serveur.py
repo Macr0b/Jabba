@@ -64,7 +64,7 @@ def test_tout_le_reste_est_refuse(nom, args):
 def test_le_service_ne_lance_que_la_liste():
     lance = []
 
-    def faux(commande, delai):
+    def faux(commande, delai, entree=None):
         lance.append(commande)
         return 0, "serveur-test\n", ""
 
@@ -91,7 +91,7 @@ def test_par_la_prise_du_service(monkeypatch):
 
     chemin = os.path.join(tempfile.mkdtemp(dir="/tmp"), "h.sock")  # chemin court : 108 caractères au plus
     monkeypatch.setattr(host_service, "SOCKET_PATH", chemin)
-    monkeypatch.setattr(host_service, "run", lambda commande, delai: (0, " ".join(commande), ""))
+    monkeypatch.setattr(host_service, "run", lambda commande, delai, entree=None: (0, " ".join(commande), ""))
     import asyncio
 
     boucle = asyncio.new_event_loop()
@@ -131,7 +131,9 @@ def test_sans_service_l_ancienne_voie_avec_la_meme_commande(monkeypatch):
     monkeypatch.setattr(commands, "HOST_SOCKET", "/nulle/part.sock")
     vu = []
     monkeypatch.setattr(
-        commands, "run_on_host", lambda commande, timeout=30: vu.append((commande, timeout)) or (0, "", "")
+        commands,
+        "run_on_host",
+        lambda commande, timeout=30, input_text=None: vu.append((commande, timeout)) or (0, "", ""),
     )
     commands.run_action("lire_fstab")
     assert vu == [(["cat", "/etc/fstab"], 10)]
@@ -171,3 +173,69 @@ def test_gestes_sur_les_outils():
             actions.build("conteneur_actif", {"nom": nom})
     with pytest.raises(actions.ActionError):
         actions.build("details_image", {"image": "nextcloud:latest"})
+
+
+def test_nextcloud_seulement_les_commandes_prevues():
+    commande, delai = actions.build("nextcloud", {"commande": "user:list", "arguments": ["--output=json"]})
+    assert commande[:2] == ["docker", "exec"] and commande[-2:] == ["user:list", "--output=json"] and delai == 60
+    # Un texte avec « ; » ou des guillemets reste un seul argument : jamais interprété par un shell.
+    commande, _ = actions.build(
+        "nextcloud", {"commande": "config:app:set", "arguments": ["a", "b", "--value", "x; reboot"]}
+    )
+    assert commande[-1] == "x; reboot" and "sh" not in commande
+    for args in (
+        {"commande": "maintenance:mode"},
+        {"commande": "db:convert-type"},
+        {"commande": "user:list", "arguments": "--output=json"},
+        {"commande": "user:list", "arguments": ["a\x00b"]},
+        {"commande": "user:list", "delai": 999999},
+    ):
+        with pytest.raises(actions.ActionError):
+            actions.build("nextcloud", args)
+
+
+def test_mot_de_passe_par_entree_standard():
+    commande, _ = actions.build(
+        "nextcloud", {"commande": "user:add", "arguments": ["--password-from-env", "alice"], "mot_de_passe": True}
+    )
+    assert commande[:2] == ["sh", "-c"] and "OC_PASS" in commande
+    assert actions.check_input("nextcloud", "secret-tres-long") == "secret-tres-long"
+    with pytest.raises(actions.ActionError):
+        actions.check_input("liste_conteneurs", "texte")  # aucune autre action ne reçoit de texte
+    vu = []
+
+    def runner(commande, delai, entree=None):
+        vu.append(entree)
+        return 0, "", ""
+
+    demande = json.dumps(
+        {
+            "action": "nextcloud",
+            "args": {
+                "commande": "user:resetpassword",
+                "arguments": ["--password-from-env", "alice"],
+                "mot_de_passe": True,
+            },
+            "entree": "secret-tres-long",
+        }
+    )
+    assert host_service.handle(demande, runner)["code"] == 0 and vu == ["secret-tres-long"]
+    demande = json.dumps({"action": "espace_disques", "args": {"chemins": ["/"]}, "entree": "x"})
+    assert host_service.handle(demande, runner)["code"] == host_service.REFUSED
+
+
+def test_occ_passe_par_la_liste_fermee(monkeypatch):
+    vu = []
+    monkeypatch.setattr(
+        commands,
+        "run_on_host",
+        lambda commande, timeout=30, input_text=None: vu.append((commande, input_text)) or (0, "ok", ""),
+    )
+    monkeypatch.setattr(commands.config, "DEMO", False)
+    assert commands.occ(["user:list", "--output=json"]) == (0, "ok", "")
+    assert (
+        commands.occ(["user:add", "--password-from-env", "bob"], input_text="motdepasse-long", is_password=True)[0] == 0
+    )
+    assert vu[1][1] == "motdepasse-long" and "motdepasse-long" not in vu[1][0]
+    assert commands.occ(["maintenance:mode", "--on"])[0] == 1  # refusée, rien lancé
+    assert len(vu) == 2

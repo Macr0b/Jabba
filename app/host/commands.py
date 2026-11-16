@@ -25,7 +25,7 @@ HOST_SOCKET = os.environ.get("JABBA_HOTE_SOCKET", "/run/jabba/hote.sock")
 
 
 # ---------------------------------------------------------------- liste fermée
-def run_action(name, **args):
+def run_action(name, input_text=None, **args):
     """Demande une action de la liste fermée. (code, sortie, erreur), comme run_on_host.
 
     Avec le service privilégié (sa prise existe) : la demande lui est envoyée.
@@ -34,13 +34,15 @@ def run_action(name, **args):
     dans les deux cas.
     """
     command, timeout = actions.build(name, args)
+    input_text = actions.check_input(name, input_text)
     if not os.path.exists(HOST_SOCKET):
-        return run_on_host(command, timeout=timeout)
+        return run_on_host(command, timeout=timeout, input_text=input_text)
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             connection.settimeout(timeout + 10)
             connection.connect(HOST_SOCKET)
-            connection.sendall((json.dumps({"action": name, "args": args}) + "\n").encode())
+            request = {"action": name, "args": args, "entree": input_text}
+            connection.sendall((json.dumps(request) + "\n").encode())
             answer = b""
             while not answer.endswith(b"\n"):
                 chunk = connection.recv(65536)
@@ -50,7 +52,7 @@ def run_action(name, **args):
     except OSError:
         # Service arrêté (prise restée là) : tant que l'appli garde ses droits, l'ancienne voie dépanne.
         # Cette solution de secours disparaîtra avec la dernière étape (l'appli sans droits).
-        return run_on_host(command, timeout=timeout)
+        return run_on_host(command, timeout=timeout, input_text=input_text)
     try:
         reply = json.loads(answer)
     except ValueError:
@@ -123,16 +125,18 @@ def occ(args, input_text=None, is_password=False, timeout=60):
         except subprocess.TimeoutExpired:
             return 1, "", "Nextcloud ne répond pas."
         return completed.returncode, completed.stdout, completed.stderr
-    base = (
-        ["docker", "exec"]
-        + (["-e", "OC_PASS"] if is_password else [])
-        + ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
-    )
+    if not args:
+        return 1, "", "Commande Nextcloud vide."
     try:
-        if is_password:
-            return run_on_host(
-                ["sh", "-c", 'export OC_PASS="$(cat)"; exec "$@"', "sh"] + base + args, timeout, input_text
-            )
-        return run_on_host(base + args, timeout)
+        return run_action(
+            "nextcloud",
+            input_text=input_text if is_password else None,
+            commande=args[0],
+            arguments=list(args[1:]),
+            delai=int(timeout),
+            mot_de_passe=bool(is_password),
+        )
+    except actions.ActionError as error:
+        return 1, "", str(error)
     except subprocess.TimeoutExpired:
         return 1, "", "Nextcloud ne répond pas."

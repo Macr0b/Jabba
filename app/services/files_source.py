@@ -73,15 +73,14 @@ def open_disk(path):
 def rescan_in_nextcloud(path):
     """Nextcloud garde en mémoire le contenu d'un disque, même vide (disque débranché) :
     on lui fait relire le disque et on remet son réglage lecture seule / écriture."""
-    occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
-    code, output, _ = commands.run_on_host(occ + ["files_external:list", "--output=json"], timeout=60)
+    code, output, _ = commands.occ(["files_external:list", "--output=json"])
     if code != 0:
         return  # Nextcloud arrêté ou absent
     try:
         mounts = json.loads(output)
     except ValueError:
         return
-    code, output, _ = commands.run_on_host(occ + ["user:list", "--output=json"], timeout=60)
+    code, output, _ = commands.occ(["user:list", "--output=json"])
     try:
         users = list(json.loads(output)) if code == 0 else []
     except ValueError:
@@ -90,14 +89,11 @@ def rescan_in_nextcloud(path):
     for mount in mounts:
         if (mount.get("configuration") or {}).get("datadir", "").rstrip("/") != f"/mnt/disques/{folder}":
             continue
-        commands.run_on_host(
-            occ
-            + ["files_external:option", str(mount["mount_id"]), "readonly", "false" if is_writable(path) else "true"],
-            timeout=60,
-        )
+        readonly = "false" if is_writable(path) else "true"
+        commands.occ(["files_external:option", str(mount["mount_id"]), "readonly", readonly])
         mount_point = mount.get("mount_point", "").strip("/")
         for user in mount.get("applicable_users") or users:
-            commands.run_on_host(occ + ["files:scan", f"--path=/{user}/files/{mount_point}"], timeout=3600)
+            commands.occ(["files:scan", f"--path=/{user}/files/{mount_point}"], timeout=3600)
     activity_log.record("disque", f"Nextcloud a relu {folder}")
 
 

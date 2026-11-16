@@ -130,30 +130,13 @@ async def set_disk_mode(nom: str, request: Request):
         timeout=30,
     )
     # Même réglage côté Nextcloud, s'il est activé.
-    code, output, _ = commands.run_on_host(
-        ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:list", "--output=json"],
-        timeout=60,
-    )
+    code, output, _ = commands.occ(["files_external:list", "--output=json"])
     if code == 0:
         try:
             for mount in json.loads(output):
                 if mount.get("mount_point", "").strip("/") == nom:
-                    commands.run_on_host(
-                        [
-                            "docker",
-                            "exec",
-                            "-u",
-                            "www-data",
-                            "nextcloud",
-                            "php",
-                            "occ",
-                            "files_external:option",
-                            str(mount["mount_id"]),
-                            "readonly",
-                            "false" if writable else "true",
-                        ],
-                        timeout=60,
-                    )
+                    readonly = "false" if writable else "true"
+                    commands.occ(["files_external:option", str(mount["mount_id"]), "readonly", readonly])
         except ValueError:
             pass
     activity_log.record("disque", f"{nom} : {'écriture autorisée' if writable else 'lecture seule'}", request.state.nom)

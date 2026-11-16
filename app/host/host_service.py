@@ -29,10 +29,10 @@ MAX_REQUEST_BYTES = 64 * 1024
 REFUSED = 126
 
 
-def run(command, timeout):
+def run(command, timeout, input_text=None):
     full_command = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", *command]
     try:
-        completed = subprocess.run(full_command, capture_output=True, text=True, timeout=timeout)
+        completed = subprocess.run(full_command, capture_output=True, text=True, timeout=timeout, input=input_text)
     except subprocess.TimeoutExpired:
         return 124, "", "Délai dépassé"
     return completed.returncode, completed.stdout, completed.stderr
@@ -44,10 +44,11 @@ def handle(raw, runner=None):
         request = json.loads(raw)
         name = request["action"]
         command, timeout = actions.build(name, request.get("args"))
+        input_text = actions.check_input(name, request.get("entree"))
     except (ValueError, KeyError, TypeError) as error:
         return {"code": REFUSED, "sortie": "", "erreur": f"Refusé : {error}"}
     print("action:", name, flush=True)
-    code, output, error_output = runner(command, timeout)
+    code, output, error_output = runner(command, timeout, input_text)
     return {"code": code, "sortie": output, "erreur": error_output}
 
 

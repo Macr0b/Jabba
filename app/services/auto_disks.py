@@ -153,27 +153,17 @@ def add(host_runner, host_input_runner, share, taken):
     return input_path
 
 
-def link_to_nextcloud(host_runner, input_path):
-    """Ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté."""
-    occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
-    code, output, _ = host_runner(
-        occ
-        + [
-            "files_external:create",
-            input_path["nom"],
-            "local",
-            "null::null",
-            "-c",
-            f"datadir=/mnt/disques/{input_path['dossier']}",
-        ],
-        timeout=60,
-    )
+def link_to_nextcloud(occ, input_path):
+    """Ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté.
+    `occ(args)` : la commande d'administration de Nextcloud (host.commands.occ)."""
+    datadir = f"datadir=/mnt/disques/{input_path['dossier']}"
+    code, output, _ = occ(["files_external:create", input_path["nom"], "local", "null::null", "-c", datadir])
     match = re.search(r"(\d+)\s*$", output.strip()) if code == 0 else None
     if not match:
         return False
     # Réservé aux admins : sans ça, chaque compte Nextcloud verrait le disque.
-    host_runner(occ + ["files_external:applicable", "--add-group=admin", match.group(1)], timeout=60)
-    host_runner(occ + ["files_external:option", match.group(1), "readonly", "true"], timeout=60)
+    occ(["files_external:applicable", "--add-group=admin", match.group(1)])
+    occ(["files_external:option", match.group(1), "readonly", "true"])
     with _LOCK:
         data = read()
         for disk in data["disques"]:
@@ -208,21 +198,7 @@ def forget(host_runner, host_input_runner, name):
     )
     host_runner(["rmdir", path])
     if disk.get("nextcloud"):
-        host_runner(
-            [
-                "docker",
-                "exec",
-                "-u",
-                "www-data",
-                "nextcloud",
-                "php",
-                "occ",
-                "files_external:delete",
-                "-y",
-                str(disk["nextcloud"]),
-            ],
-            timeout=60,
-        )
+        commands.occ(["files_external:delete", "-y", str(disk["nextcloud"])])
     with _LOCK:
         data = read()
         data["disques"] = [other for other in data["disques"] if other["nom"] != name]
@@ -280,7 +256,7 @@ def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names)
                 "/#/disques",
             )
             continue
-        linked = nextcloud_running() and link_to_nextcloud(host_runner, input_path)
+        linked = nextcloud_running() and link_to_nextcloud(commands.occ, input_path)
         notify(
             "nouveau_disque",
             f"Nouveau disque : {input_path['nom']}",
@@ -317,4 +293,4 @@ def link_disks_to_nextcloud():
         return
     for disk in read()["disques"]:
         if not disk.get("nextcloud"):
-            link_to_nextcloud(commands.run_on_host, disk)
+            link_to_nextcloud(commands.occ, disk)
