@@ -120,6 +120,54 @@ def _defragment(args):
     return ["e4defrag", _folder_path(args.get("chemin"))], 6 * 3600
 
 
+# ---------------------------------------------------------------- antivirus (ClamAV), un outil de l'Établi
+ANTIVIRUS_FOLDER = "/opt/stacks/antivirus"
+# L'image officielle, telle quelle : freshclam tient les signatures à jour et clamd les garde en
+# mémoire (environ 1 Go). Jabba lui fait analyser les nouveaux dépôts avec clamdscan.
+# /srv est vu en lecture seule ; aucun port ouvert.
+ANTIVIRUS_COMPOSE = """services:
+  antivirus:
+    image: clamav/clamav:stable
+    container_name: antivirus
+    volumes:
+      - signatures:/var/lib/clamav
+      - /srv:/srv:ro
+    restart: unless-stopped
+volumes:
+  signatures:
+"""
+MAX_SCAN_FILES = 200
+
+
+def _install_antivirus(args):
+    script = (
+        f"mkdir -p {ANTIVIRUS_FOLDER} && cat > {ANTIVIRUS_FOLDER}/compose.yaml <<'FIN'\n"
+        + ANTIVIRUS_COMPOSE
+        + f"FIN\ncd {ANTIVIRUS_FOLDER} && docker compose up -d"
+    )
+    return ["sh", "-c", script], 1800
+
+
+def _remove_antivirus(args):
+    return ["sh", "-c", f"cd {ANTIVIRUS_FOLDER} && docker compose down -v && rm -rf {ANTIVIRUS_FOLDER}"], 300
+
+
+def _antivirus_running(args):
+    return ["docker", "inspect", "-f", "{{.State.Running}}", "antivirus"], 10
+
+
+def _scan_files(args):
+    paths = args.get("chemins") or []
+    if not isinstance(paths, list) or not 0 < len(paths) <= MAX_SCAN_FILES:
+        raise ActionError("Liste de fichiers refusée")
+    checked = [_folder_path(path) for path in paths]
+    if any(not path.startswith("/srv/") for path in checked):
+        raise ActionError("L'antivirus ne voit que /srv")
+    # --fdpass : le fichier est ouvert ici et transmis à clamd, qui n'a pas besoin d'avoir le droit de le lire.
+    command = ["docker", "exec", "antivirus", "clamdscan", "--no-summary", "--infected", "--fdpass", "--"]
+    return command + checked, 1800
+
+
 ACTIONS = {
     "nom_du_serveur": _server_name,
     "espace_disques": _disk_space,
@@ -134,6 +182,10 @@ ACTIONS = {
     "activer_trim": _enable_trim,
     "mesurer_fragmentation": _measure_fragmentation,
     "defragmenter": _defragment,
+    "installer_antivirus": _install_antivirus,
+    "retirer_antivirus": _remove_antivirus,
+    "antivirus_actif": _antivirus_running,
+    "analyser_fichiers": _scan_files,
 }
 NAMES = tuple(ACTIONS)
 

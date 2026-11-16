@@ -7,6 +7,7 @@ Sommaire :
   watch_space : disques presque pleins
   disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
   disk_maintenance.watch_fragmentation : fragmentation des disques à plateaux (une fois par mois)
+  antivirus.watch_deposits : nouveaux dépôts des invités analysés (chaque minute)
   mass_deletion.watch_mass_deletion : beaucoup de fichiers supprimés d'un coup
   tool_updates.watch_tool_updates : nouvelle version d'un outil (une fois par jour)
   public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
@@ -20,6 +21,7 @@ import time
 import config
 from host import commands
 from services import (
+    antivirus,
     app_update,
     auto_disks,
     background_tasks,
@@ -185,6 +187,7 @@ def watch_forever():
                 watch_power,
                 watch_space,
                 watch_tools,
+                antivirus.watch_deposits,
                 guest_network.sync_guest_tools,
                 guest_network.apply_firewall,
             ]

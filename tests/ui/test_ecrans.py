@@ -131,3 +131,11 @@ def test_entretien_des_disques(page):
     expect(carte).to_contain_text("SSD : TRIM chaque semaine")
     expect(carte).to_contain_text("R2-D2 : fragmentation faible")
     expect(carte.locator("[data-defragmenter]")).to_have_count(0)  # rien à défragmenter sous 31
+
+
+def test_antivirus_propose_dans_l_etabli(page):
+    aller(page, "outils")
+    offre = page.locator("#offre-antivirus")
+    expect(offre).to_contain_text("Antivirus")
+    expect(offre).to_contain_text("mis à l'écart (jamais supprimé)")
+    expect(offre.locator("#installer-antivirus")).to_have_text("Installer")

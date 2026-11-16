@@ -23,6 +23,7 @@ from routes import (
     accounts,
     admin_session,
     alerts,
+    antivirus,
     app_update,
     backups,
     cloud,
@@ -81,6 +82,7 @@ app.middleware("http")(guard.guard)
 # Pages invités : ouvertes tant qu'on n'est pas connecté en admin.
 app.include_router(guests.router)
 for module in (
+    antivirus,
     admin_session,
     accounts,
     system,

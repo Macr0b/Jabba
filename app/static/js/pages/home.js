@@ -102,8 +102,20 @@ export async function toggleFavorite(path, favorite) {
 export function toolIcon(item, size = 40) {
   const initial = escapeHtml((item.nom || "?")[0].toUpperCase());
   if (!item.icone) return `<span class="icone" style="width:${size}px;height:${size}px">${initial}</span>`;
-  return `<span class="icone" style="width:${size}px;height:${size}px"><img alt="" src="/api/icone/${encodeURIComponent(item.id)}" onerror="this.parentNode.textContent='${initial}'"></span>`;
+  return `<span class="icone" style="width:${size}px;height:${size}px"><img alt="" src="/api/icone/${encodeURIComponent(item.id)}" data-initiale="${initial}"></span>`;
 }
+
+// Logo introuvable : on remet l'initiale. Écouté ici plutôt qu'avec onerror="…",
+// que la politique de sécurité de la page bloque.
+document.addEventListener(
+  "error",
+  (event) => {
+    const image = event.target;
+    if (image.tagName === "IMG" && image.dataset.initiale && image.parentNode)
+      image.parentNode.textContent = image.dataset.initiale;
+  },
+  true,
+);
 
 export const COMING_SOON = [
   { nom: t("Torrent derrière VPN"), role: t("Téléchargements, avec un abonnement VPN") },

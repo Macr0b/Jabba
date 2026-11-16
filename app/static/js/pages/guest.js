@@ -83,7 +83,7 @@ async function showGuestFolder(folderId, path) {
           ? data.elements
               .map(
                 (item) => `<div class="ligne">
-        <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : THUMBNAIL_EXTENSIONS.includes(extensionOf(item.nom)) ? `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="${guestFileUrl(folderId, item.chemin, 1)}" onerror="this.parentNode.className='ic-fichier';this.remove()"></span>` : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
+        <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : THUMBNAIL_EXTENSIONS.includes(extensionOf(item.nom)) ? `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="${guestFileUrl(folderId, item.chemin, 1)}"></span>` : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
           <span>${item.dossier ? `<a href="${link(item.chemin)}">${escapeHtml(item.nom)}</a>` : `<a href="${guestFileUrl(folderId, item.chemin)}">${escapeHtml(item.nom)}</a>`}<span class="mobile-detail">${item.dossier ? "" : formatBytes(item.taille)}</span></span></span>
         <span class="gris col-l">${item.dossier ? "" : formatBytes(item.taille)}</span><span class="gris col-l">${formatWhen(item.modifie)}</span>
         ${item.dossier ? "<span></span>" : `<a class="btn btn-petit" href="${guestFileUrl(folderId, item.chemin)}" aria-label="Télécharger ${escapeHtml(item.nom)}">↓</a>`}</div>`,
