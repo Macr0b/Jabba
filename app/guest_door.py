@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from services.guests import STATIC, lire, routeur
+from services import guests
 
 # ---------------------------------------------------------------- la porte du Wi-Fi (port 80)
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -38,14 +38,14 @@ async def garde_wifi(request: Request, call_next):
     return reponse
 
 
-app.include_router(routeur)
+app.include_router(guests.routeur)
 
 
 @app.get("/api/moi")
 def moi_wifi():
     import socket
     from version import VERSION
-    return {"mode": "invite", "serveur": lire().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
+    return {"mode": "invite", "serveur": guests.lire().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
 
 
 @app.get("/api/{reste:path}")
@@ -54,10 +54,10 @@ def interdit(reste: str):
     raise HTTPException(404, "Indisponible sur le Wi-Fi : l'administration passe par Tailscale.")
 
 
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
+app.mount("/static", StaticFiles(directory=guests.STATIC), name="static")
 
 
 @app.get("/")
 @app.get("/{reste:path}")
 def page_wifi(reste: str = ""):
-    return FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
+    return FileResponse(os.path.join(guests.STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
