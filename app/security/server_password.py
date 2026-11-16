@@ -6,6 +6,7 @@
 - changement du mot de passe, et code de secours en cas d'oubli.
 """
 
+import contextvars
 import hashlib
 import hmac
 import json
@@ -46,7 +47,10 @@ assert len(set(WORDS)) >= 256
 
 _lock = threading.Lock()
 _tokens = {}  # jeton -> expiration
-_failures = []  # horodatages des essais ratés
+# Essais ratés, comptés par personne (compte Tailscale d'où vient la demande) : quelqu'un qui
+# se trompe, ou qui essaie de deviner, ne bloque que lui-même, jamais les autres admins.
+_failures = {}  # compte Tailscale -> horodatages des essais ratés
+requester = contextvars.ContextVar("requester", default="inconnu")
 
 
 def _read():
@@ -67,15 +71,21 @@ def _write(data):
 
 
 def is_locked():
+    """True si la personne qui demande s'est trompée 5 fois en 10 minutes."""
+    who = requester.get()
     with _lock:
         now = time.time()
-        _failures[:] = [timestamp for timestamp in _failures if timestamp > now - LOCKOUT]
-        return len(_failures) >= MAX_ATTEMPTS
+        recent = [timestamp for timestamp in _failures.get(who, []) if timestamp > now - LOCKOUT]
+        if recent:
+            _failures[who] = recent
+        else:
+            _failures.pop(who, None)
+        return len(recent) >= MAX_ATTEMPTS
 
 
 def _record_failure():
     with _lock:
-        _failures.append(time.time())
+        _failures.setdefault(requester.get(), []).append(time.time())
 
 
 def check_password(host_runner, user, password):
@@ -101,7 +111,12 @@ def new_token(identifier="serveur", rank="super", temporary=False):
         now = time.time()
         for token in [token for token, token_data in _tokens.items() if token_data["exp"] < now]:
             del _tokens[token]
-        _tokens[token_value] = {"exp": now + TOKEN_LIFETIME, "identifiant": identifier, "rang": rank, "provisoire": temporary}
+        _tokens[token_value] = {
+            "exp": now + TOKEN_LIFETIME,
+            "identifiant": identifier,
+            "rang": rank,
+            "provisoire": temporary,
+        }
     return token_value
 
 

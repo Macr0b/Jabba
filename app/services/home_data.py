@@ -1,10 +1,14 @@
-"""services.home_data"""
+"""Données de l'accueil : favoris et dossiers souvent ouverts (suggestions).
+
+Sommaire :
+  read / write : le fichier accueil.json
+  record_visit : note l'ouverture d'un dossier (pour les suggestions)
+"""
 
 import json
 import os
 import threading
 import time
-
 
 # ---------------------------------------------------------------- accueil : essentiels, favoris, suggestions
 HOME_FILE = os.environ.get("JABBA_DONNEES", "/data/accueil.json")

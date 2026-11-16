@@ -4,9 +4,9 @@ import os
 import subprocess
 
 import pytest
+from conftest import exige_root, outil
 
 from services import app_update
-from conftest import exige_root, outil
 
 pytestmark = [outil("git"), outil("ssh-keygen")]
 

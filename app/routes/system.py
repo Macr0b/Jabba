@@ -1,21 +1,26 @@
-"""routes.system"""
+"""API de l'accueil et de l'écran Système : état, tâches, redémarrage, journal.
+
+Sommaire :
+  GET  /api/taches/{tid}            task_state
+  GET  /api/moi                     who_am_i
+  GET  /api/etat                    home_state
+  GET  /api/systeme                 system_state
+  GET  /api/systeme/redemarrage     restart_policy_state
+  POST /api/systeme/redemarrage     set_restart_policy
+  POST /api/systeme/redemarrer      reboot_server
+  GET  /api/journal                 activity
+"""
 
 import json
 import re
-from services import restart_policy
-from security import accounts
-from services import activity_log
-from fastapi import HTTPException, Request
-from version import VERSION
+
+from fastapi import APIRouter, HTTPException, Request
+
 import config
 from host import commands
-from security import guard
-from services import background_tasks
-from services import files_source
-from services import measurements
-from services import power
-from services import tools
-from fastapi import APIRouter
+from security import accounts, guard
+from services import activity_log, background_tasks, files_source, measurements, power, restart_policy, tools
+from version import VERSION
 
 router = APIRouter()
 

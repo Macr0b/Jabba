@@ -1,12 +1,17 @@
-"""services.background_tasks"""
+"""Tâches longues lancées depuis l'appli (mise à jour d'un outil…), suivies par l'écran.
+
+Sommaire :
+  TASKS : les tâches en cours ou finies (id -> état)
+  start_task : lance une commande dans un fil à part et note son résultat
+"""
 
 import threading
 import time
 import uuid
-from services import activity_log
+
 import config
 from host import commands
-
+from services import activity_log
 
 # ---------------------------------------------------------------- tâches longues
 TASKS = {}

@@ -19,10 +19,10 @@ import os
 import secrets
 import shutil
 import subprocess
-
-from services import sandbox
 import threading
 import time
+
+from services import sandbox
 
 WORK_DIR = os.environ.get("JABBA_LECTURE", "/tmp/jabba-lecture")
 SEGMENT_SECONDS = 4
@@ -425,7 +425,9 @@ def shift_vtt(vtt_text, start_time):
             cue_end = _seconds(second.split()[0]) - start_time
             if cue_end > 0:
                 text = chunk[chunk.index(timing) + 1 :]
-                output += [f"{_timestamp(_seconds(first.strip()) - start_time)} --> {_timestamp(cue_end)}"] + text + [""]
+                output += (
+                    [f"{_timestamp(_seconds(first.strip()) - start_time)} --> {_timestamp(cue_end)}"] + text + [""]
+                )
         chunk = []
     return "\n".join(output)
 

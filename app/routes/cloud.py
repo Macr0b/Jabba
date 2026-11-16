@@ -1,14 +1,25 @@
-"""routes.cloud"""
+"""API des comptes Nextcloud : inscriptions, espace, rangs, groupes et dossiers communs.
 
-from security import accounts
-from services import activity_log
-from services import nextcloud_accounts
-from fastapi import HTTPException, Request
+Sommaire :
+  outils communs : format_gigabytes, run_cloud_action, cloud_group_name, set_rank
+  GET  /api/nuage                    cloud_overview
+  POST /api/nuage/mettre-en-route    set_up_cloud
+  POST /api/nuage/reglages           cloud_settings
+  POST /api/nuage/charte             cloud_charter
+  GET  /api/nuage/attente            pending_signups
+  POST /api/nuage/comptes            add_cloud_account
+  POST /api/nuage/comptes/{uid}      cloud_account_action
+  POST /api/nuage/rangs              rank_action
+  POST /api/nuage/groupes            group_action
+  POST /api/nuage/dossiers           team_folder_action
+"""
+
+from fastapi import APIRouter, HTTPException, Request
+
 import config
 from host import commands
-from security import guard
-from services import measurements
-from fastapi import APIRouter
+from security import accounts, guard
+from services import activity_log, measurements, nextcloud_accounts
 
 router = APIRouter()
 

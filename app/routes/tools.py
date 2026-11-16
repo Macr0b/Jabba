@@ -1,12 +1,20 @@
-"""routes.tools"""
+"""API des outils (conteneurs Docker) : liste, icônes, démarrer, arrêter, mettre à jour.
 
-from fastapi import HTTPException, Request
+Sommaire :
+  GET  /api/outils                       list_tools
+  GET  /api/icone/{pid}                  tool_icon
+  POST /api/outils/{pid}/redemarrer      restart_tool
+  POST /api/outils/{pid}/demarrer        start_tool
+  POST /api/outils/{pid}/arreter         stop_tool
+  POST /api/outils/{pid}/mettre-a-jour   update_tool
+"""
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
+
 import config
 from security import guard
-from services import background_tasks
-from services import tools
-from fastapi import APIRouter
+from services import background_tasks, tools
 
 router = APIRouter()
 

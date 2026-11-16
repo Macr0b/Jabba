@@ -98,7 +98,9 @@ def subscribe(new_subscription, contact, device="", who=None):
     with _LOCK:
         data = _read()
         data["abonnements"] = [
-            subscription for subscription in data["abonnements"] if subscription["endpoint"] != new_subscription["endpoint"]
+            subscription
+            for subscription in data["abonnements"]
+            if subscription["endpoint"] != new_subscription["endpoint"]
         ]
         data["abonnements"].append(
             {

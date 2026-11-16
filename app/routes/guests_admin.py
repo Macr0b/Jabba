@@ -1,18 +1,20 @@
-"""routes.guests_admin"""
+"""API des réglages invités (côté admin) : code, dossiers partagés, outils du Wi-Fi.
+
+Sommaire :
+  GET  /api/invites             guest_settings
+  GET  /api/invites/qr.svg      guest_qr_code
+  POST /api/invites             update_guest_settings
+  GET  /api/invites/parcourir   browse_shareable_folders
+"""
 
 import os
 import uuid
-from services import guests
-from services import disk_browser
-from services import activity_log
-from fastapi import HTTPException, Request
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
+
 from security import guard
-from services import files_source
-from services import guest_network
-from services import nextcloud_files
-from services import tools
-from fastapi import APIRouter
+from services import activity_log, disk_browser, files_source, guest_network, guests, nextcloud_files, tools
 
 router = APIRouter()
 
@@ -40,6 +42,7 @@ def guest_settings(request: Request):
 def guest_qr_code(request: Request):
     guard.require_admin(request)
     import io
+
     import segno
 
     url = guest_network.guest_url(guests.read())

@@ -1,10 +1,15 @@
-"""services.power"""
+"""Alimentation du serveur : secteur ou batterie, et consommation électrique.
+
+Sommaire :
+  read_power : secteur / batterie, pourcentage
+  measure_consumption, read_consumption : consommation mesurée (watts)
+"""
 
 import json
 import os
 import time
-from host import commands
 
+from host import commands
 
 CONSUMPTION_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "consommation.json")
 

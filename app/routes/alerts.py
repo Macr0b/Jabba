@@ -1,10 +1,17 @@
-"""routes.alerts"""
+"""API des alertes (notifications sur l'iPhone et le Mac).
 
-from services import activity_log
-from services import notifications
-from fastapi import HTTPException, Request
-from services import measurements
-from fastapi import APIRouter
+Sommaire :
+  GET  /api/alertes                     alert_settings
+  POST /api/alertes/abonnement          subscribe
+  POST /api/alertes/abonnement/retirer  unsubscribe
+  POST /api/alertes/abonnement/etat     this_device_state
+  POST /api/alertes/types               set_alert_types
+  POST /api/alertes/essai               send_test_alert
+"""
+
+from fastapi import APIRouter, HTTPException, Request
+
+from services import activity_log, measurements, notifications
 
 router = APIRouter()
 

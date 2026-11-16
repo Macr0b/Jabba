@@ -1,4 +1,15 @@
-"""routes.player"""
+"""API du lecteur vidéo : conversion à la volée, sous-titres, et Jellyfin.
+
+Sommaire :
+  outils : playback_source, media_info, jellyfin_key, jellyfin_index
+  GET  /api/jellyfin/trouver         find_in_jellyfin
+  POST /api/jellyfin/cle             save_jellyfin_key
+  GET  /api/lecture/infos            playback_info
+  POST /api/lecture/demarrer         start_playback
+  GET  /api/lecture/soustitres       playback_subtitles
+  GET  /api/lecture/{sid}/{nom}      playback_segment
+  POST /api/lecture/{sid}/arreter    stop_playback
+"""
 
 import asyncio
 import base64
@@ -7,18 +18,14 @@ import os
 import re
 import subprocess
 import time
+
 import httpx
-from services import video_player
-from services import disk_browser
-from services import activity_log
-from fastapi import HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response
+
 import config
 from security import guard
-from services import files_source
-from services import nextcloud_files
-from services import tools
-from fastapi import APIRouter
+from services import activity_log, disk_browser, files_source, nextcloud_files, tools, video_player
 
 router = APIRouter()
 

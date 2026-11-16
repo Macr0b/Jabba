@@ -1,15 +1,19 @@
-"""routes.terminal"""
+"""API du terminal du serveur (super admin, mot de passe redemandé).
 
-import time
+Sommaire :
+  POST      /api/terminal/ticket   terminal_ticket (un ticket à usage unique, 30 s)
+  WEBSOCKET /api/terminal/ws       terminal_socket
+"""
+
 import secrets
-from services import terminal
-from services import activity_log
-from services import notifications
-from fastapi import HTTPException, Request, WebSocket
+import time
+
+from fastapi import APIRouter, HTTPException, Request, WebSocket
+
 import config
 from host import commands
 from security import guard
-from fastapi import APIRouter
+from services import activity_log, notifications, terminal
 
 router = APIRouter()
 

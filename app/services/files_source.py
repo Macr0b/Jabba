@@ -1,17 +1,27 @@
-"""services.files_source"""
+"""D'où viennent les fichiers de l'écran Fichiers : Nextcloud, ou les disques directement.
+
+Quand Nextcloud tourne, l'écran Fichiers passe par lui. Sinon, il lit les dossiers du
+serveur (services/disk_browser.py). Ce fichier gère aussi l'ouverture des disques branchés.
+
+Sommaire :
+  files_source : « nextcloud » ou « disque »
+  wake_disks, open_disk, ejected_recently, rescan_in_nextcloud, is_writable : disques branchés
+  disk_params, run_disk_action : appeler disk_browser avec les bons réglages
+  configured_disks, known_disks, disk_uuid, disk_is_present, plugged_disks, disk_path :
+      quels disques existent et où ils sont montés
+"""
 
 import json
 import os
 import re
 import threading
 import time
-from services import disk_browser
-from services import auto_disks
-from services import activity_log
+
 from fastapi import HTTPException
+
 import config
 from host import commands
-
+from services import activity_log, auto_disks, disk_browser
 
 # ---------------------------------------------------------------- source de l'écran Fichiers
 _SOURCE_CACHE = {"t": 0, "v": None}

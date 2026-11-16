@@ -18,6 +18,7 @@ import re
 import time
 
 import httpx
+
 import config
 
 RE_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
@@ -127,9 +128,10 @@ def install_script(folder, tag, key):
 # ---- ajouté au découpage de main.py
 import os
 import re
-from services import notifications
+
 import config
 from host import commands
+from services import notifications
 
 
 # ---------------------------------------------------------------- mise à jour de l'appli

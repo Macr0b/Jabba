@@ -5,6 +5,7 @@ par « sh -c » y perdait ses ${LIGNE% *}, et la vérification de signature éch
 (c'est arrivé : v0.11.0 → v0.12.0). Le script passe donc par un fichier.
 """
 
+import glob
 import os
 import re
 import shutil
@@ -12,10 +13,8 @@ import subprocess
 import uuid
 
 import pytest
-
-import glob
-
 from conftest import APP, EN_ROOT
+
 from host import commands
 
 

@@ -79,9 +79,9 @@ def message(auto):
 
 # ---- ajouté au découpage de main.py
 import os
+
 import config
 from host import commands
-
 
 # ---------------------------------------------------------------- redémarrage après une mise à jour
 DEMO_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "redemarrage-demo.txt")

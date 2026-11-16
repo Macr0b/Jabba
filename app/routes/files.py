@@ -1,23 +1,30 @@
-"""routes.files"""
+"""API de l'écran Fichiers : parcourir, envoyer, télécharger, voir, rechercher, corbeille.
+
+Les fichiers viennent de Nextcloud, ou directement des disques du serveur quand
+Nextcloud est arrêté (services/files_source.py choisit).
+
+Sommaire :
+  1. dossiers        list_folder, home_folders, toggle_favorite, create_folder
+  2. fichiers        upload_files, download_file, move_item, delete_item
+  3. visionneuse     viewable_type, viewer_headers, thumbnail, view_file
+  4. recherche       search
+  5. corbeille       list_trash, restore_from_trash, erase_from_trash
+"""
 
 import asyncio
 import mimetypes
 import os
 import time
-import xml.etree.ElementTree as ET
 from urllib.parse import quote
-from services import disk_browser
-from services import activity_log
-from fastapi import HTTPException, Request
-from starlette.datastructures import UploadFile
-from fastapi.responses import FileResponse, Response, StreamingResponse
 from xml.sax.saxutils import escape as xml_escape
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from starlette.datastructures import UploadFile
+
 import config
 from security import guard
-from services import files_source
-from services import home_data
-from services import nextcloud_files
-from fastapi import APIRouter
+from services import activity_log, disk_browser, files_source, home_data, nextcloud_files, safe_files
 
 router = APIRouter()
 
@@ -121,11 +128,15 @@ async def upload_files(request: Request, chemin: str = "/"):
             if not isinstance(upload, UploadFile) or not upload.filename:
                 continue
             name = os.path.basename(upload.filename.replace("\\", "/"))
-            real_path = files_source.run_disk_action(lambda: disk_browser.upload_path(chemin, name, *params))
-            if os.path.exists(real_path):
+            real_path = files_source.run_disk_action(
+                lambda file_name=name: disk_browser.upload_path(chemin, file_name, *params)
+            )
+            try:
+                output = safe_files.open_new_file(real_path)
+            except FileExistsError:
                 raise HTTPException(409, f"« {name} » existe déjà dans ce dossier.")
-            with open(real_path, "wb") as output:
-                while chunk := await upload.read(1024 * 1024):
+            with output:
+                while chunk := await upload.read(safe_files.CHUNK_SIZE):
                     output.write(chunk)
             disk_browser.finish_upload(real_path)
             uploaded.append(name)
@@ -389,7 +400,7 @@ async def search(q: str = ""):
         )
     result = []
     if response.status_code < 400:
-        for rep in ET.fromstring(response.content).findall("d:response", nextcloud_files.DAV_NS):
+        for rep in nextcloud_files.parse_xml(response.content).findall("d:response", nextcloud_files.DAV_NS):
             if rep.find("d:propstat/d:prop", nextcloud_files.DAV_NS) is not None:
                 result.append(nextcloud_files.dav_entry(rep))
     # Les dossiers du serveur vus dans Nextcloud (films, disques…) ne sont pas

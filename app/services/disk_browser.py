@@ -7,8 +7,8 @@ conteneur sous /srv. Rien n'est jamais lu ni écrit en dehors de ces dossiers.
 import hashlib
 import json
 import os
-import subprocess
 import shutil
+import subprocess
 import time
 from datetime import datetime, timezone
 

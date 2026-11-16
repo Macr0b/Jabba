@@ -451,10 +451,10 @@ def delete_rank(occ, state, rank_id):
 # ---- ajouté au découpage de main.py
 import os
 import threading
-from services import activity_log
-from services import notifications
+
 from host import commands
 from security import guard
+from services import activity_log, notifications
 
 
 def refresh_usage_in_background(user_ids=None):

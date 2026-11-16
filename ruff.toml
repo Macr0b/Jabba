@@ -7,5 +7,12 @@ quote-style = "double"
 
 [lint]
 # F : erreurs (noms inconnus, imports inutiles) ; E7 : une instruction par ligne ; B : pièges courants.
-select = ["F", "E7", "E9", "B006", "B008", "B023"]
+select = ["F", "E7", "E9", "I", "B006", "B023"]
 ignore = ["B008"]
+
+[lint.per-file-ignores]
+# Dans les tests, de petites fonctions écrites en une ligne (lambda) restent lisibles.
+"tests/*" = ["E731"]
+
+[lint.isort]
+known-first-party = ["config", "watchers", "main", "guest_door", "version", "host", "routes", "security", "services"]

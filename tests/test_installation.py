@@ -5,10 +5,9 @@ import re
 import subprocess
 
 import yaml
+from conftest import RACINE
 
 from services import restart_policy
-
-from conftest import RACINE
 
 SCRIPT = open(os.path.join(RACINE, "installer.sh")).read()
 
@@ -94,7 +93,7 @@ def test_question_du_redemarrage_a_l_installation():
 
 
 def test_veille_des_disques_internes_seulement():
-    regle = [l for l in SCRIPT.splitlines() if "hdparm -B 127" in l]
+    regle = [ligne for ligne in SCRIPT.splitlines() if "hdparm -B 127" in ligne]
     assert len(regle) == 1
     assert 'ENV{ID_BUS}=="ata"' in regle[0]  # jamais les boîtiers USB
     assert "/usr/bin/timeout 5 /usr/sbin/hdparm" in regle[0]  # jamais plus de 5 s au démarrage

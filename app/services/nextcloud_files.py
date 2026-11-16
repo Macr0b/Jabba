@@ -1,14 +1,29 @@
-"""services.nextcloud_files"""
+"""Fichiers dans Nextcloud, par WebDAV : lister, vérifier, corbeille.
 
-import xml.etree.ElementTree as ET
+Les réponses de Nextcloud sont lues avec defusedxml (lecteur XML protégé).
+
+Sommaire :
+  require_nextcloud, clean_path, dav_url, client : préparer une demande
+  dav_entry, read_folder, is_nextcloud_folder, check_response : lire les réponses
+  trash_url, nextcloud_trash : corbeille de Nextcloud
+"""
+
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote, unquote
+
 import httpx
+from defusedxml import ElementTree as SafeXML
 from fastapi import HTTPException
+
 import config
 
 
 # ---------------------------------------------------------------- fichiers (Nextcloud)
+def parse_xml(content):
+    """Lit une réponse XML de Nextcloud avec le lecteur protégé (entités piégées refusées)."""
+    return SafeXML.fromstring(content)
+
+
 DAV_NS = {"d": "DAV:", "oc": "http://owncloud.org/ns", "nc": "http://nextcloud.org/ns"}
 PROPFIND = """<?xml version="1.0"?>
 <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
@@ -79,7 +94,7 @@ async def read_folder(path):
         raise HTTPException(502, "Nextcloud refuse le mot de passe d'application (fichier .env).")
     if response.status_code >= 400:
         raise HTTPException(502, f"Nextcloud a répondu {response.status_code}")
-    root = ET.fromstring(response.content)
+    root = parse_xml(response.content)
     entries, folder = [], None
     for rep in root.findall("d:response", DAV_NS):
         item = dav_entry(rep)
@@ -104,7 +119,7 @@ async def is_nextcloud_folder(path):
         )
     if response.status_code >= 400:
         return False
-    root = ET.fromstring(response.content)
+    root = parse_xml(response.content)
     return root.find(".//d:resourcetype/d:collection", DAV_NS) is not None
 
 
@@ -152,7 +167,7 @@ async def nextcloud_trash():
     if response.status_code >= 400:
         return []
     result = []
-    for rep in ET.fromstring(response.content).findall("d:response", DAV_NS):
+    for rep in parse_xml(response.content).findall("d:response", DAV_NS):
         href = unquote(rep.find("d:href", DAV_NS).text).rstrip("/")
         identifier = href.rsplit("/", 1)[-1]
         if identifier == "trash":

@@ -1,18 +1,24 @@
-"""routes.disks"""
+"""API des disques branchés au serveur : liste, lecture seule ou écriture, éjection.
+
+Sommaire :
+  GET  /api/disques                 list_disks
+  POST /api/disques/{nom}/mode      set_disk_mode
+  POST /api/disques/{nom}/ejecter   eject_disk
+  POST /api/disques/{nom}/oublier   forget_disk
+  POST /api/disques/reprendre       resume_disk
+"""
 
 import json
 import re
 import threading
 import time
-from services import auto_disks
-from services import activity_log
-from fastapi import HTTPException, Request
+
+from fastapi import APIRouter, HTTPException, Request
+
 import config
 from host import commands
 from security import guard
-from services import files_source
-from services import measurements
-from fastapi import APIRouter
+from services import activity_log, auto_disks, files_source, measurements
 
 router = APIRouter()
 

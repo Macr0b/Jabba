@@ -3,11 +3,9 @@
 import os
 
 import pytest
-
-from services import sandbox
-from services import disk_browser
-from services import video_player
 from conftest import exige_root, outil
+
+from services import disk_browser, sandbox, video_player
 
 
 @exige_root
@@ -20,7 +18,7 @@ def test_commande_sous_nobody_sans_capacites():
     lignes = r.stdout.split("\n")
     assert lignes[0] == "65534"
     assert lignes[1] in ("65534", "")  # aucun groupe supplémentaire
-    statut = dict(l.split(":\t") for l in lignes[2:] if l)
+    statut = dict(ligne.split(":\t") for ligne in lignes[2:] if ligne)
     assert int(statut["CapEff"], 16) == 0 and int(statut["CapBnd"], 16) == 0
     assert statut["NoNewPrivs"].strip() == "1"
 

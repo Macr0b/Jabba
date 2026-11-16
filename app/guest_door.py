@@ -6,6 +6,7 @@ Il ne connaît QUE les pages invités : la connexion admin y est impossible.
 
 import ipaddress
 import os
+import tempfile
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -13,7 +14,25 @@ from fastapi.staticfiles import StaticFiles
 
 from services import guests
 
+
 # ---------------------------------------------------------------- la porte du Wi-Fi (port 80)
+def use_disk_for_uploads():
+    """Les envois en cours de réception vont sur le disque des invités, pas en mémoire.
+
+    Le conteneur n'a qu'un /tmp en mémoire : un gros dépôt l'aurait rempli. On le met donc
+    dans un dossier caché du dossier des invités (les noms en « . » ne s'affichent jamais).
+    """
+    folder = os.path.join(guests.GUEST_FOLDER, ".envois-en-cours")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        for leftover in os.listdir(folder):
+            os.remove(os.path.join(folder, leftover))
+        tempfile.tempdir = folder
+    except OSError:
+        pass
+
+
+use_disk_for_uploads()
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 LOCAL_NETWORKS = [
@@ -47,6 +66,7 @@ app.include_router(guests.router)
 @app.get("/api/moi")
 def who_am_i_on_wifi():
     import socket
+
     from version import VERSION
 
     return {

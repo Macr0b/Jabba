@@ -1,15 +1,22 @@
-"""routes.accounts"""
+"""API des comptes admin de Jabba : liste, création, rangs, mot de passe oublié.
 
-from security import server_password
-from security import accounts
-from security import sessions
-from services import activity_log
-from services import notifications
-from fastapi import HTTPException, Request
+Sommaire :
+  GET  /api/comptes                    list_accounts
+  POST /api/comptes                    create_account
+  POST /api/comptes/{cid}              update_account (rang, Tailscale, terminal, nom, suppression)
+  POST /api/comptes-reglages           update_account_settings
+  POST /api/comptes-moi/mot-de-passe   change_my_password
+  POST /api/comptes-oubli              forgotten_password (demande de remise)
+  POST /api/comptes-demandes/{did}     answer_reset_request (le super admin accepte ou refuse)
+  POST /api/comptes-remise             collect_reset (le mot de passe provisoire, une seule fois)
+"""
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+
 import config
-from security import guard
-from fastapi import APIRouter
+from security import accounts, guard, server_password, sessions
+from services import activity_log, notifications
 
 router = APIRouter()
 

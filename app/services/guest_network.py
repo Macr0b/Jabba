@@ -1,11 +1,17 @@
-"""services.guest_network"""
+"""Réseau des invités : adresse Wi-Fi du serveur, outils ouverts au Wi-Fi, pare-feu.
+
+Sommaire :
+  wifi_address : adresse du serveur sur le Wi-Fi
+  sync_guest_tools : copie la liste des outils pour la porte du Wi-Fi
+  wanted_rules, apply_firewall : bloquer au Wi-Fi les outils qui n'y sont pas ouverts
+  guest_url, shareable_roots : adresse de la page invités, dossiers partageables
+"""
 
 import re
-from services import guests
+
 import config
 from host import commands
-from services import files_source
-from services import tools
+from services import files_source, guests, tools
 
 
 # ---------------------------------------------------------------- invités : réglages (admin)

@@ -98,7 +98,9 @@ for module in (
 @app.get("/sw.js")
 def service_worker():
     return FileResponse(
-        os.path.join(config.STATIC_DIR, "sw.js"), media_type="application/javascript", headers={"Cache-Control": "no-cache"}
+        os.path.join(config.STATIC_DIR, "sw.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
     )
 
 

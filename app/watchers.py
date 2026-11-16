@@ -1,24 +1,36 @@
-"""watchers"""
+"""Surveillance en fond : tourne toutes les 15 secondes, tant que l'appli tourne.
+
+Chaque tour lance certaines vérifications ; les plus lourdes moins souvent.
+
+Sommaire :
+  watch_power : secteur coupé, batterie faible
+  watch_space : disques presque pleins
+  watch_tools : outil en panne
+  watch_system_updates : mises à jour du système, redémarrage en attente
+  watch_forever : la boucle (voir le détail des fréquences dedans)
+"""
 
 import time
-from services import restart_policy
-from services import video_player
-from services import backups
-from services import disk_browser
-from services import auto_disks
-from services import app_update
-from services import notifications
-from services import nextcloud_accounts
-from version import VERSION
+
 import config
 from host import commands
-from services import background_tasks
-from services import files_source
-from services import guest_network
-from services import measurements
-from services import power
-from services import tools
-
+from services import (
+    app_update,
+    auto_disks,
+    background_tasks,
+    backups,
+    disk_browser,
+    files_source,
+    guest_network,
+    measurements,
+    nextcloud_accounts,
+    notifications,
+    power,
+    restart_policy,
+    tools,
+    video_player,
+)
+from version import VERSION
 
 WATCH_STATE = {
     "disques_pleins": set(),

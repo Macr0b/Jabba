@@ -1,13 +1,22 @@
-"""routes.admin_session"""
+"""API de connexion admin : se connecter, confirmer, se déconnecter, appareils connectés.
 
-from security import server_password
-from security import sessions
-from services import activity_log
-from services import notifications
-from fastapi import HTTPException, Request
+Sommaire :
+  POST /api/admin/connexion          log_in
+  POST /api/admin/confirmer          confirm_password (actions sensibles)
+  POST /api/admin/deconnexion        log_out
+  GET  /api/sessions                 list_sessions
+  POST /api/sessions/{sid}/fermer    close_session
+  GET  /api/admin/etat               admin_state
+  POST /api/admin/mot-de-passe       change_server_password
+  POST /api/admin/code               create_recovery_code
+  POST /api/admin/secours            use_recovery_code
+"""
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
-from security import guard
-from fastapi import APIRouter
+
+from security import guard, server_password, sessions
+from services import activity_log, notifications
 
 router = APIRouter()
 

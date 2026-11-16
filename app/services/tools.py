@@ -1,13 +1,21 @@
-"""services.tools"""
+"""Outils du serveur : les projets Docker (Jellyfin, Nextcloud…) et leurs icônes.
+
+Sommaire :
+  NAMES, SYSTEM_TOOLS, PORTS, NEVER_ON_WIFI, FALLBACK_ICONS, OUTSIDE_APP : réglages connus
+  list_tools : les outils installés, avec leur état
+  find_tool : un outil par son identifiant
+  find_icon : l'icône d'un outil (site de l'outil, sinon icône de secours)
+"""
 
 import json
 import re
 from urllib.parse import urljoin
+
 import httpx
 from fastapi import HTTPException
+
 import config
 from host import commands
-
 
 # ---------------------------------------------------------------- outils (Docker)
 NAMES = {

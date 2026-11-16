@@ -1,17 +1,32 @@
-"""security.guard"""
+"""Contrôle d'accès : chaque demande passe ici avant d'arriver à une route.
+
+Trois verrous, dans l'ordre :
+  1. l'appareil Tailscale doit être autorisé (sinon : refus, noté et signalé) ;
+  2. hors des chemins publics, une session admin est demandée ;
+  3. toute action (POST…) doit venir de l'appli (en-tête X-Jabba) : protection contre
+     les demandes envoyées par un autre site.
+
+Sommaire :
+  guard : le contrôle lui-même (branché dans main.py)
+  allowed_logins, device_of, record_visit, record_refusal : qui ouvre l'appli
+  require_admin, require_super_admin, require_server_account, require_admin_space :
+      à appeler au début des routes réservées
+  hostname, server_user, server_identifiers, check_server_password : le compte du serveur
+  check_login, open_session, session_info, log_failed_login : connexion admin
+  translate_account_refusal : erreurs de comptes -> réponses HTTP
+"""
 
 import json
 import subprocess
 import time
-from security import server_password
-from security import accounts
-from security import sessions
-from services import activity_log
-from services import notifications
+
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+
 import config
 from host import commands
+from security import accounts, server_password, sessions
+from services import activity_log, notifications
 
 
 # ---------------------------------------------------------------- sécurité
@@ -30,6 +45,7 @@ async def guard(request: Request, call_next):
         if request.url.path == "/api/moi":
             record_visit(login, request.state.nom, request)
     request.state.via = "tailscale"
+    server_password.requester.set(request.state.user)  # les essais ratés se comptent par personne
     # Connexion admin mémorisée sur cet appareil (cookie), sinon : mode invité.
     token = request.cookies.get(sessions.COOKIE)
     session = sessions.read(token)
@@ -182,7 +198,10 @@ def server_identifiers():
 
 def check_server_password(password):
     if config.DEMO:
-        return password == "demo-mot-de-passe"
+        if password == "demo-mot-de-passe":
+            return True
+        server_password.record_failure()  # comme sur le serveur : l'erreur compte
+        return False
     return server_password.check_password(commands.run_on_host, server_user(), password)
 
 

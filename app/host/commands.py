@@ -1,8 +1,19 @@
-"""host.commands"""
+"""Commandes lancées sur le serveur lui-même (hors du conteneur de l'appli).
+
+L'appli tourne dans un conteneur ; pour agir sur le serveur (disques, Docker, redémarrage…),
+elle entre dans ses espaces de noms avec nsenter. Tout passe par ce fichier.
+
+Sommaire :
+  run_on_host / run_on_host_with_input / run_shell_on_host : lancer une commande et attendre
+  task_command / start_on_host : lancer un script en tâche de fond (systemd-run), qui survit
+                                 au redémarrage de l'appli
+  occ : une commande d'administration de Nextcloud
+"""
 
 import os
 import re
 import subprocess
+
 import config
 
 

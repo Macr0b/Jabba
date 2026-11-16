@@ -298,10 +298,9 @@ def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names)
 # ---- ajouté au découpage de main.py
 import os
 import threading
-from services import disk_browser
-from services import notifications
+
 from host import commands
-from services import files_source
+from services import disk_browser, files_source, notifications
 
 
 def scan_disks():
@@ -310,7 +309,9 @@ def scan_disks():
         commands.run_on_host,
         commands.run_on_host_with_input,
         lambda: files_source.files_source() == "nextcloud",
-        lambda entry, item, element, forgotten_uuid: notifications.send(entry, item, element, forgotten_uuid, family="disque"),
+        lambda entry, item, element, forgotten_uuid: notifications.send(
+            entry, item, element, forgotten_uuid, family="disque"
+        ),
         lambda: list(files_source.configured_disks()) + list(disk_browser.roots()),
     )
 

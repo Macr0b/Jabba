@@ -5,12 +5,11 @@ import os
 
 import pytest
 import yaml
+from conftest import RACINE
 from fastapi.testclient import TestClient
 
 import guest_door
-from services import guests
-from services import activity_log
-from conftest import RACINE
+from services import activity_log, guests
 
 H = {"X-Jabba": "1"}
 
@@ -28,7 +27,7 @@ def etat(tmp_path, monkeypatch):
         lambda d: d.update(
             actif=True,
             code="1234",
-            serveur="holo",
+            serveur="serveur-test",
             dossiers=[{"id": "p", "nom": "Partage", "chemin": str(partage), "mode": "depot"}],
         )
     )
@@ -65,7 +64,7 @@ def test_reprise_de_l_ancien_emplacement(tmp_path, monkeypatch):
 
 def test_parcours_invite(etat):
     c = wifi()
-    assert c.get("/api/moi").json()["serveur"] == "holo"
+    assert c.get("/api/moi").json()["serveur"] == "serveur-test"
     assert c.post("/api/invite/entrer", json={"code": "0000"}, headers=H).status_code == 403
     assert c.post("/api/invite/entrer", json={"code": "1234"}, headers=H).status_code == 200
     r = c.get("/api/invite/fichiers", params={"d": "p", "chemin": "/"})
@@ -149,3 +148,50 @@ def test_etat_hors_des_dossiers_des_invites():
         for k, v in sauve.items():
             os.environ[k] = v
         importlib.reload(sys.modules["services.guests"])
+
+
+def _entrer():
+    c = wifi()
+    c.post("/api/invite/entrer", json={"code": "1234"}, headers=H)
+    return c
+
+
+def test_depot_jamais_par_dessus_un_fichier(etat):
+    _, partage = etat
+    c = _entrer()
+    for _ in range(2):
+        r = c.post("/api/invite/envoyer", params={"d": "p"}, files={"fichiers": ("menu.txt", b"nouveau")}, headers=H)
+        assert r.status_code == 200
+    assert (partage / "menu.txt").read_text() == "menu"  # l'original n'a pas bougé
+    assert (partage / "menu (2).txt").read_text() == "nouveau" and (partage / "menu (3).txt").exists()
+
+
+def test_depot_ne_suit_jamais_un_raccourci(etat, tmp_path):
+    """Un raccourci (même cassé) qui porte le nom du fichier envoyé : on écrit à côté, pas à travers."""
+    _, partage = etat
+    dehors = tmp_path / "dehors.txt"
+    (partage / "photo.jpg").symlink_to(dehors)
+    r = _entrer().post("/api/invite/envoyer", params={"d": "p"}, files={"fichiers": ("photo.jpg", b"x")}, headers=H)
+    assert r.json()["envoyes"] == ["photo (2).jpg"] and not dehors.exists()
+
+
+def test_depot_trop_gros_refuse(etat, monkeypatch):
+    _, partage = etat
+    monkeypatch.setattr(guests, "MAX_FILE_BYTES", 10)
+    r = _entrer().post("/api/invite/envoyer", params={"d": "p"}, files={"fichiers": ("gros.bin", b"x" * 50)}, headers=H)
+    assert r.status_code == 413 and not (partage / "gros.bin").exists()
+
+
+def test_depot_garde_toujours_de_la_place(etat, monkeypatch):
+    _, partage = etat
+    monkeypatch.setattr(guests, "KEEP_FREE_BYTES", 10**18)  # plus de place que n'en a aucun disque
+    r = _entrer().post("/api/invite/envoyer", params={"d": "p"}, files={"fichiers": ("a.txt", b"x")}, headers=H)
+    assert r.status_code == 507 and not (partage / "a.txt").exists()
+
+
+def test_envois_en_cours_sur_le_disque_et_caches(etat):
+    """Les envois en réception vont dans un dossier caché du dossier des invités, pas dans la mémoire."""
+    import tempfile
+
+    assert tempfile.gettempdir().endswith(".envois-en-cours")
+    assert os.path.basename(tempfile.gettempdir()).startswith(".")

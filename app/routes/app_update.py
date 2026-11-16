@@ -1,16 +1,23 @@
-"""routes.app_update"""
+"""API de mise à jour de l'appli (versions publiées et signées sur GitHub).
+
+Sommaire :
+  GET  /api/appli/maj        update_info (version installée, dernière version publiée)
+  GET  /api/appli/versions   version_history (ce qui a changé à chaque version)
+  POST /api/appli/maj        install_update
+  GET  /api/appli/maj/etat   update_progress
+"""
 
 import json
 import os
 import time
-from services import activity_log
-from services import app_update
-from fastapi import HTTPException, Request
-from version import VERSION
+
+from fastapi import APIRouter, HTTPException, Request
+
 import config
 from host import commands
 from security import guard
-from fastapi import APIRouter
+from services import activity_log, app_update
+from version import VERSION
 
 router = APIRouter()
 

@@ -19,7 +19,6 @@ import hmac
 import json
 import os
 import secrets
-import shutil
 import threading
 import time
 from datetime import datetime, timezone
@@ -29,8 +28,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.datastructures import UploadFile
 
-from services import activity_log
 import config
+from services import activity_log, safe_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 # État partagé entre l'appli (qui l'écrit) et la porte du Wi-Fi (qui le lit) : un dossier à part.
@@ -38,6 +37,9 @@ STATE_FILE = os.environ.get("JABBA_INVITES_ETAT", os.path.join(DATA_DIR, "porte-
 OLD_STATE_FILE = os.path.join(DATA_DIR, "invites.json")  # avant la 0.11
 GUEST_FOLDER = os.environ.get("JABBA_DOSSIER_INVITES", "/srv/data/invites")
 COOKIE = "jabba_invite"
+# Dépôts des invités : taille maximale d'un fichier, et place qu'on laisse toujours libre sur le disque.
+MAX_FILE_BYTES = int(float(os.environ.get("JABBA_INVITES_MAX_GO", "4")) * 1024**3)
+KEEP_FREE_BYTES = int(float(os.environ.get("JABBA_INVITES_LIBRE_GO", "5")) * 1024**3)
 COOKIE_LIFETIME = 7 * 86400
 STATIC_DIR = config.STATIC_DIR
 _lock = threading.RLock()
@@ -297,6 +299,12 @@ async def upload(request: Request, d: str, chemin: str = "/"):
     target = _resolve(folder["chemin"], chemin)
     if not os.path.isdir(target):
         raise HTTPException(404, "Dossier introuvable")
+    # Taille annoncée trop grande, ou plus assez de place : refus avant même de recevoir le fichier.
+    announced = int(request.headers.get("content-length") or 0)
+    if announced > MAX_FILE_BYTES + 1024 * 1024:
+        raise HTTPException(413, f"Fichier trop gros : {MAX_FILE_BYTES // 1024**3} Go au plus.")
+    if safe_files.free_space(target) - announced < KEEP_FREE_BYTES:
+        raise HTTPException(507, "Plus assez de place sur le serveur pour ce dépôt.")
     form = await request.form()
     uploaded = []
     for file in form.getlist("fichiers"):
@@ -305,10 +313,21 @@ async def upload(request: Request, d: str, chemin: str = "/"):
         name = os.path.basename(file.filename.replace("\\", "/")).lstrip(".") or "fichier"
         base, extension = os.path.splitext(name)
         real_path, counter = os.path.join(target, name), 2
-        while os.path.exists(real_path):  # jamais d'écrasement : « photo (2).jpg »
-            real_path, counter = os.path.join(target, f"{base} ({counter}){extension}"), counter + 1
-        with open(real_path, "wb") as output:
-            shutil.copyfileobj(file.file, output, 1024 * 1024)
+        while True:  # jamais d'écrasement : « photo (2).jpg »
+            try:
+                output = safe_files.open_new_file(real_path)
+                break
+            except FileExistsError:
+                real_path, counter = os.path.join(target, f"{base} ({counter}){extension}"), counter + 1
+        try:
+            with output:
+                safe_files.copy_with_limit(file.file, output, target, MAX_FILE_BYTES, KEEP_FREE_BYTES)
+        except safe_files.TooLarge:
+            os.remove(real_path)
+            raise HTTPException(413, f"Fichier trop gros : {MAX_FILE_BYTES // 1024**3} Go au plus.")
+        except safe_files.DiskFull:
+            os.remove(real_path)
+            raise HTTPException(507, "Plus assez de place sur le serveur pour ce dépôt.")
         try:
             os.chown(real_path, 1000, os.stat(target).st_gid or 1000)
         except OSError:

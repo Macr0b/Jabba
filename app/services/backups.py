@@ -262,9 +262,7 @@ def snapshots(run, settings, host_dir, demo=False):
 
 def browse(run, settings, host_dir, identifier, path, demo=False):
     path = "/" + path.strip("/")
-    code, output, error_output = run(
-        restic_command(settings, host_dir, demo) + ["ls", "--json", identifier, path], 120
-    )
+    code, output, error_output = run(restic_command(settings, host_dir, demo) + ["ls", "--json", identifier, path], 120)
     if code != 0:
         raise RuntimeError(error_output.strip()[-200:] or "Copie illisible.")
     entries = []
@@ -318,14 +316,12 @@ def restore(run, settings, host_dir, identifier, path, demo=False):
 import os
 import subprocess
 import threading
-from services import activity_log
-from services import app_update
-from services import notifications
+
 from fastapi import HTTPException
+
 import config
 from host import commands
-from services import files_source
-
+from services import activity_log, app_update, files_source, notifications
 
 # ---------------------------------------------------------------- sauvegardes
 DEMO_STATE = {}  # en démo : le processus de la sauvegarde en cours
@@ -414,11 +410,18 @@ def follow_backup():
         settings["derniere_reussie"] = outcome
         settings["alerte_absent"] = None
         activity_log.record(
-            "sauvegardes", "Sauvegarde terminée" + (f" ({outcome['avert'].strip()})" if outcome.get("avert") else ""), None
+            "sauvegardes",
+            "Sauvegarde terminée" + (f" ({outcome['avert'].strip()})" if outcome.get("avert") else ""),
+            None,
         )
         if outcome.get("avert"):
             notifications.send(
-                "sauvegardes", "Sauvegarde incomplète", outcome["avert"], "/#/sauvegardes", family="sauvegardes", log=False
+                "sauvegardes",
+                "Sauvegarde incomplète",
+                outcome["avert"],
+                "/#/sauvegardes",
+                family="sauvegardes",
+                log=False,
             )
     else:
         # Une alerte par jour au plus (la sauvegarde est retentée chaque heure).

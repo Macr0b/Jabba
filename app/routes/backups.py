@@ -1,15 +1,24 @@
-"""routes.backups"""
+"""API des sauvegardes (restic, sur un disque branché au serveur).
+
+Sommaire :
+  GET  /api/sauvegardes              backup_state
+  POST /api/sauvegardes/activer      enable_backups
+  POST /api/sauvegardes/reglages     backup_settings
+  POST /api/sauvegardes/lancer       start_backup
+  GET  /api/sauvegardes/historique   backup_history
+  GET  /api/sauvegardes/parcourir    browse_backup
+  POST /api/sauvegardes/restaurer    restore_from_backup
+  POST /api/sauvegardes/phrase       show_passphrase
+"""
 
 import re
-from services import backups
-from services import activity_log
-from services import notifications
-from fastapi import HTTPException, Request
+
+from fastapi import APIRouter, HTTPException, Request
+
 import config
 from host import commands
 from security import guard
-from services import files_source
-from fastapi import APIRouter
+from services import activity_log, backups, files_source, notifications
 
 router = APIRouter()
 

@@ -1,7 +1,12 @@
-"""services.measurements"""
+"""Mesures du serveur : processeur, mémoire, température, espace disque, durée de marche.
+
+Sommaire :
+  cpu_percent, memory, temperature, disk_space, uptime, server_name
+"""
 
 import os
 import time
+
 import config
 from host import commands
 
