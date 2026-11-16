@@ -26,10 +26,10 @@ LOCAL_NETWORKS = [
 async def wifi_guard(request: Request, call_next):
     try:
         address = ipaddress.ip_address((request.client.host if request.client else "").split("%")[0])
-        local = any(address in network for network in LOCAL_NETWORKS)
+        is_local = any(address in network for network in LOCAL_NETWORKS)
     except ValueError:
-        local = False
-    if not local:
+        is_local = False
+    if not is_local:
         return JSONResponse({"erreur": "Réservé au réseau local."}, status_code=403)
     request.state.via = "lan"
     if request.method not in ("GET", "HEAD") and request.headers.get("x-jabba") != "1":

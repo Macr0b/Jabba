@@ -106,7 +106,7 @@ def repository(settings):
 
 
 # ---------------------------------------------------------------- la copie
-def backup_script(settings, donnees_hote, demo=False):
+def backup_script(settings, host_dir, demo=False):
     """Le script shell qui fait une sauvegarde complète, sur le serveur."""
     sources = [PATHS[key] for key, value in settings["sources"].items() if value and key in PATHS]
     if demo:
@@ -114,10 +114,10 @@ def backup_script(settings, donnees_hote, demo=False):
     excluded = " ".join(f"--exclude {shlex.quote(share)}" for share in EXCLUDE)
     quote = shlex.quote
     return f"""set -uo pipefail
-ETAT={quote(os.path.join(donnees_hote, "sauvegarde-etat.json"))}
+ETAT={quote(os.path.join(host_dir, "sauvegarde-etat.json"))}
 DISQUE={quote(settings["chemin"])}
 export RESTIC_REPOSITORY={quote(repository(settings))}
-export RESTIC_PASSWORD_FILE={quote(os.path.join(donnees_hote, "sauvegardes.cle"))}
+export RESTIC_PASSWORD_FILE={quote(os.path.join(host_dir, "sauvegardes.cle"))}
 export RESTIC_CACHE_DIR={quote("/tmp/restic-jabba-cache" if demo else "/var/cache/restic-jabba")}
 DEBUT=$(date +%s); ETAPE=disque; REMONTER=0; AVERT=""; RESUME=null
 TMP=$(mktemp)
@@ -187,7 +187,7 @@ def result(state):
     """Le dernier résultat, en clair."""
     if not state:
         return None
-    r = state.get("resume") or {}
+    completed = state.get("resume") or {}
     succeeded = state.get("code") == 0
     return {
         "ok": succeeded,
@@ -196,12 +196,12 @@ def result(state):
         "duree": max(0, (state.get("fin") or 0) - (state.get("debut") or 0)),
         "erreur": None if succeeded else STEPS.get(state.get("etape"), "La sauvegarde s'est arrêtée."),
         "avert": (state.get("avert") or "").strip() or None,
-        "ajoute": r.get("data_added"),
-        "fichiers": r.get("total_files_processed"),
-        "taille": r.get("total_bytes_processed"),
-        "nouveaux": r.get("files_new"),
-        "modifies": r.get("files_changed"),
-        "instantane": r.get("snapshot_id"),
+        "ajoute": completed.get("data_added"),
+        "fichiers": completed.get("total_files_processed"),
+        "taille": completed.get("total_bytes_processed"),
+        "nouveaux": completed.get("files_new"),
+        "modifies": completed.get("files_changed"),
+        "instantane": completed.get("snapshot_id"),
     }
 
 
@@ -230,20 +230,20 @@ def next_run(settings):
 
 
 # ---------------------------------------------------------------- lire les copies
-def restic_command(settings, donnees_hote, demo=False):
+def restic_command(settings, host_dir, demo=False):
     return [
         "env",
         f"RESTIC_REPOSITORY={repository(settings)}",
-        f"RESTIC_PASSWORD_FILE={os.path.join(donnees_hote, 'sauvegardes.cle')}",
+        f"RESTIC_PASSWORD_FILE={os.path.join(host_dir, 'sauvegardes.cle')}",
         f"RESTIC_CACHE_DIR={'/tmp/restic-jabba-cache' if demo else '/var/cache/restic-jabba'}",
         "restic",
         "--no-lock",
     ]
 
 
-def snapshots(run, settings, donnees_hote, demo=False):
+def snapshots(run, settings, host_dir, demo=False):
     code, output, error_output = run(
-        restic_command(settings, donnees_hote, demo) + ["snapshots", "--tag", "jabba", "--json"], 120
+        restic_command(settings, host_dir, demo) + ["snapshots", "--tag", "jabba", "--json"], 120
     )
     if code != 0:
         raise RuntimeError(error_output.strip()[-200:] or "Sauvegardes illisibles.")
@@ -260,10 +260,10 @@ def snapshots(run, settings, donnees_hote, demo=False):
     ]
 
 
-def browse(run, settings, donnees_hote, identifier, path, demo=False):
+def browse(run, settings, host_dir, identifier, path, demo=False):
     path = "/" + path.strip("/")
     code, output, error_output = run(
-        restic_command(settings, donnees_hote, demo) + ["ls", "--json", identifier, path], 120
+        restic_command(settings, host_dir, demo) + ["ls", "--json", identifier, path], 120
     )
     if code != 0:
         raise RuntimeError(error_output.strip()[-200:] or "Copie illisible.")
@@ -292,7 +292,7 @@ def browse(run, settings, donnees_hote, identifier, path, demo=False):
     return entries
 
 
-def restore(run, settings, donnees_hote, identifier, path, demo=False):
+def restore(run, settings, host_dir, identifier, path, demo=False):
     """Remet `chemin` tel qu'il était dans la copie `ident`, dans Restaurations/<date>/ (jamais par-dessus)."""
     path = "/" + path.strip("/")
     parent, name = os.path.dirname(path) or "/", os.path.basename(path)
@@ -303,7 +303,7 @@ def restore(run, settings, donnees_hote, identifier, path, demo=False):
     )
     target = os.path.join(base, time.strftime("%Y-%m-%d %Hh%M") + f" ({identifier})")
     code, _, error_output = run(
-        restic_command(settings, donnees_hote, demo)
+        restic_command(settings, host_dir, demo)
         + ["restore", f"{identifier}:{parent}", "--target", target, "--include", "/" + name],
         3600,
     )
@@ -334,8 +334,8 @@ DEMO_STATE = {}  # en démo : le processus de la sauvegarde en cours
 def run_restic(command, timeout=120):
     """Une commande restic : sur le serveur, ou en démo dans le conteneur."""
     if config.DEMO:
-        r = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
-        return r.returncode, r.stdout, r.stderr
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        return completed.returncode, completed.stdout, completed.stderr
     return commands.run_on_host(command, timeout)
 
 
@@ -399,9 +399,9 @@ def follow_backup():
     if not settings["unite"] or is_running(settings):
         return settings
     state = read_state()
-    res = result(state) if (state.get("debut") or 0) >= settings["lancee"] - 5 else None
-    if res is None:
-        res = {
+    outcome = result(state) if (state.get("debut") or 0) >= settings["lancee"] - 5 else None
+    if outcome is None:
+        outcome = {
             "ok": False,
             "debut": settings["lancee"],
             "fin": int(time.time()),
@@ -409,16 +409,16 @@ def follow_backup():
             "erreur": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?).",
         }
     settings["unite"] = None
-    settings["dernier"] = res
-    if res["ok"]:
-        settings["derniere_reussie"] = res
+    settings["dernier"] = outcome
+    if outcome["ok"]:
+        settings["derniere_reussie"] = outcome
         settings["alerte_absent"] = None
         activity_log.record(
-            "sauvegardes", "Sauvegarde terminée" + (f" ({res['avert'].strip()})" if res.get("avert") else ""), None
+            "sauvegardes", "Sauvegarde terminée" + (f" ({outcome['avert'].strip()})" if outcome.get("avert") else ""), None
         )
-        if res.get("avert"):
+        if outcome.get("avert"):
             notifications.send(
-                "sauvegardes", "Sauvegarde incomplète", res["avert"], "/#/sauvegardes", family="sauvegardes", log=False
+                "sauvegardes", "Sauvegarde incomplète", outcome["avert"], "/#/sauvegardes", family="sauvegardes", log=False
             )
     else:
         # Une alerte par jour au plus (la sauvegarde est retentée chaque heure).
@@ -427,12 +427,12 @@ def follow_backup():
             notifications.send(
                 "sauvegardes",
                 "Sauvegarde échouée",
-                res["erreur"] + (" Nouvel essai dans une heure." if settings["actif"] else ""),
+                outcome["erreur"] + (" Nouvel essai dans une heure." if settings["actif"] else ""),
                 "/#/sauvegardes",
                 family="sauvegardes",
             )
         else:
-            activity_log.record("sauvegardes", "Sauvegarde échouée — " + res["erreur"])
+            activity_log.record("sauvegardes", "Sauvegarde échouée — " + outcome["erreur"])
         settings["alerte_echec"] = day
     write(settings)
     return settings

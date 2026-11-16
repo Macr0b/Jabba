@@ -89,20 +89,20 @@ def settings():
     }
 
 
-def subscribe(abonnement, contact, device="", who=None):
-    if not isinstance(abonnement, dict) or not str(abonnement.get("endpoint", "")).startswith("https://"):
+def subscribe(new_subscription, contact, device="", who=None):
+    if not isinstance(new_subscription, dict) or not str(new_subscription.get("endpoint", "")).startswith("https://"):
         raise ValueError("Abonnement invalide.")
-    keys = abonnement.get("keys") or {}
+    keys = new_subscription.get("keys") or {}
     if not (keys.get("p256dh") and keys.get("auth")):
         raise ValueError("Abonnement invalide.")
     with _LOCK:
         data = _read()
         data["abonnements"] = [
-            subscription for subscription in data["abonnements"] if subscription["endpoint"] != abonnement["endpoint"]
+            subscription for subscription in data["abonnements"] if subscription["endpoint"] != new_subscription["endpoint"]
         ]
         data["abonnements"].append(
             {
-                "endpoint": abonnement["endpoint"],
+                "endpoint": new_subscription["endpoint"],
                 "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]},
                 "contact": contact,
                 "appareil": device[:80],

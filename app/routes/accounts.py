@@ -92,7 +92,7 @@ async def update_account(cid: str, request: Request):
         sessions.close_account(account["identifiant"])
         text = f"Compte retiré : {account['identifiant']}"
     elif action == "rang":
-        account = guard.translate_account_refusal(lambda: accounts.update(cid, session["rang"], rang=body.get("rang")))
+        account = guard.translate_account_refusal(lambda: accounts.update(cid, session["rang"], role=body.get("rang")))
         sessions.close_account(account["identifiant"])
         text = f"{account['identifiant']} est maintenant {'super admin' if account['rang'] == 'super' else 'admin'}"
     elif action == "tailscale":
@@ -102,12 +102,12 @@ async def update_account(cid: str, request: Request):
         text = f"{account['identifiant']} : compte Tailscale {account['tailscale'] or 'retiré'}"
     elif action == "terminal":
         account = guard.translate_account_refusal(
-            lambda: accounts.update(cid, session["rang"], terminal=bool(body.get("terminal")))
+            lambda: accounts.update(cid, session["rang"], terminal_allowed=bool(body.get("terminal")))
         )
         text = f"Terminal {'autorisé' if account['terminal'] else 'retiré'} pour {account['identifiant']}"
     elif action == "nom":
         account = guard.translate_account_refusal(
-            lambda: accounts.update(cid, session["rang"], nom=body.get("nom") or "")
+            lambda: accounts.update(cid, session["rang"], display_name=body.get("nom") or "")
         )
         text = f"{account['identifiant']} renommé « {account['nom']} »"
     else:

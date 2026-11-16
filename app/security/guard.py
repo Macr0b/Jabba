@@ -69,7 +69,7 @@ _DEVICES_CACHE = {"t": 0, "v": {}}
 
 def device_of(request):
     """Nom de l'appareil Tailscale d'où vient la requête (d'après son adresse 100.x)."""
-    ip = request.client.host if request.client else ""
+    client_address = request.client.host if request.client else ""
     if time.time() - _DEVICES_CACHE["t"] > 120:
         names = {}
         try:
@@ -82,7 +82,7 @@ def device_of(request):
         except (ValueError, OSError, subprocess.SubprocessError):
             pass
         _DEVICES_CACHE.update(t=time.time(), v=names)
-    return _DEVICES_CACHE["v"].get(ip)
+    return _DEVICES_CACHE["v"].get(client_address)
 
 
 def record_visit(login, name, request):

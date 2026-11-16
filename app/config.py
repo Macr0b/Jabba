@@ -1,36 +1,54 @@
-"""Emplacements fixes de l'appli (dossiers du code), communs à tous les modules."""
+"""Réglages de l'appli, lus une fois au démarrage (fichier .env du serveur, voir compose.yaml).
+
+Sommaire :
+  1. dossiers du code
+  2. mode démo (tests)
+  3. Tailscale : qui peut ouvrir l'appli
+  4. Nextcloud
+  5. dépôt GitHub (mises à jour)
+  6. divers (batterie, liens)
+"""
 
 import os
 
+# ---------------------------------------------------------------- 1. dossiers du code
 # Dossier racine du code de l'appli (app/ dans le dépôt, /app dans le conteneur).
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Pages, styles et scripts de l'interface.
 STATIC_DIR = os.path.join(APP_DIR, "static")
 
-
-# ---- ajouté au découpage de main.py
-import os
-import config
-
-
+# ---------------------------------------------------------------- 2. mode démo
+# JABBA_DEMO=1 : données fictives, aucune commande sur le serveur (tests).
 DEMO = os.environ.get("JABBA_DEMO") == "1"
-TAILSCALE_USERS = {u.strip().lower() for u in os.environ.get("TS_USERS", "").split(",") if u.strip()}
+
+# ---------------------------------------------------------------- 3. Tailscale
+# Comptes Tailscale qui peuvent ouvrir l'appli, en plus de ceux reliés à un compte admin.
+TAILSCALE_USERS = {user.strip().lower() for user in os.environ.get("TS_USERS", "").split(",") if user.strip()}
+# Compte du serveur (celui de sudo) : son mot de passe est celui du super admin principal.
+ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
+
+# ---------------------------------------------------------------- 4. Nextcloud
 NC_URL = os.environ.get("NC_URL", "http://127.0.0.1:8081").rstrip("/")
 NC_HOST = os.environ.get("NC_HOST", "")
 NC_USER = os.environ.get("NC_USER", "")
 NC_APP_PASSWORD = os.environ.get("NC_APP_PASSWORD", "")
 NC_PUBLIC = os.environ.get("NC_PUBLIC_URL", "").rstrip("/")
-STATIC = config.STATIC_DIR
-ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
+
+# ---------------------------------------------------------------- 5. dépôt GitHub
+# « propriétaire/dépôt » d'où viennent les mises à jour de l'appli.
 REPOSITORY = os.environ.get("JABBA_DEPOT", "").strip()
+
+# ---------------------------------------------------------------- 6. divers
+# En dessous de ce pourcentage de batterie (sur secteur coupé), alerte.
 BATTERY_THRESHOLD = int(os.environ.get("SEUIL_BATTERIE", "15"))
 
 
 def read_links():
+    """Liens supplémentaires de l'accueil : LIENS="Nom=https://…,Autre=https://…"."""
     links = {}
-    for share in os.environ.get("LIENS", "").split(","):
-        if "=" in share:
-            name, url = share.split("=", 1)
+    for entry in os.environ.get("LIENS", "").split(","):
+        if "=" in entry:
+            name, url = entry.split("=", 1)
             links[name.strip()] = url.strip()
     return links
 

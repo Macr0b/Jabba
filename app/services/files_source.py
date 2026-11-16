@@ -126,7 +126,7 @@ def disk_params():
     plugged = plugged_disks()
     known = known_disks()
     disks = {name: known[name] for name in plugged if name in known}
-    read_only = {name for name, c in disks.items() if not is_writable(c)}
+    read_only = {name for name, mount_path in disks.items() if not is_writable(mount_path)}
     return disks, read_only
 
 

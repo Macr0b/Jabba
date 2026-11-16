@@ -154,7 +154,7 @@ def accounts(occ):
                 "cree": None if user.get("first_seen") in (None, "never") else user.get("first_seen"),
             }
         )
-    result.sort(key=lambda c: ({"attente": 0, "actif": 1, "suspendu": 2}[c["etat"]], c["nom"].lower()))
+    result.sort(key=lambda item: ({"attente": 0, "actif": 1, "suspendu": 2}[item["etat"]], item["nom"].lower()))
     return result
 
 
@@ -476,8 +476,8 @@ def watch_signups():
     seen = set(state["en_attente_vus"])
     pending = set()
     for user_id, name in disabled_accounts.items():
-        c, setting, _ = commands.occ(["user:setting", user_id, "registration", "send_welcome_mail_on_enable"])
-        if c == 0 and setting.strip() == "yes":
+        item, setting, _ = commands.occ(["user:setting", user_id, "registration", "send_welcome_mail_on_enable"])
+        if item == 0 and setting.strip() == "yes":
             pending.add(user_id)
             if user_id not in seen:
                 notifications.send(

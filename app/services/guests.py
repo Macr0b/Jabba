@@ -103,9 +103,9 @@ def prepare_state():
 def update(function):
     with _lock:
         state = read()
-        r = function(state)
+        current_state = function(state)
         write(state)
-        return r
+        return current_state
 
 
 def new_code():
@@ -231,16 +231,16 @@ async def enter(request: Request):
     if not hmac.compare_digest(code, state["code"]):
         _failures.setdefault(address, []).append(time.time())
         raise HTTPException(403, "Code incorrect.")
-    r = JSONResponse({"ok": True})
-    r.set_cookie(COOKIE, guest_cookie(state), max_age=COOKIE_LIFETIME, httponly=True, samesite="strict")
+    current_state = JSONResponse({"ok": True})
+    current_state.set_cookie(COOKIE, guest_cookie(state), max_age=COOKIE_LIFETIME, httponly=True, samesite="strict")
     activity_log.record("invite", f"Un invité est entré ({address})")
-    return r
+    return current_state
 
 
 @router.get("/api/invite/fichiers")
 def list_files(request: Request, d: str, chemin: str = "/"):
-    r = require_guest(request)
-    folder = _shared_folder(r, d)
+    current_state = require_guest(request)
+    folder = _shared_folder(current_state, d)
     real_path = _resolve(folder["chemin"], chemin)
     if not os.path.isdir(real_path):
         raise HTTPException(404, "Dossier introuvable")
@@ -273,8 +273,8 @@ def list_files(request: Request, d: str, chemin: str = "/"):
 
 @router.get("/api/invite/fichier")
 def get_file(request: Request, d: str, chemin: str, voir: int = 0):
-    r = require_guest(request)
-    real_path = _resolve(_shared_folder(r, d)["chemin"], chemin)
+    current_state = require_guest(request)
+    real_path = _resolve(_shared_folder(current_state, d)["chemin"], chemin)
     if not os.path.isfile(real_path):
         raise HTTPException(404, "Fichier introuvable")
     name = os.path.basename(real_path)
@@ -290,8 +290,8 @@ def get_file(request: Request, d: str, chemin: str, voir: int = 0):
 
 @router.post("/api/invite/envoyer")
 async def upload(request: Request, d: str, chemin: str = "/"):
-    r = require_guest(request)
-    folder = _shared_folder(r, d)
+    current_state = require_guest(request)
+    folder = _shared_folder(current_state, d)
     if folder["mode"] != "depot":
         raise HTTPException(403, "Ce dossier est en lecture seule.")
     target = _resolve(folder["chemin"], chemin)

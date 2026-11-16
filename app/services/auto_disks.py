@@ -310,7 +310,7 @@ def scan_disks():
         commands.run_on_host,
         commands.run_on_host_with_input,
         lambda: files_source.files_source() == "nextcloud",
-        lambda entry, ti, tx, forgotten_uuid: notifications.send(entry, ti, tx, forgotten_uuid, family="disque"),
+        lambda entry, item, element, forgotten_uuid: notifications.send(entry, item, element, forgotten_uuid, family="disque"),
         lambda: list(files_source.configured_disks()) + list(disk_browser.roots()),
     )
 

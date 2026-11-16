@@ -78,7 +78,7 @@ def probe(source):
         }
         for index, stream in enumerate(value for value in streams if value.get("codec_type") == "audio")
     ]
-    soustitres = [
+    subtitle_tracks = [
         {
             "index": stream["index"],
             "codec": stream.get("codec_name"),
@@ -101,7 +101,7 @@ def probe(source):
         if video_stream
         else None,
         "audios": audio_tracks,
-        "soustitres": soustitres,
+        "soustitres": subtitle_tracks,
     }
 
 
@@ -208,16 +208,16 @@ def _video(media):
     )
 
 
-def keyframe(source, media, debut):
+def keyframe(source, media, start_time):
     """Quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`.
     On part donc de là, pour que le temps affiché et les sous-titres tombent juste."""
     video_stream = media["video"]
     if (
-        debut <= 0
+        start_time <= 0
         or not video_stream
         or not (video_stream["codec"] == "h264" and video_stream["pix_fmt"] in (None, "yuv420p"))
     ):
-        return debut
+        return start_time
     args = [
         "ffprobe",
         "-v",
@@ -231,7 +231,7 @@ def keyframe(source, media, debut):
         "-of",
         "csv=p=0",
         "-read_intervals",
-        f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}",
+        f"{max(0.0, start_time - 12):.3f}%{start_time + 0.05:.3f}",
     ]
     try:
         with sandbox.open_input(source) as (input_path, file_descriptors):
@@ -243,7 +243,7 @@ def keyframe(source, media, debut):
                 timeout=20,
             )
     except (subprocess.TimeoutExpired, OSError, RuntimeError):
-        return debut
+        return start_time
     elapsed = []
     for line in completed.stdout.splitlines():
         for share in line.split(","):
@@ -252,13 +252,13 @@ def keyframe(source, media, debut):
                 break
             except ValueError:
                 continue
-    previous_value = [tags for tags in elapsed if tags <= debut + 0.05]
-    return max(previous_value) if previous_value else debut
+    previous_value = [tags for tags in elapsed if tags <= start_time + 0.05]
+    return max(previous_value) if previous_value else start_time
 
 
-def start(source, media, debut=0.0, audio=None):
+def start(source, media, start_time=0.0, audio=None):
     """Lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)."""
-    debut = keyframe(source, media, max(0.0, float(debut)))
+    start_time = keyframe(source, media, max(0.0, float(start_time)))
     with _LOCK:
         while len(_SESSIONS) >= MAX_SESSIONS:  # trop de films en même temps : on arrête le plus ancien
             stop(min(_SESSIONS, key=lambda key: _SESSIONS[key]["vu"]), lock=False)
@@ -270,7 +270,7 @@ def start(source, media, debut=0.0, audio=None):
     tracks = [first for first in media["audios"] if audio is None or first["index"] == audio] or media["audios"]
     audio_stream = ["-map", f"0:{tracks[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if tracks else []
     command = (
-        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(debut)):.3f}"]
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(start_time)):.3f}"]
         + ([first for first in video_stream[:2]] if video_stream[:1] == ["-vaapi_device"] else [])
         + ["ENTREE"]
         + (video_stream[2:] if video_stream[:1] == ["-vaapi_device"] else video_stream)
@@ -322,9 +322,9 @@ def start(source, media, debut=0.0, audio=None):
             "dossier": folder,
             "vu": time.time(),
             "cree": time.time(),
-            "debut": float(debut),
+            "debut": float(start_time),
         }
-    return session_id, debut
+    return session_id, start_time
 
 
 def session_file(session_id, name, wait=20):
@@ -412,7 +412,7 @@ def _timestamp(value):
     return f"{int(hours):02d}:{int(minutes):02d}:{seconds:06.3f}"
 
 
-def shift_vtt(vtt_text, debut):
+def shift_vtt(vtt_text, start_time):
     """Recale les sous-titres sur le moment où la lecture a commencé (la vidéo, elle, repart de 0)."""
     output, chunk = ["WEBVTT", ""], []
     for line in vtt_text.splitlines() + [""]:
@@ -422,15 +422,15 @@ def shift_vtt(vtt_text, debut):
         timing = next((chunk_line for chunk_line in chunk if "-->" in chunk_line), None)
         if timing:
             first, _, second = timing.partition("-->")
-            cue_end = _seconds(second.split()[0]) - debut
+            cue_end = _seconds(second.split()[0]) - start_time
             if cue_end > 0:
                 text = chunk[chunk.index(timing) + 1 :]
-                output += [f"{_timestamp(_seconds(first.strip()) - debut)} --> {_timestamp(cue_end)}"] + text + [""]
+                output += [f"{_timestamp(_seconds(first.strip()) - start_time)} --> {_timestamp(cue_end)}"] + text + [""]
         chunk = []
     return "\n".join(output)
 
 
-def subtitles(source, index, debut=0.0):
+def subtitles(source, index, start_time=0.0):
     """Une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé."""
     with sandbox.open_input(source) as (input_path, file_descriptors):
         command = (
@@ -441,4 +441,4 @@ def subtitles(source, index, debut=0.0):
         completed = sandbox.run(command, file_descriptors, capture_output=True, timeout=180)
     if completed.returncode != 0:
         raise RuntimeError("Sous-titres illisibles.")
-    return shift_vtt(completed.stdout.decode("utf-8", "replace"), float(debut)).encode()
+    return shift_vtt(completed.stdout.decode("utf-8", "replace"), float(start_time)).encode()

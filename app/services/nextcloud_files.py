@@ -69,8 +69,8 @@ async def read_folder(path):
         from services.demo_data import folder_listing
 
         return folder_listing(path)
-    async with client() as c:
-        response = await c.request(
+    async with client() as dav_client:
+        response = await dav_client.request(
             "PROPFIND", dav_url(path), content=PROPFIND, headers={"Depth": "1", "Content-Type": "application/xml"}
         )
     if response.status_code == 404:
@@ -98,8 +98,8 @@ async def read_folder(path):
 
 
 async def is_nextcloud_folder(path):
-    async with client() as c:
-        response = await c.request(
+    async with client() as dav_client:
+        response = await dav_client.request(
             "PROPFIND", dav_url(path), content=PROPFIND, headers={"Depth": "0", "Content-Type": "application/xml"}
         )
     if response.status_code >= 400:
@@ -145,8 +145,8 @@ def trash_url(identifier=""):
 
 
 async def nextcloud_trash():
-    async with client() as c:
-        response = await c.request(
+    async with client() as dav_client:
+        response = await dav_client.request(
             "PROPFIND", trash_url(), content=TRASH_PROPFIND, headers={"Depth": "1", "Content-Type": "application/xml"}
         )
     if response.status_code >= 400:

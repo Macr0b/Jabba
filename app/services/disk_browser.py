@@ -133,9 +133,9 @@ def read_path(path, disks, read_only):
     return real_path
 
 
-def move(source, vers, disks, read_only):
+def move(source, target_path, disks, read_only):
     source_path = _writable_path(source, disks, read_only)
-    destination = _writable_path(vers, disks, read_only)
+    destination = _writable_path(target_path, disks, read_only)
     if not os.path.exists(source_path):
         raise Refusal(404, "Introuvable")
     if os.path.exists(destination):

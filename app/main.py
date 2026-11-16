@@ -98,11 +98,11 @@ for module in (
 @app.get("/sw.js")
 def service_worker():
     return FileResponse(
-        os.path.join(config.STATIC, "sw.js"), media_type="application/javascript", headers={"Cache-Control": "no-cache"}
+        os.path.join(config.STATIC_DIR, "sw.js"), media_type="application/javascript", headers={"Cache-Control": "no-cache"}
     )
 
 
-app.mount("/static", StaticFiles(directory=config.STATIC), name="static")
+app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
 
 
 @app.get("/")
@@ -110,4 +110,4 @@ app.mount("/static", StaticFiles(directory=config.STATIC), name="static")
 def page(reste: str = ""):
     if reste.startswith("api/"):
         raise HTTPException(404)
-    return FileResponse(os.path.join(config.STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
+    return FileResponse(os.path.join(config.STATIC_DIR, "index.html"), headers={"Cache-Control": "no-cache"})

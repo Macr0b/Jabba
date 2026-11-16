@@ -96,13 +96,13 @@ def check_password(host_runner, user, password):
 
 def new_token(identifier="serveur", rank="super", temporary=False):
     """Jeton valable 10 minutes, qui dit qui est connecté en admin et avec quel rang."""
-    jeton = secrets.token_urlsafe(32)
+    token_value = secrets.token_urlsafe(32)
     with _lock:
         now = time.time()
         for token in [token for token, token_data in _tokens.items() if token_data["exp"] < now]:
             del _tokens[token]
-        _tokens[jeton] = {"exp": now + TOKEN_LIFETIME, "identifiant": identifier, "rang": rank, "provisoire": temporary}
-    return jeton
+        _tokens[token_value] = {"exp": now + TOKEN_LIFETIME, "identifiant": identifier, "rang": rank, "provisoire": temporary}
+    return token_value
 
 
 def token_info(token):

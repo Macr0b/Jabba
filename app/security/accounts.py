@@ -109,8 +109,8 @@ def list_accounts():
         }
 
 
-def find(identifiant):
-    identifier = (identifiant or "").strip().lower()
+def find(identifier_value):
+    identifier = (identifier_value or "").strip().lower()
     for account in _read()["comptes"]:
         if account["identifiant"] == identifier:
             return account
@@ -170,12 +170,12 @@ def _check_login(login):
     return login or None
 
 
-def create(identifiant, name, rank, tailscale, by_identifier, actor_role, forbidden):
+def create(identifier_value, name, rank, tailscale, by_identifier, actor_role, forbidden):
     if rank not in ROLES:
         raise Refusal(400, "Rang inconnu.")
     if rank == "super" and actor_role != "super":
         raise Refusal(403, "Seul un super admin peut créer un super admin.")
-    identifier = _check_identifier(identifiant, forbidden)
+    identifier = _check_identifier(identifier_value, forbidden)
     login = _check_login(tailscale)
     password = temporary_password()
     salt = secrets.token_hex(16)
@@ -215,24 +215,24 @@ def _account(data, cid):
     raise Refusal(404, "Compte introuvable.")
 
 
-def update(cid, actor_role, rang=None, tailscale=False, nom=None, terminal=None):
+def update(account_id, actor_role, role=None, tailscale=False, display_name=None, terminal_allowed=None):
     with _lock:
         data = _read()
-        account = _account(data, cid)
-        if (account["rang"] == "super" or rang == "super") and actor_role != "super":
+        account = _account(data, account_id)
+        if (account["rang"] == "super" or role == "super") and actor_role != "super":
             raise Refusal(403, "Seul un super admin peut modifier un super admin.")
-        if rang is not None:
-            if rang not in ROLES:
+        if role is not None:
+            if role not in ROLES:
                 raise Refusal(400, "Rang inconnu.")
-            account["rang"] = rang
+            account["rang"] = role
         if tailscale is not False:
             account["tailscale"] = _check_login(tailscale)
-        if nom is not None:
-            account["nom"] = nom.strip()[:60] or account["identifiant"]
-        if terminal is not None:
+        if display_name is not None:
+            account["nom"] = display_name.strip()[:60] or account["identifiant"]
+        if terminal_allowed is not None:
             if actor_role != "super":
                 raise Refusal(403, "Seul un super admin peut régler l'accès au terminal.")
-            account["terminal"] = bool(terminal)
+            account["terminal"] = bool(terminal_allowed)
         _write(data)
         return _public_view(account)
 

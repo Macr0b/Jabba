@@ -53,14 +53,14 @@ async def terminal_socket(ws: WebSocket, ticket: str = ""):
     # (pas seulement par le compte Linux, partagé par tous les super admins).
     env = {"JABBA_QUI": who["qui"], "JABBA_SESSION": session_id}
     if config.DEMO:
-        commande = ["bash", "--rcfile", terminal.prepare_rc(None), "-i"]
+        shell_command = ["bash", "--rcfile", terminal.prepare_rc(None), "-i"]
     else:
         rc_path = terminal.prepare_rc(
             lambda content: commands.run_on_host_with_input(
                 ["sh", "-c", "mkdir -p /usr/local/lib/jabba && cat > /usr/local/lib/jabba/terminal.bashrc"], content
             )
         )
-        commande = [
+        shell_command = [
             "nsenter",
             "-t",
             "1",
@@ -81,7 +81,7 @@ async def terminal_socket(ws: WebSocket, ticket: str = ""):
         ]
     start = time.time()
     activity_log.record("admin", f"Terminal ouvert par {who['qui']} (compte {account} du serveur)", who["nom"])
-    await terminal.bridge(ws, commande, demo=config.DEMO, env=env)
+    await terminal.bridge(ws, shell_command, demo=config.DEMO, env=env)
     for command in terminal.command_log(session_id, start, None if config.DEMO else commands.run_on_host):
         activity_log.record("admin", f"Terminal · {who['qui']} : {command}", who["nom"])
     activity_log.record(

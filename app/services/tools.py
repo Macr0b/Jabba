@@ -54,9 +54,9 @@ def list_tools():
     for line in output.splitlines():
         container = json.loads(line)
         labels = dict(label.split("=", 1) for label in container.get("Labels", "").split(",") if "=" in label)
-        projet = labels.get("com.docker.compose.project", container["Names"])
+        project_name = labels.get("com.docker.compose.project", container["Names"])
         folder = labels.get("com.docker.compose.project.working_dir", "")
-        project = projects.setdefault(projet, {"id": projet, "dossier": folder, "conteneurs": []})
+        project = projects.setdefault(project_name, {"id": project_name, "dossier": folder, "conteneurs": []})
         project["conteneurs"].append(
             {"nom": container["Names"], "etat": container["State"], "statut": container["Status"]}
         )

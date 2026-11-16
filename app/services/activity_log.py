@@ -60,20 +60,20 @@ def read(count=100, family=None):
             continue
         for line in lines:
             try:
-                ev = json.loads(line)
+                entry = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(ev, dict) and isinstance(ev.get("t"), int) and isinstance(ev.get("texte"), str):
+            if isinstance(entry, dict) and isinstance(entry.get("t"), int) and isinstance(entry.get("texte"), str):
                 if path != LOG_FILE:
                     # Écrit par la porte du Wi-Fi : on ne la croit que pour des événements d'invités.
-                    ev = {"t": ev["t"], "famille": "invite", "texte": ev["texte"][:300]}
-                events.append(ev)
+                    entry = {"t": entry["t"], "famille": "invite", "texte": entry["texte"][:300]}
+                events.append(entry)
     events.sort(key=lambda event: event["t"])
     result = []
-    for ev in reversed(events):
-        if family and ev.get("famille") != family:
+    for entry in reversed(events):
+        if family and entry.get("famille") != family:
             continue
-        result.append(ev)
+        result.append(entry)
         if len(result) >= count:
             break
     return result

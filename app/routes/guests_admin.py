@@ -128,10 +128,10 @@ def browse_shareable_folders(request: Request, chemin: str = "/"):
     if chemin == "/":
         guests.prepare_guest_folder()
         all_entries = {**disk_browser.roots(), **guest_network.shareable_roots()}
-        elements = [
+        folder_entries = [
             {"nom": name, "chemin": "/" + name} for name, disk_path in all_entries.items() if os.path.isdir(disk_path)
         ]
-        return {"chemin": "/", "elements": elements}
+        return {"chemin": "/", "elements": folder_entries}
     state = files_source.run_disk_action(
         lambda: disk_browser.list_folder(chemin, guest_network.shareable_roots(), set())
     )

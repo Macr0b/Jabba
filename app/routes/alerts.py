@@ -12,9 +12,9 @@ router = APIRouter()
 # ---------------------------------------------------------------- alertes (notifications)
 @router.get("/api/alertes")
 def alert_settings():
-    e = notifications.settings()
-    e.pop("endpoints")
-    return e
+    current_settings = notifications.settings()
+    current_settings.pop("endpoints")
+    return current_settings
 
 
 @router.post("/api/alertes/abonnement")
@@ -24,8 +24,8 @@ async def subscribe(request: Request):
     contact = origin if origin.startswith("https://") else "mailto:jabba@example.org"
     try:
         notifications.subscribe(body.get("abonnement"), contact, str(body.get("appareil", "")), request.state.user)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    except ValueError as current_settings:
+        raise HTTPException(400, str(current_settings))
     activity_log.record("alerte", "Alertes activées sur un appareil", request.state.nom)
     return {"ok": True}
 
@@ -47,8 +47,8 @@ async def set_alert_types(request: Request):
     body = await request.json()
     try:
         notifications.set_types(body.get("type"), body.get("actif"))
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    except ValueError as current_settings:
+        raise HTTPException(400, str(current_settings))
     return {"ok": True}
 
 

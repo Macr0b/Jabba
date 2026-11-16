@@ -58,17 +58,17 @@ async def home_folders():
             else:
                 essentials.append({"nom": entry["nom"], "chemin": entry["chemin"], "type": "espace"})
     listing = home_data.read()
-    favorites = [{"nom": client.rsplit("/", 1)[-1], "chemin": client} for client in listing["favoris"]]
+    favorites = [{"nom": dav_client.rsplit("/", 1)[-1], "chemin": dav_client} for dav_client in listing["favoris"]]
     cutoff = time.time() - home_data.SUGGESTION_WINDOW
     suggestions = []
-    for client, timestamps in listing["visites"].items():
+    for dav_client, timestamps in listing["visites"].items():
         count = sum(1 for media_type in timestamps if media_type > cutoff)
         if (
             count >= home_data.SUGGESTION_THRESHOLD
-            and client not in listing["favoris"]
-            and client not in listing["ignores"]
+            and dav_client not in listing["favoris"]
+            and dav_client not in listing["ignores"]
         ):
-            suggestions.append({"nom": client.rsplit("/", 1)[-1], "chemin": client, "ouvertures": count})
+            suggestions.append({"nom": dav_client.rsplit("/", 1)[-1], "chemin": dav_client, "ouvertures": count})
     suggestions.sort(key=lambda source_name: -source_name["ouvertures"])
     return {"essentiels": essentials, "favoris": favorites, "suggestions": suggestions[:2]}
 
@@ -85,7 +85,7 @@ async def toggle_favorite(request: Request):
         if action == "ajouter" and path not in listing["favoris"]:
             listing["favoris"].append(path)
         elif action == "retirer":
-            listing["favoris"] = [client for client in listing["favoris"] if client != path]
+            listing["favoris"] = [dav_client for dav_client in listing["favoris"] if dav_client != path]
         elif action == "ignorer" and path not in listing["ignores"]:
             listing["ignores"].append(path)
         home_data.write(listing)
@@ -102,8 +102,8 @@ async def create_folder(request: Request):
     nextcloud_files.require_nextcloud()
     if config.DEMO:
         return {"ok": True}
-    async with nextcloud_files.client() as client:
-        response = await client.request("MKCOL", nextcloud_files.dav_url(path))
+    async with nextcloud_files.client() as dav_client:
+        response = await dav_client.request("MKCOL", nextcloud_files.dav_url(path))
     if response.status_code == 405:
         raise HTTPException(409, "Un dossier porte déjà ce nom.")
     await nextcloud_files.check_response(response, "Création du dossier")
@@ -144,8 +144,8 @@ async def upload_files(request: Request, chemin: str = "/"):
             while chunk := await file_path.read(1024 * 1024):
                 yield chunk
 
-        async with nextcloud_files.client() as client:
-            response = await client.put(nextcloud_files.dav_url(f"{chemin}/{name}"), content=morceaux())
+        async with nextcloud_files.client() as dav_client:
+            response = await dav_client.put(nextcloud_files.dav_url(f"{chemin}/{name}"), content=morceaux())
         await nextcloud_files.check_response(response, f"Envoi de {name}")
         uploaded.append(name)
     log_upload(request, chemin, uploaded)
@@ -169,12 +169,12 @@ async def download_file(chemin: str):
     nextcloud_files.require_nextcloud()
     if config.DEMO:
         raise HTTPException(404, "Pas de fichiers en démo")
-    client = nextcloud_files.client()
-    request_object = client.build_request("GET", nextcloud_files.dav_url(chemin))
-    response = await client.send(request_object, stream=True)
+    dav_client = nextcloud_files.client()
+    request_object = dav_client.build_request("GET", nextcloud_files.dav_url(chemin))
+    response = await dav_client.send(request_object, stream=True)
     if response.status_code >= 400:
         await response.aclose()
-        await client.aclose()
+        await dav_client.aclose()
         raise HTTPException(response.status_code, "Fichier introuvable")
     name = chemin.rsplit("/", 1)[-1]
 
@@ -184,7 +184,7 @@ async def download_file(chemin: str):
                 yield chunk
         finally:
             await response.aclose()
-            await client.aclose()
+            await dav_client.aclose()
 
     headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"}
     if "content-length" in response.headers:
@@ -209,8 +209,8 @@ async def move_item(request: Request):
     nextcloud_files.require_nextcloud()
     if config.DEMO:
         return {"ok": True}
-    async with nextcloud_files.client() as client:
-        response = await client.request(
+    async with nextcloud_files.client() as dav_client:
+        response = await dav_client.request(
             "MOVE",
             nextcloud_files.dav_url(source_path),
             headers={"Destination": nextcloud_files.dav_url(destination), "Overwrite": "F"},
@@ -243,8 +243,8 @@ async def delete_item(request: Request):
         return {"ok": True}
     if await nextcloud_files.is_nextcloud_folder(path):
         guard.require_admin(request)
-    async with nextcloud_files.client() as client:
-        response = await client.delete(nextcloud_files.dav_url(path))
+    async with nextcloud_files.client() as dav_client:
+        response = await dav_client.delete(nextcloud_files.dav_url(path))
     await nextcloud_files.check_response(response, "Suppression")
     activity_log.record("fichier", f"{path} mis à la corbeille", request.state.nom)
     return {"ok": True}
@@ -311,8 +311,8 @@ async def thumbnail(chemin: str, taille: int = 128):
             raise HTTPException(404, "Pas d'aperçu")
         return FileResponse(cache, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
     nextcloud_files.require_nextcloud()
-    async with nextcloud_files.client() as client:
-        response = await client.get(
+    async with nextcloud_files.client() as dav_client:
+        response = await dav_client.get(
             config.NC_URL + "/index.php/core/preview.png",
             params={"file": chemin, "x": taille, "y": taille, "a": "1", "mode": "cover"},
         )
@@ -339,14 +339,14 @@ async def view_file(chemin: str, request: Request):
         real_path = files_source.run_disk_action(lambda: disk_browser.read_path(chemin, *files_source.disk_params()))
         return FileResponse(real_path, media_type=media_type, headers=viewer_headers(media_type, name))
     nextcloud_files.require_nextcloud()
-    client = nextcloud_files.client()
+    dav_client = nextcloud_files.client()
     headers = {"Range": request.headers["range"]} if "range" in request.headers else {}
-    response = await client.send(
-        client.build_request("GET", nextcloud_files.dav_url(chemin), headers=headers), stream=True
+    response = await dav_client.send(
+        dav_client.build_request("GET", nextcloud_files.dav_url(chemin), headers=headers), stream=True
     )
     if response.status_code >= 400:
         await response.aclose()
-        await client.aclose()
+        await dav_client.aclose()
         raise HTTPException(404 if response.status_code == 404 else 502, "Fichier introuvable")
 
     async def flux():
@@ -355,7 +355,7 @@ async def view_file(chemin: str, request: Request):
                 yield chunk
         finally:
             await response.aclose()
-            await client.aclose()
+            await dav_client.aclose()
 
     output = viewer_headers(media_type, name)
     for header in ("content-length", "content-range", "accept-ranges", "etag", "last-modified"):
@@ -380,8 +380,8 @@ async def search(q: str = ""):
         result, full_command = await asyncio.to_thread(disk_browser.search, q, disks, read_only)
         return {"elements": result, "complet": full_command}
     nextcloud_files.require_nextcloud()
-    async with nextcloud_files.client() as client:
-        response = await client.request(
+    async with nextcloud_files.client() as dav_client:
+        response = await dav_client.request(
             "SEARCH",
             config.NC_URL + "/remote.php/dav/",
             headers={"Content-Type": "text/xml"},
@@ -431,8 +431,8 @@ async def restore_from_trash(request: Request):
         nextcloud_files.require_nextcloud()
         if "/" in identifier:
             raise HTTPException(400, "Élément invalide")
-        async with nextcloud_files.client() as client:
-            response = await client.request(
+        async with nextcloud_files.client() as dav_client:
+            response = await dav_client.request(
                 "MOVE",
                 nextcloud_files.trash_url(identifier),
                 headers={
@@ -457,8 +457,8 @@ async def erase_from_trash(request: Request):
     if everything:
         await asyncio.to_thread(disk_browser.empty_trash)
         if files_source.files_source() == "nextcloud" and config.NC_USER:
-            async with nextcloud_files.client() as client:
-                await client.delete(nextcloud_files.trash_url())
+            async with nextcloud_files.client() as dav_client:
+                await dav_client.delete(nextcloud_files.trash_url())
         activity_log.record("fichier", "Corbeille vidée", request.state.nom)
         return {"ok": True}
     if source_path == "disque":
@@ -467,8 +467,8 @@ async def erase_from_trash(request: Request):
         nextcloud_files.require_nextcloud()
         if "/" in identifier:
             raise HTTPException(400, "Élément invalide")
-        async with nextcloud_files.client() as client:
-            response = await client.delete(nextcloud_files.trash_url(identifier))
+        async with nextcloud_files.client() as dav_client:
+            response = await dav_client.delete(nextcloud_files.trash_url(identifier))
         await nextcloud_files.check_response(response, "Effacement")
     activity_log.record("fichier", f"« {body.get('nom', identifier)} » effacé définitivement", request.state.nom)
     return {"ok": True}

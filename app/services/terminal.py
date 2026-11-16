@@ -66,18 +66,18 @@ RC_PATH = "/usr/local/lib/jabba/terminal.bashrc"
 DEMO_LOG = "/tmp/jabba-terminal-demo.log"
 
 
-def prepare_rc(ecrire):
+def prepare_rc(write_rc):
     """Écrit le fichier de démarrage du shell sur le serveur (ou en démo, à côté) et renvoie son chemin."""
-    if ecrire is None:  # démo : pas de journal système, on note dans un fichier
+    if write_rc is None:  # démo : pas de journal système, on note dans un fichier
         path = "/tmp/jabba-terminal.bashrc"
         with open(path, "w") as file:
             file.write(RC.replace("logger -t jabba-terminal -- ", f"echo >> {DEMO_LOG} "))
         return path
-    ecrire(RC)
+    write_rc(RC)
     return RC_PATH
 
 
-def command_log(session_id, debut, host_runner):
+def command_log(session_id, started_at, host_runner):
     """Les commandes tapées pendant la session `sid`, dans l'ordre (200 au plus)."""
     if host_runner is None:
         try:
@@ -86,7 +86,7 @@ def command_log(session_id, debut, host_runner):
             lines = []
     else:
         _, output, _ = host_runner(
-            ["journalctl", "-t", "jabba-terminal", "--since", f"@{int(debut) - 1}", "-o", "cat", "--no-pager"]
+            ["journalctl", "-t", "jabba-terminal", "--since", f"@{int(started_at) - 1}", "-o", "cat", "--no-pager"]
         )
         lines = output.splitlines()
     result = []
@@ -131,12 +131,12 @@ async def bridge(ws, command, demo=False, env=None):
 
     def lisible():
         try:
-            donnees = os.read(descriptor, 65536)
+            incoming = os.read(descriptor, 65536)
         except BlockingIOError:
             return
         except OSError:
-            donnees = b""
-        output.put_nowait(donnees)
+            incoming = b""
+        output.put_nowait(incoming)
 
     loop_index.add_reader(descriptor, lisible)
 
