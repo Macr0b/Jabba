@@ -17,13 +17,13 @@ H = {"X-Jabba": "1"}
 @pytest.fixture
 def etat(tmp_path, monkeypatch):
     f = tmp_path / "porte-wifi" / "etat.json"
-    monkeypatch.setattr(guests, "FICHIER", str(f))
-    monkeypatch.setattr(guests, "ANCIEN_FICHIER", str(tmp_path / "invites.json"))
+    monkeypatch.setattr(guests, "STATE_FILE", str(f))
+    monkeypatch.setattr(guests, "OLD_STATE_FILE", str(tmp_path / "invites.json"))
     partage = tmp_path / "partage"
     partage.mkdir()
     (partage / "menu.txt").write_text("menu")
-    guests.preparer_etat()
-    guests.modifier(lambda d: d.update(actif=True, code="1234", serveur="holo",
+    guests.prepare_state()
+    guests.update(lambda d: d.update(actif=True, code="1234", serveur="holo",
                                         dossiers=[{"id": "p", "nom": "Partage", "chemin": str(partage), "mode": "depot"}]))
     return f, partage
 
@@ -48,10 +48,10 @@ def test_etat_cree_une_fois_et_garde(etat):
 def test_reprise_de_l_ancien_emplacement(tmp_path, monkeypatch):
     ancien = tmp_path / "invites.json"
     ancien.write_text(json.dumps({"code": "9876", "secret": "s" * 64}))
-    monkeypatch.setattr(guests, "FICHIER", str(tmp_path / "porte-wifi" / "etat.json"))
-    monkeypatch.setattr(guests, "ANCIEN_FICHIER", str(ancien))
-    guests.preparer_etat()
-    assert guests.lire()["code"] == "9876" and not ancien.exists()
+    monkeypatch.setattr(guests, "STATE_FILE", str(tmp_path / "porte-wifi" / "etat.json"))
+    monkeypatch.setattr(guests, "OLD_STATE_FILE", str(ancien))
+    guests.prepare_state()
+    assert guests.read()["code"] == "9876" and not ancien.exists()
 
 
 def test_parcours_invite(etat):
@@ -92,12 +92,12 @@ def test_trop_d_essais(etat):
 def test_journal_de_la_porte_ne_peut_pas_se_faire_passer_pour_l_appli(tmp_path, monkeypatch):
     principal = tmp_path / "journal.jsonl"
     autre = tmp_path / "journal-invites.jsonl"
-    monkeypatch.setattr(activity_log, "FICHIER", str(principal))
-    monkeypatch.setattr(activity_log, "AUTRES", [str(autre)])
-    activity_log.noter("admin", "vrai événement", "Rob")
+    monkeypatch.setattr(activity_log, "LOG_FILE", str(principal))
+    monkeypatch.setattr(activity_log, "OTHER_LOGS", [str(autre)])
+    activity_log.record("admin", "vrai événement", "Rob")
     autre.write_text(json.dumps({"t": 1, "famille": "admin", "texte": "Faux : mot de passe changé", "qui": "Rob"}) + "\n"
                      + "pas du json\n")
-    evs = activity_log.lire()
+    evs = activity_log.read()
     faux = [e for e in evs if e["texte"].startswith("Faux")][0]
     assert faux["famille"] == "invite" and "qui" not in faux
     assert evs[0]["texte"] == "vrai événement"
@@ -130,8 +130,8 @@ def test_etat_hors_des_dossiers_des_invites():
     os.environ.pop("JABBA_INVITES_ETAT", None)
     try:
         m = importlib.reload(sys.modules["services.guests"])
-        assert not os.path.commonpath([m.FICHIER, "/srv"]) == "/srv"
-        assert m.FICHIER == "/data/porte-wifi/etat.json"
+        assert not os.path.commonpath([m.STATE_FILE, "/srv"]) == "/srv"
+        assert m.STATE_FILE == "/data/porte-wifi/etat.json"
     finally:
         for k, v in sauve.items():
             os.environ[k] = v

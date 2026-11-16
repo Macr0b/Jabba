@@ -21,7 +21,7 @@ def cle(dossier, nom):
 
 
 def signer(cle_privee, tag, sha):
-    return sh("ssh-keygen", "-Y", "sign", "-f", cle_privee, "-n", "jabba", entree=app_update.texte_signe(tag, sha))
+    return sh("ssh-keygen", "-Y", "sign", "-f", cle_privee, "-n", "jabba", entree=app_update.signed_text(tag, sha))
 
 
 @pytest.fixture
@@ -59,13 +59,13 @@ def publier(d, tag, signature=None, sur=None, ligne=None):
     if signature is not None:
         dossier = d["origine"] / "signatures"
         dossier.mkdir(exist_ok=True)
-        (dossier / f"{tag}.sig").write_text((ligne or app_update.texte_signe(tag, sur)) + "\n" + signature + "\n")
+        (dossier / f"{tag}.sig").write_text((ligne or app_update.signed_text(tag, sur)) + "\n" + signature + "\n")
         sh(*d["git"], "add", ".", cwd=d["origine"])
         sh(*d["git"], "commit", "-qm", f"Signature {tag}", cwd=d["origine"])
 
 
 def installer(d, tag):
-    script = app_update.script(str(d["install"]), tag, d["pub"])
+    script = app_update.install_script(str(d["install"]), tag, d["pub"])
     r = subprocess.run(["sh", "-c", script], capture_output=True, text=True, env={**os.environ, "PATH": d["path"]})
     contenu = (d["install"] / "app.txt").read_text().strip()
     reconstruit = os.path.exists(d["tmp"] / "docker.log")
@@ -87,7 +87,7 @@ def test_version_sans_signature_refusee(depots):
     d = depots
     publier(d, "v2.0.0")
     r, contenu, reconstruit = installer(d, "v2.0.0")
-    assert r.returncode != 0 and app_update.MARQUE_REFUS in r.stdout
+    assert r.returncode != 0 and app_update.REFUSAL_MARK in r.stdout
     assert contenu == "v1" and not reconstruit
 
 
@@ -96,7 +96,7 @@ def test_signature_d_une_autre_cle_refusee(depots):
     d = depots
     publier(d, "v2.0.0", signer(d["mauvaise"], "v2.0.0", d["sha"]), d["sha"])
     r, contenu, reconstruit = installer(d, "v2.0.0")
-    assert r.returncode != 0 and app_update.MARQUE_REFUS in r.stdout
+    assert r.returncode != 0 and app_update.REFUSAL_MARK in r.stdout
     assert contenu == "v1" and not reconstruit
 
 
@@ -110,7 +110,7 @@ def test_ligne_signee_modifiee_refusee(depots):
     piege = sh("git", "rev-parse", "HEAD", cwd=d["origine"])
     publier(d, "v2.0.0", signature, piege)
     r, contenu, reconstruit = installer(d, "v2.0.0")
-    assert r.returncode != 0 and app_update.MARQUE_REFUS in r.stdout
+    assert r.returncode != 0 and app_update.REFUSAL_MARK in r.stdout
     assert contenu == "v1" and not reconstruit
 
 
@@ -133,7 +133,7 @@ def test_etiquette_deplacee_sans_effet(depots):
 def test_signature_d_une_autre_version_refusee(depots):
     """Une signature valable pour v2.0.0 ne vaut pas pour v9.0.0."""
     d = depots
-    publier(d, "v9.0.0", signer(d["bonne"], "v2.0.0", d["sha"]), d["sha"], ligne=app_update.texte_signe("v2.0.0", d["sha"]))
+    publier(d, "v9.0.0", signer(d["bonne"], "v2.0.0", d["sha"]), d["sha"], ligne=app_update.signed_text("v2.0.0", d["sha"]))
     r, contenu, _ = installer(d, "v9.0.0")
     assert r.returncode != 0 and contenu == "v1"
 
@@ -142,7 +142,7 @@ def test_signature_d_une_autre_version_refusee(depots):
 def test_signature_pour_un_autre_usage_refusee(depots):
     """Une signature SSH faite pour autre chose (autre « namespace ») ne vaut rien."""
     d = depots
-    autre = sh("ssh-keygen", "-Y", "sign", "-f", d["bonne"], "-n", "git", entree=app_update.texte_signe("v2.0.0", d["sha"]))
+    autre = sh("ssh-keygen", "-Y", "sign", "-f", d["bonne"], "-n", "git", entree=app_update.signed_text("v2.0.0", d["sha"]))
     publier(d, "v2.0.0", autre, d["sha"])
     r, contenu, _ = installer(d, "v2.0.0")
     assert r.returncode != 0 and contenu == "v1"
@@ -151,34 +151,34 @@ def test_signature_pour_un_autre_usage_refusee(depots):
 def test_parametres_verifies():
     pub = "ssh-ed25519 " + "A" * 68 + " test"
     with pytest.raises(ValueError):
-        app_update.script("/opt/x; rm -rf /", "v1.0.0", pub)
+        app_update.install_script("/opt/x; rm -rf /", "v1.0.0", pub)
     with pytest.raises(ValueError):
-        app_update.script("/opt/x", "v1.0.0; reboot", pub)
+        app_update.install_script("/opt/x", "v1.0.0; reboot", pub)
     with pytest.raises(ValueError):
-        app_update.script("/opt/x", "v1.0.0", None)
+        app_update.install_script("/opt/x", "v1.0.0", None)
     with pytest.raises(ValueError):
-        app_update.script("/opt/x", "v1.0.0", "ssh-ed25519 AAAA' ; reboot ; '")
+        app_update.install_script("/opt/x", "v1.0.0", "ssh-ed25519 AAAA' ; reboot ; '")
 
 
 def test_cle_publication(tmp_path, monkeypatch):
     f = tmp_path / "cle.pub"
-    monkeypatch.setattr(app_update, "FICHIER_CLE", str(f))
-    assert app_update.cle_publication() is None
+    monkeypatch.setattr(app_update, "KEY_FILE", str(f))
+    assert app_update.publication_key() is None
     f.write_text("# commentaire\n")
-    assert app_update.cle_publication() is None
+    assert app_update.publication_key() is None
     f.write_text("pas une clé\n")
-    assert app_update.cle_publication() is None
+    assert app_update.publication_key() is None
     bonne = "ssh-ed25519 " + "A" * 68 + " signature Jabba"
     f.write_text(f"# clé de publication\n{bonne}\n")
-    assert app_update.cle_publication() == bonne
+    assert app_update.publication_key() == bonne
 
 
 def test_cle_livree_valide():
     """La clé livrée avec l'appli doit être lisible : sans elle, aucune mise à jour possible."""
-    assert app_update.cle_publication(), "app/cle_publication.pub manque ou est illisible"
+    assert app_update.publication_key(), "app/cle_publication.pub manque ou est illisible"
 
 
 def test_versions():
-    assert app_update.plus_recente("0.9.0", "0.10.0")
-    assert not app_update.plus_recente("0.10.0", "0.9.9")
-    assert not app_update.plus_recente("0.10.0", "pas-une-version")
+    assert app_update.is_newer("0.9.0", "0.10.0")
+    assert not app_update.is_newer("0.10.0", "0.9.9")
+    assert not app_update.is_newer("0.10.0", "pas-une-version")

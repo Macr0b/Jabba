@@ -37,8 +37,8 @@ def test_empreinte_invalide():
 def test_verification_par_le_serveur(monkeypatch):
     empreinte = _empreinte_openssl("Bon-mot-de-passe", "abcdefgh", "-6")
     faux_hote = lambda commande: (0, f"rob:{empreinte}:19000:0:99999:7:::\n", "")
-    monkeypatch.setattr(server_password, "_echecs", [])
-    assert server_password.verifier_mot_de_passe(faux_hote, "rob", "Bon-mot-de-passe")
-    assert not server_password.verifier_mot_de_passe(faux_hote, "rob", "Mauvais")
+    monkeypatch.setattr(server_password, "_failures", [])
+    assert server_password.check_password(faux_hote, "rob", "Bon-mot-de-passe")
+    assert not server_password.check_password(faux_hote, "rob", "Mauvais")
     verrouille = lambda commande: (0, "rob:!:19000::::::\n", "")
-    assert not server_password.verifier_mot_de_passe(verrouille, "rob", "Bon-mot-de-passe")
+    assert not server_password.check_password(verrouille, "rob", "Bon-mot-de-passe")

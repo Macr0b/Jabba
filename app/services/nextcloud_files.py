@@ -15,14 +15,14 @@ PROPFIND = """<?xml version="1.0"?>
 </d:propfind>"""
 
 
-def nc_pret():
+def require_nextcloud():
     if config.DEMO:
         return
-    if not (config.NC_USER and config.NC_PASS):
+    if not (config.NC_USER and config.NC_APP_PASSWORD):
         raise HTTPException(503, "Le lien avec Nextcloud n'est pas encore réglé (fichier .env).")
 
 
-def chemin_propre(chemin: str) -> str:
+def clean_path(chemin: str) -> str:
     morceaux = [m for m in (chemin or "").split("/") if m not in ("", ".")]
     if any(m == ".." for m in morceaux):
         raise HTTPException(400, "Chemin invalide")
@@ -31,15 +31,15 @@ def chemin_propre(chemin: str) -> str:
 
 def dav_url(chemin: str) -> str:
     base = f"/remote.php/dav/files/{quote(config.NC_USER)}"
-    return config.NC_URL + base + quote(chemin_propre(chemin))
+    return config.NC_URL + base + quote(clean_path(chemin))
 
 
 def client():
     entetes = {"Host": config.NC_HOST} if config.NC_HOST else {}
-    return httpx.AsyncClient(auth=(config.NC_USER, config.NC_PASS), headers=entetes, timeout=httpx.Timeout(60, read=600))
+    return httpx.AsyncClient(auth=(config.NC_USER, config.NC_APP_PASSWORD), headers=entetes, timeout=httpx.Timeout(60, read=600))
 
 
-def item_dav(rep):
+def dav_entry(rep):
     """Une réponse WebDAV de Nextcloud -> un élément de l'écran Fichiers."""
     prefixe = f"/remote.php/dav/files/{config.NC_USER}"
     href = unquote(rep.find("d:href", DAV_NS).text)
@@ -59,10 +59,10 @@ def item_dav(rep):
     }
 
 
-async def lire_dossier(chemin):
+async def read_folder(chemin):
     if config.DEMO:
-        from services.demo_data import fichiers
-        return fichiers(chemin)
+        from services.demo_data import folder_listing
+        return folder_listing(chemin)
     async with client() as c:
         r = await c.request("PROPFIND", dav_url(chemin), content=PROPFIND, headers={"Depth": "1", "Content-Type": "application/xml"})
     if r.status_code == 404:
@@ -74,7 +74,7 @@ async def lire_dossier(chemin):
     racine = ET.fromstring(r.content)
     elements, dossier = [], None
     for rep in racine.findall("d:response", DAV_NS):
-        item = item_dav(rep)
+        item = dav_entry(rep)
         rel = item["chemin"]
         if rel.rstrip("/") == chemin.rstrip("/") or (rel == "/" and chemin == "/"):
             dossier = item
@@ -88,7 +88,7 @@ async def lire_dossier(chemin):
     }
 
 
-async def est_dossier_nc(chemin):
+async def is_nextcloud_folder(chemin):
     async with client() as c:
         r = await c.request("PROPFIND", dav_url(chemin), content=PROPFIND, headers={"Depth": "0", "Content-Type": "application/xml"})
     if r.status_code >= 400:
@@ -97,7 +97,7 @@ async def est_dossier_nc(chemin):
     return racine.find(".//d:resourcetype/d:collection", DAV_NS) is not None
 
 
-async def verifier(r, quoi):
+async def check_response(r, quoi):
     if r.status_code in (403, 405) :
         raise HTTPException(403, f"{quoi} impossible ici (dossier en lecture seule ?).")
     if r.status_code == 409:
@@ -122,20 +122,20 @@ SEARCH = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 # ---------------------------------------------------------------- corbeille
-TRASH_PROPS = """<?xml version="1.0"?>
+TRASH_PROPFIND = """<?xml version="1.0"?>
 <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
  <d:prop><nc:trashbin-filename/><nc:trashbin-original-location/><nc:trashbin-deletion-time/><d:resourcetype/><oc:size/><d:getcontentlength/></d:prop>
 </d:propfind>"""
 
 
-def url_corbeille(ident=""):
+def trash_url(ident=""):
     base = f"/remote.php/dav/trashbin/{quote(config.NC_USER)}/trash"
     return config.NC_URL + base + ("/" + quote(ident, safe="") if ident else "")
 
 
-async def corbeille_nc():
+async def nextcloud_trash():
     async with client() as c:
-        r = await c.request("PROPFIND", url_corbeille(), content=TRASH_PROPS, headers={"Depth": "1", "Content-Type": "application/xml"})
+        r = await c.request("PROPFIND", trash_url(), content=TRASH_PROPFIND, headers={"Depth": "1", "Content-Type": "application/xml"})
     if r.status_code >= 400:
         return []
     res = []

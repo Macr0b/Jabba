@@ -13,55 +13,55 @@ from fastapi import APIRouter
 router = APIRouter()
 
 @router.get("/api/sauvegardes")
-def api_sauvegardes(request: Request):
-    guard.exiger_admin(request)
-    d = backups.suivre_sauvegarde()
-    en_cours = backups.sauv_en_cours(d)
-    disques = [{"nom": n, "chemin": c} for n, c in sorted(files_source.disques_connus().items())]
+def backup_state(request: Request):
+    guard.require_admin(request)
+    d = backups.follow_backup()
+    en_cours = backups.is_running(d)
+    disques = [{"nom": n, "chemin": c} for n, c in sorted(files_source.known_disks().items())]
     return {
-        "actif": d["actif"], "pret": bool(d["chemin"] and backups.phrase()),
-        "disque": d["disque"], "chemin": d["chemin"], "branche": backups.sauv_disque_present(d) if d["chemin"] else None,
-        "heure": d["heure"], "prochaine": backups.prochaine(d) if d["actif"] else None,
+        "actif": d["actif"], "pret": bool(d["chemin"] and backups.passphrase()),
+        "disque": d["disque"], "chemin": d["chemin"], "branche": backups.disk_is_present(d) if d["chemin"] else None,
+        "heure": d["heure"], "prochaine": backups.next_run(d) if d["actif"] else None,
         "sources": [{"id": k, "nom": n, "detail": x, "actif": d["sources"].get(k, True)} for k, (n, x) in backups.SOURCES.items()],
-        "garder": backups.GARDER, "en_cours": en_cours, "depuis": d["lancee"] if en_cours else None,
+        "garder": backups.KEEP, "en_cours": en_cours, "depuis": d["lancee"] if en_cours else None,
         "dernier": d.get("dernier"), "derniere_reussie": d.get("derniere_reussie"),
         "disques": disques,
     }
 
 
 @router.post("/api/sauvegardes/activer")
-async def api_sauvegardes_activer(request: Request):
+async def enable_backups(request: Request):
     """Met en route les sauvegardes vers un disque : installe restic si besoin et crée la phrase de passe (montrée une fois)."""
-    j = guard.exiger_admin(request, "super", fort=True)
+    j = guard.require_admin(request, "super", fort=True)
     corps = await request.json()
     nom = corps.get("disque")
-    chemin = files_source.disques_connus().get(nom)
+    chemin = files_source.known_disks().get(nom)
     if not chemin:
         raise HTTPException(400, "Disque inconnu.")
-    d = backups.lire()
-    if backups.sauv_en_cours(d):
+    d = backups.read()
+    if backups.is_running(d):
         raise HTTPException(409, "Une sauvegarde est en cours.")
     if not config.DEMO:
-        code, _, _ = commands.hote(["sh", "-c", "command -v restic"])
+        code, _, _ = commands.run_on_host(["sh", "-c", "command -v restic"])
         if code != 0:
-            code, _, err = commands.hote(["apt-get", "install", "-y", "restic"], timeout=600)
+            code, _, err = commands.run_on_host(["apt-get", "install", "-y", "restic"], timeout=600)
             if code != 0:
                 raise HTTPException(500, "Installation de restic impossible : " + err[-200:])
     nouvelle = None
-    if not backups.phrase():
-        nouvelle = backups.nouvelle_phrase()
-        backups.poser_phrase(nouvelle)
+    if not backups.passphrase():
+        nouvelle = backups.new_passphrase()
+        backups.set_passphrase(nouvelle)
     d.update(actif=True, disque=nom, chemin=chemin)
-    backups.ecrire(d)
-    activity_log.noter("sauvegardes", f"Sauvegardes mises en route vers {nom}", request.state.nom)
+    backups.write(d)
+    activity_log.record("sauvegardes", f"Sauvegardes mises en route vers {nom}", request.state.nom)
     return {"ok": True, "phrase": nouvelle, "qui": j["identifiant"]}
 
 
 @router.post("/api/sauvegardes/reglages")
-async def api_sauvegardes_reglages(request: Request):
-    guard.exiger_admin(request, "super")
+async def backup_settings(request: Request):
+    guard.require_admin(request, "super")
     corps = await request.json()
-    d = backups.lire()
+    d = backups.read()
     changes = []
     if "actif" in corps:
         d["actif"] = bool(corps["actif"]) and bool(d["chemin"])
@@ -78,26 +78,26 @@ async def api_sauvegardes_reglages(request: Request):
         if not any(d["sources"].values()):
             raise HTTPException(400, "Garde au moins une chose à sauvegarder.")
         changes.append("contenu : " + ", ".join(backups.SOURCES[k][0] for k, v in d["sources"].items() if v))
-    backups.ecrire(d)
+    backups.write(d)
     if changes:
-        activity_log.noter("sauvegardes", "Sauvegardes " + " ; ".join(changes), request.state.nom)
+        activity_log.record("sauvegardes", "Sauvegardes " + " ; ".join(changes), request.state.nom)
     return {"ok": True}
 
 
 @router.post("/api/sauvegardes/lancer")
-def api_sauvegardes_lancer(request: Request):
-    guard.exiger_admin(request)
-    backups.lancer_sauvegarde(request.state.nom)
+def start_backup(request: Request):
+    guard.require_admin(request)
+    backups.start_backup(request.state.nom)
     return {"ok": True}
 
 
 @router.get("/api/sauvegardes/historique")
-def api_sauvegardes_historique(request: Request):
-    guard.exiger_admin(request)
-    d = backups.lire()
-    backups._sauv_lisible(d)
+def backup_history(request: Request):
+    guard.require_admin(request)
+    d = backups.read()
+    backups.require_readable(d)
     try:
-        return {"copies": backups.instantanes(backups.sauv_executer, d, backups.sauv_donnees_hote(), config.DEMO)}
+        return {"copies": backups.snapshots(backups.run_restic, d, backups.host_data_dir(), config.DEMO)}
     except RuntimeError as e:
         if "does not exist" in str(e) or "unable to open config" in str(e):
             return {"copies": []}
@@ -105,44 +105,44 @@ def api_sauvegardes_historique(request: Request):
 
 
 @router.get("/api/sauvegardes/parcourir")
-def api_sauvegardes_parcourir(request: Request, id: str, chemin: str = "/"):
-    guard.exiger_admin(request)
+def browse_backup(request: Request, id: str, chemin: str = "/"):
+    guard.require_admin(request)
     if not re.fullmatch(r"[0-9a-f]{8,64}", id):
         raise HTTPException(400, "Copie inconnue.")
-    d = backups.lire()
-    backups._sauv_lisible(d)
+    d = backups.read()
+    backups.require_readable(d)
     try:
-        return {"elements": backups.parcourir(backups.sauv_executer, d, backups.sauv_donnees_hote(), id, chemin, config.DEMO)}
+        return {"elements": backups.browse(backups.run_restic, d, backups.host_data_dir(), id, chemin, config.DEMO)}
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
 
 @router.post("/api/sauvegardes/restaurer")
-async def api_sauvegardes_restaurer(request: Request):
+async def restore_from_backup(request: Request):
     """Remet un fichier ou un dossier tel qu'il était, à côté (Restaurations), sans rien écraser."""
-    guard.exiger_admin(request, fort=True)
+    guard.require_admin(request, fort=True)
     corps = await request.json()
     ident, chemin = str(corps.get("id", "")), str(corps.get("chemin", ""))
     if not re.fullmatch(r"[0-9a-f]{8,64}", ident) or not chemin.strip("/") or ".." in chemin.split("/"):
         raise HTTPException(400, "Demande invalide.")
-    d = backups.lire()
-    backups._sauv_lisible(d)
+    d = backups.read()
+    backups.require_readable(d)
     try:
-        cible = backups.restaurer(backups.sauv_executer, d, backups.sauv_donnees_hote(), ident, chemin, config.DEMO)
+        cible = backups.restore(backups.run_restic, d, backups.host_data_dir(), ident, chemin, config.DEMO)
     except RuntimeError as e:
         raise HTTPException(500, str(e))
-    activity_log.noter("sauvegardes", f"Restauré : {chemin} (copie {ident}) → {cible}", request.state.nom)
+    activity_log.record("sauvegardes", f"Restauré : {chemin} (copie {ident}) → {cible}", request.state.nom)
     return {"ok": True, "cible": cible}
 
 
 @router.post("/api/sauvegardes/phrase")
-def api_sauvegardes_phrase(request: Request):
+def show_passphrase(request: Request):
     """La phrase de passe, pour la recopier (super admin, mot de passe redemandé, noté au Journal)."""
-    guard.exiger_admin(request, "super", fort=True)
-    p = backups.phrase()
+    guard.require_admin(request, "super", fort=True)
+    p = backups.passphrase()
     if not p:
         raise HTTPException(404, "Pas encore de phrase de passe.")
-    activity_log.noter("sauvegardes", "Phrase de passe des sauvegardes affichée", request.state.nom)
-    notifications.envoyer("securite", "Phrase des sauvegardes affichée",
+    activity_log.record("sauvegardes", "Phrase de passe des sauvegardes affichée", request.state.nom)
+    notifications.send("securite", "Phrase des sauvegardes affichée",
                    f"{request.state.nom} a affiché la phrase de passe des sauvegardes.", "/#/journal", famille="admin", noter=False)
     return {"phrase": p}

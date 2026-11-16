@@ -1,14 +1,14 @@
 """Données fictives, utilisées seulement avec JABBA_DEMO=1 (tests hors de Jabba)."""
 G = 1024 ** 3
 
-ETAT = {
+HOME_STATE = {
     "cpu": 4, "memoire": {"total": 8 * G, "utilise": int(2.0 * G)}, "temperature": 46,
     "systeme": {"total": 117 * G, "utilise": 9 * G}, "donnees": {"total": 916 * G, "utilise": 12 * G},
     "duree": 3 * 86400 + 4 * 3600, "redemarrage_requis": False,
     "outils_actifs": 5, "outils_total": 5, "soucis": [],
 }
 
-OUTILS = [
+TOOLS = [
     {"id": "adresses", "nom": "Adresses", "role": "Les adresses https des outils", "etat": "actif", "lien": None, "dossier": "/opt/stacks/adresses", "conteneurs": [{"nom": "adresse-jellyfin", "etat": "running", "statut": "Up 1 hour"}], "modifiable": True, "systeme": True, "icone": False, "dans_appli": True},
     {"id": "dockge", "nom": "Dockge", "role": "Gestion avancée des outils", "etat": "actif", "lien": "https://jabba.exemple.ts.net:10000", "dossier": "/opt/dockge", "conteneurs": [{"nom": "dockge", "etat": "running", "statut": "Up 3 days"}], "modifiable": True, "systeme": False, "icone": False, "dans_appli": True},
     {"id": "jabba-app", "nom": "Appli Jabba", "role": "Cette appli", "etat": "actif", "lien": None, "dossier": "/opt/stacks/jabba-app", "conteneurs": [{"nom": "jabba-app", "etat": "running", "statut": "Up 2 minutes"}], "modifiable": False, "systeme": True, "icone": False, "dans_appli": True},
@@ -16,14 +16,14 @@ OUTILS = [
     {"id": "nextcloud", "nom": "Nextcloud", "role": "Fichiers, photos, agenda", "etat": "actif", "lien": "https://jabba.exemple.ts.net", "dossier": "/opt/stacks/nextcloud", "conteneurs": [{"nom": "nextcloud", "etat": "running", "statut": "Up 3 days"}, {"nom": "nextcloud-db", "etat": "running", "statut": "Up 3 days"}, {"nom": "nextcloud-redis", "etat": "running", "statut": "Up 3 days"}], "modifiable": True, "systeme": False, "icone": False, "dans_appli": False},
 ]
 
-SYSTEME = {
+SYSTEM = {
     "nom": "jabba", "os": "Debian GNU/Linux 13 (trixie)", "noyau": "6.12.48-amd64", "duree": 3 * 86400 + 4 * 3600,
     "redemarrage_requis": False, "derniere_maj_auto": "2026-11-03 06:12",
     "appareils": [{"nom": "macbook", "os": "macOS", "en_ligne": True}, {"nom": "iphone", "os": "iOS", "en_ligne": True}],
     "version_appli": "0.6.0", "courant": {"secteur": True, "batterie": 100, "etat": "Full", "arret_prevu": False},
 }
 
-DISQUES = [
+DISKS = [
     {"nom": "sdb", "modele": "SSD 128 Go", "taille": 128 * 10 ** 9, "externe": False, "partitions": [
         {"nom": "sdb1", "taille": 512 * 1024 ** 2, "type": "vfat", "etiquette": None, "montage": "/boot/efi", "role": "Démarrage", "usage": None},
         {"nom": "sdb2", "taille": 120 * 10 ** 9, "type": "ext4", "etiquette": None, "montage": "/", "role": "Système", "usage": {"total": 117 * G, "utilise": 9 * G}}]},
@@ -37,7 +37,7 @@ DISQUES = [
         {"nom": "sde2", "taille": 500 * 10 ** 9, "type": "apfs", "etiquette": "Time Machine", "montage": None, "role": "Non utilisé", "usage": None, "disque_jabba": None, "oublie": None, "illisible": "APFS (format Mac récent)"}]},
 ]
 
-ARBO = {
+TREE = {
     "/": [("Documents", True, None, True), ("Photos", True, None, True), ("Films et séries", True, None, False), ("R2-D2", True, None, False), ("Téléchargements", True, None, False), ("Lisez-moi.md", False, 1200, True)],
     "/Documents": [("Atelier", True, None, True), ("Administratif", True, None, True)],
     "/Documents/Atelier": [("Plans CNC", True, None, True), ("Photos chantier", True, None, True), ("Devis vinaigrier.pdf", False, 220_000, True), ("Gabarit tiroir.ai", False, 4_800_000, True), ("Liste matériaux.xlsx", False, 36_000, True)],
@@ -45,9 +45,9 @@ ARBO = {
 }
 
 
-def fichiers(chemin):
+def folder_listing(chemin):
     elements = []
-    for nom, dossier, taille, ecriture in ARBO.get(chemin, []):
+    for nom, dossier, taille, ecriture in TREE.get(chemin, []):
         elements.append({"nom": nom, "chemin": (chemin.rstrip("/") + "/" + nom), "dossier": dossier,
                          "taille": taille if taille else (340_000_000 if dossier else None),
                          "modifie": "2026-11-02T10:12:00+00:00", "type": None, "ecriture": ecriture,
@@ -56,9 +56,9 @@ def fichiers(chemin):
     return {"chemin": chemin, "elements": elements, "ecriture": not lecture_seule, "lien_nextcloud": "https://jabba.exemple.ts.net/apps/files/?dir=" + chemin}
 
 
-def recherche(q):
+def search_results(q):
     res = []
-    for chemin, liste in ARBO.items():
+    for chemin, liste in TREE.items():
         for nom, dossier, taille, ecriture in liste:
             if q.lower() in nom.lower():
                 res.append({"nom": nom, "chemin": chemin.rstrip("/") + "/" + nom, "dossier": dossier, "taille": taille,
@@ -66,13 +66,13 @@ def recherche(q):
     return {"elements": res, "complet": True}
 
 
-CORBEILLE = [
+TRASH = [
     {"id": "a.d1", "nom": "Ancien devis.pdf", "origine": "/Documents/Atelier", "supprime": 1793600000, "dossier": False, "taille": 180_000, "source": "nextcloud"},
     {"id": "b.d2", "nom": "Brouillons", "origine": "/Documents", "supprime": 1793400000, "dossier": True, "taille": 3_400_000, "source": "nextcloud"},
     {"id": "20261101-101010-abc123", "nom": "film-test.mkv", "origine": "/Téléchargements/film-test.mkv", "supprime": 1793300000, "dossier": False, "taille": 1_400_000_000, "source": "disque"},
 ]
 
-JOURNAL = [
+ACTIVITY = [
     {"t": 1793770000, "famille": "disque", "texte": "Nouveau disque : PHOTOS 2019 — Prêt, en lecture seule, visible dans Nextcloud. Jellyfin le voit dans /disques/PHOTOS-2019."},
     {"t": 1793760000, "famille": "fichier", "texte": "3 fichiers envoyés dans /Documents/Atelier", "qui": "Alex"},
     {"t": 1793750000, "famille": "outil", "texte": "Mise à jour de Jellyfin : terminé", "qui": "Alex"},

@@ -15,15 +15,15 @@ from services import guests
 # ---------------------------------------------------------------- la porte du Wi-Fi (port 80)
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
-RESEAUX_LOCAUX = [ipaddress.ip_network(n) for n in
+LOCAL_NETWORKS = [ipaddress.ip_network(n) for n in
                   ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8", "100.64.0.0/10")]
 
 
 @app.middleware("http")
-async def garde_wifi(request: Request, call_next):
+async def wifi_guard(request: Request, call_next):
     try:
         ip = ipaddress.ip_address((request.client.host if request.client else "").split("%")[0])
-        local = any(ip in n for n in RESEAUX_LOCAUX)
+        local = any(ip in n for n in LOCAL_NETWORKS)
     except ValueError:
         local = False
     if not local:
@@ -38,26 +38,26 @@ async def garde_wifi(request: Request, call_next):
     return reponse
 
 
-app.include_router(guests.routeur)
+app.include_router(guests.router)
 
 
 @app.get("/api/moi")
-def moi_wifi():
+def who_am_i_on_wifi():
     import socket
     from version import VERSION
-    return {"mode": "invite", "serveur": guests.lire().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
+    return {"mode": "invite", "serveur": guests.read().get("serveur") or socket.gethostname(), "version": VERSION, "admin": None}
 
 
 @app.get("/api/{reste:path}")
 @app.post("/api/{reste:path}")
-def interdit(reste: str):
+def forbidden(reste: str):
     raise HTTPException(404, "Indisponible sur le Wi-Fi : l'administration passe par Tailscale.")
 
 
-app.mount("/static", StaticFiles(directory=guests.STATIC), name="static")
+app.mount("/static", StaticFiles(directory=guests.STATIC_DIR), name="static")
 
 
 @app.get("/")
 @app.get("/{reste:path}")
-def page_wifi(reste: str = ""):
-    return FileResponse(os.path.join(guests.STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
+def wifi_page(reste: str = ""):
+    return FileResponse(os.path.join(guests.STATIC_DIR, "index.html"), headers={"Cache-Control": "no-cache"})

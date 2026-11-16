@@ -14,23 +14,23 @@ def reglages(**k):
 
 def test_quand_partir():
     n = datetime(2026, 11, 10, 4, 0)
-    assert backups.due(reglages(), n)
-    assert not backups.due(reglages(derniere_reussie={"fin": n.timestamp() - 600}), n)
-    assert not backups.due(reglages(lancee=n.timestamp() - 600), n)          # essai il y a 10 min : on attend
-    assert backups.due(reglages(lancee=n.timestamp() - 4000), n)             # plus d'une heure : on réessaie
+    assert backups.is_due(reglages(), n)
+    assert not backups.is_due(reglages(derniere_reussie={"fin": n.timestamp() - 600}), n)
+    assert not backups.is_due(reglages(lancee=n.timestamp() - 600), n)          # essai il y a 10 min : on attend
+    assert backups.is_due(reglages(lancee=n.timestamp() - 4000), n)             # plus d'une heure : on réessaie
     avant = datetime(2026, 11, 10, 2, 0)
-    assert not backups.due(reglages(derniere_reussie={"fin": datetime(2026, 11, 9, 3, 40).timestamp()}), avant)
-    assert not backups.due(reglages(actif=False), n)
+    assert not backups.is_due(reglages(derniere_reussie={"fin": datetime(2026, 11, 9, 3, 40).timestamp()}), avant)
+    assert not backups.is_due(reglages(actif=False), n)
 
 
 def test_phrase():
-    p = backups.nouvelle_phrase()
+    p = backups.new_passphrase()
     assert re.fullmatch(r"([A-HJ-NP-Z2-9]{4}-){5}[A-HJ-NP-Z2-9]{4}", p)
     assert not set(p) & set("01OIL")
 
 
 def test_script_exclut_et_remet_en_lecture_seule():
-    s = backups.script(reglages(), "/opt/stacks/jabba-app/donnees")
+    s = backups.backup_script(reglages(), "/opt/stacks/jabba-app/donnees")
     for x in ("/srv/data/downloads", "/srv/data/media", "**/transcodes", "Restaurations"):
         assert x in s
     assert "mount -o remount,ro" in s and "trap fin EXIT" in s
@@ -39,13 +39,13 @@ def test_script_exclut_et_remet_en_lecture_seule():
 
 
 def test_script_sans_le_systeme():
-    s = backups.script(reglages(sources={"fichiers": True, "outils": True, "systeme": False}), "/d")
+    s = backups.backup_script(reglages(sources={"fichiers": True, "outils": True, "systeme": False}), "/d")
     assert " '/etc'" not in s and "/etc " not in s.split("restic backup")[1].split("\n")[0]
 
 
 def test_resultat():
-    assert backups.resultat({}) is None
-    r = backups.resultat({"code": 0, "debut": 10, "fin": 70, "resume": {"data_added": 5, "snapshot_id": "ab"}})
+    assert backups.result({}) is None
+    r = backups.result({"code": 0, "debut": 10, "fin": 70, "resume": {"data_added": 5, "snapshot_id": "ab"}})
     assert r["ok"] and r["duree"] == 60 and r["ajoute"] == 5
-    r = backups.resultat({"code": 13, "etape": "init", "debut": 1, "fin": 2})
+    r = backups.result({"code": 13, "etape": "init", "debut": 1, "fin": 2})
     assert not r["ok"] and "phrase de passe" in r["erreur"]

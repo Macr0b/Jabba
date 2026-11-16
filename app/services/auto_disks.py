@@ -11,10 +11,10 @@ import re
 import threading
 import time
 
-DOSSIER = os.environ.get("JABBA_DATA", "/data")
-FICHIER = os.path.join(DOSSIER, "disques.json")
-RACINE = "/srv/disques"
-_VERROU = threading.Lock()
+DATA_DIR = os.environ.get("JABBA_DATA", "/data")
+DISKS_FILE = os.path.join(DATA_DIR, "disques.json")
+MOUNT_ROOT = "/srv/disques"
+_LOCK = threading.Lock()
 
 # Formats lisibles sans rien installer, et options de montage.
 FORMATS = {
@@ -24,14 +24,14 @@ FORMATS = {
     "ext4": ("ext4", ""),
 }
 # Partitions techniques à ignorer (démarrage, récupération Windows) et taille minimale.
-TYPES_TECHNIQUES = {"c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "de94bba4-06d1-4d40-a16a-bfd50179d6ac", "0xef", "0x27"}
-TAILLE_MIN = 300 * 1024 * 1024
-ILLISIBLES = {"apfs": "APFS (format Mac récent)", "hfsplus": "Mac OS étendu (HFS+)", "btrfs": "Btrfs", "xfs": "XFS"}
+TECHNICAL_TYPES = {"c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "de94bba4-06d1-4d40-a16a-bfd50179d6ac", "0xef", "0x27"}
+MIN_SIZE = 300 * 1024 * 1024
+UNREADABLE = {"apfs": "APFS (format Mac récent)", "hfsplus": "Mac OS étendu (HFS+)", "btrfs": "Btrfs", "xfs": "XFS"}
 
 
-def lire():
+def read():
     try:
-        with open(FICHIER) as f:
+        with open(DISKS_FILE) as f:
             d = json.load(f)
     except (OSError, ValueError):
         d = {}
@@ -41,19 +41,19 @@ def lire():
     return d
 
 
-def ecrire(d):
-    os.makedirs(DOSSIER, exist_ok=True)
-    with open(FICHIER + ".tmp", "w") as f:
+def write(d):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DISKS_FILE + ".tmp", "w") as f:
         json.dump(d, f, ensure_ascii=False)
-    os.replace(FICHIER + ".tmp", FICHIER)
+    os.replace(DISKS_FILE + ".tmp", DISKS_FILE)
 
 
-def connus():
+def known_disks():
     """nom -> chemin pour les disques ajoutés automatiquement."""
-    return {x["nom"]: x["chemin"] for x in lire()["disques"]}
+    return {x["nom"]: x["chemin"] for x in read()["disques"]}
 
 
-def uuids_fstab(fstab):
+def fstab_uuids(fstab):
     res = set()
     for ligne in fstab.splitlines():
         champs = ligne.split()
@@ -62,7 +62,7 @@ def uuids_fstab(fstab):
     return res
 
 
-def nom_propre(etiquette, uuid, pris):
+def clean_name(etiquette, uuid, pris):
     base = (etiquette or "").strip() or f"Disque {uuid[:4].upper()}"
     base = re.sub(r"[^\w .-]", "", base)[:40].strip() or f"Disque {uuid[:4].upper()}"
     nom, i = base, 2
@@ -72,13 +72,13 @@ def nom_propre(etiquette, uuid, pris):
     return nom, dossier
 
 
-def candidats(hote):
+def candidates(hote):
     """Partitions USB lisibles, avec un identifiant, absentes de /etc/fstab."""
     code, sortie, _ = hote(["lsblk", "-J", "-b", "-o", "NAME,PATH,FSTYPE,LABEL,UUID,TRAN,RM,TYPE,MOUNTPOINT,SIZE,HOTPLUG,PARTTYPE"])
     if code != 0:
         return [], []
     _, fstab, _ = hote(["cat", "/etc/fstab"])
-    deja = uuids_fstab(fstab)
+    deja = fstab_uuids(fstab)
     bons, mauvais = [], []
     for d in json.loads(sortie).get("blockdevices", []):
         if d.get("type") != "disk":
@@ -90,24 +90,24 @@ def candidats(hote):
             fs, uuid = (p.get("fstype") or "").lower(), (p.get("uuid") or "").lower()
             if not uuid or uuid in deja or p.get("mountpoint"):
                 continue
-            if (p.get("parttype") or "").lower() in TYPES_TECHNIQUES or (p.get("label") or "").upper() in ("EFI", "RECOVERY"):
+            if (p.get("parttype") or "").lower() in TECHNICAL_TYPES or (p.get("label") or "").upper() in ("EFI", "RECOVERY"):
                 continue
             try:
-                if int(p.get("size") or 0) < TAILLE_MIN:
+                if int(p.get("size") or 0) < MIN_SIZE:
                     continue
             except (TypeError, ValueError):
                 pass
             if fs in FORMATS:
                 bons.append({"uuid": uuid, "format": fs, "etiquette": p.get("label"), "chemin_dev": p.get("path")})
-            elif fs in ILLISIBLES:
+            elif fs in UNREADABLE:
                 mauvais.append({"uuid": uuid, "format": fs, "etiquette": p.get("label")})
     return bons, mauvais
 
 
-def ajouter(hote, hote_entree, part, pris):
+def add(hote, hote_entree, part, pris):
     """Déclare le disque sur le serveur. Renvoie l'entrée créée."""
-    nom, dossier = nom_propre(part["etiquette"], part["uuid"], pris)
-    chemin = f"{RACINE}/{dossier}"
+    nom, dossier = clean_name(part["etiquette"], part["uuid"], pris)
+    chemin = f"{MOUNT_ROOT}/{dossier}"
     type_, options = FORMATS[part["format"]]
     opts = ",".join(o for o in ["ro", options, "nofail", "x-systemd.automount", "x-systemd.device-timeout=5s"] if o)
     uuid = part["uuid"].upper() if part["format"] in ("exfat", "vfat", "ntfs") else part["uuid"]
@@ -121,14 +121,14 @@ def ajouter(hote, hote_entree, part, pris):
     hote(["sh", "-c", f"systemctl daemon-reload && systemctl start '{unite.strip()}' && ls '{chemin}' >/dev/null 2>&1"], timeout=30)
     entree = {"nom": nom, "chemin": chemin, "dossier": dossier, "uuid": part["uuid"], "format": part["format"],
               "ajoute": int(time.time()), "nextcloud": None}
-    with _VERROU:
-        d = lire()
+    with _LOCK:
+        d = read()
         d["disques"].append(entree)
-        ecrire(d)
+        write(d)
     return entree
 
 
-def relier_nextcloud(hote, entree):
+def link_to_nextcloud(hote, entree):
     """Ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté."""
     occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
     code, sortie, _ = hote(occ + ["files_external:create", entree["nom"], "local", "null::null",
@@ -139,19 +139,19 @@ def relier_nextcloud(hote, entree):
     # Réservé aux admins : sans ça, chaque compte Nextcloud verrait le disque.
     hote(occ + ["files_external:applicable", "--add-group=admin", m.group(1)], timeout=60)
     hote(occ + ["files_external:option", m.group(1), "readonly", "true"], timeout=60)
-    with _VERROU:
-        d = lire()
+    with _LOCK:
+        d = read()
         for x in d["disques"]:
             if x["uuid"] == entree["uuid"]:
                 x["nextcloud"] = int(m.group(1))
-        ecrire(d)
+        write(d)
     return True
 
 
-def oublier(hote, hote_entree, nom):
+def forget(hote, hote_entree, nom):
     """Retire le disque du serveur et de Nextcloud. Il ne sera plus ajouté tout seul."""
-    with _VERROU:
-        d = lire()
+    with _LOCK:
+        d = read()
         x = next((x for x in d["disques"] if x["nom"] == nom), None)
     if not x:
         raise KeyError(nom)
@@ -171,24 +171,24 @@ def oublier(hote, hote_entree, nom):
     hote(["rmdir", chemin])
     if x.get("nextcloud"):
         hote(["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:delete", "-y", str(x["nextcloud"])], timeout=60)
-    with _VERROU:
-        d = lire()
+    with _LOCK:
+        d = read()
         d["disques"] = [y for y in d["disques"] if y["nom"] != nom]
         if x["uuid"] not in d["oublies"]:
             d["oublies"].append(x["uuid"])
-        ecrire(d)
+        write(d)
     return x
 
 
-def reprendre(uuid):
+def resume(uuid):
     """Un disque oublié redevient un disque à ajouter automatiquement."""
-    with _VERROU:
-        d = lire()
+    with _LOCK:
+        d = read()
         d["oublies"] = [u for u in d["oublies"] if u != uuid.lower()]
-        ecrire(d)
+        write(d)
 
 
-def present(hote, uuid):
+def is_present(hote, uuid):
     """Le disque est-il branché ? (sans réveiller l'ouverture automatique)"""
     if not uuid:
         return True
@@ -199,27 +199,27 @@ def present(hote, uuid):
     return code == 0
 
 
-def scruter(hote, hote_entree, nextcloud_actif, prevenir, autres_noms):
+def scan(hote, hote_entree, nextcloud_actif, prevenir, autres_noms):
     """Un passage : ajoute les nouveaux disques. Appelé toutes les 15 secondes."""
-    bons, mauvais = candidats(hote)
-    d = lire()
+    bons, mauvais = candidates(hote)
+    d = read()
     for m in mauvais:
         if m["uuid"] not in d["signales"]:
             d["signales"].append(m["uuid"])
-            ecrire(d)
+            write(d)
             prevenir("nouveau_disque", "Disque illisible",
-                     f"« {m['etiquette'] or 'Sans nom'} » est en {ILLISIBLES[m['format']]}. Le serveur ne sait pas le lire : "
+                     f"« {m['etiquette'] or 'Sans nom'} » est en {UNREADABLE[m['format']]}. Le serveur ne sait pas le lire : "
                      "reformate-le en exFAT depuis le Mac (Utilitaire de disque) pour qu'il soit lisible partout.", "/#/disques")
     for b in bons:
         if b["uuid"] in d["oublies"]:
             continue
-        pris = {n.lower() for n in autres_noms()} | {x["nom"].lower() for x in lire()["disques"]}
+        pris = {n.lower() for n in autres_noms()} | {x["nom"].lower() for x in read()["disques"]}
         try:
-            entree = ajouter(hote, hote_entree, b, pris)
+            entree = add(hote, hote_entree, b, pris)
         except RuntimeError as e:
             prevenir("nouveau_disque", "Disque non ajouté", f"« {b['etiquette'] or 'Sans nom'} » : {e}", "/#/disques")
             continue
-        nc = nextcloud_actif() and relier_nextcloud(hote, entree)
+        nc = nextcloud_actif() and link_to_nextcloud(hote, entree)
         prevenir("nouveau_disque", f"Nouveau disque : {entree['nom']}",
                  "Prêt, en lecture seule" + (", visible dans Nextcloud" if nc else "") +
                  f". Jellyfin le voit dans /disques/{entree['dossier']}.", "/#/disques")
@@ -234,16 +234,16 @@ from host import commands
 from services import files_source
 
 
-def scruter_disques():
-    files_source.reveiller_disques()   # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
-    scruter(commands.hote, commands.hote_entree, lambda: files_source.source() == "nextcloud",
-                         lambda t, ti, tx, u: notifications.envoyer(t, ti, tx, u, famille="disque"),
-                         lambda: list(files_source.disques_env()) + list(disk_browser.racines()))
+def scan_disks():
+    files_source.wake_disks()   # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
+    scan(commands.run_on_host, commands.run_on_host_with_input, lambda: files_source.files_source() == "nextcloud",
+                         lambda t, ti, tx, u: notifications.send(t, ti, tx, u, famille="disque"),
+                         lambda: list(files_source.configured_disks()) + list(disk_browser.roots()))
 
 
-def relier_disques_nextcloud():
-    if files_source.source() != "nextcloud":
+def link_disks_to_nextcloud():
+    if files_source.files_source() != "nextcloud":
         return
-    for x in lire()["disques"]:
+    for x in read()["disques"]:
         if not x.get("nextcloud"):
-            relier_nextcloud(commands.hote, x)
+            link_to_nextcloud(commands.run_on_host, x)

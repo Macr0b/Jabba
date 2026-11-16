@@ -9,7 +9,7 @@ from host import commands
 
 
 # ---------------------------------------------------------------- outils (Docker)
-NOMS = {
+NAMES = {
     "jellyfin": ("Jellyfin", "Films et séries"),
     "nextcloud": ("Nextcloud", "Fichiers, photos, agenda"),
     "dockge": ("Dockge", "Gestion avancée des outils"),
@@ -17,7 +17,7 @@ NOMS = {
     "adresses": ("Adresses", "Les adresses https des outils"),
 }
 # Outils du système : toujours actifs, sans interrupteur.
-SYSTEME = {"jabba-app", "adresses"}
+SYSTEM_TOOLS = {"jabba-app", "adresses"}
 # Conteneur « adresse » (Tailscale) qui suit l'interrupteur de chaque outil.
 ADRESSES = {
     "nextcloud": "adresse-nextcloud",
@@ -28,17 +28,17 @@ ADRESSES = {
 # Port local de chaque outil : l'appli y va chercher le logo que l'outil fournit lui-même.
 PORTS = {"jellyfin": 8096, "nextcloud": 8081, "dockge": 5001}
 # Jamais ouverts aux invités du Wi-Fi : ils donnent la main sur le serveur.
-JAMAIS_WIFI = {"dockge"}
-ICONES_SECOURS = ["/web/favicon.png", "/web/favicon.ico", "/favicon.ico", "/favicon.png",
+NEVER_ON_WIFI = {"dockge"}
+FALLBACK_ICONS = ["/web/favicon.png", "/web/favicon.ico", "/favicon.ico", "/favicon.png",
                   "/static/img/icons/favicon-32x32.png", "/core/img/favicon.ico", "/icon.svg"]
-HORS_APPLI = {"nextcloud"}
+OUTSIDE_APP = {"nextcloud"}
 
 
-def lister_outils():
+def list_tools():
     if config.DEMO:
-        from services.demo_data import OUTILS
-        return OUTILS
-    code, sortie, err = commands.hote(["docker", "ps", "-a", "--format", "{{json .}}"])
+        from services.demo_data import TOOLS
+        return TOOLS
+    code, sortie, err = commands.run_on_host(["docker", "ps", "-a", "--format", "{{json .}}"])
     if code != 0:
         raise HTTPException(500, "Docker ne répond pas : " + err[:200])
     projets = {}
@@ -51,7 +51,7 @@ def lister_outils():
         p["conteneurs"].append({"nom": c["Names"], "etat": c["State"], "statut": c["Status"]})
     resultat = []
     for pid, p in sorted(projets.items()):
-        nom, role = NOMS.get(pid, (pid, ""))
+        nom, role = NAMES.get(pid, (pid, ""))
         etats = {c["etat"] for c in p["conteneurs"]}
         if etats == {"running"}:
             etat = "actif"
@@ -63,16 +63,16 @@ def lister_outils():
             etat = "en panne"
         resultat.append({
             "id": pid, "nom": nom, "role": role, "etat": etat,
-            "lien": config.LIENS.get(pid), "dossier": p["dossier"], "conteneurs": p["conteneurs"],
+            "lien": config.LINKS.get(pid), "dossier": p["dossier"], "conteneurs": p["conteneurs"],
             "modifiable": pid != "jabba-app" and bool(p["dossier"]),
-            "systeme": pid in SYSTEME, "icone": pid in PORTS,
-            "dans_appli": pid not in HORS_APPLI,
+            "systeme": pid in SYSTEM_TOOLS, "icone": pid in PORTS,
+            "dans_appli": pid not in OUTSIDE_APP,
         })
     return resultat
 
 
-def outil(pid):
-    for o in lister_outils():
+def find_tool(pid):
+    for o in list_tools():
         if o["id"] == pid:
             if not o["modifiable"]:
                 raise HTTPException(400, "Cet outil ne se gère pas depuis l'appli.")
@@ -82,17 +82,17 @@ def outil(pid):
     raise HTTPException(404, "Outil inconnu")
 
 
-CACHE_ICONES = {}
-RE_LIEN = re.compile(r"<link[^>]+>", re.I)
+ICONS_CACHE = {}
+RE_LINK = re.compile(r"<link[^>]+>", re.I)
 
 
-def chercher_icone(pid):
+def find_icon(pid):
     base = f"http://127.0.0.1:{PORTS[pid]}/"
     with httpx.Client(timeout=5, follow_redirects=True) as c:
         candidats = []
         try:
             page = c.get(base)
-            for balise in RE_LIEN.findall(page.text):
+            for balise in RE_LINK.findall(page.text):
                 rel = re.search(r'rel=["\']([^"\']+)', balise, re.I)
                 href = re.search(r'href=["\']([^"\']+)', balise, re.I)
                 if rel and href and "icon" in rel.group(1).lower():
@@ -100,7 +100,7 @@ def chercher_icone(pid):
                     candidats.append((prio, urljoin(str(page.url), href.group(1))))
         except httpx.HTTPError:
             pass
-        urls = [u for _, u in sorted(candidats)] + [urljoin(base, p) for p in ICONES_SECOURS]
+        urls = [u for _, u in sorted(candidats)] + [urljoin(base, p) for p in FALLBACK_ICONS]
         for u in urls:
             try:
                 r = c.get(u)

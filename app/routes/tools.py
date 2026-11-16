@@ -10,54 +10,54 @@ from fastapi import APIRouter
 router = APIRouter()
 
 @router.get("/api/outils")
-def api_outils():
-    return tools.lister_outils()
+def list_tools():
+    return tools.list_tools()
 
 
 @router.get("/api/icone/{pid}")
-def api_icone(pid: str):
+def tool_icon(pid: str):
     if pid not in tools.PORTS or config.DEMO:
         raise HTTPException(404)
-    if pid not in tools.CACHE_ICONES:
-        tools.CACHE_ICONES[pid] = tools.chercher_icone(pid)
-    trouve = tools.CACHE_ICONES[pid]
+    if pid not in tools.ICONS_CACHE:
+        tools.ICONS_CACHE[pid] = tools.find_icon(pid)
+    trouve = tools.ICONS_CACHE[pid]
     if not trouve:
-        tools.CACHE_ICONES.pop(pid, None)
+        tools.ICONS_CACHE.pop(pid, None)
         raise HTTPException(404)
     return Response(content=trouve[0], media_type=trouve[1], headers={"Cache-Control": "max-age=86400"})
 
 
 @router.post("/api/outils/{pid}/redemarrer")
-def api_redemarrer(pid: str, request: Request):
-    o = tools.outil(pid)
-    return background_tasks.lancer_tache(f"Redémarrage de {o['nom']}", f"cd '{o['dossier']}' && docker compose restart", request.state.nom, pid)
+def restart_tool(pid: str, request: Request):
+    o = tools.find_tool(pid)
+    return background_tasks.start_task(f"Redémarrage de {o['nom']}", f"cd '{o['dossier']}' && docker compose restart", request.state.nom, pid)
 
 
 @router.post("/api/outils/{pid}/demarrer")
-def api_demarrer(pid: str, request: Request):
-    guard.exiger_admin(request)
-    o = tools.outil(pid)
+def start_tool(pid: str, request: Request):
+    guard.require_admin(request)
+    o = tools.find_tool(pid)
     script = f"cd '{o['dossier']}' && docker compose up -d"
     if pid in tools.ADRESSES:
         script += f" && (docker start {tools.ADRESSES[pid]} || true)"
-    return background_tasks.lancer_tache(f"Activation de {o['nom']}", script, request.state.nom, pid)
+    return background_tasks.start_task(f"Activation de {o['nom']}", script, request.state.nom, pid)
 
 
 @router.post("/api/outils/{pid}/arreter")
-def api_arreter(pid: str, request: Request):
-    guard.exiger_admin(request)
-    o = tools.outil(pid)
-    if pid in tools.SYSTEME:
+def stop_tool(pid: str, request: Request):
+    guard.require_admin(request)
+    o = tools.find_tool(pid)
+    if pid in tools.SYSTEM_TOOLS:
         raise HTTPException(400, "Cet outil fait partie du système.")
     script = f"cd '{o['dossier']}' && docker compose stop"
     if pid in tools.ADRESSES:
         script += f" && (docker stop {tools.ADRESSES[pid]} || true)"
-    return background_tasks.lancer_tache(f"Désactivation de {o['nom']}", script, request.state.nom, pid)
+    return background_tasks.start_task(f"Désactivation de {o['nom']}", script, request.state.nom, pid)
 
 
 @router.post("/api/outils/{pid}/mettre-a-jour")
-def api_maj(pid: str, request: Request):
-    guard.exiger_admin(request)
-    o = tools.outil(pid)
+def update_tool(pid: str, request: Request):
+    guard.require_admin(request)
+    o = tools.find_tool(pid)
     script = f"cd '{o['dossier']}' && docker compose pull && docker compose up -d && docker image prune -f"
-    return background_tasks.lancer_tache(f"Mise à jour de {o['nom']}", script, request.state.nom, pid)
+    return background_tasks.start_task(f"Mise à jour de {o['nom']}", script, request.state.nom, pid)

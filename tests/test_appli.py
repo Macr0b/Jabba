@@ -30,9 +30,9 @@ def test_terminal_pour_le_compte_du_serveur(client):
 
 def test_terminal_refuse_a_un_autre_super_admin(client):
     connecter(client, "serveur-demo", "demo-mot-de-passe")
-    c, mdp = accounts.creer("second", "Second", "super", None, "test", "super", set())
+    c, mdp = accounts.create("second", "Second", "super", None, "test", "super", set())
     nouveau = "Un-mot-de-passe-solide-42"
-    accounts.changer_mien("second", nouveau)
+    accounts.change_own_password("second", nouveau)
     connecter(client, "second", nouveau)
     r = client.post("/api/terminal/ticket", headers=H)
     assert r.status_code == 403
@@ -48,7 +48,7 @@ def test_dockge_jamais_ouvert_au_wifi(client):
 
 
 def test_regles_pare_feu_bloquent_toujours_dockge():
-    regles = guest_network.regles_voulues("enp1s0", {"wifi": {"dockge": True, "jellyfin": True}})
+    regles = guest_network.wanted_rules("enp1s0", {"wifi": {"dockge": True, "jellyfin": True}})
     assert any("--ctorigdstport 5001" in r for r in regles)
     assert not any("--ctorigdstport 8096" in r for r in regles)
 
@@ -67,14 +67,14 @@ def test_choix_du_redemarrage(client):
     assert client.post("/api/systeme/redemarrage", json={"mode": "auto"}, headers=H).status_code == 200
     assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] == "auto"
     from services import activity_log
-    assert any("Redémarrage après une mise à jour" in str(e) for e in activity_log.lire(20))
+    assert any("Redémarrage après une mise à jour" in str(e) for e in activity_log.read(20))
 
 
 def test_choix_du_redemarrage_reserve_au_super_admin(client):
     connecter(client, "serveur-demo", "demo-mot-de-passe")
-    c, _ = accounts.creer("simple", "Simple", "admin", None, "test", "admin", set())
+    c, _ = accounts.create("simple", "Simple", "admin", None, "test", "admin", set())
     nouveau = "Un-mot-de-passe-solide-43"
-    accounts.changer_mien("simple", nouveau)
+    accounts.change_own_password("simple", nouveau)
     connecter(client, "simple", nouveau)
     assert client.get("/api/systeme/redemarrage", headers=H).status_code == 200
     assert client.post("/api/systeme/redemarrage", json={"mode": "manuel"}, headers=H).status_code == 403

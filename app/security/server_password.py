@@ -15,13 +15,13 @@ import time
 
 from host import system_crypt
 
-DUREE_JETON = 10 * 60
-ESSAIS_MAX = 5
-BLOCAGE = 10 * 60
-FICHIER = os.environ.get("JABBA_ADMIN", "/data/admin.json")
+TOKEN_LIFETIME = 10 * 60
+MAX_ATTEMPTS = 5
+LOCKOUT = 10 * 60
+STATE_FILE = os.environ.get("JABBA_ADMIN", "/data/admin.json")
 
 # 256 mots simples, sans accents : un code de 6 mots = 48 bits.
-MOTS = """abeille abricot acier agneau aigle algue amande ananas ancre anneau arbre argent armoire astre atelier avion
+WORDS = """abeille abricot acier agneau aigle algue amande ananas ancre anneau arbre argent armoire astre atelier avion
 bague baleine balle bambou banane barque bateau baton bergere biscuit bison bobine bois bonbon bouchon bougie
 boussole bouton branche brique brosse bureau cactus cadre cafe caillou camion canard canoe carotte carte castor
 cerise chaise chameau champ chapeau chariot chat chene cheval chevre chien citron clef cloche clou coffre
@@ -41,45 +41,45 @@ diadem echarpe eclair epee fanion fenouil flocon fougere framboise fromage gaufr
 kiwi lagune lanterne lilas lotus luciole mandarine marmotte mesange mimosa mouette myrtille narcisse noisette nougat oursin
 pamplemousse panier papaye pelote perroquet pinson plateau poivron pompon prune quartz raquette renne rossignol safran sardine
 sorbet tartine tilleul toucan vigne""".split()
-assert len(set(MOTS)) >= 256
+assert len(set(WORDS)) >= 256
 
-_verrou = threading.Lock()
-_jetons = {}          # jeton -> expiration
-_echecs = []          # horodatages des essais ratés
+_lock = threading.Lock()
+_tokens = {}          # jeton -> expiration
+_failures = []          # horodatages des essais ratés
 
 
-def _lire():
+def _read():
     try:
-        with open(FICHIER) as f:
+        with open(STATE_FILE) as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
 
 
-def _ecrire(d):
-    os.makedirs(os.path.dirname(FICHIER), exist_ok=True)
-    tmp = FICHIER + ".tmp"
+def _write(d):
+    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    tmp = STATE_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(d, f)
     os.chmod(tmp, 0o600)
-    os.replace(tmp, FICHIER)
+    os.replace(tmp, STATE_FILE)
 
 
-def bloque():
-    with _verrou:
+def is_locked():
+    with _lock:
         maintenant = time.time()
-        _echecs[:] = [t for t in _echecs if t > maintenant - BLOCAGE]
-        return len(_echecs) >= ESSAIS_MAX
+        _failures[:] = [t for t in _failures if t > maintenant - LOCKOUT]
+        return len(_failures) >= MAX_ATTEMPTS
 
 
-def _echec():
-    with _verrou:
-        _echecs.append(time.time())
+def _record_failure():
+    with _lock:
+        _failures.append(time.time())
 
 
-def verifier_mot_de_passe(hote, utilisateur, mot_de_passe):
+def check_password(hote, utilisateur, mot_de_passe):
     """True si le mot de passe est celui du compte `utilisateur` sur le serveur."""
-    if not mot_de_passe or bloque():
+    if not mot_de_passe or is_locked():
         return False
     code, sortie, _ = hote(["getent", "shadow", utilisateur])
     if code != 0 or ":" not in sortie:
@@ -89,42 +89,42 @@ def verifier_mot_de_passe(hote, utilisateur, mot_de_passe):
         return False
     ok = hmac.compare_digest(system_crypt.hash_with_setting(mot_de_passe, empreinte) or "", empreinte)
     if not ok:
-        _echec()
+        _record_failure()
     return ok
 
 
-def nouveau_jeton(identifiant="serveur", rang="super", provisoire=False):
+def new_token(identifiant="serveur", rang="super", provisoire=False):
     """Jeton valable 10 minutes, qui dit qui est connecté en admin et avec quel rang."""
     jeton = secrets.token_urlsafe(32)
-    with _verrou:
+    with _lock:
         maintenant = time.time()
-        for j in [j for j, v in _jetons.items() if v["exp"] < maintenant]:
-            del _jetons[j]
-        _jetons[jeton] = {"exp": maintenant + DUREE_JETON, "identifiant": identifiant, "rang": rang, "provisoire": provisoire}
+        for j in [j for j, v in _tokens.items() if v["exp"] < maintenant]:
+            del _tokens[j]
+        _tokens[jeton] = {"exp": maintenant + TOKEN_LIFETIME, "identifiant": identifiant, "rang": rang, "provisoire": provisoire}
     return jeton
 
 
-def jeton_valide(jeton):
+def token_info(jeton):
     """Les infos du jeton (identifiant, rang, provisoire) s'il est valable, sinon None."""
     if not jeton:
         return None
-    with _verrou:
-        v = _jetons.get(jeton)
+    with _lock:
+        v = _tokens.get(jeton)
         return dict(v) if v and v["exp"] > time.time() else None
 
 
-def oublier_jetons(identifiant=None):
+def forget_tokens(identifiant=None):
     """Déconnecte un compte (ou tout le monde)."""
-    with _verrou:
-        for j in [j for j, v in _jetons.items() if identifiant is None or v["identifiant"] == identifiant]:
-            del _jetons[j]
+    with _lock:
+        for j in [j for j, v in _tokens.items() if identifiant is None or v["identifiant"] == identifiant]:
+            del _tokens[j]
 
 
-def echec():
-    _echec()
+def record_failure():
+    _record_failure()
 
 
-def changer_mot_de_passe(hote_entree, utilisateur, nouveau):
+def change_password(hote_entree, utilisateur, nouveau):
     if len(nouveau) < 10:
         raise ValueError("Le nouveau mot de passe doit faire au moins 10 caractères.")
     if any(c in nouveau for c in "\n\r:"):
@@ -132,33 +132,33 @@ def changer_mot_de_passe(hote_entree, utilisateur, nouveau):
     code, _, err = hote_entree(["chpasswd"], f"{utilisateur}:{nouveau}\n")
     if code != 0:
         raise RuntimeError("Le serveur a refusé le changement : " + err[:200])
-    oublier_jetons()  # on redemande le mot de passe partout
+    forget_tokens()  # on redemande le mot de passe partout
 
 
 # ---------------------------------------------------------------- code de secours
-def _empreinte_code(code, sel):
+def _code_hash(code, sel):
     norm = " ".join(code.lower().split())
     return hashlib.scrypt(norm.encode(), salt=bytes.fromhex(sel), n=2 ** 14, r=8, p=1).hex()
 
 
-def generer_code():
-    code = " ".join(secrets.choice(MOTS) for _ in range(6))
+def generate_recovery_code():
+    code = " ".join(secrets.choice(WORDS) for _ in range(6))
     sel = secrets.token_hex(16)
-    d = _lire()
-    d["code"] = {"sel": sel, "empreinte": _empreinte_code(code, sel), "cree": int(time.time())}
-    _ecrire(d)
+    d = _read()
+    d["code"] = {"sel": sel, "empreinte": _code_hash(code, sel), "cree": int(time.time())}
+    _write(d)
     return code
 
 
-def code_existe():
-    return "code" in _lire()
+def recovery_code_exists():
+    return "code" in _read()
 
 
-def verifier_code(code):
-    if bloque():
+def check_recovery_code(code):
+    if is_locked():
         return False
-    c = _lire().get("code")
-    ok = bool(c) and hmac.compare_digest(_empreinte_code(code, c["sel"]), c["empreinte"])
+    c = _read().get("code")
+    ok = bool(c) and hmac.compare_digest(_code_hash(code, c["sel"]), c["empreinte"])
     if not ok:
-        _echec()
+        _record_failure()
     return ok

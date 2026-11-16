@@ -59,7 +59,7 @@ def test_redemarrer_classique_et_note_au_journal(tmp_path):
     assert "kexec" not in SCRIPT
     _, log = _executer(_bloc("/usr/local/sbin/redemarrer"), tmp_path)
     assert log.splitlines() == ["logger -t redemarrer Redémarrage du serveur", "systemctl reboot"]
-    assert restart_policy.REDEMARRER.strip() == _bloc("/usr/local/sbin/redemarrer").strip()
+    assert restart_policy.RESTART_SCRIPT.strip() == _bloc("/usr/local/sbin/redemarrer").strip()
 
 
 def test_redemarrage_de_4h_seulement_si_choisi(tmp_path):

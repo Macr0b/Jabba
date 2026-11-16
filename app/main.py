@@ -28,14 +28,14 @@ from version import VERSION
 # ---------------------------------------------------------------- démarrage
 def note_installed_version():
     """Note au Journal chaque nouvelle version installée (une fois)."""
-    version_file = os.path.join(os.path.dirname(activity_log.FICHIER), "version.txt")
+    version_file = os.path.join(os.path.dirname(activity_log.LOG_FILE), "version.txt")
     try:
         previous = open(version_file).read().strip()
     except OSError:
         previous = None
     if previous == VERSION:
         return
-    activity_log.noter("appli", f"Appli Jabba {VERSION} installée" + (f" (avant : {previous})" if previous else ""))
+    activity_log.record("appli", f"Appli Jabba {VERSION} installée" + (f" (avant : {previous})" if previous else ""))
     try:
         os.makedirs(os.path.dirname(version_file), exist_ok=True)
         open(version_file, "w").write(VERSION)
@@ -48,20 +48,20 @@ async def lifespan(_app):
     """Au démarrage : version, état des invités, puis la surveillance en fond."""
     note_installed_version()
     try:
-        guests.preparer_etat()
-        guests.modifier(lambda state: state.update(serveur=guard.nom_hote()))
+        guests.prepare_state()
+        guests.update(lambda state: state.update(serveur=guard.hostname()))
     except OSError as error:
         print("invités :", error, flush=True)
-    threading.Thread(target=watchers.surveiller, daemon=True, name="surveillance").start()
+    threading.Thread(target=watchers.watch_forever, daemon=True, name="surveillance").start()
     yield
 
 
 # ---------------------------------------------------------------- application
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
-app.middleware("http")(guard.garde)
+app.middleware("http")(guard.guard)
 
 # Pages invités : ouvertes tant qu'on n'est pas connecté en admin.
-app.include_router(guests.routeur)
+app.include_router(guests.router)
 for module in (admin_session, accounts, system, tools, terminal, files, disks, player, alerts, cloud, backups,
                app_update, guests_admin):
     app.include_router(module.router)

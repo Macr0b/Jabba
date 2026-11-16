@@ -22,44 +22,44 @@ from contextlib import contextmanager
 import config
 
 NOBODY = 65534
-PUCE = "/dev/dri/renderD128"
-MEMOIRE_IMAGE = 1024 ** 3      # 1 Go au plus pour décoder une image
+GPU_DEVICE = "/dev/dri/renderD128"
+IMAGE_MEMORY_LIMIT = 1024 ** 3      # 1 Go au plus pour décoder une image
 
 
-def actif():
+def is_active():
     """Le bac à sable s'applique quand l'appli tourne en root (le cas normal) ; désactivable pour le développement."""
     return os.geteuid() == 0 and bool(shutil.which("setpriv")) and os.environ.get("JABBA_SANS_BAC_A_SABLE") != "1"
 
 
-def groupe_puce():
+def gpu_group():
     try:
-        return os.stat(PUCE).st_gid
+        return os.stat(GPU_DEVICE).st_gid
     except OSError:
         return None
 
 
-def prefixe(puce=False):
+def prefix(puce=False):
     """Ce qu'on met devant une commande pour la lancer sans droits."""
-    if not actif():
+    if not is_active():
         return []
-    g = groupe_puce() if puce else None
+    g = gpu_group() if puce else None
     groupes = [f"--groups={g}"] if g else ["--clear-groups"]
     return ["setpriv", f"--reuid={NOBODY}", f"--regid={NOBODY}", *groupes,
             "--inh-caps=-all", "--bounding-set=-all", "--no-new-privs", "--"]
 
 
-def local(source):
+def local_command(source):
     return not str(source.get("entree", "")).startswith(("http://", "https://"))
 
 
 @contextmanager
-def entree(source):
+def open_input(source):
     """Arguments d'entrée pour ffmpeg/ffprobe, et les descripteurs à leur passer.
 
     Fichier local : on l'ouvre ici et on passe le descripteur (-fd N -i fd:), chaque
     appel avec le sien (sa position de lecture lui est propre). Adresse : telle quelle.
     """
-    if local(source) and actif():
+    if local_command(source) and is_active():
         fd = os.open(source["entree"], os.O_RDONLY)
         try:
             if not stat.S_ISREG(os.fstat(fd).st_mode):
@@ -72,7 +72,7 @@ def entree(source):
         yield a + ["-i", source["entree"]], ()
 
 
-def sans_i(args):
+def without_input_option(args):
     """ffprobe prend l'entrée sans « -i » devant."""
     a = list(args)
     i = a.index("-i")
@@ -80,35 +80,35 @@ def sans_i(args):
 
 
 def run(cmd, fds=(), puce=False, **kw):
-    return subprocess.run(prefixe(puce) + cmd, pass_fds=fds, **kw)
+    return subprocess.run(prefix(puce) + cmd, pass_fds=fds, **kw)
 
 
 def popen(cmd, fds=(), puce=False, **kw):
-    return subprocess.Popen(prefixe(puce) + cmd, pass_fds=fds, **kw)
+    return subprocess.Popen(prefix(puce) + cmd, pass_fds=fds, **kw)
 
 
-def dossier_ecrivable(chemin):
+def writable_dir(chemin):
     """Dossier où le programme sans droits écrit (morceaux vidéo)."""
     os.makedirs(chemin, exist_ok=True)
-    if actif():
+    if is_active():
         parent = os.path.dirname(chemin)
         os.chmod(parent, os.stat(parent).st_mode | 0o111)   # il doit pouvoir traverser le dossier parent
         os.chown(chemin, NOBODY, NOBODY)
         os.chmod(chemin, 0o700)
 
 
-def _limiter_memoire():
-    resource.setrlimit(resource.RLIMIT_AS, (MEMOIRE_IMAGE, MEMOIRE_IMAGE))
+def _limit_memory():
+    resource.setrlimit(resource.RLIMIT_AS, (IMAGE_MEMORY_LIMIT, IMAGE_MEMORY_LIMIT))
 
 
-def vignette(reel, taille, timeout=30):
+def thumbnail(reel, taille, timeout=30):
     """JPEG de l'image `reel` réduite à `taille` px, calculé par Pillow sans droits. Renvoie les octets."""
     # Le code est passé en ligne de commande : le programme sans droits n'a besoin de lire aucun fichier de l'appli.
     with open(os.path.join(config.APP_DIR, "vignette_seule.py")) as f:
         code = f.read()
     with open(reel, "rb") as f:
-        r = subprocess.run(prefixe() + [sys.executable, "-I", "-c", code, str(int(taille))], stdin=f,
-                           capture_output=True, timeout=timeout, preexec_fn=_limiter_memoire)
+        r = subprocess.run(prefix() + [sys.executable, "-I", "-c", code, str(int(taille))], stdin=f,
+                           capture_output=True, timeout=timeout, preexec_fn=_limit_memory)
     if r.returncode != 0 or not r.stdout:
         raise RuntimeError("Aperçu impossible.")
     return r.stdout

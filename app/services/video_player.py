@@ -23,23 +23,23 @@ from services import sandbox
 import threading
 import time
 
-RACINE = os.environ.get("JABBA_LECTURE", "/tmp/jabba-lecture")
-DUREE_MORCEAU = 4
+WORK_DIR = os.environ.get("JABBA_LECTURE", "/tmp/jabba-lecture")
+SEGMENT_SECONDS = 4
 MAX_SESSIONS = 3
-INACTIVITE = 120          # s sans demande de morceau : la conversion s'arrête
-SOUS_TITRES_TEXTE = {"subrip", "ass", "ssa", "webvtt", "mov_text", "text"}
+IDLE_TIMEOUT = 120          # s sans demande de morceau : la conversion s'arrête
+TEXT_SUBTITLE_CODECS = {"subrip", "ass", "ssa", "webvtt", "mov_text", "text"}
 _SESSIONS = {}
-_VERROU = threading.Lock()
-_MATERIEL = {"teste": False, "options": None}
+_LOCK = threading.Lock()
+_HARDWARE = {"teste": False, "options": None}
 
 
 # ---------------------------------------------------------------- analyse du fichier
 # ffmpeg et ffprobe tournent sans aucun droit (bac_a_sable) : ils ne reçoivent que le
 # fichier à lire, déjà ouvert par l'appli.
-def sonder(source):
+def probe(source):
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
-    with sandbox.entree(source) as (entree, fds):
-        r = sandbox.run(args + sandbox.sans_i(entree), fds, capture_output=True, text=True, timeout=30)
+    with sandbox.open_input(source) as (entree, fds):
+        r = sandbox.run(args + sandbox.without_input_option(entree), fds, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
         raise RuntimeError("Fichier illisible : " + (r.stderr.strip()[:200] or "format inconnu"))
     d = json.loads(r.stdout or "{}")
@@ -55,7 +55,7 @@ def sonder(source):
                "nom": etiquette(s, i + 1), "defaut": bool((s.get("disposition") or {}).get("default"))}
               for i, s in enumerate(x for x in flux if x.get("codec_type") == "audio")]
     soustitres = [{"index": s["index"], "codec": s.get("codec_name"), "nom": etiquette(s, i + 1),
-                   "texte": s.get("codec_name") in SOUS_TITRES_TEXTE}
+                   "texte": s.get("codec_name") in TEXT_SUBTITLE_CODECS}
                   for i, s in enumerate(x for x in flux if x.get("codec_type") == "subtitle")]
     fmt = d.get("format", {})
     return {
@@ -68,7 +68,7 @@ def sonder(source):
     }
 
 
-def lecture_directe(infos):
+def plays_directly(infos):
     """Le navigateur sait-il lire le fichier tel quel ?"""
     v, a = infos["video"], infos["audios"]
     conteneur_ok = any(c in infos["conteneur"] for c in ("mp4", "mov"))   # MKV (même « matroska,webm ») : converti
@@ -78,11 +78,11 @@ def lecture_directe(infos):
 
 
 # ---------------------------------------------------------------- conversion
-def _options_materiel():
+def _hardware_options():
     """Conversion par la puce graphique (VAAPI) si elle marche sur ce serveur, sinon None."""
-    if _MATERIEL["teste"]:
-        return _MATERIEL["options"]
-    _MATERIEL["teste"] = True
+    if _HARDWARE["teste"]:
+        return _HARDWARE["options"]
+    _HARDWARE["teste"] = True
     if not os.path.exists("/dev/dri/renderD128") or not shutil.which("ffmpeg"):
         return None
     for pilote in (None, "i965", "iHD"):
@@ -94,8 +94,8 @@ def _options_materiel():
                  "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-f", "null", "-"]
         try:
             if sandbox.run(essai, puce=True, capture_output=True, env=env, timeout=30).returncode == 0:
-                _MATERIEL["options"] = {"pilote": pilote}
-                return _MATERIEL["options"]
+                _HARDWARE["options"] = {"pilote": pilote}
+                return _HARDWARE["options"]
         except (OSError, subprocess.TimeoutExpired):
             pass
     return None
@@ -108,17 +108,17 @@ def _video(infos):
     if v["codec"] == "h264" and v["pix_fmt"] in (None, "yuv420p"):
         return ["-map", f"0:{v['index']}", "-c:v", "copy"], {}
     echelle = "scale=-2:'min(1080,ih)'"
-    hw = _options_materiel()
+    hw = _hardware_options()
     if hw is not None:
         env = {"LIBVA_DRIVER_NAME": hw["pilote"]} if hw["pilote"] else {}
         return (["-vaapi_device", "/dev/dri/renderD128", "-map", f"0:{v['index']}",
                  "-vf", f"{echelle},format=nv12,hwupload", "-c:v", "h264_vaapi", "-qp", "24",
-                 "-g", str(DUREE_MORCEAU * 25)], env)
+                 "-g", str(SEGMENT_SECONDS * 25)], env)
     return (["-map", f"0:{v['index']}", "-vf", f"{echelle},format=yuv420p", "-c:v", "libx264",
-             "-preset", "veryfast", "-crf", "23", "-g", str(DUREE_MORCEAU * 25), "-sc_threshold", "0"], {})
+             "-preset", "veryfast", "-crf", "23", "-g", str(SEGMENT_SECONDS * 25), "-sc_threshold", "0"], {})
 
 
-def image_cle(source, infos, debut):
+def keyframe(source, infos, debut):
     """Quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`.
     On part donc de là, pour que le temps affiché et les sous-titres tombent juste."""
     v = infos["video"]
@@ -128,8 +128,8 @@ def image_cle(source, infos, debut):
             "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
             "-read_intervals", f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}"]
     try:
-        with sandbox.entree(source) as (entree, fds):
-            r = sandbox.run(args + sandbox.sans_i(entree), fds, capture_output=True, text=True, timeout=20)
+        with sandbox.open_input(source) as (entree, fds):
+            r = sandbox.run(args + sandbox.without_input_option(entree), fds, capture_output=True, text=True, timeout=20)
     except (subprocess.TimeoutExpired, OSError, RuntimeError):
         return debut
     temps = []
@@ -144,16 +144,16 @@ def image_cle(source, infos, debut):
     return max(avant) if avant else debut
 
 
-def demarrer(source, infos, debut=0.0, audio=None):
+def start(source, infos, debut=0.0, audio=None):
     """Lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)."""
-    debut = image_cle(source, infos, max(0.0, float(debut)))
-    with _VERROU:
+    debut = keyframe(source, infos, max(0.0, float(debut)))
+    with _LOCK:
         while len(_SESSIONS) >= MAX_SESSIONS:   # trop de films en même temps : on arrête le plus ancien
-            arreter(min(_SESSIONS, key=lambda k: _SESSIONS[k]["vu"]), verrou=False)
+            stop(min(_SESSIONS, key=lambda k: _SESSIONS[k]["vu"]), verrou=False)
     sid = secrets.token_urlsafe(18)
-    dossier = os.path.join(RACINE, sid)
-    os.makedirs(RACINE, exist_ok=True)
-    sandbox.dossier_ecrivable(dossier)
+    dossier = os.path.join(WORK_DIR, sid)
+    os.makedirs(WORK_DIR, exist_ok=True)
+    sandbox.writable_dir(dossier)
     video, env_sup = _video(infos)
     pistes = [a for a in infos["audios"] if audio is None or a["index"] == audio] or infos["audios"]
     son = ["-map", f"0:{pistes[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if pistes else []
@@ -165,21 +165,21 @@ def demarrer(source, infos, debut=0.0, audio=None):
            + (["-force_key_frames", "expr:gte(t,n_forced*2)"] if video[-2:] != ["-c:v", "copy"] and "copy" not in video else [])
            # horodatages à partir de 0 : la vidéo et les sous-titres partent du même instant, sur tous les navigateurs
            + ["-muxdelay", "0", "-muxpreload", "0"]
-           + ["-max_muxing_queue_size", "4096", "-f", "hls", "-hls_init_time", "1", "-hls_time", str(DUREE_MORCEAU),
+           + ["-max_muxing_queue_size", "4096", "-f", "hls", "-hls_init_time", "1", "-hls_time", str(SEGMENT_SECONDS),
               "-hls_list_size", "0", "-hls_playlist_type", "event",
               "-hls_segment_filename", os.path.join(dossier, "m%05d.ts"), os.path.join(dossier, "index.m3u8")])
     env = dict(os.environ, **env_sup)
-    with sandbox.entree(source) as (entree, fds), open(os.path.join(dossier, "erreurs.txt"), "w") as err:
+    with sandbox.open_input(source) as (entree, fds), open(os.path.join(dossier, "erreurs.txt"), "w") as err:
         i = cmd.index("ENTREE")
         cmd[i:i + 1] = entree
         p = sandbox.popen(cmd, fds, puce=bool(env_sup) or "-vaapi_device" in cmd, stdin=subprocess.DEVNULL,
                               stdout=subprocess.DEVNULL, stderr=err, env=env)
-    with _VERROU:
+    with _LOCK:
         _SESSIONS[sid] = {"p": p, "dossier": dossier, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
     return sid, debut
 
 
-def fichier(sid, nom, attendre=20):
+def session_file(sid, nom, attendre=20):
     """Chemin d'un morceau ou de la liste de lecture, une fois prêt."""
     s = _SESSIONS.get(sid)
     if not s or not (nom == "index.m3u8" or (nom.startswith("m") and nom.endswith(".ts") and nom[1:-3].isdigit())):
@@ -209,7 +209,7 @@ def fichier(sid, nom, attendre=20):
     return None
 
 
-def erreur(sid):
+def session_error(sid):
     s = _SESSIONS.get(sid)
     if not s:
         return "Lecture arrêtée."
@@ -221,7 +221,7 @@ def erreur(sid):
     return None
 
 
-def arreter(sid, verrou=True):
+def stop(sid, verrou=True):
     def faire():
         s = _SESSIONS.pop(sid, None)
         if not s:
@@ -234,31 +234,31 @@ def arreter(sid, verrou=True):
                 s["p"].kill()
         shutil.rmtree(s["dossier"], ignore_errors=True)
     if verrou:
-        with _VERROU:
+        with _LOCK:
             faire()
     else:
         faire()
 
 
-def nettoyer():
+def clean_up():
     """Arrête les lectures abandonnées (onglet fermé, téléphone en veille…)."""
-    limite = time.time() - INACTIVITE
+    limite = time.time() - IDLE_TIMEOUT
     for sid in [k for k, s in list(_SESSIONS.items()) if s["vu"] < limite]:
-        arreter(sid)
+        stop(sid)
 
 
-def _secondes(t):
+def _seconds(t):
     morceaux = t.replace(",", ".").split(":")
     return sum(float(m) * 60 ** k for k, m in enumerate(reversed(morceaux)))
 
 
-def _horodatage(x):
+def _timestamp(x):
     h, reste = divmod(max(0.0, x), 3600)
     m, sec = divmod(reste, 60)
     return f"{int(h):02d}:{int(m):02d}:{sec:06.3f}"
 
 
-def decaler_vtt(vtt, debut):
+def shift_vtt(vtt, debut):
     """Recale les sous-titres sur le moment où la lecture a commencé (la vidéo, elle, repart de 0)."""
     sortie, bloc = ["WEBVTT", ""], []
     for ligne in vtt.splitlines() + [""]:
@@ -268,20 +268,20 @@ def decaler_vtt(vtt, debut):
         horaire = next((l for l in bloc if "-->" in l), None)
         if horaire:
             a, _, b = horaire.partition("-->")
-            fin_cue = _secondes(b.split()[0]) - debut
+            fin_cue = _seconds(b.split()[0]) - debut
             if fin_cue > 0:
                 texte = bloc[bloc.index(horaire) + 1:]
-                sortie += [f"{_horodatage(_secondes(a.strip()) - debut)} --> {_horodatage(fin_cue)}"] + texte + [""]
+                sortie += [f"{_timestamp(_seconds(a.strip()) - debut)} --> {_timestamp(fin_cue)}"] + texte + [""]
         bloc = []
     return "\n".join(sortie)
 
 
-def soustitres(source, index, debut=0.0):
+def subtitles(source, index, debut=0.0):
     """Une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé."""
-    with sandbox.entree(source) as (entree, fds):
+    with sandbox.open_input(source) as (entree, fds):
         cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
                + entree + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
         r = sandbox.run(cmd, fds, capture_output=True, timeout=180)
     if r.returncode != 0:
         raise RuntimeError("Sous-titres illisibles.")
-    return decaler_vtt(r.stdout.decode("utf-8", "replace"), float(debut)).encode()
+    return shift_vtt(r.stdout.decode("utf-8", "replace"), float(debut)).encode()

@@ -39,28 +39,28 @@ def test_ne_peut_pas_ecrire_ailleurs(tmp_path):
 
 def test_prefixe_vide_sans_root(monkeypatch):
     monkeypatch.setattr(os, "geteuid", lambda: 1000)
-    assert sandbox.prefixe() == []
+    assert sandbox.prefix() == []
 
 
 def test_desactivable(monkeypatch):
     monkeypatch.setenv("JABBA_SANS_BAC_A_SABLE", "1")
-    assert sandbox.prefixe() == []
+    assert sandbox.prefix() == []
 
 
 @outil("ffmpeg")
 def test_lecture_complete(video):
     """Analyse, conversion en morceaux et sous-titres : avec le fichier passé déjà ouvert."""
     src = {"entree": video}
-    infos = video_player.sonder(src)
+    infos = video_player.probe(src)
     assert 5.5 < infos["duree"] < 6.5 and infos["video"]["codec"] == "h264" and infos["soustitres"]
-    sid, debut = video_player.demarrer(src, infos, 2)
-    assert video_player.fichier(sid, "index.m3u8"), video_player.erreur(sid)
-    if sandbox.actif():
-        assert os.stat(os.path.join(video_player.RACINE, sid)).st_uid == sandbox.NOBODY
-    vtt = video_player.soustitres(src, infos["soustitres"][0]["index"], 0).decode()
+    sid, debut = video_player.start(src, infos, 2)
+    assert video_player.session_file(sid, "index.m3u8"), video_player.session_error(sid)
+    if sandbox.is_active():
+        assert os.stat(os.path.join(video_player.WORK_DIR, sid)).st_uid == sandbox.NOBODY
+    vtt = video_player.subtitles(src, infos["soustitres"][0]["index"], 0).decode()
     assert vtt.startswith("WEBVTT") and "Bonjour" in vtt
-    video_player.arreter(sid)
-    assert not os.path.exists(os.path.join(video_player.RACINE, sid))
+    video_player.stop(sid)
+    assert not os.path.exists(os.path.join(video_player.WORK_DIR, sid))
 
 
 @outil("ffmpeg")
@@ -68,11 +68,11 @@ def test_fichier_illisible(tmp_path):
     f = tmp_path / "faux.mkv"
     f.write_bytes(b"pas une video" * 100)
     with pytest.raises(RuntimeError):
-        video_player.sonder({"entree": str(f)})
+        video_player.probe({"entree": str(f)})
 
 
 def test_adresse_passee_telle_quelle():
-    with sandbox.entree({"entree": "http://127.0.0.1:8081/f.mkv", "entetes": "Authorization: x\r\n"}) as (a, fds):
+    with sandbox.open_input({"entree": "http://127.0.0.1:8081/f.mkv", "entetes": "Authorization: x\r\n"}) as (a, fds):
         assert a == ["-headers", "Authorization: x\r\n", "-i", "http://127.0.0.1:8081/f.mkv"] and fds == ()
 
 
@@ -80,9 +80,9 @@ def test_vignette(tmp_path):
     from PIL import Image
     img = tmp_path / "photo.png"
     Image.new("RGB", (1200, 800), "red").save(img)
-    jpeg = sandbox.vignette(str(img), 128)
+    jpeg = sandbox.thumbnail(str(img), 128)
     assert jpeg[:3] == b"\xff\xd8\xff"
-    cache = disk_browser.vignette(str(img), 128)
+    cache = disk_browser.thumbnail(str(img), 128)
     assert os.path.getsize(cache) > 100
 
 
@@ -90,13 +90,13 @@ def test_vignette_fichier_piege(tmp_path):
     f = tmp_path / "piege.png"
     f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 500)
     with pytest.raises(RuntimeError):
-        sandbox.vignette(str(f), 128)
-    with pytest.raises(disk_browser.Refus):
-        disk_browser.vignette(str(f), 128)
+        sandbox.thumbnail(str(f), 128)
+    with pytest.raises(disk_browser.Refusal):
+        disk_browser.thumbnail(str(f), 128)
 
 
 def test_entree_refuse_ce_qui_n_est_pas_un_fichier(tmp_path, monkeypatch):
-    monkeypatch.setattr(sandbox, "actif", lambda: True)
+    monkeypatch.setattr(sandbox, "is_active", lambda: True)
     with pytest.raises((RuntimeError, OSError)):
-        with sandbox.entree({"entree": str(tmp_path)}):
+        with sandbox.open_input({"entree": str(tmp_path)}):
             pass

@@ -12,113 +12,113 @@ import secrets
 import threading
 import time
 
-DOSSIER = os.environ.get("JABBA_DATA", "/data")
-FICHIER = os.path.join(DOSSIER, "sessions.json")
-DUREE = 30 * 86400
-DUREE_PROVISOIRE = 15 * 60
-CONFIRMATION = 10 * 60
+DATA_DIR = os.environ.get("JABBA_DATA", "/data")
+SESSIONS_FILE = os.path.join(DATA_DIR, "sessions.json")
+LIFETIME = 30 * 86400
+TEMPORARY_LIFETIME = 15 * 60
+CONFIRMATION_WINDOW = 10 * 60
 COOKIE = "jabba_session"
-_verrou = threading.RLock()
+_lock = threading.RLock()
 _cache = {"d": None, "ecrit": 0}
 
 
-def _h(jeton):
+def _token_hash(jeton):
     return hashlib.sha256(jeton.encode()).hexdigest()
 
 
-def _lire():
+def _read():
     if _cache["d"] is None:
         try:
-            with open(FICHIER) as f:
+            with open(SESSIONS_FILE) as f:
                 _cache["d"] = json.load(f)
         except (OSError, ValueError):
             _cache["d"] = {}
     return _cache["d"]
 
 
-def _ecrire():
-    os.makedirs(DOSSIER, exist_ok=True)
-    tmp = FICHIER + ".tmp"
+def _write():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = SESSIONS_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(_cache["d"], f)
     os.chmod(tmp, 0o600)
-    os.replace(tmp, FICHIER)
+    os.replace(tmp, SESSIONS_FILE)
     _cache["ecrit"] = time.time()
 
 
-def _nettoyer(d):
+def _drop_expired(d):
     maintenant = time.time()
     for k in [k for k, s in d.items() if s["exp"] < maintenant]:
         del d[k]
 
 
-def creer(identifiant, rang, provisoire=False, appareil=None, login=None):
+def create(identifiant, rang, provisoire=False, appareil=None, login=None):
     jeton = secrets.token_urlsafe(32)
     maintenant = time.time()
-    with _verrou:
-        d = _lire()
-        _nettoyer(d)
-        d[_h(jeton)] = {"id": secrets.token_hex(4), "identifiant": identifiant, "rang": rang, "provisoire": provisoire,
+    with _lock:
+        d = _read()
+        _drop_expired(d)
+        d[_token_hash(jeton)] = {"id": secrets.token_hex(4), "identifiant": identifiant, "rang": rang, "provisoire": provisoire,
                         "appareil": appareil, "login": login, "cree": int(maintenant), "vu": int(maintenant),
-                        "exp": maintenant + (DUREE_PROVISOIRE if provisoire else DUREE), "confirme": maintenant}
-        _ecrire()
+                        "exp": maintenant + (TEMPORARY_LIFETIME if provisoire else LIFETIME), "confirme": maintenant}
+        _write()
     return jeton
 
 
-def lire(jeton):
+def read(jeton):
     """La session (copie) si le jeton est valable, sinon None."""
     if not jeton:
         return None
-    with _verrou:
-        s = _lire().get(_h(jeton))
+    with _lock:
+        s = _read().get(_token_hash(jeton))
         if not s or s["exp"] < time.time():
             return None
         if time.time() - s["vu"] > 300:
             s["vu"] = int(time.time())
-            _ecrire()
+            _write()
         return dict(s)
 
 
-def confirmer(jeton):
-    with _verrou:
-        s = _lire().get(_h(jeton))
+def confirm(jeton):
+    with _lock:
+        s = _read().get(_token_hash(jeton))
         if s:
             s["confirme"] = time.time()
-            _ecrire()
+            _write()
 
 
-def confirme_recemment(session):
-    return time.time() - session.get("confirme", 0) < CONFIRMATION
+def confirmed_recently(session):
+    return time.time() - session.get("confirme", 0) < CONFIRMATION_WINDOW
 
 
-def fermer(jeton):
-    with _verrou:
-        if _lire().pop(_h(jeton or ""), None):
-            _ecrire()
+def close(jeton):
+    with _lock:
+        if _read().pop(_token_hash(jeton or ""), None):
+            _write()
 
 
-def fermer_id(sid):
-    with _verrou:
-        d = _lire()
+def close_by_id(sid):
+    with _lock:
+        d = _read()
         for k in [k for k, s in d.items() if s["id"] == sid]:
             del d[k]
-            _ecrire()
+            _write()
             return True
     return False
 
 
-def fermer_compte(identifiant=None):
+def close_account(identifiant=None):
     """Ferme toutes les sessions d'un compte (ou de tout le monde)."""
-    with _verrou:
-        d = _lire()
+    with _lock:
+        d = _read()
         for k in [k for k, s in d.items() if identifiant is None or s["identifiant"] == identifiant]:
             del d[k]
-        _ecrire()
+        _write()
 
 
-def lister():
-    with _verrou:
-        d = _lire()
-        _nettoyer(d)
+def list_sessions():
+    with _lock:
+        d = _read()
+        _drop_expired(d)
         return sorted(({k: v for k, v in s.items() if k != "exp"} for s in d.values() if not s["provisoire"]),
                       key=lambda s: -s["vu"])

@@ -20,18 +20,18 @@ from host import commands
 
 def test_le_script_passe_par_un_fichier(monkeypatch):
     appels = []
-    monkeypatch.setattr(commands, "hote", lambda cmd, timeout=30, entree=None: (appels.append((cmd, entree)), (0, "", ""))[1])
+    monkeypatch.setattr(commands, "run_on_host", lambda cmd, timeout=30, entree=None: (appels.append((cmd, entree)), (0, "", ""))[1])
     script = 'L="a b"; echo "${L% *}"'
-    commands.lancer_sur_serveur("jabba-test-1", script, "bash", ("Nice=10",))
+    commands.start_on_host("jabba-test-1", script, "bash", ("Nice=10",))
     (ecrire, contenu), (lancer, _) = appels
     assert contenu.endswith(script) and contenu.startswith('rm -f "$0"')
     assert "$" not in " ".join(lancer)                       # rien que systemd puisse remplacer
-    assert lancer == ["systemd-run", "--unit=jabba-test-1", "--collect", "-p", "Nice=10", "bash", f"{commands.DOSSIER_TACHES}/jabba-test-1.sh"]
+    assert lancer == ["systemd-run", "--unit=jabba-test-1", "--collect", "-p", "Nice=10", "bash", f"{commands.TASKS_DIR}/jabba-test-1.sh"]
 
 
 def test_nom_de_tache_verifie():
     with pytest.raises(ValueError):
-        commands.lancer_sur_serveur("x; reboot", "true")
+        commands.start_on_host("x; reboot", "true")
 
 
 def test_aucun_script_en_ligne_de_commande_de_systemd_run():
@@ -50,10 +50,10 @@ def test_vrai_systemd_run(tmp_path):
     os.chmod(tmp_path, 0o755)
     sortie = tmp_path / "sortie"
     unite = "jabba-test-" + uuid.uuid4().hex[:8]
-    os.makedirs(commands.DOSSIER_TACHES, exist_ok=True)
-    with open(f"{commands.DOSSIER_TACHES}/{unite}.sh", "w") as f:
+    os.makedirs(commands.TASKS_DIR, exist_ok=True)
+    with open(f"{commands.TASKS_DIR}/{unite}.sh", "w") as f:
         f.write(f'rm -f "$0"\nL="jabba v1.2.3 abc"\necho "${{L% *}}|${{L##* }}" > {sortie}\n')
-    cmd = commands.commande_tache(unite)
+    cmd = commands.task_command(unite)
     subprocess.run([cmd[0], "--wait"] + cmd[1:], check=True, capture_output=True)
     assert sortie.read_text().strip() == "jabba v1.2.3|abc"
-    assert not os.path.exists(f"{commands.DOSSIER_TACHES}/{unite}.sh")
+    assert not os.path.exists(f"{commands.TASKS_DIR}/{unite}.sh")

@@ -20,33 +20,33 @@ import httpx
 import config
 
 RE_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
-FICHIER_CLE = os.path.join(config.APP_DIR, "cle_publication.pub")
-RE_CLE = re.compile(r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]{40,800}( [\w@.+ -]{0,100})?$")
-ESPACE_SIGNATURE = "jabba"   # « namespace » de ssh-keygen -Y : une signature faite pour autre chose ne vaut rien ici
-MARQUE_REFUS = "JABBA-SIGNATURE-REFUSEE"
+KEY_FILE = os.path.join(config.APP_DIR, "cle_publication.pub")
+RE_KEY = re.compile(r"^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]{40,800}( [\w@.+ -]{0,100})?$")
+SIGNATURE_NAMESPACE = "jabba"   # « namespace » de ssh-keygen -Y : une signature faite pour autre chose ne vaut rien ici
+REFUSAL_MARK = "JABBA-SIGNATURE-REFUSEE"
 
 
-def cle_publication():
+def publication_key():
     """La clé publique qui signe les versions (celle de la version installée), ou None."""
     try:
-        with open(FICHIER_CLE) as f:
+        with open(KEY_FILE) as f:
             lignes = [l.strip() for l in f if l.strip() and not l.startswith("#")]
     except OSError:
         return None
-    return lignes[0] if lignes and RE_CLE.match(lignes[0]) else None
+    return lignes[0] if lignes and RE_KEY.match(lignes[0]) else None
 
 
-def texte_signe(tag, commit):
+def signed_text(tag, commit):
     return f"jabba {tag} {commit}"
 _CACHE = {"t": 0, "v": None}
 
 
-def tuple_version(v):
+def version_tuple(v):
     m = RE_VERSION.match(v or "")
     return tuple(int(x) for x in m.groups()) if m else None
 
 
-def derniere(depot, forcer=False):
+def latest_release(depot, forcer=False):
     """{'version': '0.5.1', 'tag': 'v0.5.1', 'notes': '...', 'date': '...'} ou None."""
     if not depot or not re.fullmatch(r"[\w.-]+/[\w.-]+", depot):
         return None
@@ -61,19 +61,19 @@ def derniere(depot, forcer=False):
         return _CACHE["v"]
     d = r.json()
     tag = d.get("tag_name", "")
-    if not tuple_version(tag):
+    if not version_tuple(tag):
         return None
     v = {"version": tag.lstrip("v"), "tag": tag, "notes": (d.get("body") or "")[:3000], "date": d.get("published_at")}
     _CACHE.update(t=time.time(), v=v)
     return v
 
 
-def plus_recente(actuelle, autre):
-    a, b = tuple_version(actuelle), tuple_version(autre)
+def is_newer(actuelle, autre):
+    a, b = version_tuple(actuelle), version_tuple(autre)
     return bool(a and b and b > a)
 
 
-def script(dossier, tag, cle):
+def install_script(dossier, tag, cle):
     """Commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli).
 
     Étapes : récupérer le dépôt, vérifier la signature de cette version avec `cle`
@@ -81,7 +81,7 @@ def script(dossier, tag, cle):
     """
     if not re.fullmatch(r"/[\w./-]+", dossier) or not RE_VERSION.match(tag):
         raise ValueError("Paramètres inattendus")
-    if not cle or not RE_CLE.match(cle):
+    if not cle or not RE_KEY.match(cle):
         raise ValueError("Pas de clé de publication : mise à jour impossible")
     # git tourne avec le compte propriétaire du dossier : les fichiers restent à son nom.
     # Avant, on lui rend tout ce qui ne lui appartient plus (traces d'anciennes installations
@@ -94,15 +94,15 @@ def script(dossier, tag, cle):
     # Toute étape qui échoue (fichier absent, ligne inattendue, signature fausse) = refus.
     verifier = (
         'T=$(mktemp -d) && trap \'rm -rf "$T"\' EXIT && '
-        f"printf '%s %s\\n' {ESPACE_SIGNATURE} '{cle}' > \"$T/cles\" && "
+        f"printf '%s %s\\n' {SIGNATURE_NAMESPACE} '{cle}' > \"$T/cles\" && "
         f"if {git} show 'refs/remotes/origin/main:signatures/{tag}.sig' > \"$T/fichier\" 2>/dev/null"
         ' && LIGNE=$(head -n 1 "$T/fichier")'
         f' && [ "${{LIGNE% *}}" = "jabba {tag}" ] && SHA="${{LIGNE##* }}"'
         ' && printf %s "$SHA" | grep -Eqx "[0-9a-f]{40}"'
         " && sed -n '/^-----BEGIN SSH SIGNATURE-----$/,/^-----END SSH SIGNATURE-----$/p' \"$T/fichier\" > \"$T/sig\""
-        f' && printf %s "$LIGNE" | ssh-keygen -Y verify -f "$T/cles" -I {ESPACE_SIGNATURE} -n {ESPACE_SIGNATURE} -s "$T/sig"'
+        f' && printf %s "$LIGNE" | ssh-keygen -Y verify -f "$T/cles" -I {SIGNATURE_NAMESPACE} -n {SIGNATURE_NAMESPACE} -s "$T/sig"'
         f' && {git} cat-file -e "$SHA^{{commit}}"; then echo "Signature valable : {tag} ($SHA)"; '
-        f"else echo '{MARQUE_REFUS} : la version {tag} n est pas signée par la clé attendue, rien n a été installé.'; exit 1; fi"
+        f"else echo '{REFUSAL_MARK} : la version {tag} n est pas signée par la clé attendue, rien n a été installé.'; exit 1; fi"
     )
     return (f"cd '{dossier}' && {remettre} && {git} fetch --quiet --tags --force origin && {verifier} && "
             f"{git} -c advice.detachedHead=false checkout --quiet --force \"$SHA\" && "
@@ -118,44 +118,44 @@ from host import commands
 
 
 # ---------------------------------------------------------------- mise à jour de l'appli
-def dossier_appli():
-    code, sortie, _ = commands.hote(["docker", "inspect", "-f", '{{index .Config.Labels "com.docker.compose.project.working_dir"}}', "jabba-app"])
+def app_folder():
+    code, sortie, _ = commands.run_on_host(["docker", "inspect", "-f", '{{index .Config.Labels "com.docker.compose.project.working_dir"}}', "jabba-app"])
     d = sortie.strip()
     return d if code == 0 and re.fullmatch(r"/[\w./-]+", d) else None
 
 
-MAJ = {"unite": None, "version": None, "debut": 0, "signale": False}
+CURRENT_UPDATE = {"unite": None, "version": None, "debut": 0, "signale": False}
 
 
-def etat_maj():
+def update_state():
     """Où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine."""
-    if not MAJ["unite"]:
+    if not CURRENT_UPDATE["unite"]:
         return {"statut": "aucune"}
-    u = MAJ["unite"] + ".service"
-    _, actif, _ = commands.hote(["systemctl", "show", "-p", "ActiveState", "--value", u])
-    _, log, _ = commands.hote(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "300"])
+    u = CURRENT_UPDATE["unite"] + ".service"
+    _, actif, _ = commands.run_on_host(["systemctl", "show", "-p", "ActiveState", "--value", u])
+    _, log, _ = commands.run_on_host(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "300"])
     lignes = [l for l in log.splitlines() if l.strip()]
     if actif.strip() in ("active", "activating", "reloading"):
-        return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"]), **avancement_maj(lignes)}
-    if any(MARQUE_REFUS in l for l in lignes):
-        if not MAJ["signale"]:
-            MAJ["signale"] = True
-            notifications.envoyer("securite", "Mise à jour refusée",
-                           f"La version {MAJ['version']} publiée sur GitHub n'est pas signée par la clé attendue : rien n'a été installé. "
+        return {"statut": "en_cours", "version": CURRENT_UPDATE["version"], "depuis": int(time.time() - CURRENT_UPDATE["debut"]), **update_progress(lignes)}
+    if any(REFUSAL_MARK in l for l in lignes):
+        if not CURRENT_UPDATE["signale"]:
+            CURRENT_UPDATE["signale"] = True
+            notifications.send("securite", "Mise à jour refusée",
+                           f"La version {CURRENT_UPDATE['version']} publiée sur GitHub n'est pas signée par la clé attendue : rien n'a été installé. "
                            "Si tu n'as rien publié toi-même, ton compte GitHub est peut-être piraté.", "/#/systeme", famille="appli")
-        return {"statut": "echec", "version": MAJ["version"],
+        return {"statut": "echec", "version": CURRENT_UPDATE["version"],
                 "detail": ["Signature refusée : cette version n'est pas signée par la clé attendue. Rien n'a été installé, l'appli actuelle continue."]}
     if any("Failed with result" in l or "status=" in l and "status=0/" not in l for l in lignes):
         detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
-        if not MAJ["signale"]:
-            MAJ["signale"] = True
-            notifications.envoyer("mises_a_jour", "Mise à jour échouée",
-                           f"La version {MAJ['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", famille="appli")
-        return {"statut": "echec", "version": MAJ["version"], "detail": detail}
-    return {"statut": "termine", "version": MAJ["version"]}
+        if not CURRENT_UPDATE["signale"]:
+            CURRENT_UPDATE["signale"] = True
+            notifications.send("mises_a_jour", "Mise à jour échouée",
+                           f"La version {CURRENT_UPDATE['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", famille="appli")
+        return {"statut": "echec", "version": CURRENT_UPDATE["version"], "detail": detail}
+    return {"statut": "termine", "version": CURRENT_UPDATE["version"]}
 
 
-def avancement_maj(lignes):
+def update_progress(lignes):
     """Étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure."""
     texte = "\n".join(lignes)
     if re.search(r"Container \S+\s+(Recreate|Starting|Started|Running)", texte):

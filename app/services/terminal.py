@@ -21,25 +21,25 @@ import termios
 import time
 
 TICKETS = {}          # ticket -> {qui, nom, expire}
-DUREE_TICKET = 30
-OUVERTS = {}          # pid -> {qui, debut}
+TICKET_LIFETIME = 30
+OPEN_TERMINALS = {}          # pid -> {qui, debut}
 
 
-def nouveau_ticket(qui, nom):
+def new_ticket(qui, nom):
     maintenant = time.time()
     for t in [t for t, v in TICKETS.items() if v["expire"] < maintenant]:
         TICKETS.pop(t, None)
     t = secrets.token_urlsafe(32)
-    TICKETS[t] = {"qui": qui, "nom": nom, "expire": maintenant + DUREE_TICKET}
+    TICKETS[t] = {"qui": qui, "nom": nom, "expire": maintenant + TICKET_LIFETIME}
     return t
 
 
-def prendre_ticket(t):
+def take_ticket(t):
     v = TICKETS.pop(t or "", None)
     return v if v and v["expire"] > time.time() else None
 
 
-def _taille(fd, lignes, colonnes):
+def _resize(fd, lignes, colonnes):
     lignes, colonnes = max(5, min(int(lignes), 500)), max(20, min(int(colonnes), 500))
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", lignes, colonnes, 0, 0))
 
@@ -61,26 +61,26 @@ __jabba_noter() {
 PROMPT_COMMAND="__jabba_noter${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 echo "Connecté au compte $(whoami) du serveur. Tes commandes sont notées au Journal de Jabba au nom de $JABBA_QUI."
 """
-CHEMIN_RC = "/usr/local/lib/jabba/terminal.bashrc"
-FICHIER_DEMO = "/tmp/jabba-terminal-demo.log"
+RC_PATH = "/usr/local/lib/jabba/terminal.bashrc"
+DEMO_LOG = "/tmp/jabba-terminal-demo.log"
 
 
-def preparer_rc(ecrire):
+def prepare_rc(ecrire):
     """Écrit le fichier de démarrage du shell sur le serveur (ou en démo, à côté) et renvoie son chemin."""
     if ecrire is None:   # démo : pas de journal système, on note dans un fichier
         chemin = "/tmp/jabba-terminal.bashrc"
         with open(chemin, "w") as f:
-            f.write(RC.replace('logger -t jabba-terminal -- ', f'echo >> {FICHIER_DEMO} '))
+            f.write(RC.replace('logger -t jabba-terminal -- ', f'echo >> {DEMO_LOG} '))
         return chemin
     ecrire(RC)
-    return CHEMIN_RC
+    return RC_PATH
 
 
-def commandes(sid, debut, hote):
+def command_log(sid, debut, hote):
     """Les commandes tapées pendant la session `sid`, dans l'ordre (200 au plus)."""
     if hote is None:
         try:
-            lignes = open(FICHIER_DEMO).read().splitlines()
+            lignes = open(DEMO_LOG).read().splitlines()
         except OSError:
             lignes = []
     else:
@@ -95,7 +95,7 @@ def commandes(sid, debut, hote):
     return res[:200]
 
 
-def lancer(commande, demo=False, env_sup=None):
+def start(commande, demo=False, env_sup=None):
     """Ouvre un shell dans un pseudo-terminal. Renvoie (processus, descripteur maître)."""
     maitre, esclave = pty.openpty()
 
@@ -114,10 +114,10 @@ def lancer(commande, demo=False, env_sup=None):
     return p, maitre
 
 
-async def relier(ws, commande, demo=False, env=None):
+async def bridge(ws, commande, demo=False, env=None):
     """Fait passer les octets entre la page (xterm.js) et le shell, jusqu'à ce que l'un des deux s'arrête."""
-    p, fd = lancer(commande, demo, env)
-    OUVERTS[p.pid] = {"debut": time.time()}
+    p, fd = start(commande, demo, env)
+    OPEN_TERMINALS[p.pid] = {"debut": time.time()}
     boucle = asyncio.get_running_loop()
     sortie = asyncio.Queue()
 
@@ -154,7 +154,7 @@ async def relier(ws, commande, demo=False, env=None):
             if msg.get("t") == "i":
                 os.write(fd, str(msg.get("d", "")).encode())
             elif msg.get("t") == "r":
-                _taille(fd, msg.get("l", 24), msg.get("c", 80))
+                _resize(fd, msg.get("l", 24), msg.get("c", 80))
 
     taches = [asyncio.create_task(vers_page()), asyncio.create_task(depuis_page())]
     try:
@@ -175,5 +175,5 @@ async def relier(ws, commande, demo=False, env=None):
             except OSError:
                 pass
         os.close(fd)
-        OUVERTS.pop(p.pid, None)
+        OPEN_TERMINALS.pop(p.pid, None)
     return p.returncode

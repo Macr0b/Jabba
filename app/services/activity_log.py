@@ -7,42 +7,42 @@ import os
 import threading
 import time
 
-FICHIER = os.environ.get("JABBA_JOURNAL", "/data/journal.jsonl")
+LOG_FILE = os.environ.get("JABBA_JOURNAL", "/data/journal.jsonl")
 # La porte du Wi-Fi (conteneur à part, sans accès aux données de l'appli) note dans son propre fichier.
-AUTRES = [f for f in os.environ.get("JABBA_JOURNAUX_AUTRES", "/data/porte-wifi/journal.jsonl").split(",") if f]
-MAX = 2000
-_VERROU = threading.Lock()
+OTHER_LOGS = [f for f in os.environ.get("JABBA_JOURNAUX_AUTRES", "/data/porte-wifi/journal.jsonl").split(",") if f]
+MAX_EVENTS = 2000
+_LOCK = threading.Lock()
 
 # Familles d'événements (pour l'icône et le filtre dans l'appli).
-FAMILLES = {"outil", "admin", "disque", "courant", "fichier", "appli", "alerte", "systeme", "invite", "sauvegardes", "nuage"}
+FAMILIES = {"outil", "admin", "disque", "courant", "fichier", "appli", "alerte", "systeme", "invite", "sauvegardes", "nuage"}
 
 
-def noter(famille, texte, qui=None):
-    ev = {"t": int(time.time()), "famille": famille if famille in FAMILLES else "systeme", "texte": texte}
+def record(famille, texte, qui=None):
+    ev = {"t": int(time.time()), "famille": famille if famille in FAMILIES else "systeme", "texte": texte}
     if qui:
         ev["qui"] = qui
-    with _VERROU:
-        os.makedirs(os.path.dirname(FICHIER), exist_ok=True)
-        with open(FICHIER, "a") as f:
+    with _LOCK:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        with open(LOG_FILE, "a") as f:
             f.write(json.dumps(ev, ensure_ascii=False) + "\n")
         try:
-            if os.path.getsize(FICHIER) > 600_000:
-                with open(FICHIER) as f:
-                    lignes = f.readlines()[-MAX:]
-                with open(FICHIER + ".tmp", "w") as f:
+            if os.path.getsize(LOG_FILE) > 600_000:
+                with open(LOG_FILE) as f:
+                    lignes = f.readlines()[-MAX_EVENTS:]
+                with open(LOG_FILE + ".tmp", "w") as f:
                     f.writelines(lignes)
-                os.replace(FICHIER + ".tmp", FICHIER)
+                os.replace(LOG_FILE + ".tmp", LOG_FILE)
         except OSError:
             pass
     return ev
 
 
-def lire(n=100, famille=None):
+def read(n=100, famille=None):
     evs = []
-    for chemin in [FICHIER] + [a for a in AUTRES if a != FICHIER]:
+    for chemin in [LOG_FILE] + [a for a in OTHER_LOGS if a != LOG_FILE]:
         try:
             with open(chemin) as f:
-                lignes = f.readlines()[-MAX:]
+                lignes = f.readlines()[-MAX_EVENTS:]
         except OSError:
             continue
         for ligne in lignes:
@@ -51,7 +51,7 @@ def lire(n=100, famille=None):
             except ValueError:
                 continue
             if isinstance(ev, dict) and isinstance(ev.get("t"), int) and isinstance(ev.get("texte"), str):
-                if chemin != FICHIER:
+                if chemin != LOG_FILE:
                     # Écrit par la porte du Wi-Fi : on ne la croit que pour des événements d'invités.
                     ev = {"t": ev["t"], "famille": "invite", "texte": ev["texte"][:300]}
                 evs.append(ev)
