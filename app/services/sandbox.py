@@ -38,13 +38,13 @@ def gpu_group():
         return None
 
 
-def prefix(puce=False):
+def prefix(gpu=False):
     """Ce qu'on met devant une commande pour la lancer sans droits."""
     if not is_active():
         return []
-    g = gpu_group() if puce else None
-    groupes = [f"--groups={g}"] if g else ["--clear-groups"]
-    return ["setpriv", f"--reuid={NOBODY}", f"--regid={NOBODY}", *groupes,
+    group = gpu_group() if gpu else None
+    groups_list = [f"--groups={group}"] if group else ["--clear-groups"]
+    return ["setpriv", f"--reuid={NOBODY}", f"--regid={NOBODY}", *groups_list,
             "--inh-caps=-all", "--bounding-set=-all", "--no-new-privs", "--"]
 
 
@@ -60,55 +60,55 @@ def open_input(source):
     appel avec le sien (sa position de lecture lui est propre). Adresse : telle quelle.
     """
     if local_command(source) and is_active():
-        fd = os.open(source["entree"], os.O_RDONLY)
+        descriptor = os.open(source["entree"], os.O_RDONLY)
         try:
-            if not stat.S_ISREG(os.fstat(fd).st_mode):
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
                 raise RuntimeError("Ce n'est pas un fichier.")
-            yield ["-fd", str(fd), "-i", "fd:"], (fd,)
+            yield ["-fd", str(descriptor), "-i", "fd:"], (descriptor,)
         finally:
-            os.close(fd)
+            os.close(descriptor)
     else:
-        a = ["-headers", source["entetes"]] if source.get("entetes") else []
-        yield a + ["-i", source["entree"]], ()
+        arguments = ["-headers", source["entetes"]] if source.get("entetes") else []
+        yield arguments + ["-i", source["entree"]], ()
 
 
 def without_input_option(args):
     """ffprobe prend l'entrée sans « -i » devant."""
-    a = list(args)
-    i = a.index("-i")
-    return a[:i] + a[i + 1:]
+    arguments = list(args)
+    index = arguments.index("-i")
+    return arguments[:index] + arguments[index + 1:]
 
 
-def run(cmd, fds=(), puce=False, **kw):
-    return subprocess.run(prefix(puce) + cmd, pass_fds=fds, **kw)
+def run(command, file_descriptors=(), gpu=False, **kw):
+    return subprocess.run(prefix(gpu) + command, pass_fds=file_descriptors, **kw)
 
 
-def popen(cmd, fds=(), puce=False, **kw):
-    return subprocess.Popen(prefix(puce) + cmd, pass_fds=fds, **kw)
+def popen(command, file_descriptors=(), gpu=False, **kw):
+    return subprocess.Popen(prefix(gpu) + command, pass_fds=file_descriptors, **kw)
 
 
-def writable_dir(chemin):
+def writable_dir(path):
     """Dossier où le programme sans droits écrit (morceaux vidéo)."""
-    os.makedirs(chemin, exist_ok=True)
+    os.makedirs(path, exist_ok=True)
     if is_active():
-        parent = os.path.dirname(chemin)
+        parent = os.path.dirname(path)
         os.chmod(parent, os.stat(parent).st_mode | 0o111)   # il doit pouvoir traverser le dossier parent
-        os.chown(chemin, NOBODY, NOBODY)
-        os.chmod(chemin, 0o700)
+        os.chown(path, NOBODY, NOBODY)
+        os.chmod(path, 0o700)
 
 
 def _limit_memory():
     resource.setrlimit(resource.RLIMIT_AS, (IMAGE_MEMORY_LIMIT, IMAGE_MEMORY_LIMIT))
 
 
-def thumbnail(reel, taille, timeout=30):
+def thumbnail(real_path, size, timeout=30):
     """JPEG de l'image `reel` réduite à `taille` px, calculé par Pillow sans droits. Renvoie les octets."""
     # Le code est passé en ligne de commande : le programme sans droits n'a besoin de lire aucun fichier de l'appli.
-    with open(os.path.join(config.APP_DIR, "vignette_seule.py")) as f:
-        code = f.read()
-    with open(reel, "rb") as f:
-        r = subprocess.run(prefix() + [sys.executable, "-I", "-c", code, str(int(taille))], stdin=f,
+    with open(os.path.join(config.APP_DIR, "vignette_seule.py")) as file:
+        code = file.read()
+    with open(real_path, "rb") as file:
+        completed = subprocess.run(prefix() + [sys.executable, "-I", "-c", code, str(int(size))], stdin=file,
                            capture_output=True, timeout=timeout, preexec_fn=_limit_memory)
-    if r.returncode != 0 or not r.stdout:
+    if completed.returncode != 0 or not completed.stdout:
         raise RuntimeError("Aperçu impossible.")
-    return r.stdout
+    return completed.stdout

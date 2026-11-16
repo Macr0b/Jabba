@@ -45,30 +45,30 @@ _lock = threading.RLock()
 # ---------------------------------------------------------------- réglages
 def read():
     try:
-        with open(SETTINGS_FILE) as f:
-            d = json.load(f)
+        with open(SETTINGS_FILE) as file:
+            settings = json.load(file)
     except (OSError, ValueError):
-        d = {}
-    d.setdefault("actif", False)
-    d.setdefault("disque", None)       # nom du disque choisi
-    d.setdefault("chemin", None)       # point de montage du disque
-    d.setdefault("heure", "03:30")
-    d.setdefault("sources", {k: True for k in SOURCES})
-    d.setdefault("unite", None)        # tâche en cours sur le serveur
-    d.setdefault("lancee", 0)
-    d.setdefault("derniere_reussie", None)
-    d.setdefault("alerte_absent", None)
-    return d
+        settings = {}
+    settings.setdefault("actif", False)
+    settings.setdefault("disque", None)       # nom du disque choisi
+    settings.setdefault("chemin", None)       # point de montage du disque
+    settings.setdefault("heure", "03:30")
+    settings.setdefault("sources", {key: True for key in SOURCES})
+    settings.setdefault("unite", None)        # tâche en cours sur le serveur
+    settings.setdefault("lancee", 0)
+    settings.setdefault("derniere_reussie", None)
+    settings.setdefault("alerte_absent", None)
+    return settings
 
 
-def write(d):
+def write(settings):
     with _lock:
         os.makedirs(DATA_DIR, exist_ok=True)
-        tmp = SETTINGS_FILE + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(d, f, ensure_ascii=False)
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, SETTINGS_FILE)
+        temporary_file = SETTINGS_FILE + ".tmp"
+        with open(temporary_file, "w") as file:
+            json.dump(settings, file, ensure_ascii=False)
+        os.chmod(temporary_file, 0o600)
+        os.replace(temporary_file, SETTINGS_FILE)
 
 
 def new_passphrase():
@@ -79,36 +79,36 @@ def new_passphrase():
 
 def passphrase():
     try:
-        with open(KEY_FILE) as f:
-            return f.read().strip()
+        with open(KEY_FILE) as file:
+            return file.read().strip()
     except OSError:
         return None
 
 
-def set_passphrase(p):
-    with open(KEY_FILE, "w") as f:
-        f.write(p + "\n")
+def set_passphrase(process):
+    with open(KEY_FILE, "w") as file:
+        file.write(process + "\n")
     os.chmod(KEY_FILE, 0o600)
 
 
-def repository(d):
-    return os.path.join(d["chemin"], REPOSITORY_FOLDER)
+def repository(settings):
+    return os.path.join(settings["chemin"], REPOSITORY_FOLDER)
 
 
 # ---------------------------------------------------------------- la copie
-def backup_script(d, donnees_hote, demo=False):
+def backup_script(settings, donnees_hote, demo=False):
     """Le script shell qui fait une sauvegarde complète, sur le serveur."""
-    sources = [PATHS[k] for k, v in d["sources"].items() if v and k in PATHS]
+    sources = [PATHS[key] for key, value in settings["sources"].items() if value and key in PATHS]
     if demo:
         sources = [os.environ.get("JABBA_DEMO_SAUVER", "/tmp")]
-    exclure = " ".join(f"--exclude {shlex.quote(x)}" for x in EXCLUDE)
-    q = shlex.quote
+    excluded = " ".join(f"--exclude {shlex.quote(share)}" for share in EXCLUDE)
+    quote = shlex.quote
     return f"""set -uo pipefail
-ETAT={q(os.path.join(donnees_hote, "sauvegarde-etat.json"))}
-DISQUE={q(d["chemin"])}
-export RESTIC_REPOSITORY={q(repository(d))}
-export RESTIC_PASSWORD_FILE={q(os.path.join(donnees_hote, "sauvegardes.cle"))}
-export RESTIC_CACHE_DIR={q("/tmp/restic-jabba-cache" if demo else "/var/cache/restic-jabba")}
+ETAT={quote(os.path.join(donnees_hote, "sauvegarde-etat.json"))}
+DISQUE={quote(settings["chemin"])}
+export RESTIC_REPOSITORY={quote(repository(settings))}
+export RESTIC_PASSWORD_FILE={quote(os.path.join(donnees_hote, "sauvegardes.cle"))}
+export RESTIC_CACHE_DIR={quote("/tmp/restic-jabba-cache" if demo else "/var/cache/restic-jabba")}
 DEBUT=$(date +%s); ETAPE=disque; REMONTER=0; AVERT=""; RESUME=null
 TMP=$(mktemp)
 fin() {{
@@ -128,7 +128,7 @@ ETAPE=init
 restic cat config >/dev/null 2>&1 || restic init >/dev/null || exit 13
 restic unlock >/dev/null 2>&1
 ETAPE=copie
-restic backup --tag jabba --exclude-caches {exclure} {" ".join(q(s) for s in sources)} --json > "$TMP"
+restic backup --tag jabba --exclude-caches {excluded} {" ".join(quote(source_list) for source_list in sources)} --json > "$TMP"
 c=$?
 RESUME=$(grep '"message_type":"summary"' "$TMP" | tail -1)
 [ -n "$RESUME" ] || RESUME=null
@@ -158,8 +158,8 @@ done"""
 
 def read_state():
     try:
-        with open(STATE_FILE) as f:
-            return json.loads(f.read() or "{}")
+        with open(STATE_FILE) as file:
+            return json.loads(file.read() or "{}")
     except (OSError, ValueError):
         return {}
 
@@ -171,18 +171,18 @@ STEPS = {"disque": "Le disque des sauvegardes est introuvable ou ne s'ouvre pas.
           "menage": "Le tri des anciennes copies a échoué."}
 
 
-def result(e):
+def result(state):
     """Le dernier résultat, en clair."""
-    if not e:
+    if not state:
         return None
-    r = e.get("resume") or {}
-    ok = e.get("code") == 0
+    r = state.get("resume") or {}
+    succeeded = state.get("code") == 0
     return {
-        "ok": ok,
-        "debut": e.get("debut"), "fin": e.get("fin"),
-        "duree": max(0, (e.get("fin") or 0) - (e.get("debut") or 0)),
-        "erreur": None if ok else STEPS.get(e.get("etape"), "La sauvegarde s'est arrêtée."),
-        "avert": (e.get("avert") or "").strip() or None,
+        "ok": succeeded,
+        "debut": state.get("debut"), "fin": state.get("fin"),
+        "duree": max(0, (state.get("fin") or 0) - (state.get("debut") or 0)),
+        "erreur": None if succeeded else STEPS.get(state.get("etape"), "La sauvegarde s'est arrêtée."),
+        "avert": (state.get("avert") or "").strip() or None,
         "ajoute": r.get("data_added"),
         "fichiers": r.get("total_files_processed"),
         "taille": r.get("total_bytes_processed"),
@@ -191,80 +191,80 @@ def result(e):
     }
 
 
-def is_due(d, maintenant=None):
+def is_due(settings, now=None):
     """Faut-il lancer la sauvegarde de cette nuit ? (manquée : dès que possible)"""
-    if not d["actif"] or not d["chemin"]:
+    if not settings["actif"] or not settings["chemin"]:
         return False
-    maintenant = maintenant or datetime.now()
-    h, m = (int(x) for x in d["heure"].split(":"))
-    prevue = maintenant.replace(hour=h, minute=m, second=0, microsecond=0)
-    if maintenant < prevue:
-        prevue = prevue.fromtimestamp(prevue.timestamp() - 86400)
-    if ((d.get("derniere_reussie") or {}).get("fin") or 0) >= prevue.timestamp():
+    now = now or datetime.now()
+    hour, minute = (int(share) for share in settings["heure"].split(":"))
+    scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if now < scheduled:
+        scheduled = scheduled.fromtimestamp(scheduled.timestamp() - 86400)
+    if ((settings.get("derniere_reussie") or {}).get("fin") or 0) >= scheduled.timestamp():
         return False
     # Pas encore réussie depuis l'heure prévue : on (re)tente, au plus une fois par heure.
-    return maintenant.timestamp() - (d.get("lancee") or 0) >= 3600
+    return now.timestamp() - (settings.get("lancee") or 0) >= 3600
 
 
-def next_run(d):
-    h, m = (int(x) for x in d["heure"].split(":"))
-    maintenant = datetime.now()
-    p = maintenant.replace(hour=h, minute=m, second=0, microsecond=0)
-    if p <= maintenant:
-        p = datetime.fromtimestamp(p.timestamp() + 86400)
-    return int(p.timestamp())
+def next_run(settings):
+    hour, minute = (int(share) for share in settings["heure"].split(":"))
+    now = datetime.now()
+    process = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if process <= now:
+        process = datetime.fromtimestamp(process.timestamp() + 86400)
+    return int(process.timestamp())
 
 
 # ---------------------------------------------------------------- lire les copies
-def restic_command(d, donnees_hote, demo=False):
-    return ["env", f"RESTIC_REPOSITORY={repository(d)}", f"RESTIC_PASSWORD_FILE={os.path.join(donnees_hote, 'sauvegardes.cle')}",
+def restic_command(settings, donnees_hote, demo=False):
+    return ["env", f"RESTIC_REPOSITORY={repository(settings)}", f"RESTIC_PASSWORD_FILE={os.path.join(donnees_hote, 'sauvegardes.cle')}",
             f"RESTIC_CACHE_DIR={'/tmp/restic-jabba-cache' if demo else '/var/cache/restic-jabba'}", "restic", "--no-lock"]
 
 
-def snapshots(executer, d, donnees_hote, demo=False):
-    code, sortie, err = executer(restic_command(d, donnees_hote, demo) + ["snapshots", "--tag", "jabba", "--json"], 120)
+def snapshots(run, settings, donnees_hote, demo=False):
+    code, output, error_output = run(restic_command(settings, donnees_hote, demo) + ["snapshots", "--tag", "jabba", "--json"], 120)
     if code != 0:
-        raise RuntimeError(err.strip()[-200:] or "Sauvegardes illisibles.")
-    liste = json.loads(sortie or "[]")
-    liste.sort(key=lambda s: s["time"], reverse=True)
-    return [{"id": s["short_id"], "date": s["time"][:19], "chemins": s.get("paths", []),
-             "taille": (s.get("summary") or {}).get("total_bytes_processed")} for s in liste]
+        raise RuntimeError(error_output.strip()[-200:] or "Sauvegardes illisibles.")
+    items = json.loads(output or "[]")
+    items.sort(key=lambda source_list: source_list["time"], reverse=True)
+    return [{"id": source_list["short_id"], "date": source_list["time"][:19], "chemins": source_list.get("paths", []),
+             "taille": (source_list.get("summary") or {}).get("total_bytes_processed")} for source_list in items]
 
 
-def browse(executer, d, donnees_hote, ident, chemin, demo=False):
-    chemin = "/" + chemin.strip("/")
-    code, sortie, err = executer(restic_command(d, donnees_hote, demo) + ["ls", "--json", ident, chemin], 120)
+def browse(run, settings, donnees_hote, identifier, path, demo=False):
+    path = "/" + path.strip("/")
+    code, output, error_output = run(restic_command(settings, donnees_hote, demo) + ["ls", "--json", identifier, path], 120)
     if code != 0:
-        raise RuntimeError(err.strip()[-200:] or "Copie illisible.")
-    elements = []
-    for ligne in sortie.splitlines():
+        raise RuntimeError(error_output.strip()[-200:] or "Copie illisible.")
+    entries = []
+    for line in output.splitlines():
         try:
-            n = json.loads(ligne)
+            event = json.loads(line)
         except ValueError:
             continue
-        if n.get("struct_type") != "node" or n.get("path") == chemin:
+        if event.get("struct_type") != "node" or event.get("path") == path:
             continue
-        if os.path.dirname(n["path"].rstrip("/")) != chemin.rstrip("/") and not (chemin == "/" and n["path"].count("/") == 1):
+        if os.path.dirname(event["path"].rstrip("/")) != path.rstrip("/") and not (path == "/" and event["path"].count("/") == 1):
             continue
-        elements.append({"nom": n["name"], "chemin": n["path"], "dossier": n.get("type") == "dir",
-                         "taille": n.get("size"), "modifie": (n.get("mtime") or "")[:19]})
-    elements.sort(key=lambda e: (not e["dossier"], e["nom"].lower()))
-    return elements
+        entries.append({"nom": event["name"], "chemin": event["path"], "dossier": event.get("type") == "dir",
+                         "taille": event.get("size"), "modifie": (event.get("mtime") or "")[:19]})
+    entries.sort(key=lambda state: (not state["dossier"], state["nom"].lower()))
+    return entries
 
 
-def restore(executer, d, donnees_hote, ident, chemin, demo=False):
+def restore(run, settings, donnees_hote, identifier, path, demo=False):
     """Remet `chemin` tel qu'il était dans la copie `ident`, dans Restaurations/<date>/ (jamais par-dessus)."""
-    chemin = "/" + chemin.strip("/")
-    parent, nom = os.path.dirname(chemin) or "/", os.path.basename(chemin)
+    path = "/" + path.strip("/")
+    parent, name = os.path.dirname(path) or "/", os.path.basename(path)
     base = os.environ.get("JABBA_DEMO_RESTAURER", "/srv/data/dossiers/Restaurations") if demo else "/srv/data/dossiers/Restaurations"
-    cible = os.path.join(base, time.strftime("%Y-%m-%d %Hh%M") + f" ({ident})")
-    code, _, err = executer(restic_command(d, donnees_hote, demo) + ["restore", f"{ident}:{parent}", "--target", cible,
-                                                                  "--include", "/" + nom], 3600)
+    target = os.path.join(base, time.strftime("%Y-%m-%d %Hh%M") + f" ({identifier})")
+    code, _, error_output = run(restic_command(settings, donnees_hote, demo) + ["restore", f"{identifier}:{parent}", "--target", target,
+                                                                  "--include", "/" + name], 3600)
     if code != 0:
-        raise RuntimeError(err.strip()[-200:] or "Restauration impossible.")
+        raise RuntimeError(error_output.strip()[-200:] or "Restauration impossible.")
     if not demo:
-        executer(["chown", "-R", "1000:1000", base], 600)
-    return os.path.join(cible, nom)
+        run(["chown", "-R", "1000:1000", base], 600)
+    return os.path.join(target, name)
 
 
 # ---- ajouté au découpage de main.py
@@ -284,112 +284,112 @@ from services import files_source
 DEMO_STATE = {}   # en démo : le processus de la sauvegarde en cours
 
 
-def run_restic(cmd, timeout=120):
+def run_restic(command, timeout=120):
     """Une commande restic : sur le serveur, ou en démo dans le conteneur."""
     if config.DEMO:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         return r.returncode, r.stdout, r.stderr
-    return commands.run_on_host(cmd, timeout)
+    return commands.run_on_host(command, timeout)
 
 
 def host_data_dir():
     """Le dossier des données de l'appli, vu depuis le serveur (la clé et l'état y sont)."""
     if config.DEMO:
         return DATA_DIR
-    d = app_update.app_folder()
-    if not d:
+    settings = app_update.app_folder()
+    if not settings:
         raise HTTPException(500, "Dossier de l'appli introuvable.")
-    return os.path.join(d, "donnees")
+    return os.path.join(settings, "donnees")
 
 
-def is_running(d):
-    if not d["unite"]:
+def is_running(settings):
+    if not settings["unite"]:
         return False
     if config.DEMO:
-        p = DEMO_STATE.get(d["unite"])
-        return bool(p and p.poll() is None)
-    _, actif, _ = commands.run_on_host(["systemctl", "show", "-p", "ActiveState", "--value", d["unite"] + ".service"])
-    return actif.strip() in ("active", "activating")
+        process = DEMO_STATE.get(settings["unite"])
+        return bool(process and process.poll() is None)
+    _, active, _ = commands.run_on_host(["systemctl", "show", "-p", "ActiveState", "--value", settings["unite"] + ".service"])
+    return active.strip() in ("active", "activating")
 
 
-def disk_is_present(d):
-    return True if config.DEMO else bool(d["chemin"]) and files_source.disk_is_present(d["chemin"])
+def disk_is_present(settings):
+    return True if config.DEMO else bool(settings["chemin"]) and files_source.disk_is_present(settings["chemin"])
 
 
-def start_backup(qui=None):
-    d = read()
-    if not d["chemin"] or not passphrase():
+def start_backup(who=None):
+    settings = read()
+    if not settings["chemin"] or not passphrase():
         raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
-    if is_running(d):
+    if is_running(settings):
         raise HTTPException(409, "Une sauvegarde est déjà en cours.")
-    if not disk_is_present(d):
-        raise HTTPException(409, f"Le disque {d['disque']} n'est pas branché.")
-    contenu_script = backup_script(d, host_data_dir(), config.DEMO)
-    unite = f"jabba-sauvegarde-{int(time.time())}"
+    if not disk_is_present(settings):
+        raise HTTPException(409, f"Le disque {settings['disque']} n'est pas branché.")
+    script_content = backup_script(settings, host_data_dir(), config.DEMO)
+    unit = f"jabba-sauvegarde-{int(time.time())}"
     if config.DEMO:
-        DEMO_STATE[unite] = subprocess.Popen(["bash", "-c", contenu_script])
+        DEMO_STATE[unit] = subprocess.Popen(["bash", "-c", script_content])
     else:
         # Lancée par le serveur lui-même, en douceur (le serveur reste réactif) :
         # elle va au bout même si l'appli redémarre.
-        code, _, err = commands.start_on_host(unite, contenu_script, "bash", ("Nice=10", "IOSchedulingClass=idle"))
+        code, _, error_output = commands.start_on_host(unit, script_content, "bash", ("Nice=10", "IOSchedulingClass=idle"))
         if code != 0:
-            raise HTTPException(500, "Lancement impossible : " + err[:200])
-    d.update(unite=unite, lancee=int(time.time()))
-    write(d)
-    activity_log.record("sauvegardes", f"Sauvegarde lancée vers {d['disque']}" + ("" if qui else " (automatique)"), qui)
-    return unite
+            raise HTTPException(500, "Lancement impossible : " + error_output[:200])
+    settings.update(unite=unit, lancee=int(time.time()))
+    write(settings)
+    activity_log.record("sauvegardes", f"Sauvegarde lancée vers {settings['disque']}" + ("" if who else " (automatique)"), who)
+    return unit
 
 
 def follow_backup():
     """Quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté."""
-    d = read()
-    if not d["unite"] or is_running(d):
-        return d
-    e = read_state()
-    res = result(e) if (e.get("debut") or 0) >= d["lancee"] - 5 else None
+    settings = read()
+    if not settings["unite"] or is_running(settings):
+        return settings
+    state = read_state()
+    res = result(state) if (state.get("debut") or 0) >= settings["lancee"] - 5 else None
     if res is None:
-        res = {"ok": False, "debut": d["lancee"], "fin": int(time.time()), "duree": 0,
+        res = {"ok": False, "debut": settings["lancee"], "fin": int(time.time()), "duree": 0,
                "erreur": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?)."}
-    d["unite"] = None
-    d["dernier"] = res
+    settings["unite"] = None
+    settings["dernier"] = res
     if res["ok"]:
-        d["derniere_reussie"] = res
-        d["alerte_absent"] = None
+        settings["derniere_reussie"] = res
+        settings["alerte_absent"] = None
         activity_log.record("sauvegardes", "Sauvegarde terminée" + (f" ({res['avert'].strip()})" if res.get("avert") else ""), None)
         if res.get("avert"):
-            notifications.send("sauvegardes", "Sauvegarde incomplète", res["avert"], "/#/sauvegardes", famille="sauvegardes", noter=False)
+            notifications.send("sauvegardes", "Sauvegarde incomplète", res["avert"], "/#/sauvegardes", family="sauvegardes", log=False)
     else:
         # Une alerte par jour au plus (la sauvegarde est retentée chaque heure).
-        jour = time.strftime("%Y-%m-%d")
-        if d.get("alerte_echec") != jour:
-            notifications.send("sauvegardes", "Sauvegarde échouée", res["erreur"] + (" Nouvel essai dans une heure." if d["actif"] else ""),
-                           "/#/sauvegardes", famille="sauvegardes")
+        day = time.strftime("%Y-%m-%d")
+        if settings.get("alerte_echec") != day:
+            notifications.send("sauvegardes", "Sauvegarde échouée", res["erreur"] + (" Nouvel essai dans une heure." if settings["actif"] else ""),
+                           "/#/sauvegardes", family="sauvegardes")
         else:
             activity_log.record("sauvegardes", "Sauvegarde échouée — " + res["erreur"])
-        d["alerte_echec"] = jour
-    write(d)
-    return d
+        settings["alerte_echec"] = day
+    write(settings)
+    return settings
 
 
 def watch_backups():
-    d = follow_backup()
-    if d["unite"] or not is_due(d):
+    settings = follow_backup()
+    if settings["unite"] or not is_due(settings):
         return
-    if disk_is_present(d):
+    if disk_is_present(settings):
         start_backup()
         return
     # Disque absent : on prévient une fois par jour, et la copie part dès qu'il revient.
-    jour = time.strftime("%Y-%m-%d")
-    if d.get("alerte_absent") != jour:
-        d["alerte_absent"] = jour
-        write(d)
+    day = time.strftime("%Y-%m-%d")
+    if settings.get("alerte_absent") != day:
+        settings["alerte_absent"] = day
+        write(settings)
         notifications.send("sauvegardes", "Sauvegarde en attente",
-                       f"Le disque {d['disque']} n'est pas branché : la sauvegarde partira dès son retour.",
-                       "/#/sauvegardes", famille="sauvegardes")
+                       f"Le disque {settings['disque']} n'est pas branché : la sauvegarde partira dès son retour.",
+                       "/#/sauvegardes", family="sauvegardes")
 
 
-def require_readable(d):
-    if not d["chemin"] or not passphrase():
+def require_readable(settings):
+    if not settings["chemin"] or not passphrase():
         raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
-    if not disk_is_present(d):
-        raise HTTPException(409, f"Branche le disque {d['disque']} pour voir les sauvegardes.")
+    if not disk_is_present(settings):
+        raise HTTPException(409, f"Branche le disque {settings['disque']} pour voir les sauvegardes.")

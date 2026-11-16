@@ -33,26 +33,26 @@ TYPES = {
 
 def _read():
     try:
-        with open(SUBSCRIPTIONS_FILE) as f:
-            d = json.load(f)
+        with open(SUBSCRIPTIONS_FILE) as file:
+            data = json.load(file)
     except (OSError, ValueError):
-        d = {}
-    d.setdefault("abonnements", [])
-    d.setdefault("types", {t: True for t in TYPES})
-    for t in TYPES:
-        d["types"].setdefault(t, True)
-    return d
+        data = {}
+    data.setdefault("abonnements", [])
+    data.setdefault("types", {alert_type: True for alert_type in TYPES})
+    for alert_type in TYPES:
+        data["types"].setdefault(alert_type, True)
+    return data
 
 
-def _write(d):
+def _write(data):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(SUBSCRIPTIONS_FILE + ".tmp", "w") as f:
-        json.dump(d, f)
+    with open(SUBSCRIPTIONS_FILE + ".tmp", "w") as file:
+        json.dump(data, file)
     os.replace(SUBSCRIPTIONS_FILE + ".tmp", SUBSCRIPTIONS_FILE)
 
 
-def _b64(b):
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+def _b64(raw_bytes):
+    return base64.urlsafe_b64encode(raw_bytes).rstrip(b"=").decode()
 
 
 def public_key():
@@ -60,107 +60,107 @@ def public_key():
     with _LOCK:
         if not os.path.exists(KEY_FILE):
             os.makedirs(DATA_DIR, exist_ok=True)
-            k = ec.generate_private_key(ec.SECP256R1())
-            pem = k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+            private_key = ec.generate_private_key(ec.SECP256R1())
+            pem = private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                   serialization.NoEncryption())
-            fd = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "wb") as f:
-                f.write(pem)
-        with open(KEY_FILE, "rb") as f:
-            k = serialization.load_pem_private_key(f.read(), None)
-    pub = k.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
-    return _b64(pub)
+            descriptor = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(descriptor, "wb") as file:
+                file.write(pem)
+        with open(KEY_FILE, "rb") as file:
+            private_key = serialization.load_pem_private_key(file.read(), None)
+    public = private_key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    return _b64(public)
 
 
 def settings():
-    d = _read()
+    data = _read()
     return {
         "cle": public_key(),
-        "appareils": len(d["abonnements"]),
-        "endpoints": [a["endpoint"] for a in d["abonnements"]],
-        "types": [{"id": t, "nom": n, "detail": x, "actif": d["types"][t]} for t, (n, x) in TYPES.items()],
+        "appareils": len(data["abonnements"]),
+        "endpoints": [subscription["endpoint"] for subscription in data["abonnements"]],
+        "types": [{"id": alert_type, "nom": name, "detail": entry, "actif": data["types"][alert_type]} for alert_type, (name, entry) in TYPES.items()],
     }
 
 
-def subscribe(abonnement, contact, appareil="", qui=None):
+def subscribe(abonnement, contact, device="", who=None):
     if not isinstance(abonnement, dict) or not str(abonnement.get("endpoint", "")).startswith("https://"):
         raise ValueError("Abonnement invalide.")
-    cles = abonnement.get("keys") or {}
-    if not (cles.get("p256dh") and cles.get("auth")):
+    keys = abonnement.get("keys") or {}
+    if not (keys.get("p256dh") and keys.get("auth")):
         raise ValueError("Abonnement invalide.")
     with _LOCK:
-        d = _read()
-        d["abonnements"] = [a for a in d["abonnements"] if a["endpoint"] != abonnement["endpoint"]]
-        d["abonnements"].append({"endpoint": abonnement["endpoint"], "keys": {"p256dh": cles["p256dh"], "auth": cles["auth"]},
-                                 "contact": contact, "appareil": appareil[:80], "qui": qui, "depuis": int(time.time())})
-        _write(d)
+        data = _read()
+        data["abonnements"] = [subscription for subscription in data["abonnements"] if subscription["endpoint"] != abonnement["endpoint"]]
+        data["abonnements"].append({"endpoint": abonnement["endpoint"], "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]},
+                                 "contact": contact, "appareil": device[:80], "qui": who, "depuis": int(time.time())})
+        _write(data)
 
 
 def unsubscribe(endpoint):
     with _LOCK:
-        d = _read()
-        d["abonnements"] = [a for a in d["abonnements"] if a["endpoint"] != endpoint]
-        _write(d)
+        data = _read()
+        data["abonnements"] = [subscription for subscription in data["abonnements"] if subscription["endpoint"] != endpoint]
+        _write(data)
 
 
-def set_types(type_, actif):
-    if type_ not in TYPES:
+def set_types(media_type, active):
+    if media_type not in TYPES:
         raise ValueError("Type inconnu.")
     with _LOCK:
-        d = _read()
-        d["types"][type_] = bool(actif)
-        _write(d)
+        data = _read()
+        data["types"][media_type] = bool(active)
+        _write(data)
 
 
-def send(type_, titre, texte, url="/", forcer=False, famille="alerte", pour=None, noter=True):
+def send(media_type, title, text, url="/", force=False, family="alerte", recipients=None, log=True):
     """Note l'événement au journal, puis l'envoie aux appareils si ce type est activé.
 
     `pour` : ensemble de comptes Tailscale ; seuls leurs appareils reçoivent l'alerte.
     """
-    if noter:
-        activity_log.record(famille, f"{titre} — {texte}" if texte else titre)
-    d = _read()
-    if not forcer and not d["types"].get(type_, True):
+    if log:
+        activity_log.record(family, f"{title} — {text}" if text else title)
+    data = _read()
+    if not force and not data["types"].get(media_type, True):
         return 0
-    cibles = [a for a in d["abonnements"] if pour is None or a.get("qui") in pour]
-    if not cibles:
+    targets = [subscription for subscription in data["abonnements"] if recipients is None or subscription.get("qui") in recipients]
+    if not targets:
         return 0
-    threading.Thread(target=_push, args=(cibles, titre, texte, url), daemon=True).start()
-    return len(cibles)
+    threading.Thread(target=_push, args=(targets, title, text, url), daemon=True).start()
+    return len(targets)
 
 
 def valid_contact(contact):
     """Adresse de contact acceptée par la signature des alertes : https://hôte (sans port) ou mailto:."""
     from urllib.parse import urlparse
     if contact and contact.startswith("https://"):
-        hote = urlparse(contact).hostname
-        if hote:
-            return "https://" + hote
+        host_runner = urlparse(contact).hostname
+        if host_runner:
+            return "https://" + host_runner
     if contact and contact.startswith("mailto:") and "@" in contact:
         return contact
     return "mailto:jabba@example.org"
 
 
-def _push(abonnements, titre, texte, url):
+def _push(subscriptions, title, text, url):
     try:
         from pywebpush import WebPushException, webpush
     except ImportError:
         return
     public_key()
-    message = json.dumps({"titre": titre, "texte": texte, "url": url})
-    perimes = []
-    for a in abonnements:
+    message = json.dumps({"titre": title, "texte": text, "url": url})
+    expired = []
+    for subscription in subscriptions:
         try:
-            webpush(subscription_info={"endpoint": a["endpoint"], "keys": a["keys"]}, data=message,
-                    vapid_private_key=KEY_FILE, vapid_claims={"sub": valid_contact(a.get("contact"))},
+            webpush(subscription_info={"endpoint": subscription["endpoint"], "keys": subscription["keys"]}, data=message,
+                    vapid_private_key=KEY_FILE, vapid_claims={"sub": valid_contact(subscription.get("contact"))},
                     ttl=24 * 3600, timeout=15)
         except WebPushException as e:
             code = getattr(e.response, "status_code", None)
             if code in (404, 410):
-                perimes.append(a["endpoint"])
+                expired.append(subscription["endpoint"])
             else:
                 print("alerte refusée :", code, getattr(e.response, "text", e), flush=True)
         except Exception as e:  # noqa: BLE001 — une alerte ratée ne doit jamais faire tomber l'appli
             print("alerte non envoyée :", type(e).__name__, e, flush=True)
-    for p in perimes:
-        unsubscribe(p)
+    for expired_list in expired:
+        unsubscribe(expired_list)

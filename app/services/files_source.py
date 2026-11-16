@@ -26,102 +26,102 @@ def files_source():
         return "disque"
     if time.time() - _SOURCE_CACHE["t"] < 15:
         return _SOURCE_CACHE["v"]
-    code, sortie, _ = commands.run_on_host(["docker", "inspect", "-f", "{{.State.Running}}", "nextcloud"], timeout=10)
-    v = "nextcloud" if code == 0 and sortie.strip() == "true" else "disque"
-    _SOURCE_CACHE.update(t=time.time(), v=v)
-    return v
+    code, output, _ = commands.run_on_host(["docker", "inspect", "-f", "{{.State.Running}}", "nextcloud"], timeout=10)
+    value = "nextcloud" if code == 0 and output.strip() == "true" else "disque"
+    _SOURCE_CACHE.update(t=time.time(), v=value)
+    return value
 
 
-def ejected_recently(nom):
-    return time.time() - EJECTED.get(nom, 0) < EJECTION_PAUSE
+def ejected_recently(name):
+    return time.time() - EJECTED.get(name, 0) < EJECTION_PAUSE
 
 
 def wake_disks():
     """Un accès réveille l'ouverture automatique des disques branchés (sauf ceux qu'on vient d'éjecter)."""
     if config.DEMO:
         return
-    for nom, chemin in known_disks().items():
-        if re.fullmatch(r"/[\w./-]+", chemin) and not ejected_recently(nom) and disk_is_present(chemin):
-            open_disk(chemin)
+    for name, path in known_disks().items():
+        if re.fullmatch(r"/[\w./-]+", path) and not ejected_recently(name) and disk_is_present(path):
+            open_disk(path)
 
 
 _OPENED = set()   # disques vus ouverts au dernier passage
 
 
-def open_disk(chemin):
+def open_disk(path):
     """Ouvre un disque branché. Si l'ouverture automatique n'est pas armée (réglage
     modifié sans redémarrage, disque rebranché…), l'appli la réarme elle-même.
     Quand un disque vient d'être (re)branché, Nextcloud refait son inventaire."""
-    ok = _mount(chemin)
-    if ok and chemin not in _OPENED:
-        threading.Thread(target=rescan_in_nextcloud, args=(chemin,), daemon=True).start()
-    (_OPENED.add if ok else _OPENED.discard)(chemin)
-    return ok
+    mounted = _mount(path)
+    if mounted and path not in _OPENED:
+        threading.Thread(target=rescan_in_nextcloud, args=(path,), daemon=True).start()
+    (_OPENED.add if mounted else _OPENED.discard)(path)
+    return mounted
 
 
-def rescan_in_nextcloud(chemin):
+def rescan_in_nextcloud(path):
     """Nextcloud garde en mémoire le contenu d'un disque, même vide (disque débranché) :
     on lui fait relire le disque et on remet son réglage lecture seule / écriture."""
     occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
-    code, sortie, _ = commands.run_on_host(occ + ["files_external:list", "--output=json"], timeout=60)
+    code, output, _ = commands.run_on_host(occ + ["files_external:list", "--output=json"], timeout=60)
     if code != 0:
         return   # Nextcloud arrêté ou absent
     try:
-        montages = json.loads(sortie)
+        mounts = json.loads(output)
     except ValueError:
         return
-    code, sortie, _ = commands.run_on_host(occ + ["user:list", "--output=json"], timeout=60)
+    code, output, _ = commands.run_on_host(occ + ["user:list", "--output=json"], timeout=60)
     try:
-        utilisateurs = list(json.loads(sortie)) if code == 0 else []
+        users = list(json.loads(output)) if code == 0 else []
     except ValueError:
-        utilisateurs = []
-    dossier = os.path.basename(chemin.rstrip("/"))
-    for m in montages:
-        if (m.get("configuration") or {}).get("datadir", "").rstrip("/") != f"/mnt/disques/{dossier}":
+        users = []
+    folder = os.path.basename(path.rstrip("/"))
+    for mount in mounts:
+        if (mount.get("configuration") or {}).get("datadir", "").rstrip("/") != f"/mnt/disques/{folder}":
             continue
-        commands.run_on_host(occ + ["files_external:option", str(m["mount_id"]), "readonly",
-                    "false" if is_writable(chemin) else "true"], timeout=60)
-        point = m.get("mount_point", "").strip("/")
-        for u in m.get("applicable_users") or utilisateurs:
-            commands.run_on_host(occ + ["files:scan", f"--path=/{u}/files/{point}"], timeout=3600)
-    activity_log.record("disque", f"Nextcloud a relu {dossier}")
+        commands.run_on_host(occ + ["files_external:option", str(mount["mount_id"]), "readonly",
+                    "false" if is_writable(path) else "true"], timeout=60)
+        mount_point = mount.get("mount_point", "").strip("/")
+        for user in mount.get("applicable_users") or users:
+            commands.run_on_host(occ + ["files:scan", f"--path=/{user}/files/{mount_point}"], timeout=3600)
+    activity_log.record("disque", f"Nextcloud a relu {folder}")
 
 
-def _mount(chemin):
-    commands.run_on_host(["ls", chemin], timeout=10)
-    if commands.run_on_host(["mountpoint", "-q", chemin], timeout=10)[0] == 0:
+def _mount(path):
+    commands.run_on_host(["ls", path], timeout=10)
+    if commands.run_on_host(["mountpoint", "-q", path], timeout=10)[0] == 0:
         return True
-    _, unite, _ = commands.run_on_host(["systemd-escape", "--path", "--suffix=automount", chemin])
-    unite = unite.strip()
-    commands.run_on_host(["sh", "-c", f"systemctl daemon-reload; systemctl reset-failed '{unite[:-10]}.mount' 2>/dev/null; "
-                      f"systemctl restart '{unite}'; ls '{chemin}' >/dev/null 2>&1"], timeout=30)
-    return commands.run_on_host(["mountpoint", "-q", chemin], timeout=10)[0] == 0
+    _, unit, _ = commands.run_on_host(["systemd-escape", "--path", "--suffix=automount", path])
+    unit = unit.strip()
+    commands.run_on_host(["sh", "-c", f"systemctl daemon-reload; systemctl reset-failed '{unit[:-10]}.mount' 2>/dev/null; "
+                      f"systemctl restart '{unit}'; ls '{path}' >/dev/null 2>&1"], timeout=30)
+    return commands.run_on_host(["mountpoint", "-q", path], timeout=10)[0] == 0
 
 
-def is_writable(chemin):
+def is_writable(path):
     """True si le disque monté sur `chemin` est déclaré en écriture dans /etc/fstab."""
     if config.DEMO:
         return bool(os.environ.get("JABBA_DEMO_ECRITURE"))
     code, fstab, _ = commands.run_on_host(["cat", "/etc/fstab"])
-    for ligne in fstab.splitlines():
-        champs = ligne.split()
-        if len(champs) >= 4 and not ligne.lstrip().startswith("#") and champs[1] == chemin:
-            return "ro" not in champs[3].split(",")
+    for line in fstab.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and not line.lstrip().startswith("#") and fields[1] == path:
+            return "ro" not in fields[3].split(",")
     return False
 
 
 def disk_params():
     """Pour l'écran Fichiers en mode disque : disques branchés (nom -> chemin) et ceux en lecture seule."""
-    branches = plugged_disks()
-    connus = known_disks()
-    disques = {n: connus[n] for n in branches if n in connus}
-    lecture_seule = {n for n, c in disques.items() if not is_writable(c)}
-    return disques, lecture_seule
+    plugged = plugged_disks()
+    known = known_disks()
+    disks = {name: known[name] for name in plugged if name in known}
+    read_only = {name for name, c in disks.items() if not is_writable(c)}
+    return disks, read_only
 
 
-def run_disk_action(fonction):
+def run_disk_action(function):
     try:
-        return fonction()
+        return function()
     except disk_browser.Refusal as e:
         raise HTTPException(e.code, e.message)
     except PermissionError:
@@ -129,60 +129,60 @@ def run_disk_action(fonction):
 
 
 def configured_disks():
-    res = {}
-    for morceau in os.environ.get("DISQUES", "").split(","):
-        if "=" in morceau:
-            nom, chemin = morceau.split("=", 1)
-            res[nom.strip()] = chemin.strip()
-    return res
+    result = {}
+    for share in os.environ.get("DISQUES", "").split(","):
+        if "=" in share:
+            name, path = share.split("=", 1)
+            result[name.strip()] = path.strip()
+    return result
 
 
 def known_disks():
     """Disques externes : « nom -> chemin sur le serveur ». Ceux du .env, puis ceux ajoutés tout seuls."""
-    res = configured_disks()
+    result = configured_disks()
     if not config.DEMO:
-        for nom, chemin in auto_disks.known_disks().items():
-            res.setdefault(nom, chemin)
-    return res
+        for name, path in auto_disks.known_disks().items():
+            result.setdefault(name, path)
+    return result
 
 
 _UUID_CACHE = {"t": 0, "v": {}}
 
 
-def disk_uuid(chemin):
+def disk_uuid(path):
     """Identifiant du disque monté sur `chemin`, lu dans /etc/fstab (gardé 1 minute)."""
     if time.time() - _UUID_CACHE["t"] > 60:
         _, fstab, _ = commands.run_on_host(["cat", "/etc/fstab"])
-        v = {}
-        for ligne in fstab.splitlines():
-            champs = ligne.split()
-            if len(champs) >= 2 and not ligne.lstrip().startswith("#") and champs[0].upper().startswith("UUID="):
-                v[champs[1]] = champs[0].split("=", 1)[1].strip('"')
-        _UUID_CACHE.update(t=time.time(), v=v)
-    return _UUID_CACHE["v"].get(chemin)
+        value = {}
+        for line in fstab.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and not line.lstrip().startswith("#") and fields[0].upper().startswith("UUID="):
+                value[fields[1]] = fields[0].split("=", 1)[1].strip('"')
+        _UUID_CACHE.update(t=time.time(), v=value)
+    return _UUID_CACHE["v"].get(path)
 
 
-def disk_is_present(chemin):
+def disk_is_present(path):
     """Branché ? Vérifié sans réveiller l'ouverture automatique (qui attendrait 5 s si débranché)."""
-    return auto_disks.is_present(commands.run_on_host, disk_uuid(chemin))
+    return auto_disks.is_present(commands.run_on_host, disk_uuid(path))
 
 
 def plugged_disks():
     """Noms des disques externes actuellement branchés."""
     if config.DEMO:
         return {"R2-D2"}
-    branches = set()
-    for nom, chemin in known_disks().items():
-        if not re.fullmatch(r"/[\w./-]+", chemin) or ejected_recently(nom) or not disk_is_present(chemin):
+    plugged = set()
+    for name, path in known_disks().items():
+        if not re.fullmatch(r"/[\w./-]+", path) or ejected_recently(name) or not disk_is_present(path):
             continue
-        if open_disk(chemin):
-            branches.add(nom)
-    return branches
+        if open_disk(path):
+            plugged.add(name)
+    return plugged
 
 
 # ---------------------------------------------------------------- disques : mode d'accès et éjection
-def disk_path(nom):
-    chemin = known_disks().get(nom)
-    if not chemin or not re.fullmatch(r"/[\w./-]+", chemin):
+def disk_path(name):
+    path = known_disks().get(name)
+    if not path or not re.fullmatch(r"/[\w./-]+", path):
         raise HTTPException(404, "Disque inconnu")
-    return chemin
+    return path

@@ -28,12 +28,12 @@ def task_state(tid: str):
 # ---------------------------------------------------------------- accueil / système
 @router.get("/api/moi")
 def who_am_i(request: Request):
-    serveur = "serveur-demo" if config.DEMO else commands.run_on_host(["hostname"])[1].strip()
-    j = request.state.session
-    return {"login": request.state.user, "nom": request.state.nom, "version": VERSION, "serveur": serveur,
+    server = "serveur-demo" if config.DEMO else commands.run_on_host(["hostname"])[1].strip()
+    session = request.state.session
+    return {"login": request.state.user, "nom": request.state.nom, "version": VERSION, "serveur": server,
             "remise": accounts.pending_reset(request.state.user),
-            "mode": "admin" if j and not j.get("provisoire") else "invite",
-            "admin": {"identifiant": j["identifiant"], "rang": j["rang"], "provisoire": j.get("provisoire", False)} if j else None}
+            "mode": "admin" if session and not session.get("provisoire") else "invite",
+            "admin": {"identifiant": session["identifiant"], "rang": session["rang"], "provisoire": session.get("provisoire", False)} if session else None}
 
 
 @router.get("/api/etat")
@@ -42,22 +42,22 @@ def home_state():
         from services.demo_data import HOME_STATE
         return HOME_STATE
     files_source.wake_disks()
-    disques = measurements.disk_space(["/", "/srv/data"])
-    outils = tools.list_tools()
+    disks = measurements.disk_space(["/", "/srv/data"])
+    tools_list = tools.list_tools()
     code, _, _ = commands.run_on_host(["test", "-f", "/var/run/reboot-required"])
-    soucis = [o["nom"] for o in outils if o["etat"] in ("arrêté", "en panne", "partiel") and o["id"] != "jabba-app"]
+    problems = [tool["nom"] for tool in tools_list if tool["etat"] in ("arrêté", "en panne", "partiel") and tool["id"] != "jabba-app"]
     return {
         "cpu": measurements.cpu_percent(),
         "memoire": measurements.memory(),
         "temperature": measurements.temperature(),
-        "systeme": disques.get("/"),
-        "donnees": disques.get("/srv/data"),
+        "systeme": disks.get("/"),
+        "donnees": disks.get("/srv/data"),
         "duree": measurements.uptime(),
         "redemarrage_requis": code == 0,
         "redemarrage_auto": restart_policy.current_mode()["mode"] == "auto" if code == 0 else None,
-        "outils_actifs": sum(1 for o in outils if o["etat"] == "actif"),
-        "outils_total": len(outils),
-        "soucis": soucis,
+        "outils_actifs": sum(1 for tool in tools_list if tool["etat"] == "actif"),
+        "outils_total": len(tools_list),
+        "soucis": problems,
     }
 
 
@@ -66,31 +66,31 @@ def system_state():
     if config.DEMO:
         from services.demo_data import SYSTEM
         return SYSTEM
-    _, nom, _ = commands.run_on_host(["hostname"])
-    _, osr, _ = commands.run_on_host(["cat", "/etc/os-release"])
-    jolie = re.search(r'PRETTY_NAME="([^"]+)"', osr)
-    _, noyau, _ = commands.run_on_host(["uname", "-r"])
+    _, name, _ = commands.run_on_host(["hostname"])
+    _, os_release, _ = commands.run_on_host(["cat", "/etc/os-release"])
+    pretty = re.search(r'PRETTY_NAME="([^"]+)"', os_release)
+    _, kernel, _ = commands.run_on_host(["uname", "-r"])
     code, _, _ = commands.run_on_host(["test", "-f", "/var/run/reboot-required"])
-    _, journal, _ = commands.run_shell_on_host("tail -n 200 /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null")
-    derniere = None
-    for ligne in journal.splitlines():
-        m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d)", ligne)
-        if m:
-            derniere = m.group(1)
-    appareils = []
-    c, ts, _ = commands.run_on_host(["tailscale", "status", "--json"], timeout=10)
-    if c == 0:
+    _, log_text, _ = commands.run_shell_on_host("tail -n 200 /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null")
+    latest = None
+    for line in log_text.splitlines():
+        match = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d)", line)
+        if match:
+            latest = match.group(1)
+    devices = []
+    status, tailscale_output, _ = commands.run_on_host(["tailscale", "status", "--json"], timeout=10)
+    if status == 0:
         try:
-            d = json.loads(ts)
-            for p in (d.get("Peer") or {}).values():
-                appareils.append({"nom": p.get("HostName"), "os": p.get("OS"), "en_ligne": p.get("Online", False)})
+            status_data = json.loads(tailscale_output)
+            for peer in (status_data.get("Peer") or {}).values():
+                devices.append({"nom": peer.get("HostName"), "os": peer.get("OS"), "en_ligne": peer.get("Online", False)})
         except ValueError:
             pass
     return {
-        "nom": nom.strip(), "os": jolie.group(1) if jolie else "", "noyau": noyau.strip(),
+        "nom": name.strip(), "os": pretty.group(1) if pretty else "", "noyau": kernel.strip(),
         "duree": measurements.uptime(), "redemarrage_requis": code == 0,
         "redemarrage": restart_policy.current_mode(),
-        "derniere_maj_auto": derniere, "appareils": sorted(appareils, key=lambda a: (not a["en_ligne"], a["nom"] or "")),
+        "derniere_maj_auto": latest, "appareils": sorted(devices, key=lambda account: (not account["en_ligne"], account["nom"] or "")),
         "version_appli": VERSION, "courant": power.POWER_STATE, "conso": power.read_consumption(),
     }
 
@@ -104,24 +104,24 @@ def restart_policy_state(request: Request):
 @router.post("/api/systeme/redemarrage")
 async def set_restart_policy(request: Request):
     """Choisit : redémarrage automatique à 4 h, ou à la main. Super admin, mot de passe récent."""
-    guard.require_super_admin(request, fort=True)
+    guard.require_super_admin(request, strong=True)
     mode = str((await request.json()).get("mode") or "")
     if mode not in restart_policy.MODES:
         raise HTTPException(400, "Choix inconnu.")
     if config.DEMO:
-        with open(restart_policy.DEMO_FILE, "w") as f:
-            f.write(mode + "\n")
+        with open(restart_policy.DEMO_FILE, "w") as file:
+            file.write(mode + "\n")
     else:
-        code, _, err = commands.run_shell_on_host(restart_policy.apply_script(mode), timeout=60)
+        code, _, error_output = commands.run_shell_on_host(restart_policy.apply_script(mode), timeout=60)
         if code != 0:
-            raise HTTPException(500, err.strip()[-200:] or "Échec du réglage.")
+            raise HTTPException(500, error_output.strip()[-200:] or "Échec du réglage.")
     activity_log.record("systeme", "Redémarrage après une mise à jour : " + ("automatique à 4 h" if mode == "auto" else "à la main"), request.state.nom)
     return {"ok": True}
 
 
 @router.post("/api/systeme/redemarrer")
 def reboot_server(request: Request):
-    guard.require_admin(request, fort=True)
+    guard.require_admin(request, strong=True)
     if config.DEMO:
         return {"ok": True}
     activity_log.record("systeme", "Redémarrage du serveur demandé", request.state.nom)
@@ -133,8 +133,8 @@ def reboot_server(request: Request):
 # ---------------------------------------------------------------- journal d'activité
 @router.get("/api/journal")
 def activity(n: int = 100, famille: str = ""):
-    res = activity_log.read(min(max(n, 1), 500), famille or None)
+    result = activity_log.read(min(max(n, 1), 500), famille or None)
     if config.DEMO:
         from services.demo_data import ACTIVITY
-        res += [e for e in ACTIVITY if not famille or e["famille"] == famille]
-    return res
+        result += [events for events in ACTIVITY if not famille or events["famille"] == famille]
+    return result

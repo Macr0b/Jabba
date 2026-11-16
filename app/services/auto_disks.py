@@ -31,198 +31,198 @@ UNREADABLE = {"apfs": "APFS (format Mac récent)", "hfsplus": "Mac OS étendu (H
 
 def read():
     try:
-        with open(DISKS_FILE) as f:
-            d = json.load(f)
+        with open(DISKS_FILE) as file:
+            data = json.load(file)
     except (OSError, ValueError):
-        d = {}
-    d.setdefault("disques", [])   # {nom, chemin, uuid, format, ajoute}
-    d.setdefault("oublies", [])   # uuid
-    d.setdefault("signales", [])  # uuid illisibles déjà signalés
-    return d
+        data = {}
+    data.setdefault("disques", [])   # {nom, chemin, uuid, format, ajoute}
+    data.setdefault("oublies", [])   # uuid
+    data.setdefault("signales", [])  # uuid illisibles déjà signalés
+    return data
 
 
-def write(d):
+def write(data):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(DISKS_FILE + ".tmp", "w") as f:
-        json.dump(d, f, ensure_ascii=False)
+    with open(DISKS_FILE + ".tmp", "w") as file:
+        json.dump(data, file, ensure_ascii=False)
     os.replace(DISKS_FILE + ".tmp", DISKS_FILE)
 
 
 def known_disks():
     """nom -> chemin pour les disques ajoutés automatiquement."""
-    return {x["nom"]: x["chemin"] for x in read()["disques"]}
+    return {disk["nom"]: disk["chemin"] for disk in read()["disques"]}
 
 
 def fstab_uuids(fstab):
-    res = set()
-    for ligne in fstab.splitlines():
-        champs = ligne.split()
-        if champs and not ligne.lstrip().startswith("#") and champs[0].upper().startswith("UUID="):
-            res.add(champs[0].split("=", 1)[1].strip('"').lower())
-    return res
+    result = set()
+    for line in fstab.splitlines():
+        fields = line.split()
+        if fields and not line.lstrip().startswith("#") and fields[0].upper().startswith("UUID="):
+            result.add(fields[0].split("=", 1)[1].strip('"').lower())
+    return result
 
 
-def clean_name(etiquette, uuid, pris):
-    base = (etiquette or "").strip() or f"Disque {uuid[:4].upper()}"
+def clean_name(label, uuid, taken):
+    base = (label or "").strip() or f"Disque {uuid[:4].upper()}"
     base = re.sub(r"[^\w .-]", "", base)[:40].strip() or f"Disque {uuid[:4].upper()}"
-    nom, i = base, 2
-    while nom.lower() in pris:
-        nom, i = f"{base} {i}", i + 1
-    dossier = re.sub(r"[^\w.-]", "-", nom).strip("-") or uuid[:8]
-    return nom, dossier
+    name, index = base, 2
+    while name.lower() in taken:
+        name, index = f"{base} {index}", index + 1
+    folder = re.sub(r"[^\w.-]", "-", name).strip("-") or uuid[:8]
+    return name, folder
 
 
-def candidates(hote):
+def candidates(host_runner):
     """Partitions USB lisibles, avec un identifiant, absentes de /etc/fstab."""
-    code, sortie, _ = hote(["lsblk", "-J", "-b", "-o", "NAME,PATH,FSTYPE,LABEL,UUID,TRAN,RM,TYPE,MOUNTPOINT,SIZE,HOTPLUG,PARTTYPE"])
+    code, output, _ = host_runner(["lsblk", "-J", "-b", "-o", "NAME,PATH,FSTYPE,LABEL,UUID,TRAN,RM,TYPE,MOUNTPOINT,SIZE,HOTPLUG,PARTTYPE"])
     if code != 0:
         return [], []
-    _, fstab, _ = hote(["cat", "/etc/fstab"])
-    deja = fstab_uuids(fstab)
-    bons, mauvais = [], []
-    for d in json.loads(sortie).get("blockdevices", []):
-        if d.get("type") != "disk":
+    _, fstab, _ = host_runner(["cat", "/etc/fstab"])
+    already = fstab_uuids(fstab)
+    good, bad = [], []
+    for data in json.loads(output).get("blockdevices", []):
+        if data.get("type") != "disk":
             continue
-        usb = d.get("tran") == "usb" or str(d.get("rm")) in ("1", "True", "true") or str(d.get("hotplug")) in ("1", "True", "true")
+        usb = data.get("tran") == "usb" or str(data.get("rm")) in ("1", "True", "true") or str(data.get("hotplug")) in ("1", "True", "true")
         if not usb:
             continue
-        for p in (d.get("children") or [d]):
-            fs, uuid = (p.get("fstype") or "").lower(), (p.get("uuid") or "").lower()
-            if not uuid or uuid in deja or p.get("mountpoint"):
+        for partition in (data.get("children") or [data]):
+            filesystem, uuid = (partition.get("fstype") or "").lower(), (partition.get("uuid") or "").lower()
+            if not uuid or uuid in already or partition.get("mountpoint"):
                 continue
-            if (p.get("parttype") or "").lower() in TECHNICAL_TYPES or (p.get("label") or "").upper() in ("EFI", "RECOVERY"):
+            if (partition.get("parttype") or "").lower() in TECHNICAL_TYPES or (partition.get("label") or "").upper() in ("EFI", "RECOVERY"):
                 continue
             try:
-                if int(p.get("size") or 0) < MIN_SIZE:
+                if int(partition.get("size") or 0) < MIN_SIZE:
                     continue
             except (TypeError, ValueError):
                 pass
-            if fs in FORMATS:
-                bons.append({"uuid": uuid, "format": fs, "etiquette": p.get("label"), "chemin_dev": p.get("path")})
-            elif fs in UNREADABLE:
-                mauvais.append({"uuid": uuid, "format": fs, "etiquette": p.get("label")})
-    return bons, mauvais
+            if filesystem in FORMATS:
+                good.append({"uuid": uuid, "format": filesystem, "etiquette": partition.get("label"), "chemin_dev": partition.get("path")})
+            elif filesystem in UNREADABLE:
+                bad.append({"uuid": uuid, "format": filesystem, "etiquette": partition.get("label")})
+    return good, bad
 
 
-def add(hote, hote_entree, part, pris):
+def add(host_runner, host_input_runner, share, taken):
     """Déclare le disque sur le serveur. Renvoie l'entrée créée."""
-    nom, dossier = clean_name(part["etiquette"], part["uuid"], pris)
-    chemin = f"{MOUNT_ROOT}/{dossier}"
-    type_, options = FORMATS[part["format"]]
-    opts = ",".join(o for o in ["ro", options, "nofail", "x-systemd.automount", "x-systemd.device-timeout=5s"] if o)
-    uuid = part["uuid"].upper() if part["format"] in ("exfat", "vfat", "ntfs") else part["uuid"]
-    ligne = f"UUID={uuid} {chemin} {type_} {opts} 0 0"
-    _, fstab, _ = hote(["cat", "/etc/fstab"])
-    nouveau = fstab.rstrip("\n") + f"\n# Ajouté par l'appli Jabba : {nom}\n{ligne}\n"
-    code, _, err = hote_entree(["sh", "-c", f"mkdir -p '{chemin}' && cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab"], nouveau)
+    name, folder = clean_name(share["etiquette"], share["uuid"], taken)
+    path = f"{MOUNT_ROOT}/{folder}"
+    media_type, options = FORMATS[share["format"]]
+    options_text = ",".join(mount_options for mount_options in ["ro", options, "nofail", "x-systemd.automount", "x-systemd.device-timeout=5s"] if mount_options)
+    uuid = share["uuid"].upper() if share["format"] in ("exfat", "vfat", "ntfs") else share["uuid"]
+    line = f"UUID={uuid} {path} {media_type} {options_text} 0 0"
+    _, fstab, _ = host_runner(["cat", "/etc/fstab"])
+    new_value = fstab.rstrip("\n") + f"\n# Ajouté par l'appli Jabba : {name}\n{line}\n"
+    code, _, error_output = host_input_runner(["sh", "-c", f"mkdir -p '{path}' && cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab"], new_value)
     if code != 0:
-        raise RuntimeError(err[:200])
-    _, unite, _ = hote(["systemd-escape", "--path", "--suffix=automount", chemin])
-    hote(["sh", "-c", f"systemctl daemon-reload && systemctl start '{unite.strip()}' && ls '{chemin}' >/dev/null 2>&1"], timeout=30)
-    entree = {"nom": nom, "chemin": chemin, "dossier": dossier, "uuid": part["uuid"], "format": part["format"],
+        raise RuntimeError(error_output[:200])
+    _, unit, _ = host_runner(["systemd-escape", "--path", "--suffix=automount", path])
+    host_runner(["sh", "-c", f"systemctl daemon-reload && systemctl start '{unit.strip()}' && ls '{path}' >/dev/null 2>&1"], timeout=30)
+    input_path = {"nom": name, "chemin": path, "dossier": folder, "uuid": share["uuid"], "format": share["format"],
               "ajoute": int(time.time()), "nextcloud": None}
     with _LOCK:
-        d = read()
-        d["disques"].append(entree)
-        write(d)
-    return entree
+        data = read()
+        data["disques"].append(input_path)
+        write(data)
+    return input_path
 
 
-def link_to_nextcloud(hote, entree):
+def link_to_nextcloud(host_runner, input_path):
     """Ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté."""
     occ = ["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ"]
-    code, sortie, _ = hote(occ + ["files_external:create", entree["nom"], "local", "null::null",
-                                  "-c", f"datadir=/mnt/disques/{entree['dossier']}"], timeout=60)
-    m = re.search(r"(\d+)\s*$", sortie.strip()) if code == 0 else None
-    if not m:
+    code, output, _ = host_runner(occ + ["files_external:create", input_path["nom"], "local", "null::null",
+                                  "-c", f"datadir=/mnt/disques/{input_path['dossier']}"], timeout=60)
+    match = re.search(r"(\d+)\s*$", output.strip()) if code == 0 else None
+    if not match:
         return False
     # Réservé aux admins : sans ça, chaque compte Nextcloud verrait le disque.
-    hote(occ + ["files_external:applicable", "--add-group=admin", m.group(1)], timeout=60)
-    hote(occ + ["files_external:option", m.group(1), "readonly", "true"], timeout=60)
+    host_runner(occ + ["files_external:applicable", "--add-group=admin", match.group(1)], timeout=60)
+    host_runner(occ + ["files_external:option", match.group(1), "readonly", "true"], timeout=60)
     with _LOCK:
-        d = read()
-        for x in d["disques"]:
-            if x["uuid"] == entree["uuid"]:
-                x["nextcloud"] = int(m.group(1))
-        write(d)
+        data = read()
+        for disk in data["disques"]:
+            if disk["uuid"] == input_path["uuid"]:
+                disk["nextcloud"] = int(match.group(1))
+        write(data)
     return True
 
 
-def forget(hote, hote_entree, nom):
+def forget(host_runner, host_input_runner, name):
     """Retire le disque du serveur et de Nextcloud. Il ne sera plus ajouté tout seul."""
     with _LOCK:
-        d = read()
-        x = next((x for x in d["disques"] if x["nom"] == nom), None)
-    if not x:
-        raise KeyError(nom)
-    chemin = x["chemin"]
-    _, unite, _ = hote(["systemd-escape", "--path", "--suffix=automount", chemin])
-    hote(["sh", "-c", f"systemctl stop '{unite.strip()}'; umount '{chemin}' 2>/dev/null; true"], timeout=60)
-    _, fstab, _ = hote(["cat", "/etc/fstab"])
-    lignes = []
-    for ligne in fstab.splitlines():
-        champs = ligne.split()
-        if len(champs) >= 2 and not ligne.lstrip().startswith("#") and champs[1] == chemin:
+        data = read()
+        disk = next((disk for disk in data["disques"] if disk["nom"] == name), None)
+    if not disk:
+        raise KeyError(name)
+    path = disk["chemin"]
+    _, unit, _ = host_runner(["systemd-escape", "--path", "--suffix=automount", path])
+    host_runner(["sh", "-c", f"systemctl stop '{unit.strip()}'; umount '{path}' 2>/dev/null; true"], timeout=60)
+    _, fstab, _ = host_runner(["cat", "/etc/fstab"])
+    lines = []
+    for line in fstab.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and not line.lstrip().startswith("#") and fields[1] == path:
             continue
-        if ligne.strip() == f"# Ajouté par l'appli Jabba : {nom}":
+        if line.strip() == f"# Ajouté par l'appli Jabba : {name}":
             continue
-        lignes.append(ligne)
-    hote_entree(["sh", "-c", "cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab && systemctl daemon-reload"], "\n".join(lignes) + "\n")
-    hote(["rmdir", chemin])
-    if x.get("nextcloud"):
-        hote(["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:delete", "-y", str(x["nextcloud"])], timeout=60)
+        lines.append(line)
+    host_input_runner(["sh", "-c", "cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab && systemctl daemon-reload"], "\n".join(lines) + "\n")
+    host_runner(["rmdir", path])
+    if disk.get("nextcloud"):
+        host_runner(["docker", "exec", "-u", "www-data", "nextcloud", "php", "occ", "files_external:delete", "-y", str(disk["nextcloud"])], timeout=60)
     with _LOCK:
-        d = read()
-        d["disques"] = [y for y in d["disques"] if y["nom"] != nom]
-        if x["uuid"] not in d["oublies"]:
-            d["oublies"].append(x["uuid"])
-        write(d)
-    return x
+        data = read()
+        data["disques"] = [other for other in data["disques"] if other["nom"] != name]
+        if disk["uuid"] not in data["oublies"]:
+            data["oublies"].append(disk["uuid"])
+        write(data)
+    return disk
 
 
 def resume(uuid):
     """Un disque oublié redevient un disque à ajouter automatiquement."""
     with _LOCK:
-        d = read()
-        d["oublies"] = [u for u in d["oublies"] if u != uuid.lower()]
-        write(d)
+        data = read()
+        data["oublies"] = [forgotten_uuid for forgotten_uuid in data["oublies"] if forgotten_uuid != uuid.lower()]
+        write(data)
 
 
-def is_present(hote, uuid):
+def is_present(host_runner, uuid):
     """Le disque est-il branché ? (sans réveiller l'ouverture automatique)"""
     if not uuid:
         return True
-    code, sortie, _ = hote(["blkid", "-U", uuid], timeout=10)
+    code, output, _ = host_runner(["blkid", "-U", uuid], timeout=10)
     if code == 0:
         return True
-    code, _, _ = hote(["blkid", "-U", uuid.upper()], timeout=10)
+    code, _, _ = host_runner(["blkid", "-U", uuid.upper()], timeout=10)
     return code == 0
 
 
-def scan(hote, hote_entree, nextcloud_actif, prevenir, autres_noms):
+def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names):
     """Un passage : ajoute les nouveaux disques. Appelé toutes les 15 secondes."""
-    bons, mauvais = candidates(hote)
-    d = read()
-    for m in mauvais:
-        if m["uuid"] not in d["signales"]:
-            d["signales"].append(m["uuid"])
-            write(d)
-            prevenir("nouveau_disque", "Disque illisible",
-                     f"« {m['etiquette'] or 'Sans nom'} » est en {UNREADABLE[m['format']]}. Le serveur ne sait pas le lire : "
+    good, bad = candidates(host_runner)
+    data = read()
+    for match in bad:
+        if match["uuid"] not in data["signales"]:
+            data["signales"].append(match["uuid"])
+            write(data)
+            notify("nouveau_disque", "Disque illisible",
+                     f"« {match['etiquette'] or 'Sans nom'} » est en {UNREADABLE[match['format']]}. Le serveur ne sait pas le lire : "
                      "reformate-le en exFAT depuis le Mac (Utilitaire de disque) pour qu'il soit lisible partout.", "/#/disques")
-    for b in bons:
-        if b["uuid"] in d["oublies"]:
+    for good_disk in good:
+        if good_disk["uuid"] in data["oublies"]:
             continue
-        pris = {n.lower() for n in autres_noms()} | {x["nom"].lower() for x in read()["disques"]}
+        taken = {names.lower() for names in other_names()} | {disk["nom"].lower() for disk in read()["disques"]}
         try:
-            entree = add(hote, hote_entree, b, pris)
+            input_path = add(host_runner, host_input_runner, good_disk, taken)
         except RuntimeError as e:
-            prevenir("nouveau_disque", "Disque non ajouté", f"« {b['etiquette'] or 'Sans nom'} » : {e}", "/#/disques")
+            notify("nouveau_disque", "Disque non ajouté", f"« {good_disk['etiquette'] or 'Sans nom'} » : {e}", "/#/disques")
             continue
-        nc = nextcloud_actif() and link_to_nextcloud(hote, entree)
-        prevenir("nouveau_disque", f"Nouveau disque : {entree['nom']}",
-                 "Prêt, en lecture seule" + (", visible dans Nextcloud" if nc else "") +
-                 f". Jellyfin le voit dans /disques/{entree['dossier']}.", "/#/disques")
+        linked = nextcloud_running() and link_to_nextcloud(host_runner, input_path)
+        notify("nouveau_disque", f"Nouveau disque : {input_path['nom']}",
+                 "Prêt, en lecture seule" + (", visible dans Nextcloud" if linked else "") +
+                 f". Jellyfin le voit dans /disques/{input_path['dossier']}.", "/#/disques")
 
 
 # ---- ajouté au découpage de main.py
@@ -237,13 +237,13 @@ from services import files_source
 def scan_disks():
     files_source.wake_disks()   # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
     scan(commands.run_on_host, commands.run_on_host_with_input, lambda: files_source.files_source() == "nextcloud",
-                         lambda t, ti, tx, u: notifications.send(t, ti, tx, u, famille="disque"),
+                         lambda entry, ti, tx, forgotten_uuid: notifications.send(entry, ti, tx, forgotten_uuid, family="disque"),
                          lambda: list(files_source.configured_disks()) + list(disk_browser.roots()))
 
 
 def link_disks_to_nextcloud():
     if files_source.files_source() != "nextcloud":
         return
-    for x in read()["disques"]:
-        if not x.get("nextcloud"):
-            link_to_nextcloud(commands.run_on_host, x)
+    for disk in read()["disques"]:
+        if not disk.get("nextcloud"):
+            link_to_nextcloud(commands.run_on_host, disk)

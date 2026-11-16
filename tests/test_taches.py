@@ -20,7 +20,7 @@ from host import commands
 
 def test_le_script_passe_par_un_fichier(monkeypatch):
     appels = []
-    monkeypatch.setattr(commands, "run_on_host", lambda cmd, timeout=30, entree=None: (appels.append((cmd, entree)), (0, "", ""))[1])
+    monkeypatch.setattr(commands, "run_on_host", lambda command, timeout=30, input_text=None: (appels.append((command, input_text)), (0, "", ""))[1])
     script = 'L="a b"; echo "${L% *}"'
     commands.start_on_host("jabba-test-1", script, "bash", ("Nice=10",))
     (ecrire, contenu), (lancer, _) = appels

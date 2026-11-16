@@ -29,11 +29,11 @@ REFUSAL_MARK = "JABBA-SIGNATURE-REFUSEE"
 def publication_key():
     """La clé publique qui signe les versions (celle de la version installée), ou None."""
     try:
-        with open(KEY_FILE) as f:
-            lignes = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+        with open(KEY_FILE) as file:
+            lines = [line.strip() for line in file if line.strip() and not line.startswith("#")]
     except OSError:
         return None
-    return lignes[0] if lignes and RE_KEY.match(lignes[0]) else None
+    return lines[0] if lines and RE_KEY.match(lines[0]) else None
 
 
 def signed_text(tag, commit):
@@ -41,71 +41,71 @@ def signed_text(tag, commit):
 _CACHE = {"t": 0, "v": None}
 
 
-def version_tuple(v):
-    m = RE_VERSION.match(v or "")
-    return tuple(int(x) for x in m.groups()) if m else None
+def version_tuple(version):
+    match = RE_VERSION.match(version or "")
+    return tuple(int(done_steps) for done_steps in match.groups()) if match else None
 
 
-def latest_release(depot, forcer=False):
+def latest_release(repository, force=False):
     """{'version': '0.5.1', 'tag': 'v0.5.1', 'notes': '...', 'date': '...'} ou None."""
-    if not depot or not re.fullmatch(r"[\w.-]+/[\w.-]+", depot):
+    if not repository or not re.fullmatch(r"[\w.-]+/[\w.-]+", repository):
         return None
-    if not forcer and time.time() - _CACHE["t"] < 6 * 3600 and _CACHE["v"] is not None:
+    if not force and time.time() - _CACHE["t"] < 6 * 3600 and _CACHE["v"] is not None:
         return _CACHE["v"]
     try:
-        r = httpx.get(f"https://api.github.com/repos/{depot}/releases/latest", timeout=15,
+        response = httpx.get(f"https://api.github.com/repos/{repository}/releases/latest", timeout=15,
                       headers={"Accept": "application/vnd.github+json", "User-Agent": "jabba-app"})
     except httpx.HTTPError:
         return _CACHE["v"]
-    if r.status_code != 200:
+    if response.status_code != 200:
         return _CACHE["v"]
-    d = r.json()
-    tag = d.get("tag_name", "")
+    data = response.json()
+    tag = data.get("tag_name", "")
     if not version_tuple(tag):
         return None
-    v = {"version": tag.lstrip("v"), "tag": tag, "notes": (d.get("body") or "")[:3000], "date": d.get("published_at")}
-    _CACHE.update(t=time.time(), v=v)
-    return v
+    version = {"version": tag.lstrip("v"), "tag": tag, "notes": (data.get("body") or "")[:3000], "date": data.get("published_at")}
+    _CACHE.update(t=time.time(), v=version)
+    return version
 
 
-def is_newer(actuelle, autre):
-    a, b = version_tuple(actuelle), version_tuple(autre)
-    return bool(a and b and b > a)
+def is_newer(current, other):
+    current_tuple, other_tuple = version_tuple(current), version_tuple(other)
+    return bool(current_tuple and other_tuple and other_tuple > current_tuple)
 
 
-def install_script(dossier, tag, cle):
+def install_script(folder, tag, key):
     """Commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli).
 
     Étapes : récupérer le dépôt, vérifier la signature de cette version avec `cle`
     (la clé de la version installée), puis installer exactement le commit signé.
     """
-    if not re.fullmatch(r"/[\w./-]+", dossier) or not RE_VERSION.match(tag):
+    if not re.fullmatch(r"/[\w./-]+", folder) or not RE_VERSION.match(tag):
         raise ValueError("Paramètres inattendus")
-    if not cle or not RE_KEY.match(cle):
+    if not key or not RE_KEY.match(key):
         raise ValueError("Pas de clé de publication : mise à jour impossible")
     # git tourne avec le compte propriétaire du dossier : les fichiers restent à son nom.
     # Avant, on lui rend tout ce qui ne lui appartient plus (traces d'anciennes installations
     # faites en root), sauf donnees/ qui reste à l'appli.
-    proprio = f"$(stat -c %U:%G '{dossier}')"
-    remettre = (f"find '{dossier}' -path '{dossier}/donnees' -prune -o ! -user \"$(stat -c %U '{dossier}')\" "
-                f"-exec chown -h \"{proprio}\" {{}} +")
-    git = f"runuser -u \"$(stat -c %U '{dossier}')\" -- git"
+    owner = f"$(stat -c %U:%G '{folder}')"
+    restore_owner = (f"find '{folder}' -path '{folder}/donnees' -prune -o ! -user \"$(stat -c %U '{folder}')\" "
+                f"-exec chown -h \"{owner}\" {{}} +")
+    git_command = f"runuser -u \"$(stat -c %U '{folder}')\" -- git"
     # Le fichier de signature de cette version, sur main : « jabba <tag> <commit> » puis la signature.
     # Toute étape qui échoue (fichier absent, ligne inattendue, signature fausse) = refus.
-    verifier = (
+    verify = (
         'T=$(mktemp -d) && trap \'rm -rf "$T"\' EXIT && '
-        f"printf '%s %s\\n' {SIGNATURE_NAMESPACE} '{cle}' > \"$T/cles\" && "
-        f"if {git} show 'refs/remotes/origin/main:signatures/{tag}.sig' > \"$T/fichier\" 2>/dev/null"
+        f"printf '%s %s\\n' {SIGNATURE_NAMESPACE} '{key}' > \"$T/cles\" && "
+        f"if {git_command} show 'refs/remotes/origin/main:signatures/{tag}.sig' > \"$T/fichier\" 2>/dev/null"
         ' && LIGNE=$(head -n 1 "$T/fichier")'
         f' && [ "${{LIGNE% *}}" = "jabba {tag}" ] && SHA="${{LIGNE##* }}"'
         ' && printf %s "$SHA" | grep -Eqx "[0-9a-f]{40}"'
         " && sed -n '/^-----BEGIN SSH SIGNATURE-----$/,/^-----END SSH SIGNATURE-----$/p' \"$T/fichier\" > \"$T/sig\""
         f' && printf %s "$LIGNE" | ssh-keygen -Y verify -f "$T/cles" -I {SIGNATURE_NAMESPACE} -n {SIGNATURE_NAMESPACE} -s "$T/sig"'
-        f' && {git} cat-file -e "$SHA^{{commit}}"; then echo "Signature valable : {tag} ($SHA)"; '
+        f' && {git_command} cat-file -e "$SHA^{{commit}}"; then echo "Signature valable : {tag} ($SHA)"; '
         f"else echo '{REFUSAL_MARK} : la version {tag} n est pas signée par la clé attendue, rien n a été installé.'; exit 1; fi"
     )
-    return (f"cd '{dossier}' && {remettre} && {git} fetch --quiet --tags --force origin && {verifier} && "
-            f"{git} -c advice.detachedHead=false checkout --quiet --force \"$SHA\" && "
+    return (f"cd '{folder}' && {restore_owner} && {git_command} fetch --quiet --tags --force origin && {verify} && "
+            f"{git_command} -c advice.detachedHead=false checkout --quiet --force \"$SHA\" && "
             "docker compose up -d --build && docker image prune -f")
 
 
@@ -119,9 +119,9 @@ from host import commands
 
 # ---------------------------------------------------------------- mise à jour de l'appli
 def app_folder():
-    code, sortie, _ = commands.run_on_host(["docker", "inspect", "-f", '{{index .Config.Labels "com.docker.compose.project.working_dir"}}', "jabba-app"])
-    d = sortie.strip()
-    return d if code == 0 and re.fullmatch(r"/[\w./-]+", d) else None
+    code, output, _ = commands.run_on_host(["docker", "inspect", "-f", '{{index .Config.Labels "com.docker.compose.project.working_dir"}}', "jabba-app"])
+    data = output.strip()
+    return data if code == 0 and re.fullmatch(r"/[\w./-]+", data) else None
 
 
 CURRENT_UPDATE = {"unite": None, "version": None, "debut": 0, "signale": False}
@@ -131,41 +131,41 @@ def update_state():
     """Où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine."""
     if not CURRENT_UPDATE["unite"]:
         return {"statut": "aucune"}
-    u = CURRENT_UPDATE["unite"] + ".service"
-    _, actif, _ = commands.run_on_host(["systemctl", "show", "-p", "ActiveState", "--value", u])
-    _, log, _ = commands.run_on_host(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "300"])
-    lignes = [l for l in log.splitlines() if l.strip()]
-    if actif.strip() in ("active", "activating", "reloading"):
-        return {"statut": "en_cours", "version": CURRENT_UPDATE["version"], "depuis": int(time.time() - CURRENT_UPDATE["debut"]), **update_progress(lignes)}
-    if any(REFUSAL_MARK in l for l in lignes):
+    unit_name = CURRENT_UPDATE["unite"] + ".service"
+    _, active, _ = commands.run_on_host(["systemctl", "show", "-p", "ActiveState", "--value", unit_name])
+    _, log, _ = commands.run_on_host(["journalctl", "-u", unit_name, "--no-pager", "-o", "cat", "-n", "300"])
+    lines = [line for line in log.splitlines() if line.strip()]
+    if active.strip() in ("active", "activating", "reloading"):
+        return {"statut": "en_cours", "version": CURRENT_UPDATE["version"], "depuis": int(time.time() - CURRENT_UPDATE["debut"]), **update_progress(lines)}
+    if any(REFUSAL_MARK in line for line in lines):
         if not CURRENT_UPDATE["signale"]:
             CURRENT_UPDATE["signale"] = True
             notifications.send("securite", "Mise à jour refusée",
                            f"La version {CURRENT_UPDATE['version']} publiée sur GitHub n'est pas signée par la clé attendue : rien n'a été installé. "
-                           "Si tu n'as rien publié toi-même, ton compte GitHub est peut-être piraté.", "/#/systeme", famille="appli")
+                           "Si tu n'as rien publié toi-même, ton compte GitHub est peut-être piraté.", "/#/systeme", family="appli")
         return {"statut": "echec", "version": CURRENT_UPDATE["version"],
                 "detail": ["Signature refusée : cette version n'est pas signée par la clé attendue. Rien n'a été installé, l'appli actuelle continue."]}
-    if any("Failed with result" in l or "status=" in l and "status=0/" not in l for l in lignes):
-        detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
+    if any("Failed with result" in line or "status=" in line and "status=0/" not in line for line in lines):
+        detail = [line for line in lines if not line.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in line][-6:]
         if not CURRENT_UPDATE["signale"]:
             CURRENT_UPDATE["signale"] = True
             notifications.send("mises_a_jour", "Mise à jour échouée",
-                           f"La version {CURRENT_UPDATE['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", famille="appli")
+                           f"La version {CURRENT_UPDATE['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", family="appli")
         return {"statut": "echec", "version": CURRENT_UPDATE["version"], "detail": detail}
     return {"statut": "termine", "version": CURRENT_UPDATE["version"]}
 
 
-def update_progress(lignes):
+def update_progress(lines):
     """Étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure."""
-    texte = "\n".join(lignes)
-    if re.search(r"Container \S+\s+(Recreate|Starting|Started|Running)", texte):
+    text = "\n".join(lines)
+    if re.search(r"Container \S+\s+(Recreate|Starting|Started|Running)", text):
         return {"etape": "Redémarrage de l'appli", "pourcent": 92}
-    etapes = re.findall(r"\[(?:[\w-]+ )?(\d+)/(\d+)\]", texte)
-    if etapes:
-        x, y = (int(v) for v in etapes[-1])
-        return {"etape": f"Construction de l'appli (étape {x} sur {y})", "pourcent": 20 + round(65 * x / max(y, 1))}
-    if "Signature valable" in texte and not re.search(r"Building|building|load build definition", texte):
+    steps = re.findall(r"\[(?:[\w-]+ )?(\d+)/(\d+)\]", text)
+    if steps:
+        done_steps, total_steps = (int(version) for version in steps[-1])
+        return {"etape": f"Construction de l'appli (étape {done_steps} sur {total_steps})", "pourcent": 20 + round(65 * done_steps / max(total_steps, 1))}
+    if "Signature valable" in text and not re.search(r"Building|building|load build definition", text):
         return {"etape": "Signature vérifiée", "pourcent": 15}
-    if re.search(r"Building|building|load build definition|resolve image config", texte):
+    if re.search(r"Building|building|load build definition|resolve image config", text):
         return {"etape": "Construction de l'appli", "pourcent": 20}
     return {"etape": "Téléchargement de la nouvelle version", "pourcent": 8}

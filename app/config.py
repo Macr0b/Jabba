@@ -27,12 +27,12 @@ BATTERY_THRESHOLD = int(os.environ.get("SEUIL_BATTERIE", "15"))
 
 
 def read_links():
-    liens = {}
-    for morceau in os.environ.get("LIENS", "").split(","):
-        if "=" in morceau:
-            nom, url = morceau.split("=", 1)
-            liens[nom.strip()] = url.strip()
-    return liens
+    links = {}
+    for share in os.environ.get("LIENS", "").split(","):
+        if "=" in share:
+            name, url = share.split("=", 1)
+            links[name.strip()] = url.strip()
+    return links
 
 
 LINKS = read_links()

@@ -45,25 +45,25 @@ TREE = {
 }
 
 
-def folder_listing(chemin):
-    elements = []
-    for nom, dossier, taille, ecriture in TREE.get(chemin, []):
-        elements.append({"nom": nom, "chemin": (chemin.rstrip("/") + "/" + nom), "dossier": dossier,
-                         "taille": taille if taille else (340_000_000 if dossier else None),
-                         "modifie": "2026-11-02T10:12:00+00:00", "type": None, "ecriture": ecriture,
-                         "externe": not ecriture})
-    lecture_seule = any(chemin.startswith(p) for p in ("/Films", "/R2-D2", "/Téléchargements"))
-    return {"chemin": chemin, "elements": elements, "ecriture": not lecture_seule, "lien_nextcloud": "https://jabba.exemple.ts.net/apps/files/?dir=" + chemin}
+def folder_listing(path):
+    entries = []
+    for name, folder, size, writable in TREE.get(path, []):
+        entries.append({"nom": name, "chemin": (path.rstrip("/") + "/" + name), "dossier": folder,
+                         "taille": size if size else (340_000_000 if folder else None),
+                         "modifie": "2026-11-02T10:12:00+00:00", "type": None, "ecriture": writable,
+                         "externe": not writable})
+    read_only = any(path.startswith(prefix) for prefix in ("/Films", "/R2-D2", "/Téléchargements"))
+    return {"chemin": path, "elements": entries, "ecriture": not read_only, "lien_nextcloud": "https://jabba.exemple.ts.net/apps/files/?dir=" + path}
 
 
-def search_results(q):
-    res = []
-    for chemin, liste in TREE.items():
-        for nom, dossier, taille, ecriture in liste:
-            if q.lower() in nom.lower():
-                res.append({"nom": nom, "chemin": chemin.rstrip("/") + "/" + nom, "dossier": dossier, "taille": taille,
-                            "modifie": "2026-11-02T10:12:00+00:00", "type": None, "ecriture": ecriture, "externe": False})
-    return {"elements": res, "complet": True}
+def search_results(query):
+    result = []
+    for path, items in TREE.items():
+        for name, folder, size, writable in items:
+            if query.lower() in name.lower():
+                result.append({"nom": name, "chemin": path.rstrip("/") + "/" + name, "dossier": folder, "taille": size,
+                            "modifie": "2026-11-02T10:12:00+00:00", "type": None, "ecriture": writable, "externe": False})
+    return {"elements": result, "complet": True}
 
 
 TRASH = [

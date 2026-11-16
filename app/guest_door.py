@@ -22,8 +22,8 @@ LOCAL_NETWORKS = [ipaddress.ip_network(n) for n in
 @app.middleware("http")
 async def wifi_guard(request: Request, call_next):
     try:
-        ip = ipaddress.ip_address((request.client.host if request.client else "").split("%")[0])
-        local = any(ip in n for n in LOCAL_NETWORKS)
+        address = ipaddress.ip_address((request.client.host if request.client else "").split("%")[0])
+        local = any(address in network for network in LOCAL_NETWORKS)
     except ValueError:
         local = False
     if not local:
@@ -31,11 +31,11 @@ async def wifi_guard(request: Request, call_next):
     request.state.via = "lan"
     if request.method not in ("GET", "HEAD") and request.headers.get("x-jabba") != "1":
         return JSONResponse({"erreur": "Requête refusée."}, status_code=403)
-    reponse = await call_next(request)
-    reponse.headers.setdefault("X-Frame-Options", "DENY")
-    reponse.headers["X-Content-Type-Options"] = "nosniff"
-    reponse.headers["Referrer-Policy"] = "no-referrer"
-    return reponse
+    response = await call_next(request)
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 app.include_router(guests.router)

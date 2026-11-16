@@ -38,43 +38,43 @@ _HARDWARE = {"teste": False, "options": None}
 # fichier à lire, déjà ouvert par l'appli.
 def probe(source):
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
-    with sandbox.open_input(source) as (entree, fds):
-        r = sandbox.run(args + sandbox.without_input_option(entree), fds, capture_output=True, text=True, timeout=30)
-    if r.returncode != 0:
-        raise RuntimeError("Fichier illisible : " + (r.stderr.strip()[:200] or "format inconnu"))
-    d = json.loads(r.stdout or "{}")
-    flux = d.get("streams", [])
-    video = next((s for s in flux if s.get("codec_type") == "video" and not (s.get("disposition") or {}).get("attached_pic")), None)
+    with sandbox.open_input(source) as (input_path, file_descriptors):
+        completed = sandbox.run(args + sandbox.without_input_option(input_path), file_descriptors, capture_output=True, text=True, timeout=30)
+    if completed.returncode != 0:
+        raise RuntimeError("Fichier illisible : " + (completed.stderr.strip()[:200] or "format inconnu"))
+    probe_data = json.loads(completed.stdout or "{}")
+    streams = probe_data.get("streams", [])
+    video_stream = next((stream for stream in streams if stream.get("codec_type") == "video" and not (stream.get("disposition") or {}).get("attached_pic")), None)
 
-    def etiquette(s, n):
-        t = s.get("tags") or {}
-        morceaux = [t.get("title"), (t.get("language") or "").upper() if t.get("language") not in (None, "und") else None]
-        return " · ".join(m for m in morceaux if m) or f"Piste {n}"
+    def etiquette(stream, count):
+        tags = stream.get("tags") or {}
+        shares = [tags.get("title"), (tags.get("language") or "").upper() if tags.get("language") not in (None, "und") else None]
+        return " · ".join(minutes for minutes in shares if minutes) or f"Piste {count}"
 
-    audios = [{"index": s["index"], "codec": s.get("codec_name"), "canaux": s.get("channels"),
-               "nom": etiquette(s, i + 1), "defaut": bool((s.get("disposition") or {}).get("default"))}
-              for i, s in enumerate(x for x in flux if x.get("codec_type") == "audio")]
-    soustitres = [{"index": s["index"], "codec": s.get("codec_name"), "nom": etiquette(s, i + 1),
-                   "texte": s.get("codec_name") in TEXT_SUBTITLE_CODECS}
-                  for i, s in enumerate(x for x in flux if x.get("codec_type") == "subtitle")]
-    fmt = d.get("format", {})
+    audio_tracks = [{"index": stream["index"], "codec": stream.get("codec_name"), "canaux": stream.get("channels"),
+               "nom": etiquette(stream, index + 1), "defaut": bool((stream.get("disposition") or {}).get("default"))}
+              for index, stream in enumerate(value for value in streams if value.get("codec_type") == "audio")]
+    soustitres = [{"index": stream["index"], "codec": stream.get("codec_name"), "nom": etiquette(stream, index + 1),
+                   "texte": stream.get("codec_name") in TEXT_SUBTITLE_CODECS}
+                  for index, stream in enumerate(value for value in streams if value.get("codec_type") == "subtitle")]
+    format_name = probe_data.get("format", {})
     return {
-        "duree": float(fmt.get("duration") or 0),
-        "conteneur": fmt.get("format_name", ""),
-        "video": {"codec": video.get("codec_name"), "largeur": video.get("width"), "hauteur": video.get("height"),
-                  "pix_fmt": video.get("pix_fmt"), "index": video["index"]} if video else None,
-        "audios": audios,
+        "duree": float(format_name.get("duration") or 0),
+        "conteneur": format_name.get("format_name", ""),
+        "video": {"codec": video_stream.get("codec_name"), "largeur": video_stream.get("width"), "hauteur": video_stream.get("height"),
+                  "pix_fmt": video_stream.get("pix_fmt"), "index": video_stream["index"]} if video_stream else None,
+        "audios": audio_tracks,
         "soustitres": soustitres,
     }
 
 
-def plays_directly(infos):
+def plays_directly(media):
     """Le navigateur sait-il lire le fichier tel quel ?"""
-    v, a = infos["video"], infos["audios"]
-    conteneur_ok = any(c in infos["conteneur"] for c in ("mp4", "mov"))   # MKV (même « matroska,webm ») : converti
-    video_ok = v is not None and v["codec"] in ("h264", "vp9", "av1") and v["pix_fmt"] in (None, "yuv420p")
-    son_ok = not a or all(x["codec"] in ("aac", "mp3", "opus", "vorbis") for x in a[:1])
-    return conteneur_ok and video_ok and son_ok and len(a) <= 1
+    video_stream, first = media["video"], media["audios"]
+    container_ok = any(container_format in media["conteneur"] for container_format in ("mp4", "mov"))   # MKV (même « matroska,webm ») : converti
+    video_ok = video_stream is not None and video_stream["codec"] in ("h264", "vp9", "av1") and video_stream["pix_fmt"] in (None, "yuv420p")
+    audio_ok = not first or all(value["codec"] in ("aac", "mp3", "opus", "vorbis") for value in first[:1])
+    return container_ok and video_ok and audio_ok and len(first) <= 1
 
 
 # ---------------------------------------------------------------- conversion
@@ -85,155 +85,155 @@ def _hardware_options():
     _HARDWARE["teste"] = True
     if not os.path.exists("/dev/dri/renderD128") or not shutil.which("ffmpeg"):
         return None
-    for pilote in (None, "i965", "iHD"):
+    for driver in (None, "i965", "iHD"):
         env = dict(os.environ)
-        if pilote:
-            env["LIBVA_DRIVER_NAME"] = pilote
-        essai = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-vaapi_device", "/dev/dri/renderD128",
+        if driver:
+            env["LIBVA_DRIVER_NAME"] = driver
+        attempt = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-vaapi_device", "/dev/dri/renderD128",
                  "-f", "lavfi", "-i", "testsrc=duration=1:size=640x360:rate=25",
                  "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi", "-f", "null", "-"]
         try:
-            if sandbox.run(essai, puce=True, capture_output=True, env=env, timeout=30).returncode == 0:
-                _HARDWARE["options"] = {"pilote": pilote}
+            if sandbox.run(attempt, gpu=True, capture_output=True, env=env, timeout=30).returncode == 0:
+                _HARDWARE["options"] = {"pilote": driver}
                 return _HARDWARE["options"]
         except (OSError, subprocess.TimeoutExpired):
             pass
     return None
 
 
-def _video(infos):
-    v = infos["video"]
-    if v is None:
+def _video(media):
+    video_stream = media["video"]
+    if video_stream is None:
         return [], {}
-    if v["codec"] == "h264" and v["pix_fmt"] in (None, "yuv420p"):
-        return ["-map", f"0:{v['index']}", "-c:v", "copy"], {}
-    echelle = "scale=-2:'min(1080,ih)'"
-    hw = _hardware_options()
-    if hw is not None:
-        env = {"LIBVA_DRIVER_NAME": hw["pilote"]} if hw["pilote"] else {}
-        return (["-vaapi_device", "/dev/dri/renderD128", "-map", f"0:{v['index']}",
-                 "-vf", f"{echelle},format=nv12,hwupload", "-c:v", "h264_vaapi", "-qp", "24",
+    if video_stream["codec"] == "h264" and video_stream["pix_fmt"] in (None, "yuv420p"):
+        return ["-map", f"0:{video_stream['index']}", "-c:v", "copy"], {}
+    scale = "scale=-2:'min(1080,ih)'"
+    hardware = _hardware_options()
+    if hardware is not None:
+        env = {"LIBVA_DRIVER_NAME": hardware["pilote"]} if hardware["pilote"] else {}
+        return (["-vaapi_device", "/dev/dri/renderD128", "-map", f"0:{video_stream['index']}",
+                 "-vf", f"{scale},format=nv12,hwupload", "-c:v", "h264_vaapi", "-qp", "24",
                  "-g", str(SEGMENT_SECONDS * 25)], env)
-    return (["-map", f"0:{v['index']}", "-vf", f"{echelle},format=yuv420p", "-c:v", "libx264",
+    return (["-map", f"0:{video_stream['index']}", "-vf", f"{scale},format=yuv420p", "-c:v", "libx264",
              "-preset", "veryfast", "-crf", "23", "-g", str(SEGMENT_SECONDS * 25), "-sc_threshold", "0"], {})
 
 
-def keyframe(source, infos, debut):
+def keyframe(source, media, debut):
     """Quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`.
     On part donc de là, pour que le temps affiché et les sous-titres tombent juste."""
-    v = infos["video"]
-    if debut <= 0 or not v or not (v["codec"] == "h264" and v["pix_fmt"] in (None, "yuv420p")):
+    video_stream = media["video"]
+    if debut <= 0 or not video_stream or not (video_stream["codec"] == "h264" and video_stream["pix_fmt"] in (None, "yuv420p")):
         return debut
-    args = ["ffprobe", "-v", "error", "-select_streams", f"{v['index']}", "-skip_frame", "nokey",
+    args = ["ffprobe", "-v", "error", "-select_streams", f"{video_stream['index']}", "-skip_frame", "nokey",
             "-show_entries", "frame=pts_time,best_effort_timestamp_time", "-of", "csv=p=0",
             "-read_intervals", f"{max(0.0, debut - 12):.3f}%{debut + 0.05:.3f}"]
     try:
-        with sandbox.open_input(source) as (entree, fds):
-            r = sandbox.run(args + sandbox.without_input_option(entree), fds, capture_output=True, text=True, timeout=20)
+        with sandbox.open_input(source) as (input_path, file_descriptors):
+            completed = sandbox.run(args + sandbox.without_input_option(input_path), file_descriptors, capture_output=True, text=True, timeout=20)
     except (subprocess.TimeoutExpired, OSError, RuntimeError):
         return debut
-    temps = []
-    for ligne in r.stdout.splitlines():
-        for morceau in ligne.split(","):
+    elapsed = []
+    for line in completed.stdout.splitlines():
+        for share in line.split(","):
             try:
-                temps.append(float(morceau))
+                elapsed.append(float(share))
                 break
             except ValueError:
                 continue
-    avant = [t for t in temps if t <= debut + 0.05]
-    return max(avant) if avant else debut
+    previous_value = [tags for tags in elapsed if tags <= debut + 0.05]
+    return max(previous_value) if previous_value else debut
 
 
-def start(source, infos, debut=0.0, audio=None):
+def start(source, media, debut=0.0, audio=None):
     """Lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)."""
-    debut = keyframe(source, infos, max(0.0, float(debut)))
+    debut = keyframe(source, media, max(0.0, float(debut)))
     with _LOCK:
         while len(_SESSIONS) >= MAX_SESSIONS:   # trop de films en même temps : on arrête le plus ancien
-            stop(min(_SESSIONS, key=lambda k: _SESSIONS[k]["vu"]), verrou=False)
-    sid = secrets.token_urlsafe(18)
-    dossier = os.path.join(WORK_DIR, sid)
+            stop(min(_SESSIONS, key=lambda key: _SESSIONS[key]["vu"]), lock=False)
+    session_id = secrets.token_urlsafe(18)
+    folder = os.path.join(WORK_DIR, session_id)
     os.makedirs(WORK_DIR, exist_ok=True)
-    sandbox.writable_dir(dossier)
-    video, env_sup = _video(infos)
-    pistes = [a for a in infos["audios"] if audio is None or a["index"] == audio] or infos["audios"]
-    son = ["-map", f"0:{pistes[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if pistes else []
-    cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(debut)):.3f}"]
-           + ([a for a in video[:2]] if video[:1] == ["-vaapi_device"] else [])
+    sandbox.writable_dir(folder)
+    video_stream, extra_env = _video(media)
+    tracks = [first for first in media["audios"] if audio is None or first["index"] == audio] or media["audios"]
+    audio_stream = ["-map", f"0:{tracks[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if tracks else []
+    command = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(debut)):.3f}"]
+           + ([first for first in video_stream[:2]] if video_stream[:1] == ["-vaapi_device"] else [])
            + ["ENTREE"]
-           + (video[2:] if video[:1] == ["-vaapi_device"] else video)
-           + son
-           + (["-force_key_frames", "expr:gte(t,n_forced*2)"] if video[-2:] != ["-c:v", "copy"] and "copy" not in video else [])
+           + (video_stream[2:] if video_stream[:1] == ["-vaapi_device"] else video_stream)
+           + audio_stream
+           + (["-force_key_frames", "expr:gte(t,n_forced*2)"] if video_stream[-2:] != ["-c:v", "copy"] and "copy" not in video_stream else [])
            # horodatages à partir de 0 : la vidéo et les sous-titres partent du même instant, sur tous les navigateurs
            + ["-muxdelay", "0", "-muxpreload", "0"]
            + ["-max_muxing_queue_size", "4096", "-f", "hls", "-hls_init_time", "1", "-hls_time", str(SEGMENT_SECONDS),
               "-hls_list_size", "0", "-hls_playlist_type", "event",
-              "-hls_segment_filename", os.path.join(dossier, "m%05d.ts"), os.path.join(dossier, "index.m3u8")])
-    env = dict(os.environ, **env_sup)
-    with sandbox.open_input(source) as (entree, fds), open(os.path.join(dossier, "erreurs.txt"), "w") as err:
-        i = cmd.index("ENTREE")
-        cmd[i:i + 1] = entree
-        p = sandbox.popen(cmd, fds, puce=bool(env_sup) or "-vaapi_device" in cmd, stdin=subprocess.DEVNULL,
-                              stdout=subprocess.DEVNULL, stderr=err, env=env)
+              "-hls_segment_filename", os.path.join(folder, "m%05d.ts"), os.path.join(folder, "index.m3u8")])
+    env = dict(os.environ, **extra_env)
+    with sandbox.open_input(source) as (input_path, file_descriptors), open(os.path.join(folder, "erreurs.txt"), "w") as error_output:
+        index = command.index("ENTREE")
+        command[index:index + 1] = input_path
+        process = sandbox.popen(command, file_descriptors, gpu=bool(extra_env) or "-vaapi_device" in command, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=error_output, env=env)
     with _LOCK:
-        _SESSIONS[sid] = {"p": p, "dossier": dossier, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
-    return sid, debut
+        _SESSIONS[session_id] = {"p": process, "dossier": folder, "vu": time.time(), "cree": time.time(), "debut": float(debut)}
+    return session_id, debut
 
 
-def session_file(sid, nom, attendre=20):
+def session_file(session_id, name, wait=20):
     """Chemin d'un morceau ou de la liste de lecture, une fois prêt."""
-    s = _SESSIONS.get(sid)
-    if not s or not (nom == "index.m3u8" or (nom.startswith("m") and nom.endswith(".ts") and nom[1:-3].isdigit())):
+    stream = _SESSIONS.get(session_id)
+    if not stream or not (name == "index.m3u8" or (name.startswith("m") and name.endswith(".ts") and name[1:-3].isdigit())):
         return None
-    s["vu"] = time.time()
-    chemin = os.path.join(s["dossier"], nom)
-    fin = time.time() + attendre
-    while time.time() < fin:
-        if nom == "index.m3u8":
+    stream["vu"] = time.time()
+    path = os.path.join(stream["dossier"], name)
+    end = time.time() + wait
+    while time.time() < end:
+        if name == "index.m3u8":
             # Au démarrage, la liste n'est servie qu'avec quelques morceaux d'avance (6, ou moins si la
             # conversion traîne) : le lecteur ne la relit qu'au rythme des morceaux et s'arrêterait entre deux.
             try:
-                texte = open(chemin).read()
-                n = texte.count(".ts")
-                age = time.time() - s["cree"]
-                if n >= 6 or "#EXT-X-ENDLIST" in texte or (n >= 2 and age > 3) or (n >= 1 and age > 8):
-                    return chemin
+                text = open(path).read()
+                count = text.count(".ts")
+                age = time.time() - stream["cree"]
+                if count >= 6 or "#EXT-X-ENDLIST" in text or (count >= 2 and age > 3) or (count >= 1 and age > 8):
+                    return path
             except OSError:
                 pass
-        elif os.path.exists(chemin):
-            suivant = os.path.join(s["dossier"], f"m{int(nom[1:-3]) + 1:05d}.ts")
-            if os.path.exists(suivant) or s["p"].poll() is not None:   # morceau terminé
-                return chemin
-        if s["p"].poll() not in (None, 0) and not os.path.exists(chemin):
+        elif os.path.exists(path):
+            next_value = os.path.join(stream["dossier"], f"m{int(name[1:-3]) + 1:05d}.ts")
+            if os.path.exists(next_value) or stream["p"].poll() is not None:   # morceau terminé
+                return path
+        if stream["p"].poll() not in (None, 0) and not os.path.exists(path):
             return None
         time.sleep(0.25)
     return None
 
 
-def session_error(sid):
-    s = _SESSIONS.get(sid)
-    if not s:
+def session_error(session_id):
+    stream = _SESSIONS.get(session_id)
+    if not stream:
         return "Lecture arrêtée."
-    if s["p"].poll() not in (None, 0):
+    if stream["p"].poll() not in (None, 0):
         try:
-            return open(os.path.join(s["dossier"], "erreurs.txt")).read().strip()[-300:] or "La conversion s'est arrêtée."
+            return open(os.path.join(stream["dossier"], "erreurs.txt")).read().strip()[-300:] or "La conversion s'est arrêtée."
         except OSError:
             return "La conversion s'est arrêtée."
     return None
 
 
-def stop(sid, verrou=True):
+def stop(session_id, lock=True):
     def faire():
-        s = _SESSIONS.pop(sid, None)
-        if not s:
+        stream = _SESSIONS.pop(session_id, None)
+        if not stream:
             return
-        if s["p"].poll() is None:
-            s["p"].terminate()
+        if stream["p"].poll() is None:
+            stream["p"].terminate()
             try:
-                s["p"].wait(timeout=5)
+                stream["p"].wait(timeout=5)
             except subprocess.TimeoutExpired:
-                s["p"].kill()
-        shutil.rmtree(s["dossier"], ignore_errors=True)
-    if verrou:
+                stream["p"].kill()
+        shutil.rmtree(stream["dossier"], ignore_errors=True)
+    if lock:
         with _LOCK:
             faire()
     else:
@@ -242,46 +242,46 @@ def stop(sid, verrou=True):
 
 def clean_up():
     """Arrête les lectures abandonnées (onglet fermé, téléphone en veille…)."""
-    limite = time.time() - IDLE_TIMEOUT
-    for sid in [k for k, s in list(_SESSIONS.items()) if s["vu"] < limite]:
-        stop(sid)
+    cutoff = time.time() - IDLE_TIMEOUT
+    for session_id in [key for key, stream in list(_SESSIONS.items()) if stream["vu"] < cutoff]:
+        stop(session_id)
 
 
-def _seconds(t):
-    morceaux = t.replace(",", ".").split(":")
-    return sum(float(m) * 60 ** k for k, m in enumerate(reversed(morceaux)))
+def _seconds(tags):
+    shares = tags.replace(",", ".").split(":")
+    return sum(float(minutes) * 60 ** key for key, minutes in enumerate(reversed(shares)))
 
 
-def _timestamp(x):
-    h, reste = divmod(max(0.0, x), 3600)
-    m, sec = divmod(reste, 60)
-    return f"{int(h):02d}:{int(m):02d}:{sec:06.3f}"
+def _timestamp(value):
+    hours, rest = divmod(max(0.0, value), 3600)
+    minutes, seconds = divmod(rest, 60)
+    return f"{int(hours):02d}:{int(minutes):02d}:{seconds:06.3f}"
 
 
-def shift_vtt(vtt, debut):
+def shift_vtt(vtt_text, debut):
     """Recale les sous-titres sur le moment où la lecture a commencé (la vidéo, elle, repart de 0)."""
-    sortie, bloc = ["WEBVTT", ""], []
-    for ligne in vtt.splitlines() + [""]:
-        if ligne.strip():
-            bloc.append(ligne)
+    output, chunk = ["WEBVTT", ""], []
+    for line in vtt_text.splitlines() + [""]:
+        if line.strip():
+            chunk.append(line)
             continue
-        horaire = next((l for l in bloc if "-->" in l), None)
-        if horaire:
-            a, _, b = horaire.partition("-->")
-            fin_cue = _seconds(b.split()[0]) - debut
-            if fin_cue > 0:
-                texte = bloc[bloc.index(horaire) + 1:]
-                sortie += [f"{_timestamp(_seconds(a.strip()) - debut)} --> {_timestamp(fin_cue)}"] + texte + [""]
-        bloc = []
-    return "\n".join(sortie)
+        timing = next((chunk_line for chunk_line in chunk if "-->" in chunk_line), None)
+        if timing:
+            first, _, second = timing.partition("-->")
+            cue_end = _seconds(second.split()[0]) - debut
+            if cue_end > 0:
+                text = chunk[chunk.index(timing) + 1:]
+                output += [f"{_timestamp(_seconds(first.strip()) - debut)} --> {_timestamp(cue_end)}"] + text + [""]
+        chunk = []
+    return "\n".join(output)
 
 
 def subtitles(source, index, debut=0.0):
     """Une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé."""
-    with sandbox.open_input(source) as (entree, fds):
-        cmd = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
-               + entree + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
-        r = sandbox.run(cmd, fds, capture_output=True, timeout=180)
-    if r.returncode != 0:
+    with sandbox.open_input(source) as (input_path, file_descriptors):
+        command = (["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
+               + input_path + ["-map", f"0:{int(index)}", "-f", "webvtt", "-"])
+        completed = sandbox.run(command, file_descriptors, capture_output=True, timeout=180)
+    if completed.returncode != 0:
         raise RuntimeError("Sous-titres illisibles.")
-    return shift_vtt(r.stdout.decode("utf-8", "replace"), float(debut)).encode()
+    return shift_vtt(completed.stdout.decode("utf-8", "replace"), float(debut)).encode()

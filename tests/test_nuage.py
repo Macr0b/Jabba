@@ -21,7 +21,7 @@ class FauxOcc:
         for g in groupes:
             self.groups.setdefault(g, []).append(uid)
 
-    def __call__(self, args, entree=None, mdp=False, timeout=60):
+    def __call__(self, args, input_text=None, is_password=False, timeout=60):
         self.appels.append(args)
         a = [x for x in args if x != "--output=json"]
         c = a[0]
@@ -75,10 +75,10 @@ class FauxOcc:
             self.ajouter(uid)
             if "--group" in a:
                 self.groups[a[a.index("--group") + 1]].append(uid)
-            self.mdp = entree
+            self.mdp = input_text
             return ok()
         if c == "user:resetpassword":
-            self.mdp = entree
+            self.mdp = input_text
             return ok()
         if c == "config:app:set":
             self.reglages[(a[1], a[2])] = a[a.index("--value") + 1]
@@ -229,7 +229,7 @@ class FauxOccDisques(FauxOcc):
         super().__init__()
         self.montages = montages
 
-    def __call__(self, args, entree=None, mdp=False, timeout=60):
+    def __call__(self, args, input_text=None, is_password=False, timeout=60):
         a = [x for x in args if x != "--output=json"]
         if a[0] == "files_external:list":
             self.appels.append(args)
@@ -239,7 +239,7 @@ class FauxOccDisques(FauxOcc):
             m = next(m for m in self.montages if str(m["mount_id"]) == a[-1])
             m["applicable_groups"].append(a[1].split("=", 1)[1])
             return 0, "", ""
-        return super().__call__(args, entree, mdp, timeout)
+        return super().__call__(args, input_text, is_password, timeout)
 
 
 def _montage(i, nom, users=(), groups=()):

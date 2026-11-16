@@ -22,15 +22,15 @@ _lock = threading.RLock()
 _cache = {"d": None, "ecrit": 0}
 
 
-def _token_hash(jeton):
-    return hashlib.sha256(jeton.encode()).hexdigest()
+def _token_hash(token):
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _read():
     if _cache["d"] is None:
         try:
-            with open(SESSIONS_FILE) as f:
-                _cache["d"] = json.load(f)
+            with open(SESSIONS_FILE) as file:
+                _cache["d"] = json.load(file)
         except (OSError, ValueError):
             _cache["d"] = {}
     return _cache["d"]
@@ -38,52 +38,52 @@ def _read():
 
 def _write():
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = SESSIONS_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(_cache["d"], f)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, SESSIONS_FILE)
+    temporary_file = SESSIONS_FILE + ".tmp"
+    with open(temporary_file, "w") as file:
+        json.dump(_cache["d"], file)
+    os.chmod(temporary_file, 0o600)
+    os.replace(temporary_file, SESSIONS_FILE)
     _cache["ecrit"] = time.time()
 
 
-def _drop_expired(d):
-    maintenant = time.time()
-    for k in [k for k, s in d.items() if s["exp"] < maintenant]:
-        del d[k]
+def _drop_expired(sessions_data):
+    now = time.time()
+    for key in [key for key, session in sessions_data.items() if session["exp"] < now]:
+        del sessions_data[key]
 
 
-def create(identifiant, rang, provisoire=False, appareil=None, login=None):
-    jeton = secrets.token_urlsafe(32)
-    maintenant = time.time()
+def create(identifier, rank, temporary=False, device=None, login=None):
+    token = secrets.token_urlsafe(32)
+    now = time.time()
     with _lock:
-        d = _read()
-        _drop_expired(d)
-        d[_token_hash(jeton)] = {"id": secrets.token_hex(4), "identifiant": identifiant, "rang": rang, "provisoire": provisoire,
-                        "appareil": appareil, "login": login, "cree": int(maintenant), "vu": int(maintenant),
-                        "exp": maintenant + (TEMPORARY_LIFETIME if provisoire else LIFETIME), "confirme": maintenant}
+        sessions_data = _read()
+        _drop_expired(sessions_data)
+        sessions_data[_token_hash(token)] = {"id": secrets.token_hex(4), "identifiant": identifier, "rang": rank, "provisoire": temporary,
+                        "appareil": device, "login": login, "cree": int(now), "vu": int(now),
+                        "exp": now + (TEMPORARY_LIFETIME if temporary else LIFETIME), "confirme": now}
         _write()
-    return jeton
+    return token
 
 
-def read(jeton):
+def read(token):
     """La session (copie) si le jeton est valable, sinon None."""
-    if not jeton:
+    if not token:
         return None
     with _lock:
-        s = _read().get(_token_hash(jeton))
-        if not s or s["exp"] < time.time():
+        session = _read().get(_token_hash(token))
+        if not session or session["exp"] < time.time():
             return None
-        if time.time() - s["vu"] > 300:
-            s["vu"] = int(time.time())
+        if time.time() - session["vu"] > 300:
+            session["vu"] = int(time.time())
             _write()
-        return dict(s)
+        return dict(session)
 
 
-def confirm(jeton):
+def confirm(token):
     with _lock:
-        s = _read().get(_token_hash(jeton))
-        if s:
-            s["confirme"] = time.time()
+        session = _read().get(_token_hash(token))
+        if session:
+            session["confirme"] = time.time()
             _write()
 
 
@@ -91,34 +91,34 @@ def confirmed_recently(session):
     return time.time() - session.get("confirme", 0) < CONFIRMATION_WINDOW
 
 
-def close(jeton):
+def close(token):
     with _lock:
-        if _read().pop(_token_hash(jeton or ""), None):
+        if _read().pop(_token_hash(token or ""), None):
             _write()
 
 
-def close_by_id(sid):
+def close_by_id(session_id):
     with _lock:
-        d = _read()
-        for k in [k for k, s in d.items() if s["id"] == sid]:
-            del d[k]
+        sessions_data = _read()
+        for key in [key for key, session in sessions_data.items() if session["id"] == session_id]:
+            del sessions_data[key]
             _write()
             return True
     return False
 
 
-def close_account(identifiant=None):
+def close_account(identifier=None):
     """Ferme toutes les sessions d'un compte (ou de tout le monde)."""
     with _lock:
-        d = _read()
-        for k in [k for k, s in d.items() if identifiant is None or s["identifiant"] == identifiant]:
-            del d[k]
+        sessions_data = _read()
+        for key in [key for key, session in sessions_data.items() if identifier is None or session["identifiant"] == identifier]:
+            del sessions_data[key]
         _write()
 
 
 def list_sessions():
     with _lock:
-        d = _read()
-        _drop_expired(d)
-        return sorted(({k: v for k, v in s.items() if k != "exp"} for s in d.values() if not s["provisoire"]),
-                      key=lambda s: -s["vu"])
+        sessions_data = _read()
+        _drop_expired(sessions_data)
+        return sorted(({key: value for key, value in session.items() if key != "exp"} for session in sessions_data.values() if not session["provisoire"]),
+                      key=lambda session: -session["vu"])

@@ -17,11 +17,11 @@ def alert_settings():
 
 @router.post("/api/alertes/abonnement")
 async def subscribe(request: Request):
-    corps = await request.json()
-    origine = request.headers.get("origin") or ""
-    contact = origine if origine.startswith("https://") else "mailto:jabba@example.org"
+    body = await request.json()
+    origin = request.headers.get("origin") or ""
+    contact = origin if origin.startswith("https://") else "mailto:jabba@example.org"
     try:
-        notifications.subscribe(corps.get("abonnement"), contact, str(corps.get("appareil", "")), request.state.user)
+        notifications.subscribe(body.get("abonnement"), contact, str(body.get("appareil", "")), request.state.user)
     except ValueError as e:
         raise HTTPException(400, str(e))
     activity_log.record("alerte", "Alertes activées sur un appareil", request.state.nom)
@@ -42,9 +42,9 @@ async def this_device_state(request: Request):
 
 @router.post("/api/alertes/types")
 async def set_alert_types(request: Request):
-    corps = await request.json()
+    body = await request.json()
     try:
-        notifications.set_types(corps.get("type"), corps.get("actif"))
+        notifications.set_types(body.get("type"), body.get("actif"))
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True}
@@ -52,5 +52,5 @@ async def set_alert_types(request: Request):
 
 @router.post("/api/alertes/essai")
 def send_test_alert(request: Request):
-    n = notifications.send("essai", "Alerte d'essai", f"Tout marche : {measurements.server_name()} peut te prévenir.", "/#/systeme", forcer=True)
-    return {"ok": True, "appareils": n}
+    sent_count = notifications.send("essai", "Alerte d'essai", f"Tout marche : {measurements.server_name()} peut te prévenir.", "/#/systeme", force=True)
+    return {"ok": True, "appareils": sent_count}

@@ -16,14 +16,14 @@ UID, GID = 1000, 1000
 
 def roots():
     """Nom affiché -> chemin sur le serveur. Réglable par DOSSIERS_DISQUE (« nom=chemin,… »)."""
-    brut = os.environ.get("DOSSIERS_DISQUE",
+    raw = os.environ.get("DOSSIERS_DISQUE",
                           "Films et séries=/srv/data/media,Téléchargements=/srv/data/downloads,Mes dossiers=/srv/data/dossiers")
-    res = {}
-    for morceau in brut.split(","):
-        if "=" in morceau:
-            nom, chemin = morceau.split("=", 1)
-            res[nom.strip()] = chemin.strip()
-    return res
+    result = {}
+    for share in raw.split(","):
+        if "=" in share:
+            name, path = share.split("=", 1)
+            result[name.strip()] = path.strip()
+    return result
 
 
 class Refusal(Exception):
@@ -33,251 +33,251 @@ class Refusal(Exception):
         self.message = message
 
 
-def resolve(chemin, disques, lecture_seule):
+def resolve(path, disks, read_only):
     """Chemin virtuel « /Films et séries/xx » -> (chemin réel, écriture autorisée)."""
-    morceaux = [m for m in chemin.split("/") if m]
-    if not morceaux:
+    shares = [parts_list for parts_list in path.split("/") if parts_list]
+    if not shares:
         return None, False
-    toutes = dict(roots())
-    toutes.update(disques)
-    if morceaux[0] not in toutes:
+    all_entries = dict(roots())
+    all_entries.update(disks)
+    if shares[0] not in all_entries:
         raise Refusal(404, "Dossier introuvable")
-    base = os.path.realpath(toutes[morceaux[0]])
-    reel = os.path.realpath(os.path.join(base, *morceaux[1:]))
-    if reel != base and not reel.startswith(base + os.sep):
+    base = os.path.realpath(all_entries[shares[0]])
+    real_path = os.path.realpath(os.path.join(base, *shares[1:]))
+    if real_path != base and not real_path.startswith(base + os.sep):
         raise Refusal(400, "Chemin invalide")
-    ecriture = morceaux[0] not in lecture_seule
-    return reel, ecriture
+    writable = shares[0] not in read_only
+    return real_path, writable
 
 
-def _entry(chemin_virtuel, reel, ecriture, externe):
-    st = os.stat(reel)
-    dossier = os.path.isdir(reel)
+def _entry(virtual_path, real_path, writable, external):
+    stat = os.stat(real_path)
+    folder = os.path.isdir(real_path)
     return {
-        "nom": chemin_virtuel.rsplit("/", 1)[-1], "chemin": chemin_virtuel, "dossier": dossier,
-        "taille": None if dossier else st.st_size,
-        "modifie": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(),
-        "type": None, "ecriture": ecriture, "externe": externe,
+        "nom": virtual_path.rsplit("/", 1)[-1], "chemin": virtual_path, "dossier": folder,
+        "taille": None if folder else stat.st_size,
+        "modifie": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "type": None, "ecriture": writable, "externe": external,
     }
 
 
-def list_folder(chemin, disques, lecture_seule):
-    if chemin == "/":
-        elements = []
-        for nom, reel in list(roots().items()) + list(disques.items()):
-            if nom == "Mes dossiers":
-                os.makedirs(reel, exist_ok=True)
-                _give_to_server_user(reel)
-            if os.path.isdir(reel):
-                elements.append(_entry("/" + nom, reel, nom not in lecture_seule, nom in disques))
-        return {"chemin": "/", "elements": elements, "ecriture": False, "lien_nextcloud": None, "source": "disque"}
-    reel, ecriture = resolve(chemin, disques, lecture_seule)
-    if not os.path.isdir(reel):
+def list_folder(path, disks, read_only):
+    if path == "/":
+        entries = []
+        for name, real_path in list(roots().items()) + list(disks.items()):
+            if name == "Mes dossiers":
+                os.makedirs(real_path, exist_ok=True)
+                _give_to_server_user(real_path)
+            if os.path.isdir(real_path):
+                entries.append(_entry("/" + name, real_path, name not in read_only, name in disks))
+        return {"chemin": "/", "elements": entries, "ecriture": False, "lien_nextcloud": None, "source": "disque"}
+    real_path, writable = resolve(path, disks, read_only)
+    if not os.path.isdir(real_path):
         raise Refusal(404, "Dossier introuvable")
-    elements = []
-    for nom in sorted(os.listdir(reel), key=str.lower):
-        if nom.startswith("."):
+    entries = []
+    for name in sorted(os.listdir(real_path), key=str.lower):
+        if name.startswith("."):
             continue
         try:
-            elements.append(_entry(chemin.rstrip("/") + "/" + nom, os.path.join(reel, nom), ecriture, False))
+            entries.append(_entry(path.rstrip("/") + "/" + name, os.path.join(real_path, name), writable, False))
         except OSError:
             continue
-    elements.sort(key=lambda e: (not e["dossier"], e["nom"].lower()))
-    return {"chemin": chemin, "elements": elements, "ecriture": ecriture, "lien_nextcloud": None, "source": "disque"}
+    entries.sort(key=lambda entry: (not entry["dossier"], entry["nom"].lower()))
+    return {"chemin": path, "elements": entries, "ecriture": writable, "lien_nextcloud": None, "source": "disque"}
 
 
-def _give_to_server_user(chemin):
+def _give_to_server_user(path):
     """Les fichiers créés par l'appli appartiennent à l'utilisateur du serveur, groupe du dossier parent."""
     try:
-        gid = os.stat(os.path.dirname(chemin)).st_gid
-        os.chown(chemin, UID, gid if gid else GID)
+        group_id = os.stat(os.path.dirname(path)).st_gid
+        os.chown(path, UID, group_id if group_id else GID)
     except OSError:
         pass
 
 
-def _writable_path(chemin, disques, lecture_seule):
-    reel, ecriture = resolve(chemin, disques, lecture_seule)
-    if reel is None or not ecriture or len([m for m in chemin.split("/") if m]) < 2:
+def _writable_path(path, disks, read_only):
+    real_path, writable = resolve(path, disks, read_only)
+    if real_path is None or not writable or len([parts_list for parts_list in path.split("/") if parts_list]) < 2:
         raise Refusal(403, "Impossible ici : dossier en lecture seule.")
-    return reel
+    return real_path
 
 
-def create_folder(chemin, disques, lecture_seule):
-    reel = _writable_path(chemin, disques, lecture_seule)
-    if os.path.exists(reel):
+def create_folder(path, disks, read_only):
+    real_path = _writable_path(path, disks, read_only)
+    if os.path.exists(real_path):
         raise Refusal(409, "Un élément porte déjà ce nom.")
-    os.mkdir(reel)
-    _give_to_server_user(reel)
+    os.mkdir(real_path)
+    _give_to_server_user(real_path)
 
 
-def upload_path(dossier, nom, disques, lecture_seule):
-    reel = _writable_path(dossier.rstrip("/") + "/" + nom, disques, lecture_seule)
-    return reel
+def upload_path(folder, name, disks, read_only):
+    real_path = _writable_path(folder.rstrip("/") + "/" + name, disks, read_only)
+    return real_path
 
 
-def finish_upload(reel):
-    _give_to_server_user(reel)
+def finish_upload(real_path):
+    _give_to_server_user(real_path)
 
 
-def read_path(chemin, disques, lecture_seule):
-    reel, _ = resolve(chemin, disques, lecture_seule)
-    if reel is None or not os.path.isfile(reel):
+def read_path(path, disks, read_only):
+    real_path, _ = resolve(path, disks, read_only)
+    if real_path is None or not os.path.isfile(real_path):
         raise Refusal(404, "Fichier introuvable")
-    return reel
+    return real_path
 
 
-def move(de, vers, disques, lecture_seule):
-    src = _writable_path(de, disques, lecture_seule)
-    dst = _writable_path(vers, disques, lecture_seule)
-    if not os.path.exists(src):
+def move(source, vers, disks, read_only):
+    source_path = _writable_path(source, disks, read_only)
+    destination = _writable_path(vers, disks, read_only)
+    if not os.path.exists(source_path):
         raise Refusal(404, "Introuvable")
-    if os.path.exists(dst):
+    if os.path.exists(destination):
         raise Refusal(409, "Un élément porte déjà ce nom.")
-    shutil.move(src, dst)
+    shutil.move(source_path, destination)
 
 
 TRASH_NAME = os.environ.get("JABBA_CORBEILLE", "/srv/data/.corbeille")
 TRASH_KEEP = 30 * 86400
 
 
-def delete(chemin, disques, lecture_seule):
+def delete(path, disks, read_only):
     """Pas de suppression définitive : l'élément part dans la corbeille du disque de données (30 jours)."""
-    reel = _writable_path(chemin, disques, lecture_seule)
-    if not os.path.exists(reel):
+    real_path = _writable_path(path, disks, read_only)
+    if not os.path.exists(real_path):
         raise Refusal(404, "Introuvable")
-    ident = time.strftime("%Y%m%d-%H%M%S-") + os.urandom(3).hex()
-    boite = os.path.join(TRASH_NAME, ident)
-    os.makedirs(boite, exist_ok=True)
-    dossier = os.path.isdir(reel)
-    taille = None if dossier else os.path.getsize(reel)
-    shutil.move(reel, os.path.join(boite, os.path.basename(reel)))
-    with open(os.path.join(boite, ".jabba.json"), "w") as f:
-        json.dump({"chemin": chemin, "t": int(time.time()), "dossier": dossier, "taille": taille}, f, ensure_ascii=False)
+    identifier = time.strftime("%Y%m%d-%H%M%S-") + os.urandom(3).hex()
+    trash_dir = os.path.join(TRASH_NAME, identifier)
+    os.makedirs(trash_dir, exist_ok=True)
+    folder = os.path.isdir(real_path)
+    size = None if folder else os.path.getsize(real_path)
+    shutil.move(real_path, os.path.join(trash_dir, os.path.basename(real_path)))
+    with open(os.path.join(trash_dir, ".jabba.json"), "w") as file:
+        json.dump({"chemin": path, "t": int(time.time()), "dossier": folder, "taille": size}, file, ensure_ascii=False)
 
 
 def _trash_dirs():
     try:
-        noms = sorted(os.listdir(TRASH_NAME), reverse=True)
+        names = sorted(os.listdir(TRASH_NAME), reverse=True)
     except OSError:
         return
-    for ident in noms:
-        boite = os.path.join(TRASH_NAME, ident)
-        if not os.path.isdir(boite):
+    for identifier in names:
+        trash_dir = os.path.join(TRASH_NAME, identifier)
+        if not os.path.isdir(trash_dir):
             continue
         try:
-            with open(os.path.join(boite, ".jabba.json")) as f:
-                meta = json.load(f)
+            with open(os.path.join(trash_dir, ".jabba.json")) as file:
+                metadata = json.load(file)
         except (OSError, ValueError):
-            meta = {}
-        contenu = [n for n in os.listdir(boite) if n != ".jabba.json"]
-        if not contenu:
+            metadata = {}
+        content = [name for name in os.listdir(trash_dir) if name != ".jabba.json"]
+        if not content:
             continue
-        meta.setdefault("t", int(os.stat(boite).st_mtime))
-        yield ident, boite, contenu[0], meta
+        metadata.setdefault("t", int(os.stat(trash_dir).st_mtime))
+        yield identifier, trash_dir, content[0], metadata
 
 
 def list_trash():
-    res = []
-    for ident, boite, nom, meta in _trash_dirs():
-        reel = os.path.join(boite, nom)
-        origine = meta.get("chemin")
-        res.append({"id": ident, "nom": nom, "origine": (origine.rsplit("/", 1)[0] or "/") if origine else None, "supprime": meta["t"],
-                    "dossier": os.path.isdir(reel), "taille": meta.get("taille"), "source": "disque"})
-    return res
+    result = []
+    for identifier, trash_dir, name, metadata in _trash_dirs():
+        real_path = os.path.join(trash_dir, name)
+        origin = metadata.get("chemin")
+        result.append({"id": identifier, "nom": name, "origine": (origin.rsplit("/", 1)[0] or "/") if origin else None, "supprime": metadata["t"],
+                    "dossier": os.path.isdir(real_path), "taille": metadata.get("taille"), "source": "disque"})
+    return result
 
 
-def _trash_dir(ident):
-    if not ident or "/" in ident or ident.startswith("."):
+def _trash_dir(identifier):
+    if not identifier or "/" in identifier or identifier.startswith("."):
         raise Refusal(400, "Élément invalide")
-    for i, boite, nom, meta in _trash_dirs():
-        if i == ident:
-            return boite, nom, meta
+    for index, trash_dir, name, metadata in _trash_dirs():
+        if index == identifier:
+            return trash_dir, name, metadata
     raise Refusal(404, "Introuvable dans la corbeille")
 
 
-def restore(ident, disques, lecture_seule):
-    boite, nom, meta = _trash_dir(ident)
-    origine = meta.get("chemin")
-    if not origine:
+def restore(identifier, disks, read_only):
+    trash_dir, name, metadata = _trash_dir(identifier)
+    origin = metadata.get("chemin")
+    if not origin:
         raise Refusal(409, "On ne sait plus d'où vient cet élément.")
-    parent = origine.rsplit("/", 1)[0] or "/"
-    dest_virtuel = origine
-    reel = _writable_path(dest_virtuel, disques, lecture_seule)
-    if not os.path.isdir(os.path.dirname(reel)):
+    parent = origin.rsplit("/", 1)[0] or "/"
+    destination_path = origin
+    real_path = _writable_path(destination_path, disks, read_only)
+    if not os.path.isdir(os.path.dirname(real_path)):
         raise Refusal(409, f"Le dossier d'origine « {parent} » n'existe plus.")
-    base, ext = os.path.splitext(nom)
-    i = 2
-    while os.path.exists(reel):
-        dest_virtuel = f"{parent.rstrip('/')}/{base} ({i}){ext}"
-        reel = _writable_path(dest_virtuel, disques, lecture_seule)
-        i += 1
-    shutil.move(os.path.join(boite, nom), reel)
-    shutil.rmtree(boite, ignore_errors=True)
-    return dest_virtuel
+    base, extension = os.path.splitext(name)
+    index = 2
+    while os.path.exists(real_path):
+        destination_path = f"{parent.rstrip('/')}/{base} ({index}){extension}"
+        real_path = _writable_path(destination_path, disks, read_only)
+        index += 1
+    shutil.move(os.path.join(trash_dir, name), real_path)
+    shutil.rmtree(trash_dir, ignore_errors=True)
+    return destination_path
 
 
-def erase(ident):
-    boite, _, _ = _trash_dir(ident)
-    shutil.rmtree(boite)
+def erase(identifier):
+    trash_dir, _, _ = _trash_dir(identifier)
+    shutil.rmtree(trash_dir)
 
 
 def empty_trash():
-    n = 0
-    for _, boite, _, _ in list(_trash_dirs()):
-        shutil.rmtree(boite, ignore_errors=True)
-        n += 1
-    return n
+    name = 0
+    for _, trash_dir, _, _ in list(_trash_dirs()):
+        shutil.rmtree(trash_dir, ignore_errors=True)
+        name += 1
+    return name
 
 
 def purge_old_trash():
     """Efface ce qui est dans la corbeille depuis plus de 30 jours."""
-    limite = time.time() - TRASH_KEEP
-    n = 0
-    for _, boite, _, meta in list(_trash_dirs()):
-        if meta["t"] < limite:
-            shutil.rmtree(boite, ignore_errors=True)
-            n += 1
+    cutoff = time.time() - TRASH_KEEP
+    name = 0
+    for _, trash_dir, _, metadata in list(_trash_dirs()):
+        if metadata["t"] < cutoff:
+            shutil.rmtree(trash_dir, ignore_errors=True)
+            name += 1
     # Les aperçus non regardés depuis 60 jours sont refaits à la demande.
-    limite_v = time.time() - 60 * 86400
-    for dossier, _, fichiers in os.walk(THUMBNAILS_DIR):
-        for f in fichiers:
+    cutoff_value = time.time() - 60 * 86400
+    for folder, _, files in os.walk(THUMBNAILS_DIR):
+        for file in files:
             try:
-                if os.stat(os.path.join(dossier, f)).st_mtime < limite_v:
-                    os.remove(os.path.join(dossier, f))
+                if os.stat(os.path.join(folder, file)).st_mtime < cutoff_value:
+                    os.remove(os.path.join(folder, file))
             except OSError:
                 pass
-    return n
+    return name
 
 
 # ------------------------------------------------------------ recherche
-def search(texte, disques, lecture_seule, noms=None, limite=60, delai=6.0):
+def search(text, disks, read_only, names=None, cutoff=60, delay=6.0):
     """Cherche par nom dans les dossiers du serveur. `noms` limite aux racines voulues."""
-    texte = texte.lower()
-    fin = time.time() + delai
-    toutes = dict(roots())
-    toutes.update(disques)
-    res, complet = [], True
-    for nom_racine, base in toutes.items():
-        if noms is not None and nom_racine not in noms:
+    text = text.lower()
+    end = time.time() + delay
+    all_entries = dict(roots())
+    all_entries.update(disks)
+    result, full_command = [], True
+    for root_name, base in all_entries.items():
+        if names is not None and root_name not in names:
             continue
         base = os.path.realpath(base)
-        for dossier, sous, fichiers in os.walk(base):
-            sous[:] = sorted(d for d in sous if not d.startswith("."))
-            rel = os.path.relpath(dossier, base)
-            virtuel = "/" + nom_racine + ("" if rel == "." else "/" + rel.replace(os.sep, "/"))
-            for n in sous + sorted(fichiers):
-                if n.startswith(".") or texte not in n.lower():
+        for folder, subfolders, files in os.walk(base):
+            subfolders[:] = sorted(subfolder for subfolder in subfolders if not subfolder.startswith("."))
+            relative_path = os.path.relpath(folder, base)
+            virtual_path = "/" + root_name + ("" if relative_path == "." else "/" + relative_path.replace(os.sep, "/"))
+            for name in subfolders + sorted(files):
+                if name.startswith(".") or text not in name.lower():
                     continue
-                reel = os.path.join(dossier, n)
+                real_path = os.path.join(folder, name)
                 try:
-                    res.append(_entry(virtuel + "/" + n, reel, nom_racine not in lecture_seule, nom_racine in disques))
+                    result.append(_entry(virtual_path + "/" + name, real_path, root_name not in read_only, root_name in disks))
                 except OSError:
                     continue
-                if len(res) >= limite:
-                    return res, False
-            if time.time() > fin:
-                return res, False
-    return res, complet
+                if len(result) >= cutoff:
+                    return result, False
+            if time.time() > end:
+                return result, False
+    return result, full_command
 
 
 # ------------------------------------------------------------ vignettes
@@ -285,29 +285,29 @@ THUMBNAILS_DIR = os.environ.get("JABBA_VIGNETTES", "/data/vignettes")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff"}
 
 
-def thumbnail(reel, taille):
+def thumbnail(real_path, size):
     """Petite image JPEG pour la liste des fichiers (gardée en cache)."""
-    if os.path.splitext(reel)[1].lower() not in IMAGE_EXTENSIONS:
+    if os.path.splitext(real_path)[1].lower() not in IMAGE_EXTENSIONS:
         raise Refusal(404, "Pas d'aperçu")
-    st = os.stat(reel)
-    if st.st_size > 80 * 1024 * 1024:
+    stat = os.stat(real_path)
+    if stat.st_size > 80 * 1024 * 1024:
         raise Refusal(404, "Image trop lourde pour un aperçu")
-    cle = hashlib.sha1(f"{reel}|{st.st_mtime_ns}|{st.st_size}|{taille}".encode()).hexdigest()
-    cache = os.path.join(THUMBNAILS_DIR, cle[:2], cle + ".jpg")
+    key = hashlib.sha1(f"{real_path}|{stat.st_mtime_ns}|{stat.st_size}|{size}".encode()).hexdigest()
+    cache = os.path.join(THUMBNAILS_DIR, key[:2], key + ".jpg")
     if not os.path.exists(cache):
         from services import sandbox
         # Pillow tourne à part, sans aucun droit : une image piégée ne peut rien faire.
         try:
-            jpeg = sandbox.thumbnail(reel, taille)
+            jpeg = sandbox.thumbnail(real_path, size)
         except (RuntimeError, OSError, subprocess.SubprocessError):
             raise Refusal(404, "Pas d'aperçu")
         os.makedirs(os.path.dirname(cache), exist_ok=True)
-        with open(cache + ".tmp", "wb") as f:
-            f.write(jpeg)
+        with open(cache + ".tmp", "wb") as file:
+            file.write(jpeg)
         os.replace(cache + ".tmp", cache)
     return cache
 
 
-def is_folder(chemin, disques, lecture_seule):
-    reel, _ = resolve(chemin, disques, lecture_seule)
-    return bool(reel) and os.path.isdir(reel)
+def is_folder(path, disks, read_only):
+    real_path, _ = resolve(path, disks, read_only)
+    return bool(real_path) and os.path.isdir(real_path)

@@ -50,25 +50,25 @@ _failures = []          # horodatages des essais ratés
 
 def _read():
     try:
-        with open(STATE_FILE) as f:
-            return json.load(f)
+        with open(STATE_FILE) as file:
+            return json.load(file)
     except (OSError, ValueError):
         return {}
 
 
-def _write(d):
+def _write(data):
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    tmp = STATE_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(d, f)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, STATE_FILE)
+    temporary_file = STATE_FILE + ".tmp"
+    with open(temporary_file, "w") as file:
+        json.dump(data, file)
+    os.chmod(temporary_file, 0o600)
+    os.replace(temporary_file, STATE_FILE)
 
 
 def is_locked():
     with _lock:
-        maintenant = time.time()
-        _failures[:] = [t for t in _failures if t > maintenant - LOCKOUT]
+        now = time.time()
+        _failures[:] = [timestamp for timestamp in _failures if timestamp > now - LOCKOUT]
         return len(_failures) >= MAX_ATTEMPTS
 
 
@@ -77,76 +77,76 @@ def _record_failure():
         _failures.append(time.time())
 
 
-def check_password(hote, utilisateur, mot_de_passe):
+def check_password(host_runner, user, password):
     """True si le mot de passe est celui du compte `utilisateur` sur le serveur."""
-    if not mot_de_passe or is_locked():
+    if not password or is_locked():
         return False
-    code, sortie, _ = hote(["getent", "shadow", utilisateur])
-    if code != 0 or ":" not in sortie:
+    code, output, _ = host_runner(["getent", "shadow", user])
+    if code != 0 or ":" not in output:
         return False
-    empreinte = sortie.split(":")[1]
-    if not empreinte or empreinte[0] in "!*":
+    password_hash = output.split(":")[1]
+    if not password_hash or password_hash[0] in "!*":
         return False
-    ok = hmac.compare_digest(system_crypt.hash_with_setting(mot_de_passe, empreinte) or "", empreinte)
-    if not ok:
+    valid = hmac.compare_digest(system_crypt.hash_with_setting(password, password_hash) or "", password_hash)
+    if not valid:
         _record_failure()
-    return ok
+    return valid
 
 
-def new_token(identifiant="serveur", rang="super", provisoire=False):
+def new_token(identifier="serveur", rank="super", temporary=False):
     """Jeton valable 10 minutes, qui dit qui est connecté en admin et avec quel rang."""
     jeton = secrets.token_urlsafe(32)
     with _lock:
-        maintenant = time.time()
-        for j in [j for j, v in _tokens.items() if v["exp"] < maintenant]:
-            del _tokens[j]
-        _tokens[jeton] = {"exp": maintenant + TOKEN_LIFETIME, "identifiant": identifiant, "rang": rang, "provisoire": provisoire}
+        now = time.time()
+        for token in [token for token, token_data in _tokens.items() if token_data["exp"] < now]:
+            del _tokens[token]
+        _tokens[jeton] = {"exp": now + TOKEN_LIFETIME, "identifiant": identifier, "rang": rank, "provisoire": temporary}
     return jeton
 
 
-def token_info(jeton):
+def token_info(token):
     """Les infos du jeton (identifiant, rang, provisoire) s'il est valable, sinon None."""
-    if not jeton:
+    if not token:
         return None
     with _lock:
-        v = _tokens.get(jeton)
-        return dict(v) if v and v["exp"] > time.time() else None
+        token_data = _tokens.get(token)
+        return dict(token_data) if token_data and token_data["exp"] > time.time() else None
 
 
-def forget_tokens(identifiant=None):
+def forget_tokens(identifier=None):
     """Déconnecte un compte (ou tout le monde)."""
     with _lock:
-        for j in [j for j, v in _tokens.items() if identifiant is None or v["identifiant"] == identifiant]:
-            del _tokens[j]
+        for token in [token for token, token_data in _tokens.items() if identifier is None or token_data["identifiant"] == identifier]:
+            del _tokens[token]
 
 
 def record_failure():
     _record_failure()
 
 
-def change_password(hote_entree, utilisateur, nouveau):
-    if len(nouveau) < 10:
+def change_password(host_input_runner, user, new_value):
+    if len(new_value) < 10:
         raise ValueError("Le nouveau mot de passe doit faire au moins 10 caractères.")
-    if any(c in nouveau for c in "\n\r:"):
+    if any(stored in new_value for stored in "\n\r:"):
         raise ValueError("Le mot de passe ne peut pas contenir « : » ni de retour à la ligne.")
-    code, _, err = hote_entree(["chpasswd"], f"{utilisateur}:{nouveau}\n")
+    code, _, error_output = host_input_runner(["chpasswd"], f"{user}:{new_value}\n")
     if code != 0:
-        raise RuntimeError("Le serveur a refusé le changement : " + err[:200])
+        raise RuntimeError("Le serveur a refusé le changement : " + error_output[:200])
     forget_tokens()  # on redemande le mot de passe partout
 
 
 # ---------------------------------------------------------------- code de secours
-def _code_hash(code, sel):
-    norm = " ".join(code.lower().split())
-    return hashlib.scrypt(norm.encode(), salt=bytes.fromhex(sel), n=2 ** 14, r=8, p=1).hex()
+def _code_hash(code, salt):
+    normalized = " ".join(code.lower().split())
+    return hashlib.scrypt(normalized.encode(), salt=bytes.fromhex(salt), n=2 ** 14, r=8, p=1).hex()
 
 
 def generate_recovery_code():
     code = " ".join(secrets.choice(WORDS) for _ in range(6))
-    sel = secrets.token_hex(16)
-    d = _read()
-    d["code"] = {"sel": sel, "empreinte": _code_hash(code, sel), "cree": int(time.time())}
-    _write(d)
+    salt = secrets.token_hex(16)
+    data = _read()
+    data["code"] = {"sel": salt, "empreinte": _code_hash(code, salt), "cree": int(time.time())}
+    _write(data)
     return code
 
 
@@ -157,8 +157,8 @@ def recovery_code_exists():
 def check_recovery_code(code):
     if is_locked():
         return False
-    c = _read().get("code")
-    ok = bool(c) and hmac.compare_digest(_code_hash(code, c["sel"]), c["empreinte"])
-    if not ok:
+    stored = _read().get("code")
+    valid = bool(stored) and hmac.compare_digest(_code_hash(code, stored["sel"]), stored["empreinte"])
+    if not valid:
         _record_failure()
-    return ok
+    return valid

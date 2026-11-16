@@ -38,47 +38,47 @@ def list_tools():
     if config.DEMO:
         from services.demo_data import TOOLS
         return TOOLS
-    code, sortie, err = commands.run_on_host(["docker", "ps", "-a", "--format", "{{json .}}"])
+    code, output, error_output = commands.run_on_host(["docker", "ps", "-a", "--format", "{{json .}}"])
     if code != 0:
-        raise HTTPException(500, "Docker ne répond pas : " + err[:200])
-    projets = {}
-    for ligne in sortie.splitlines():
-        c = json.loads(ligne)
-        etiquettes = dict(e.split("=", 1) for e in c.get("Labels", "").split(",") if "=" in e)
-        projet = etiquettes.get("com.docker.compose.project", c["Names"])
-        dossier = etiquettes.get("com.docker.compose.project.working_dir", "")
-        p = projets.setdefault(projet, {"id": projet, "dossier": dossier, "conteneurs": []})
-        p["conteneurs"].append({"nom": c["Names"], "etat": c["State"], "statut": c["Status"]})
-    resultat = []
-    for pid, p in sorted(projets.items()):
-        nom, role = NAMES.get(pid, (pid, ""))
-        etats = {c["etat"] for c in p["conteneurs"]}
-        if etats == {"running"}:
-            etat = "actif"
-        elif "running" in etats:
-            etat = "partiel"
+        raise HTTPException(500, "Docker ne répond pas : " + error_output[:200])
+    projects = {}
+    for line in output.splitlines():
+        container = json.loads(line)
+        labels = dict(label.split("=", 1) for label in container.get("Labels", "").split(",") if "=" in label)
+        projet = labels.get("com.docker.compose.project", container["Names"])
+        folder = labels.get("com.docker.compose.project.working_dir", "")
+        project = projects.setdefault(projet, {"id": projet, "dossier": folder, "conteneurs": []})
+        project["conteneurs"].append({"nom": container["Names"], "etat": container["State"], "statut": container["Status"]})
+    result = []
+    for pid, project in sorted(projects.items()):
+        name, role = NAMES.get(pid, (pid, ""))
+        states = {container["etat"] for container in project["conteneurs"]}
+        if states == {"running"}:
+            state = "actif"
+        elif "running" in states:
+            state = "partiel"
         else:
-            etat = "arrêté"
-        if any("restarting" in c["etat"] for c in p["conteneurs"]):
-            etat = "en panne"
-        resultat.append({
-            "id": pid, "nom": nom, "role": role, "etat": etat,
-            "lien": config.LINKS.get(pid), "dossier": p["dossier"], "conteneurs": p["conteneurs"],
-            "modifiable": pid != "jabba-app" and bool(p["dossier"]),
+            state = "arrêté"
+        if any("restarting" in container["etat"] for container in project["conteneurs"]):
+            state = "en panne"
+        result.append({
+            "id": pid, "nom": name, "role": role, "etat": state,
+            "lien": config.LINKS.get(pid), "dossier": project["dossier"], "conteneurs": project["conteneurs"],
+            "modifiable": pid != "jabba-app" and bool(project["dossier"]),
             "systeme": pid in SYSTEM_TOOLS, "icone": pid in PORTS,
             "dans_appli": pid not in OUTSIDE_APP,
         })
-    return resultat
+    return result
 
 
 def find_tool(pid):
-    for o in list_tools():
-        if o["id"] == pid:
-            if not o["modifiable"]:
+    for tool in list_tools():
+        if tool["id"] == pid:
+            if not tool["modifiable"]:
                 raise HTTPException(400, "Cet outil ne se gère pas depuis l'appli.")
-            if not re.fullmatch(r"/[\w./-]+", o["dossier"]):
+            if not re.fullmatch(r"/[\w./-]+", tool["dossier"]):
                 raise HTTPException(400, "Dossier inattendu.")
-            return o
+            return tool
     raise HTTPException(404, "Outil inconnu")
 
 
@@ -88,25 +88,25 @@ RE_LINK = re.compile(r"<link[^>]+>", re.I)
 
 def find_icon(pid):
     base = f"http://127.0.0.1:{PORTS[pid]}/"
-    with httpx.Client(timeout=5, follow_redirects=True) as c:
-        candidats = []
+    with httpx.Client(timeout=5, follow_redirects=True) as container:
+        candidates = []
         try:
-            page = c.get(base)
-            for balise in RE_LINK.findall(page.text):
-                rel = re.search(r'rel=["\']([^"\']+)', balise, re.I)
-                href = re.search(r'href=["\']([^"\']+)', balise, re.I)
-                if rel and href and "icon" in rel.group(1).lower():
-                    prio = 0 if "apple-touch" in rel.group(1).lower() else 1
-                    candidats.append((prio, urljoin(str(page.url), href.group(1))))
+            page = container.get(base)
+            for tag_name in RE_LINK.findall(page.text):
+                relative_path = re.search(r'rel=["\']([^"\']+)', tag_name, re.I)
+                href = re.search(r'href=["\']([^"\']+)', tag_name, re.I)
+                if relative_path and href and "icon" in relative_path.group(1).lower():
+                    priority = 0 if "apple-touch" in relative_path.group(1).lower() else 1
+                    candidates.append((priority, urljoin(str(page.url), href.group(1))))
         except httpx.HTTPError:
             pass
-        urls = [u for _, u in sorted(candidats)] + [urljoin(base, p) for p in FALLBACK_ICONS]
-        for u in urls:
+        urls = [candidate_url for _, candidate_url in sorted(candidates)] + [urljoin(base, project) for project in FALLBACK_ICONS]
+        for candidate_url in urls:
             try:
-                r = c.get(u)
+                response = container.get(candidate_url)
             except httpx.HTTPError:
                 continue
-            type_ = r.headers.get("content-type", "").split(";")[0]
-            if r.status_code == 200 and type_.startswith("image/") and 0 < len(r.content) < 2_000_000:
-                return r.content, type_
+            media_type = response.headers.get("content-type", "").split(";")[0]
+            if response.status_code == 200 and media_type.startswith("image/") and 0 < len(response.content) < 2_000_000:
+                return response.content, media_type
     return None

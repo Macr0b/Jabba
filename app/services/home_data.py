@@ -15,29 +15,29 @@ SUGGESTION_WINDOW = 30 * 86400  # …sur 30 jours
 
 def read():
     try:
-        with open(HOME_FILE) as f:
-            d = json.load(f)
+        with open(HOME_FILE) as file:
+            data = json.load(file)
     except (OSError, ValueError):
-        d = {}
-    d.setdefault("favoris", [])
-    d.setdefault("visites", {})
-    d.setdefault("ignores", [])
-    return d
+        data = {}
+    data.setdefault("favoris", [])
+    data.setdefault("visites", {})
+    data.setdefault("ignores", [])
+    return data
 
 
-def write(d):
+def write(data):
     os.makedirs(os.path.dirname(HOME_FILE), exist_ok=True)
-    tmp = HOME_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(d, f, ensure_ascii=False)
-    os.replace(tmp, HOME_FILE)
+    temporary_file = HOME_FILE + ".tmp"
+    with open(temporary_file, "w") as file:
+        json.dump(data, file, ensure_ascii=False)
+    os.replace(temporary_file, HOME_FILE)
 
 
-def record_visit(chemin):
+def record_visit(path):
     with LOCK:
-        d = read()
-        limite = time.time() - SUGGESTION_WINDOW
-        d["visites"] = {c: [t for t in ts if t > limite] for c, ts in d["visites"].items() if any(t > limite for t in ts)}
-        d["visites"].setdefault(chemin, []).append(int(time.time()))
-        d["visites"][chemin] = d["visites"][chemin][-50:]
-        write(d)
+        data = read()
+        cutoff = time.time() - SUGGESTION_WINDOW
+        data["visites"] = {folder: [timestamp for timestamp in timestamps if timestamp > cutoff] for folder, timestamps in data["visites"].items() if any(timestamp > cutoff for timestamp in timestamps)}
+        data["visites"].setdefault(path, []).append(int(time.time()))
+        data["visites"][path] = data["visites"][path][-50:]
+        write(data)

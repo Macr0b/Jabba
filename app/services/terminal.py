@@ -25,23 +25,23 @@ TICKET_LIFETIME = 30
 OPEN_TERMINALS = {}          # pid -> {qui, debut}
 
 
-def new_ticket(qui, nom):
-    maintenant = time.time()
-    for t in [t for t, v in TICKETS.items() if v["expire"] < maintenant]:
-        TICKETS.pop(t, None)
-    t = secrets.token_urlsafe(32)
-    TICKETS[t] = {"qui": qui, "nom": nom, "expire": maintenant + TICKET_LIFETIME}
-    return t
+def new_ticket(who, name):
+    now = time.time()
+    for ticket in [ticket for ticket, ticket_data in TICKETS.items() if ticket_data["expire"] < now]:
+        TICKETS.pop(ticket, None)
+    ticket = secrets.token_urlsafe(32)
+    TICKETS[ticket] = {"qui": who, "nom": name, "expire": now + TICKET_LIFETIME}
+    return ticket
 
 
-def take_ticket(t):
-    v = TICKETS.pop(t or "", None)
-    return v if v and v["expire"] > time.time() else None
+def take_ticket(ticket):
+    ticket_data = TICKETS.pop(ticket or "", None)
+    return ticket_data if ticket_data and ticket_data["expire"] > time.time() else None
 
 
-def _resize(fd, lignes, colonnes):
-    lignes, colonnes = max(5, min(int(lignes), 500)), max(20, min(int(colonnes), 500))
-    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", lignes, colonnes, 0, 0))
+def _resize(descriptor, lines, columns):
+    lines, columns = max(5, min(int(lines), 500)), max(20, min(int(columns), 500))
+    fcntl.ioctl(descriptor, termios.TIOCSWINSZ, struct.pack("HHHH", lines, columns, 0, 0))
 
 
 RC = r"""# Terminal de l'appli Jabba : réglages du shell, puis chaque commande part au journal du serveur.
@@ -68,112 +68,112 @@ DEMO_LOG = "/tmp/jabba-terminal-demo.log"
 def prepare_rc(ecrire):
     """Écrit le fichier de démarrage du shell sur le serveur (ou en démo, à côté) et renvoie son chemin."""
     if ecrire is None:   # démo : pas de journal système, on note dans un fichier
-        chemin = "/tmp/jabba-terminal.bashrc"
-        with open(chemin, "w") as f:
-            f.write(RC.replace('logger -t jabba-terminal -- ', f'echo >> {DEMO_LOG} '))
-        return chemin
+        path = "/tmp/jabba-terminal.bashrc"
+        with open(path, "w") as file:
+            file.write(RC.replace('logger -t jabba-terminal -- ', f'echo >> {DEMO_LOG} '))
+        return path
     ecrire(RC)
     return RC_PATH
 
 
-def command_log(sid, debut, hote):
+def command_log(session_id, debut, host_runner):
     """Les commandes tapées pendant la session `sid`, dans l'ordre (200 au plus)."""
-    if hote is None:
+    if host_runner is None:
         try:
-            lignes = open(DEMO_LOG).read().splitlines()
+            lines = open(DEMO_LOG).read().splitlines()
         except OSError:
-            lignes = []
+            lines = []
     else:
-        _, sortie, _ = hote(["journalctl", "-t", "jabba-terminal", "--since", f"@{int(debut) - 1}", "-o", "cat", "--no-pager"])
-        lignes = sortie.splitlines()
-    res = []
-    for l in lignes:
-        if l.startswith(sid + " "):
-            cmd = l[len(sid) + 1:].split(" : ", 1)[-1].strip()
-            if cmd:
-                res.append(cmd[:300])
-    return res[:200]
+        _, output, _ = host_runner(["journalctl", "-t", "jabba-terminal", "--since", f"@{int(debut) - 1}", "-o", "cat", "--no-pager"])
+        lines = output.splitlines()
+    result = []
+    for line in lines:
+        if line.startswith(session_id + " "):
+            command = line[len(session_id) + 1:].split(" : ", 1)[-1].strip()
+            if command:
+                result.append(command[:300])
+    return result[:200]
 
 
-def start(commande, demo=False, env_sup=None):
+def start(command, demo=False, extra_env=None):
     """Ouvre un shell dans un pseudo-terminal. Renvoie (processus, descripteur maître)."""
-    maitre, esclave = pty.openpty()
+    master_fd, slave_fd = pty.openpty()
 
     def prepare():
         os.setsid()
-        fcntl.ioctl(esclave, termios.TIOCSCTTY, 0)
+        fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
 
     env = {"TERM": "xterm-256color", "LANG": "C.UTF-8", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
     if demo:
         env["HOME"] = "/tmp"
-    env.update(env_sup or {})
-    p = subprocess.Popen(commande, stdin=esclave, stdout=esclave, stderr=esclave, preexec_fn=prepare,
+    env.update(extra_env or {})
+    process = subprocess.Popen(command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, preexec_fn=prepare,
                          close_fds=True, env=env)
-    os.close(esclave)
-    os.set_blocking(maitre, False)
-    return p, maitre
+    os.close(slave_fd)
+    os.set_blocking(master_fd, False)
+    return process, master_fd
 
 
-async def bridge(ws, commande, demo=False, env=None):
+async def bridge(ws, command, demo=False, env=None):
     """Fait passer les octets entre la page (xterm.js) et le shell, jusqu'à ce que l'un des deux s'arrête."""
-    p, fd = start(commande, demo, env)
-    OPEN_TERMINALS[p.pid] = {"debut": time.time()}
-    boucle = asyncio.get_running_loop()
-    sortie = asyncio.Queue()
+    process, descriptor = start(command, demo, env)
+    OPEN_TERMINALS[process.pid] = {"debut": time.time()}
+    loop_index = asyncio.get_running_loop()
+    output = asyncio.Queue()
 
     def lisible():
         try:
-            donnees = os.read(fd, 65536)
+            donnees = os.read(descriptor, 65536)
         except BlockingIOError:
             return
         except OSError:
             donnees = b""
-        sortie.put_nowait(donnees)
+        output.put_nowait(donnees)
 
-    boucle.add_reader(fd, lisible)
+    loop_index.add_reader(descriptor, lisible)
 
     async def vers_page():
         while True:
-            d = await sortie.get()
-            if not d:
+            data = await output.get()
+            if not data:
                 return
-            await ws.send_bytes(d)
+            await ws.send_bytes(data)
 
     async def depuis_page():
         while True:
-            m = await ws.receive()
-            if m["type"] == "websocket.disconnect":
+            message = await ws.receive()
+            if message["type"] == "websocket.disconnect":
                 return
-            if m.get("bytes") is not None:
-                os.write(fd, m["bytes"])
+            if message.get("bytes") is not None:
+                os.write(descriptor, message["bytes"])
                 continue
             try:
-                msg = json.loads(m.get("text") or "{}")
+                msg = json.loads(message.get("text") or "{}")
             except ValueError:
                 continue
             if msg.get("t") == "i":
-                os.write(fd, str(msg.get("d", "")).encode())
+                os.write(descriptor, str(msg.get("d", "")).encode())
             elif msg.get("t") == "r":
-                _resize(fd, msg.get("l", 24), msg.get("c", 80))
+                _resize(descriptor, msg.get("l", 24), msg.get("c", 80))
 
-    taches = [asyncio.create_task(vers_page()), asyncio.create_task(depuis_page())]
+    tasks = [asyncio.create_task(vers_page()), asyncio.create_task(depuis_page())]
     try:
-        await asyncio.wait(taches, return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     finally:
-        for t in taches:
-            t.cancel()
-        boucle.remove_reader(fd)
+        for ticket in tasks:
+            ticket.cancel()
+        loop_index.remove_reader(descriptor)
         try:
-            os.killpg(p.pid, signal.SIGHUP)
+            os.killpg(process.pid, signal.SIGHUP)
         except OSError:
             pass
         try:
-            p.wait(timeout=3)
+            process.wait(timeout=3)
         except subprocess.TimeoutExpired:
             try:
-                os.killpg(p.pid, signal.SIGKILL)
+                os.killpg(process.pid, signal.SIGKILL)
             except OSError:
                 pass
-        os.close(fd)
-        OPEN_TERMINALS.pop(p.pid, None)
-    return p.returncode
+        os.close(descriptor)
+        OPEN_TERMINALS.pop(process.pid, None)
+    return process.returncode

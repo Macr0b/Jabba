@@ -39,12 +39,12 @@ exec systemctl reboot
 """
 
 
-def interpret(contenu, minuteur_actif):
+def interpret(content, timer_enabled):
     """Le mode en vigueur. Sans choix enregistré (installation d'avant 0.13), le minuteur décide."""
-    m = (contenu or "").strip()
-    if m in MODES:
-        return {"mode": m, "choisi": True}
-    return {"mode": "auto" if minuteur_actif else "manuel", "choisi": False}
+    mode = (content or "").strip()
+    if mode in MODES:
+        return {"mode": mode, "choisi": True}
+    return {"mode": "auto" if timer_enabled else "manuel", "choisi": False}
 
 
 def apply_script(mode):
@@ -93,6 +93,6 @@ def current_mode():
             return interpret(open(DEMO_FILE).read(), True)
         except OSError:
             return interpret("", True)
-    code, contenu, _ = commands.run_on_host(["cat", CHOICE_FILE])
-    actif = commands.run_on_host(["systemctl", "is-enabled", "--quiet", f"{UNIT}.timer"])[0] == 0
-    return interpret(contenu if code == 0 else "", actif)
+    code, content, _ = commands.run_on_host(["cat", CHOICE_FILE])
+    active = commands.run_on_host(["systemctl", "is-enabled", "--quiet", f"{UNIT}.timer"])[0] == 0
+    return interpret(content if code == 0 else "", active)
