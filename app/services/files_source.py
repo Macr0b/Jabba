@@ -106,20 +106,14 @@ def is_mounted(path):
 
 
 def _mount(path):
-    commands.run_on_host(["ls", path], timeout=10)
-    if is_mounted(path):
-        return True
-    _, unit, _ = commands.run_on_host(["systemd-escape", "--path", "--suffix=automount", path])
-    unit = unit.strip()
-    commands.run_on_host(
-        [
-            "sh",
-            "-c",
-            f"systemctl daemon-reload; systemctl reset-failed '{unit[:-10]}.mount' 2>/dev/null; "
-            f"systemctl restart '{unit}'; ls '{path}' >/dev/null 2>&1",
-        ],
-        timeout=30,
-    )
+    """Ouvre le disque (un accès réveille l'ouverture automatique), sinon la réarme."""
+    try:
+        commands.run_action("reveiller_disque", chemin=path)
+        if is_mounted(path):
+            return True
+        commands.run_action("rearmer_disque", chemin=path)
+    except actions.ActionError:
+        return False
     return is_mounted(path)
 
 
@@ -189,7 +183,7 @@ def disk_uuid(path):
 
 def disk_is_present(path):
     """Branché ? Vérifié sans réveiller l'ouverture automatique (qui attendrait 5 s si débranché)."""
-    return auto_disks.is_present(commands.run_on_host, disk_uuid(path))
+    return auto_disks.is_present(disk_uuid(path))
 
 
 def plugged_disks():

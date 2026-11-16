@@ -12,18 +12,15 @@ import re
 import threading
 import time
 
+from host import actions, commands
+
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 DISKS_FILE = os.path.join(DATA_DIR, "disques.json")
 MOUNT_ROOT = "/srv/disques"
 _LOCK = threading.Lock()
 
-# Formats lisibles sans rien installer, et options de montage.
-FORMATS = {
-    "exfat": ("exfat", "uid=1000,gid=1000"),
-    "vfat": ("vfat", "uid=1000,gid=1000,utf8"),
-    "ntfs": ("ntfs3", "uid=1000,gid=1000"),
-    "ext4": ("ext4", ""),
-}
+# Formats lisibles sans rien installer (options de montage : host/actions.py).
+FORMATS = actions.DISK_FORMATS
 # Partitions techniques à ignorer (démarrage, récupération Windows) et taille minimale.
 TECHNICAL_TYPES = {"c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "de94bba4-06d1-4d40-a16a-bfd50179d6ac", "0xef", "0x27"}
 MIN_SIZE = 300 * 1024 * 1024
@@ -66,14 +63,12 @@ def clean_name(label, uuid, taken):
     return name, folder
 
 
-def candidates(host_runner):
+def candidates():
     """Partitions USB lisibles, avec un identifiant, absentes de /etc/fstab."""
-    code, output, _ = host_runner(
-        ["lsblk", "-J", "-b", "-o", "NAME,PATH,FSTYPE,LABEL,UUID,TRAN,RM,TYPE,MOUNTPOINT,SIZE,HOTPLUG,PARTTYPE"]
-    )
+    code, output, _ = commands.run_action("arbre_disques")
     if code != 0:
         return [], []
-    _, fstab, _ = host_runner(["cat", "/etc/fstab"])
+    _, fstab, _ = commands.run_action("lire_fstab")
     already = fstab_uuids(fstab)
     good, bad = [], []
     for data in json.loads(output).get("blockdevices", []):
@@ -113,30 +108,18 @@ def candidates(host_runner):
     return good, bad
 
 
-def add(host_runner, host_input_runner, share, taken):
-    """Déclare le disque sur le serveur. Renvoie l'entrée créée."""
+def add(share, taken):
+    """Déclare le disque sur le serveur (action « declarer_disque »). Renvoie l'entrée créée."""
     name, folder = clean_name(share["etiquette"], share["uuid"], taken)
     path = f"{MOUNT_ROOT}/{folder}"
-    media_type, options = FORMATS[share["format"]]
-    options_text = ",".join(
-        mount_options
-        for mount_options in ["ro", options, "nofail", "x-systemd.automount", "x-systemd.device-timeout=5s"]
-        if mount_options
-    )
-    uuid = share["uuid"].upper() if share["format"] in ("exfat", "vfat", "ntfs") else share["uuid"]
-    line = f"UUID={uuid} {path} {media_type} {options_text} 0 0"
-    _, fstab, _ = host_runner(["cat", "/etc/fstab"])
-    new_value = fstab.rstrip("\n") + f"\n# Ajouté par l'appli Jabba : {name}\n{line}\n"
-    code, _, error_output = host_input_runner(
-        ["sh", "-c", f"mkdir -p '{path}' && cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab"], new_value
-    )
+    try:
+        code, _, error_output = commands.run_action(
+            "declarer_disque", uuid=share["uuid"], format=share["format"], dossier=folder, nom=name
+        )
+    except actions.ActionError as error:
+        raise RuntimeError(str(error))
     if code != 0:
         raise RuntimeError(error_output[:200])
-    _, unit, _ = host_runner(["systemd-escape", "--path", "--suffix=automount", path])
-    host_runner(
-        ["sh", "-c", f"systemctl daemon-reload && systemctl start '{unit.strip()}' && ls '{path}' >/dev/null 2>&1"],
-        timeout=30,
-    )
     input_path = {
         "nom": name,
         "chemin": path,
@@ -173,30 +156,16 @@ def link_to_nextcloud(occ, input_path):
     return True
 
 
-def forget(host_runner, host_input_runner, name):
+def forget(name):
     """Retire le disque du serveur et de Nextcloud. Il ne sera plus ajouté tout seul."""
     with _LOCK:
         data = read()
         disk = next((disk for disk in data["disques"] if disk["nom"] == name), None)
     if not disk:
         raise KeyError(name)
-    path = disk["chemin"]
-    _, unit, _ = host_runner(["systemd-escape", "--path", "--suffix=automount", path])
-    host_runner(["sh", "-c", f"systemctl stop '{unit.strip()}'; umount '{path}' 2>/dev/null; true"], timeout=60)
-    _, fstab, _ = host_runner(["cat", "/etc/fstab"])
-    lines = []
-    for line in fstab.splitlines():
-        fields = line.split()
-        if len(fields) >= 2 and not line.lstrip().startswith("#") and fields[1] == path:
-            continue
-        if line.strip() == f"# Ajouté par l'appli Jabba : {name}":
-            continue
-        lines.append(line)
-    host_input_runner(
-        ["sh", "-c", "cp /etc/fstab /etc/fstab.jabba-bak && cat > /etc/fstab && systemctl daemon-reload"],
-        "\n".join(lines) + "\n",
-    )
-    host_runner(["rmdir", path])
+    code, _, error_output = commands.run_action("oublier_disque", chemin=disk["chemin"], nom=name)
+    if code != 0:
+        raise RuntimeError(error_output[:200])
     if disk.get("nextcloud"):
         commands.occ(["files_external:delete", "-y", str(disk["nextcloud"])])
     with _LOCK:
@@ -216,20 +185,19 @@ def resume(uuid):
         write(data)
 
 
-def is_present(host_runner, uuid):
+def is_present(uuid):
     """Le disque est-il branché ? (sans réveiller l'ouverture automatique)"""
     if not uuid:
         return True
-    code, output, _ = host_runner(["blkid", "-U", uuid], timeout=10)
-    if code == 0:
-        return True
-    code, _, _ = host_runner(["blkid", "-U", uuid.upper()], timeout=10)
-    return code == 0
+    try:
+        return commands.run_action("disque_present", uuid=uuid)[0] == 0
+    except actions.ActionError:
+        return False
 
 
-def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names):
+def scan(nextcloud_running, notify, other_names):
     """Un passage : ajoute les nouveaux disques. Appelé toutes les 15 secondes."""
-    good, bad = candidates(host_runner)
+    good, bad = candidates()
     data = read()
     for match in bad:
         if match["uuid"] not in data["signales"]:
@@ -247,7 +215,7 @@ def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names)
             continue
         taken = {names.lower() for names in other_names()} | {disk["nom"].lower() for disk in read()["disques"]}
         try:
-            input_path = add(host_runner, host_input_runner, good_disk, taken)
+            input_path = add(good_disk, taken)
         except RuntimeError as error:
             notify(
                 "nouveau_disque",
@@ -267,19 +235,13 @@ def scan(host_runner, host_input_runner, nextcloud_running, notify, other_names)
         )
 
 
-# ---- ajouté au découpage de main.py
-import os
-import threading
-
-from host import commands
-from services import disk_browser, files_source, json_files, notifications
+# Importés ici, en fin de fichier : files_source importe lui-même ce module.
+from services import disk_browser, files_source, json_files, notifications  # noqa: E402
 
 
 def scan_disks():
     files_source.wake_disks()  # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
     scan(
-        commands.run_on_host,
-        commands.run_on_host_with_input,
         lambda: files_source.files_source() == "nextcloud",
         lambda entry, item, element, forgotten_uuid: notifications.send(
             entry, item, element, forgotten_uuid, family="disque"

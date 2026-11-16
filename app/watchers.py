@@ -72,7 +72,7 @@ def watch_power():
         )
     elif previous_value is False and on_mains:
         if power.POWER_STATE["arret_prevu"]:
-            commands.run_on_host(["systemctl", "stop", "jabba-arret.timer"])
+            commands.run_action("annuler_arret_batterie")
             power.POWER_STATE["arret_prevu"] = False
         notifications.send(
             "courant",
@@ -95,9 +95,7 @@ def watch_power():
             "/#/systeme",
             family="courant",
         )
-        commands.run_on_host(
-            ["systemd-run", "--unit=jabba-arret", "--collect", "--on-active=60", "systemctl", "poweroff"]
-        )
+        commands.run_action("arret_batterie")
 
 
 def watch_space():
@@ -143,7 +141,7 @@ def watch_tools():
 
 
 def watch_system_updates():
-    if commands.run_on_host(["test", "-f", "/var/run/reboot-required"])[0] == 0:
+    if commands.run_action("redemarrage_requis")[0] == 0:
         if not WATCH_STATE["redemarrage_signale"]:
             WATCH_STATE["redemarrage_signale"] = True
             auto = restart_policy.current_mode()["mode"] == "auto"

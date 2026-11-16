@@ -306,3 +306,125 @@ def test_suivi_des_taches():
     for unite in ("ssh", "jabba-maj-", "jabba-maj-1;x", "--all"):
         with pytest.raises(actions.ActionError):
             actions.build("journal_tache", {"unite": unite})
+
+
+# ---------------------------------------------------------------- disques : /etc/fstab modifié par le service
+FSTAB_DEPART = "# /etc/fstab\nUUID=aaaa / ext4 defaults 0 1\nUUID=bbbb /srv/data ext4 defaults 0 2"  # sans fin de ligne
+
+
+def _lancer_sur_faux_serveur(tmp_path, commande):
+    """Joue le script d'une action sur un faux /etc/fstab ; systemctl, umount, mkdir… ne font rien."""
+    import subprocess
+
+    outils = tmp_path / "outils"
+    outils.mkdir(exist_ok=True)
+    for outil, texte in {
+        "systemctl": "exit 0",
+        "umount": "exit 0",
+        "mkdir": "exit 0",
+        "rmdir": "exit 0",
+        "systemd-escape": 'echo "srv-disques-x.automount"',
+    }.items():
+        (outils / outil).write_text("#!/bin/sh\n" + texte + "\n")
+        (outils / outil).chmod(0o755)
+    fstab = tmp_path / "fstab"
+    script = commande[2].replace("F=/etc/fstab", f"F={fstab}", 1)
+    env = {**os.environ, "PATH": f"{outils}:{os.environ['PATH']}"}
+    return subprocess.run(["sh", "-c", script, *commande[3:]], capture_output=True, text=True, env=env)
+
+
+def test_disque_declare_regle_puis_oublie(tmp_path):
+    fstab = tmp_path / "fstab"
+    fstab.write_text(FSTAB_DEPART)
+    declarer = actions.build(
+        "declarer_disque", {"uuid": "1234-abcd", "format": "exfat", "dossier": "Mes-photos", "nom": "Mes photos"}
+    )[0]
+    assert _lancer_sur_faux_serveur(tmp_path, declarer).returncode == 0
+    lignes = fstab.read_text().splitlines()
+    assert lignes[:3] == FSTAB_DEPART.splitlines()  # rien d'autre n'a bougé
+    assert lignes[3] == "# Ajouté par l'appli Jabba : Mes photos"
+    assert lignes[4].startswith("UUID=1234-ABCD /srv/disques/Mes-photos exfat ro,uid=1000")
+    assert (tmp_path / "fstab.jabba-bak").read_text() == FSTAB_DEPART
+    assert _lancer_sur_faux_serveur(tmp_path, declarer).returncode == 3  # déjà déclaré : refusé
+
+    ecriture = actions.build("mode_disque", {"chemin": "/srv/disques/Mes-photos", "ecriture": True})[0]
+    assert _lancer_sur_faux_serveur(tmp_path, ecriture).returncode == 0
+    ligne = fstab.read_text().splitlines()[4]
+    assert ligne.split()[3].startswith("rw,uid=1000") and ",ro" not in ligne
+    assert fstab.read_text().splitlines()[:4] == lignes[:4]
+    lecture = actions.build("mode_disque", {"chemin": "/srv/disques/Mes-photos", "ecriture": "oui"})[
+        0
+    ]  # seul True vaut écriture
+    _lancer_sur_faux_serveur(tmp_path, lecture)
+    assert fstab.read_text().splitlines()[4].split()[3].startswith("ro,uid=1000")
+    absent = actions.build("mode_disque", {"chemin": "/srv/disques/Autre", "ecriture": True})[0]
+    avant = fstab.read_text()
+    assert _lancer_sur_faux_serveur(tmp_path, absent).returncode == 4 and fstab.read_text() == avant
+
+    oublier = actions.build("oublier_disque", {"chemin": "/srv/disques/Mes-photos", "nom": "Mes photos"})[0]
+    assert _lancer_sur_faux_serveur(tmp_path, oublier).returncode == 0
+    assert fstab.read_text() == FSTAB_DEPART + "\n"
+
+
+def test_disques_parametres_refuses():
+    for args in (
+        {"uuid": "1234; reboot", "format": "exfat", "dossier": "x", "nom": "x"},
+        {"uuid": "1234-abcd", "format": "btrfs", "dossier": "x", "nom": "x"},
+        {"uuid": "1234-abcd", "format": "exfat", "dossier": "../etc", "nom": "x"},
+        {"uuid": "1234-abcd", "format": "exfat", "dossier": "a b", "nom": "x"},
+        {"uuid": "1234-abcd", "format": "exfat", "dossier": "x", "nom": "x\nUUID=1 / ext4"},
+    ):
+        with pytest.raises(actions.ActionError):
+            actions.build("declarer_disque", args)
+    for chemin in ("/srv/data", "/etc", "/srv/disques/../data", "/srv/disques/"):
+        with pytest.raises(actions.ActionError):
+            actions.build("oublier_disque", {"chemin": chemin, "nom": "x"})
+    with pytest.raises(actions.ActionError):
+        actions.build(
+            "mode_disque", {"chemin": "/srv/data", "ecriture": False}
+        )  # le disque de données reste en écriture
+    with pytest.raises(actions.ActionError):
+        actions.build("disque_present", {"uuid": "-o x"})
+
+
+def test_ajout_automatique_d_un_disque_usb(tmp_path, monkeypatch):
+    from services import auto_disks
+
+    monkeypatch.setattr(auto_disks, "DISKS_FILE", str(tmp_path / "disques.json"))
+    arbre = {
+        "blockdevices": [
+            {"type": "disk", "tran": "sata", "children": [{"uuid": "aaaa", "fstype": "ext4", "size": 10**12}]},
+            {
+                "type": "disk",
+                "tran": "usb",
+                "children": [
+                    {"uuid": "c12a-0001", "fstype": "vfat", "label": "EFI", "size": 10**9},
+                    {"uuid": "5e5e-0002", "fstype": "exfat", "label": "Vacances", "size": 10**11, "path": "/dev/sdb2"},
+                    {"uuid": "dead-0003", "fstype": "apfs", "label": "Mac", "size": 10**11},
+                ],
+            },
+        ]
+    }
+    demandes = []
+
+    def faux(action, input_text=None, **args):
+        demandes.append((action, args))
+        if action == "arbre_disques":
+            return 0, json.dumps(arbre), ""
+        if action == "lire_fstab":
+            return 0, "UUID=aaaa / ext4 defaults 0 1\n", ""
+        return 0, "", ""
+
+    monkeypatch.setattr(commands, "run_action", faux)
+    alertes = []
+    auto_disks.scan(lambda: False, lambda *a: alertes.append(a[1]), lambda: [])
+    ajouts = [args for nom, args in demandes if nom == "declarer_disque"]
+    assert ajouts == [{"uuid": "5e5e-0002", "format": "exfat", "dossier": "Vacances", "nom": "Vacances"}]
+    actions.build("declarer_disque", ajouts[0])  # la demande passe la vérification du service
+    assert auto_disks.known_disks() == {"Vacances": "/srv/disques/Vacances"}
+    assert alertes == ["Disque illisible", "Nouveau disque : Vacances"]
+
+    demandes.clear()
+    assert auto_disks.forget("Vacances")["uuid"] == "5e5e-0002"
+    assert demandes == [("oublier_disque", {"chemin": "/srv/disques/Vacances", "nom": "Vacances"})]
+    assert auto_disks.known_disks() == {} and "5e5e-0002" in auto_disks.read()["oublies"]

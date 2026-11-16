@@ -32,9 +32,7 @@ def health_summary(request: Request):
 async def enable_health_checks(request: Request):
     guard.require_admin(request, "super", strong=True)
     if not config.DEMO and not disk_health.installed():
-        code, _, error_output = await asyncio.to_thread(
-            commands.run_on_host, ["apt-get", "install", "-y", "smartmontools"], 600
-        )
+        code, _, error_output = await asyncio.to_thread(commands.run_action, "installer_smartmontools")
         if code != 0:
             raise HTTPException(500, "Installation de smartmontools impossible : " + error_output[-200:])
     activity_log.record("disque", "Surveillance de la santé des disques activée", request.state.nom)
