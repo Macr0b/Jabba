@@ -145,9 +145,9 @@ pages.outils = async () => {
     element.addEventListener("click", async () => {
       const item = tools.find((item) => item.id === element.dataset.id);
       const texts = {
-        redemarrer: ["Redémarrer " + item.nom + " ?", t("Il sera indisponible quelques secondes."), t("Redémarrer")],
+        redemarrer: [t("Redémarrer ") + item.nom + " ?", t("Il sera indisponible quelques secondes."), t("Redémarrer")],
         "mettre-a-jour": [
-          "Mettre à jour " + item.nom + " ?",
+          t("Mettre à jour ") + item.nom + " ?",
           t("Il sera indisponible pendant la mise à jour (1 à 5 minutes)."),
           t("Mettre à jour"),
         ],

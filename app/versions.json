@@ -12,9 +12,10 @@
       "Le Terminal est retiré de l'appli : un shell complet donnait tous les pouvoirs à quiconque prendrait la main sur l'interface web. Pour un terminal, passe par SSH depuis le Mac.",
       "L'éjection d'un disque ne passe plus par un texte de shell : un nom de disque contenant une apostrophe ne peut plus rien casser.",
       "Entretien des disques (carte Santé des disques) : le TRIM hebdomadaire du SSD est vérifié et s'active d'un clic ; la fragmentation des disques à plateaux en ext4 est mesurée une fois par mois, avec une alerte et un bouton « Défragmenter » seulement si elle devient gênante. Un SSD n'est jamais défragmenté (ça l'userait pour rien), et exFAT/NTFS ne sont pas touchés.",
-      "Traductions : les 841 textes de l'interface sont rassemblés dans un seul fichier (static/locales/fr.json). Pour ajouter une langue, il suffit d'en faire une copie traduite ; le choix de la langue apparaîtra alors dans Système → Apparence.",
+      "Traductions : les 856 textes de l'interface sont rassemblés dans un seul fichier (static/locales/fr.json). Pour ajouter une langue, il suffit d'en faire une copie traduite ; le choix de la langue apparaîtra alors dans Système → Apparence.",
       "Antivirus dans l'Établi (à installer d'un clic, image officielle ClamAV) : chaque fichier déposé par un invité est analysé dans la minute ; un fichier infecté est mis à l'écart, jamais supprimé, avec une alerte. Les fichiers de plus de 100 Mo (vidéos) ne sont pas analysés.",
-      "Correction : les logos des outils et les vignettes de la page invités retrouvent leur image de secours (la politique de sécurité bloquait l'ancien mécanisme)."
+      "Correction : les logos des outils et les vignettes de la page invités retrouvent leur image de secours (la politique de sécurité bloquait l'ancien mécanisme).",
+      "Correction : la liste « Dossiers partagés » (Comptes Nextcloud → Dossiers et rangs) restait sur « Chargement… » ; elle s'affiche maintenant."
     ]
   },
   {

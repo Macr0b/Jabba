@@ -30,7 +30,7 @@ export function formatWhen(isoDate) {
   const data = new Date(isoDate),
     now = new Date();
   const days = Math.floor((new Date(now.toDateString()) - new Date(data.toDateString())) / 86400000);
-  if (days === 0) return "Aujourd'hui " + data.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  if (days === 0) return t("Aujourd'hui ") + data.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   if (days === 1) return t("Hier");
   if (days < 7)
     return data.toLocaleDateString("fr-FR", { weekday: "long" }).replace(/^./, (item) => item.toUpperCase());

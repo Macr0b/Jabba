@@ -45,9 +45,9 @@ async function maintenanceHtml() {
     lines.push(
       t`<div class="ligne-reglage"><span><strong>SSD : TRIM chaque semaine</strong><br><span class="note">${
         trim.actif
-          ? "Actif" +
+          ? t("Actif") +
             (trim.dernier ? t` · dernier passage : ${escapeHtml(trim.dernier)}` : "") +
-            ". Un SSD ne se défragmente jamais : le TRIM est son entretien."
+            t(". Un SSD ne se défragmente jamais : le TRIM est son entretien.")
           : t("Pas actif : le SSD ralentit et s'use plus vite avec le temps.")
       }</span></span>${trim.actif ? t('<span class="pastille p-ok">Actif</span>') : t('<button class="btn btn-petit" type="button" id="activer-trim">Activer</button>')}</div>`,
     );
@@ -132,7 +132,7 @@ export async function diskHealthCard() {
   }
   element.innerHTML = t`<div class="entete-carte"><h2>Santé des disques</h2>
       <button class="btn btn-petit" type="button" id="verifier-sante">Vérifier maintenant</button></div>
-    <p class="note" style="margin:6px 0 10px">${health.lu ? "Dernière lecture : " + escapeHtml(formatWhen(new Date(health.lu * 1000).toISOString())) + ". Lue chaque jour ; une alerte part au premier signe de fatigue." : t("Pas encore lue.")}</p>
+    <p class="note" style="margin:6px 0 10px">${health.lu ? t("Dernière lecture : ") + escapeHtml(formatWhen(new Date(health.lu * 1000).toISOString())) + t(". Lue chaque jour ; une alerte part au premier signe de fatigue.") : t("Pas encore lue.")}</p>
     ${health.disques.map(diskLine).join("") || t('<p class="note">Aucun disque lisible.</p>')}
     <div id="entretien-disques">${await maintenanceHtml().catch(() => "")}</div>`;
   bindMaintenance(() => diskHealthCard().catch((error) => toast(error.message, true)));

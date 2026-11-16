@@ -139,3 +139,40 @@ def test_antivirus_propose_dans_l_etabli(page):
     expect(offre).to_contain_text("Antivirus")
     expect(offre).to_contain_text("mis à l'écart (jamais supprimé)")
     expect(offre.locator("#installer-antivirus")).to_have_text("Installer")
+
+
+NUAGE_PRET = {
+    "etat": {"present": True, "pret": True, "quota_defaut": "5 GB"},
+    "rang": "super",
+    "plafond_go": 50,
+    "comptes": [],
+    "groupes": [],
+    "rangs_actif": False,
+    "rangs": [],
+    "createur": True,
+    "charte": "",
+    "charte_defaut": "",
+    "charte_max": 1500,
+    "dossiers": [],
+    "modes": {"lecture": {"nom": "Lecture", "detail": ""}},
+    "tous": "membres",
+    "promis": 0,
+    "espace": None,
+}
+
+
+def test_dossiers_partages_se_chargent(page):
+    """La liste « Dossiers partagés » restait sur « Chargement… » (jamais demandée) : corrigé en 0.14."""
+    import json
+
+    page.route("**/api/nuage", lambda route: route.fulfill(json=NUAGE_PRET))
+    partage = {
+        "partages": [{"id": "p1", "nom": "Plans", "chemin": "/Plans", "groupe": "membres", "mode": "lecture"}],
+        "modes": {"lecture": "Lecture"},
+    }
+    page.route(
+        "**/api/partages", lambda route: route.fulfill(body=json.dumps(partage), content_type="application/json")
+    )
+    aller(page, "nuage")
+    page.locator('[data-onglet-btn="partage"]').click()
+    expect(page.locator("#partages-liste")).not_to_contain_text("Chargement…")

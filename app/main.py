@@ -31,6 +31,7 @@ from routes import (
     disks,
     files,
     files_batch,
+    files_viewer,
     guests_admin,
     player,
     public_mode,
@@ -38,6 +39,7 @@ from routes import (
     shares,
     system,
     tools,
+    trash,
 )
 from security import guard
 from services import activity_log, guests
@@ -89,6 +91,8 @@ for module in (
     tools,
     files,
     files_batch,
+    files_viewer,
+    trash,
     disks,
     disk_health,
     player,

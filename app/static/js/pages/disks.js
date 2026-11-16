@@ -47,7 +47,7 @@ pages.disques = async () => {
                   (item) => `
           <div class="part">
             <div><strong>${escapeHtml(item.etiquette || item.nom)}</strong> <span class="note">· ${escapeHtml(item.type || "?")} · ${formatBytes(item.taille)}</span><div class="note">${escapeHtml(item.role)}${item.montage && item.role !== item.montage ? " · " + escapeHtml(item.montage) : ""}</div></div>
-            <div class="note">${item.usage ? formatBytes(item.usage.utilise) + " utilisés" : ""}</div>
+            <div class="note">${item.usage ? formatBytes(item.usage.utilise) + t(" utilisés") : ""}</div>
             ${item.usage ? `<div class="jauge"><span style="width:${formatPercent(item.usage)}%"></span></div>` : ""}
             ${
               item.disque_jabba

@@ -29,7 +29,7 @@ pages.corbeille = async () => {
                 (item, index) => t`
         <div class="ligne">
           <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
-            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${item.origine ? "Venait de " + escapeHtml(item.origine) : t("Origine inconnue")} · encore ${days(item.supprime)} j</span></span></span>
+            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${item.origine ? t("Venait de ") + escapeHtml(item.origine) : t("Origine inconnue")} · encore ${days(item.supprime)} j</span></span></span>
           <span class="gris col-l">${formatBytes(item.taille)}</span>
           <span class="gris col-l">${formatWhen(new Date(item.supprime * 1000).toISOString())}</span>
           <button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>

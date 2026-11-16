@@ -77,7 +77,7 @@ export function showUnreachable(type) {
   document.body.classList.add("injoignable");
   content.innerHTML = t`
     <div class="entete"><div><h1>${type === "appli" ? t("Jabba ne répond pas") : t`${escapeHtml(name[0].toUpperCase() + name.slice(1))} est injoignable`}</h1>
-      <p class="sous-titre">${latest ? "Dernier contact réussi " + formatWhen(new Date(latest).toISOString()).toLowerCase() + ". " : ""}Nouvel essai automatique toutes les 10 secondes.</p></div>
+      <p class="sous-titre">${latest ? t("Dernier contact réussi ") + formatWhen(new Date(latest).toISOString()).toLowerCase() + ". " : ""}Nouvel essai automatique toutes les 10 secondes.</p></div>
       <div class="actions"><a class="btn" href="#/aide">Aide</a><button class="btn btn-p" id="reessayer">Réessayer</button></div></div>
     <section class="carte pad pistes">
       <h2>Pistes, dans l'ordre</h2>

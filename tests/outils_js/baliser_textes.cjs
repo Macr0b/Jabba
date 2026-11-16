@@ -31,6 +31,7 @@ function looksLikeText(raw) {
   if (/^(application|text|image|video|audio)\/[\w.+-]+$/.test(raw)) return false;
   const text = visibleText(raw);
   if (/[a-zà-ÿ]{2,}[ '’][a-zà-ÿ]{2,}/i.test(text) && /[a-zà-ÿ]{3,}/i.test(text)) return true;
+  if (/\([a-zà-ÿ]{3,}[^)]*\)/i.test(text)) return true; // « (actuel) »
   if (/[àâéèêëîïôûùçœÀÂÉÈÊÎÔÛÇ]/.test(text) && /[a-zà-ÿ]{3,}/i.test(text)) return true;
   if (/(^|[\s>])[A-ZÀ-Ý][a-zà-ÿ'’]{2,}[.!?…:]?(\s|$|<)/.test(text) && !/^[A-Z][a-z]+[A-Z]/.test(text.trim())) return true;
   return false;
@@ -60,7 +61,8 @@ function tagFile(file, dry) {
       if (!looksLikeText(node.value)) return;
       if (parent.type === "Property" && key === "key") return;
       if (parent.type === "MemberExpression" && key === "property") return;
-      if (parent.type === "BinaryExpression" || parent.type === "SwitchCase" || parent.type === "ExportNamedDeclaration") return;
+      if (parent.type === "BinaryExpression" && parent.operator !== "+") return; // une comparaison, pas un texte affiché
+      if (parent.type === "SwitchCase" || parent.type === "ExportNamedDeclaration") return;
       if (parent.type === "CallExpression" || parent.type === "NewExpression") {
         const name = calleeName(parent);
         if (name === "t") return;
@@ -78,7 +80,8 @@ function tagFile(file, dry) {
         (parent.type === "CallExpression" || parent.type === "NewExpression") &&
         SKIP_CALLS.has(calleeName(parent)) &&
         calleeName(parent) !== "insertAdjacentHTML";
-      if (looksLikeText(text) && !skipCall && parent.type !== "BinaryExpression") inserts.push([node.start, "t"]);
+      const comparison = parent.type === "BinaryExpression" && parent.operator !== "+";
+      if (looksLikeText(text) && !skipCall && !comparison) inserts.push([node.start, "t"]);
       node.expressions.forEach((e) => visit(e, node, "expressions"));
       return;
     }

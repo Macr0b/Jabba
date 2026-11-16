@@ -29,7 +29,7 @@ pages.systeme = async () => {
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
         <dt>Allumé depuis</dt><dd>${formatDuration(item.duree)}</dd>
-        <dt>Mises à jour auto</dt><dd>${item.derniere_maj_auto ? "Dernier passage le " + escapeHtml(item.derniere_maj_auto.replace(" ", " à ")) : t("Pas encore de passage")}</dd>
+        <dt>Mises à jour auto</dt><dd>${item.derniere_maj_auto ? t("Dernier passage le ") + escapeHtml(item.derniere_maj_auto.replace(" ", " à ")) : t("Pas encore de passage")}</dd>
         <dt>Système</dt><dd>${escapeHtml(item.os)}</dd>
         <dt>Noyau</dt><dd>${escapeHtml(item.noyau)}</dd>
         <dt>Appli Jabba</dt><dd>version ${escapeHtml(item.version_appli)}</dd>
@@ -43,7 +43,7 @@ pages.systeme = async () => {
           item.courant && item.courant.batterie != null
             ? t`<dt>Consommation</dt><dd>${
                 item.conso && item.conso.derniere
-                  ? `${String(item.conso.derniere.w).replace(".", ",")} W <span class="note">(${item.courant.secteur ? "dernière mesure sur batterie, " + escapeHtml(timeAgo(item.conso.derniere.t)) : t("en ce moment")})</span>${item.conso.repos ? t`<br><span class="note">Au plus bas : ${String(item.conso.repos.w).replace(".", ",")} W, au repos</span>` : ""}`
+                  ? `${String(item.conso.derniere.w).replace(".", ",")} W <span class="note">(${item.courant.secteur ? t("dernière mesure sur batterie, ") + escapeHtml(timeAgo(item.conso.derniere.t)) : t("en ce moment")})</span>${item.conso.repos ? t`<br><span class="note">Au plus bas : ${String(item.conso.repos.w).replace(".", ",")} W, au repos</span>` : ""}`
                   : t`<span class="note">Se mesure sur batterie : débranche le chargeur 2 minutes pour la voir.</span>`
               }</dd>`
             : ""

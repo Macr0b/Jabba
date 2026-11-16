@@ -45,7 +45,7 @@ export async function router() {
     else element.removeAttribute("aria-current");
   });
   document.title =
-    "Jabba · " +
+    t("Jabba · ") +
     ({ outils: t("Établi"), ouvrir: t("Outil"), nuage: t("Comptes Nextcloud") }[page] ||
       page[0].toUpperCase() + page.slice(1));
   try {

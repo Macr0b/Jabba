@@ -41,7 +41,7 @@ pages.utilisateurs = async () => {
           (item, index) => `
         <div class="ligne">
           <span class="nom"><span class="avatar" aria-hidden="true">${escapeHtml((item.nom || item.identifiant)[0].toUpperCase())}</span>
-            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${escapeHtml(item.identifiant)}${item.systeme ? t(" · mot de passe du serveur") : item.tailscale ? " · Tailscale : " + escapeHtml(item.tailscale) : t(" · sans compte Tailscale")}${item.provisoire ? t(" · mot de passe provisoire") : ""}</span>
+            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${escapeHtml(item.identifiant)}${item.systeme ? t(" · mot de passe du serveur") : item.tailscale ? t(" · Tailscale : ") + escapeHtml(item.tailscale) : t(" · sans compte Tailscale")}${item.provisoire ? t(" · mot de passe provisoire") : ""}</span>
             <span class="mobile-detail">${ROLE_NAMES[item.rang]}</span></span></span>
           <span class="col-l"><span class="pastille ${item.rang === "super" ? "p-alerte" : "p-gris"}">${ROLE_NAMES[item.rang]}</span></span>
           <span class="gris col-l">${item.systeme ? "—" : escapeHtml(timeAgo(item.derniere_connexion))}</span>
@@ -231,7 +231,8 @@ pages.utilisateurs = async () => {
           if (
             await confirmAction({
               titre: t`Retirer ${item.nom} ?`,
-              texte: "Il ne pourra plus faire d'action admin" + (item.tailscale ? t(" ni ouvrir l'appli") : "") + ".",
+              texte:
+                t("Il ne pourra plus faire d'action admin") + (item.tailscale ? t(" ni ouvrir l'appli") : "") + ".",
               valider: t("Retirer"),
               danger: true,
             })
