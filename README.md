@@ -40,6 +40,8 @@ Tout est en français. Aucune dépendance externe dans l'interface : xterm.js (t
 
 - L'appli d'administration écoute **seulement sur le serveur lui-même** (`127.0.0.1:8090`). On n'y entre que par **Tailscale** (`tailscale serve`), avec un compte Tailscale autorisé (`.env` ou relié à un compte admin).
 - Sans connexion admin, l'appli ne montre que la page invités. La connexion admin (identifiant + mot de passe) est gardée 30 jours dans un cookie protégé ; les actions les plus sensibles redemandent le mot de passe.
+- Mots de passe selon la règle du NIST (2025) : 15 caractères minimum, sans obligation de majuscule ni de symbole, mais refus des mots de passe courants, des suites de touches, des répétitions et de ceux déjà apparus dans une fuite (vérification par les 5 premiers caractères de l'empreinte SHA-1 seulement ; `JABBA_VERIF_FUITES=0` la coupe).
+- Double vérification au choix de chaque admin : clé d'accès (Face ID, Touch ID, clé USB), appli d'authentification (codes à 6 chiffres), et 10 codes de secours à usage unique. Le serveur ne garde que les clés publiques et les empreintes des codes. Un super admin peut la retirer à un compte dont le téléphone est perdu.
 - Le super admin principal est le compte du serveur : son mot de passe est vérifié sur le serveur et n'est jamais enregistré. Les autres comptes n'ont qu'une empreinte (scrypt). Un code de secours de 6 mots permet de choisir un nouveau mot de passe serveur.
 - La page invités du Wi-Fi est un serveur à part (port 80, réseau local seulement) qui ne connaît **que** les pages invités : aucune connexion admin n'y est possible. Il tourne dans **son propre conteneur, sans aucun pouvoir** : compte du serveur (pas root), aucune capacité Linux, fichiers en lecture seule. Il ne voit que `/srv` (les dossiers partagés) et son petit dossier d'état `donnees/porte-wifi/`, jamais les comptes, clés ou sessions de l'appli. Ce qu'il note au Journal est toujours affiché comme venant d'un invité. Les outils non ouverts au Wi-Fi sont bloqués sur le réseau local par un filtre réseau ; Dockge ne peut jamais l'être. Les dossiers partagés aux invités doivent être lisibles par le compte du serveur.
 - **ffmpeg et Pillow tournent sans aucun droit** (compte `nobody`, aucune capacité, `no_new_privs`) : ils ne reçoivent que le fichier à lire, déjà ouvert par l'appli, et ne peuvent rien ouvrir d'autre. Un fichier vidéo ou une image piégés (déposés par un invité, par exemple) ne peuvent pas atteindre le serveur.
@@ -62,7 +64,7 @@ app/
   guest_door.py    la porte du Wi-Fi (page invités, conteneur sans pouvoirs)
   watchers.py      surveillance en fond (disques, batterie, mises à jour…)
   host/            commandes envoyées au serveur lui-même
-  security/        contrôle d'accès, sessions, comptes admin, mot de passe du serveur
+  security/        contrôle d'accès, sessions, comptes admin, mot de passe du serveur, règles des mots de passe, double vérification
   services/        le travail : disques, Nextcloud, sauvegardes, invités, lecteur vidéo…
   routes/          l'API, un fichier par partie de l'appli
   static/

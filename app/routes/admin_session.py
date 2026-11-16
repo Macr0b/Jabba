@@ -1,7 +1,7 @@
 """API de connexion admin : se connecter, confirmer, se déconnecter, appareils connectés.
 
 Sommaire :
-  POST /api/admin/connexion          log_in
+  POST /api/admin/connexion          log_in (puis open_admin_session, ou la 2e étape)
   POST /api/admin/confirmer          confirm_password (actions sensibles)
   POST /api/admin/deconnexion        log_out
   GET  /api/sessions                 list_sessions
@@ -15,7 +15,7 @@ Sommaire :
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from security import guard, server_password, sessions
+from security import guard, second_factor, server_password, sessions
 from services import activity_log, notifications
 
 router = APIRouter()
@@ -25,6 +25,15 @@ router = APIRouter()
 async def log_in(request: Request):
     body = await request.json()
     account = guard.check_login(request, body.get("identifiant"), body.get("mot_de_passe", ""))
+    methods = second_factor.methods(account["identifiant"])
+    if methods:
+        # Mot de passe bon : il reste la deuxième preuve (routes/second_factor.py).
+        return {"etape": second_factor.start_login_step(account), "methodes": methods}
+    return open_admin_session(request, account)
+
+
+def open_admin_session(request, account):
+    """Ouvre la session une fois toutes les preuves données."""
     temporary = bool(account.get("provisoire"))
     activity_log.record(
         "admin",

@@ -4,6 +4,7 @@
 //   partagé : confirmPassword, logOut, adminLogin, chooseMyPassword, showPasswordReset, showRecoveryCode
 //   interne : readSavedIdentifier, saveIdentifier, rememberLogin, forgottenPassword, recoverPassword
 import { confirmAction, dialogForm, dialogElement, toast } from "../components/dialogs.js";
+import { secondLoginStep } from "../components/second_factor.js";
 import { api, formBody } from "./api.js";
 import { $, escapeHtml } from "./dom.js";
 import { state } from "./state.js";
@@ -98,6 +99,14 @@ export async function adminLogin() {
         true,
       );
       saveIdentifier(identifier);
+      if (data.etape) {
+        // Double vérification : Face ID, appli d'authentification ou code de secours.
+        const opened = await secondLoginStep(data);
+        if (!opened) return false;
+        rememberLogin(opened);
+        if (opened.changer) return chooseMyPassword(true);
+        return true;
+      }
       rememberLogin(data);
       if (data.changer) return chooseMyPassword(true);
       return true;

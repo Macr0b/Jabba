@@ -47,7 +47,13 @@ export async function api(path, options = {}, secondAttempt = false) {
 }
 
 // Formulaire dans une fenêtre : renvoie les valeurs, null (annulé) ou le nom du bouton secondaire.
-export function formBody({ titre: title, text = "", champs: fields, confirmLabel = "Valider", secondary = null }) {
+export function formBody({
+  titre: title,
+  texte: text = "",
+  champs: fields,
+  valider: confirmLabel = "Valider",
+  secondaire: secondary = null,
+}) {
   return new Promise((resolve) => {
     dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
       ${fields

@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 import config
-from security import accounts, guard, server_password, sessions
+from security import accounts, guard, second_factor, server_password, sessions
 from services import activity_log, notifications
 
 router = APIRouter()
@@ -97,6 +97,7 @@ async def update_account(cid: str, request: Request):
     if action == "supprimer":
         account = guard.translate_account_refusal(lambda: accounts.delete(cid, session["rang"]))
         sessions.close_account(account["identifiant"])
+        second_factor.clear(account["identifiant"])
         text = f"Compte retiré : {account['identifiant']}"
     elif action == "rang":
         account = guard.translate_account_refusal(lambda: accounts.update(cid, session["rang"], role=body.get("rang")))

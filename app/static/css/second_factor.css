@@ -1,0 +1,39 @@
+/* Double vérification : codes de secours, QR code de l'appli, bouton Face ID. */
+.codes-secours {
+  columns: 2;
+  margin: 0 0 14px;
+  padding: 14px 14px 14px 36px;
+  background: var(--fond);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  font:
+    600 16px/1.9 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: var(--texte);
+  user-select: all;
+}
+.qr-double {
+  display: block;
+  margin: 4px auto 10px;
+  border-radius: 10px;
+  background: #fff;
+}
+.cle-texte {
+  font:
+    600 13px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  word-spacing: 4px;
+  user-select: all;
+}
+.bouton-large {
+  width: 100%;
+  margin: 4px 0 14px;
+  min-height: 44px;
+}
+.liste-appareils .appareil {
+  align-items: center;
+}

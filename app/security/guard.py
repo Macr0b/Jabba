@@ -141,6 +141,8 @@ PUBLIC_PATHS = (
     "/api/invite/",
     "/api/admin/connexion",
     "/api/admin/secours",
+    "/api/admin/verification",  # 2e étape de la connexion (double vérification)
+    "/api/admin/cle/options",
     "/api/comptes-oubli",
     "/api/comptes-remise",
     "/api/icone/",

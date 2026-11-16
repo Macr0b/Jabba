@@ -14,7 +14,13 @@ export function toast(text, isError = false) {
 
 export const dialogElement = $("#dialogue"),
   dialogForm = $("#dialogue-form");
-export function confirmAction({ titre: title, text = "", field = null, confirmLabel = "OK", danger = false }) {
+export function confirmAction({
+  titre: title,
+  texte: text = "",
+  champ: field = null,
+  valider: confirmLabel = "OK",
+  danger = false,
+}) {
   return new Promise((resolve) => {
     dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
       ${field !== null ? `<input type="text" name="champ" value="${escapeHtml(field)}" autocomplete="off" autocapitalize="off">` : ""}

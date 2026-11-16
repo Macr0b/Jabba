@@ -2,9 +2,10 @@
 //
 // Sommaire :
 //   partagé : pages.systeme (écran), pages.plus (écran)
-//   interne : restartPolicyCard, appUpdateCard
+//   interne : restartPolicyCard, appUpdateCard (la carte Double vérification : components/second_factor.js)
 import { alertsCard } from "../components/alerts.js";
 import { confirmAction, toast } from "../components/dialogs.js";
+import { secondFactorCard } from "../components/second_factor.js";
 import { chooseMyPassword, logOut, showRecoveryCode } from "../core/admin_session.js";
 import { api, formBody } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
@@ -53,6 +54,7 @@ pages.systeme = async () => {
         <div class="actions"><button class="btn" id="changer-mdp">${entry.connecte && entry.connecte.identifiant !== entry.serveur ? "Changer mon mot de passe" : "Changer le mot de passe du serveur"}</button>
         <button class="btn" id="code-secours">${entry.code_existe ? "Nouveau code de secours" : "Créer le code de secours"}</button></div>
       </section>
+      <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="redem"><h2>Redémarrage après une mise à jour</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
@@ -70,6 +72,10 @@ pages.systeme = async () => {
         }</div>
       </section>
     </div>`;
+  secondFactorCard().catch((entry) => {
+    const element = $("#double");
+    if (element) element.innerHTML = `<h2>Double vérification</h2><p class="note">${escapeHtml(entry.message)}</p>`;
+  });
   alertsCard().catch((entry) => {
     const element = $("#alertes");
     if (element) element.innerHTML = `<h2>Alertes</h2><p class="note">${escapeHtml(entry.message)}</p>`;
