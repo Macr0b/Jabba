@@ -238,17 +238,12 @@ main {
 .btn-p {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--sur-accent);
   font-weight: 600;
 }
 .btn-p:hover {
   background: var(--accent-fonce);
   border-color: var(--accent-fonce);
-}
-@media (prefers-color-scheme: dark) {
-  .btn-p {
-    color: #0e1320;
-  }
 }
 .btn-danger {
   color: var(--rouge);

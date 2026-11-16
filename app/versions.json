@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.13.1",
+    "date": "2026-11-16",
+    "changements": [
+      "Apparence (Système) : clair, sombre, ou comme l'appareil. Le choix vaut pour chaque appareil et s'applique dès l'ouverture, sans flash."
+    ]
+  },
+  {
     "version": "0.13.0",
     "date": "2026-11-12",
     "changements": [

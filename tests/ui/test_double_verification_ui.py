@@ -56,7 +56,7 @@ def se_connecter(p):
     p.wait_for_selector("#connexion", state="attached")
     p.evaluate("document.querySelector('#connexion').click()")
     fenetre = p.locator("dialog[open]")
-    # la fenêtre affiche bien son texte et ses boutons (régression de la 0.13.0 en préparation)
+    # la fenêtre affiche bien son texte et ses boutons (régression corrigée en 0.13.0)
     expect(fenetre.locator("p").first).to_contain_text("La connexion reste mémorisée 30 jours")
     expect(fenetre.locator("button.lien")).to_have_text("Mot de passe oublié ?")
     expect(fenetre.locator("button.btn-p")).to_have_text("Continuer")

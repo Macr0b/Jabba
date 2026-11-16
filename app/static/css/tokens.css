@@ -1,51 +1,63 @@
-/* Couleurs et réglages communs (thème clair et sombre). */
+/* Couleurs et réglages communs.
+ * Chaque couleur a sa valeur claire et sa valeur sombre : light-dark(clair, sombre).
+ * Le thème suit l'appareil, sauf si l'admin a choisi Clair ou Sombre (Système → Apparence),
+ * ce qui pose data-theme sur <html> (voir js/theme_boot.js). */
 :root {
-  --fond: #f4f5f7;
-  --carte: #ffffff;
-  --bord: #e3e5ea;
-  --bord-doux: #eef0f3;
-  --texte: #15181e;
-  --texte-2: #3a404c;
-  --texte-3: #5b6270;
-  --texte-4: #646a76; /* contraste ≥ 4,5:1 sur les fonds clairs (WCAG AA) */
-  --accent: #2457c5;
-  --accent-fonce: #1a3f8f;
-  --accent-doux: #e9effc;
-  --survol: #f5f8fe;
-  --vert: #1e8e5a;
-  --vert-texte: #146b43;
-  --vert-doux: #e3f4ea;
-  --alerte-doux: #fff6e5;
-  --alerte-bord: #f3d9a4;
-  --alerte-texte: #7a4a06;
-  --rouge: #c23b32;
-  --rouge-doux: #fdecea;
-  --dossier: #7fa2e8;
+  color-scheme: light dark;
+  --fond: light-dark(#f4f5f7, #121418);
+  --carte: light-dark(#ffffff, #1b1e24);
+  --bord: light-dark(#e3e5ea, #2c3038);
+  --bord-doux: light-dark(#eef0f3, #252931);
+  --texte: light-dark(#15181e, #eceef2);
+  --texte-2: light-dark(#3a404c, #c9cdd6);
+  --texte-3: light-dark(#5b6270, #9aa0ac);
+  --texte-4: light-dark(#646a76, #8a909c); /* contraste ≥ 4,5:1 sur les deux fonds (WCAG AA) */
+  --accent: light-dark(#2457c5, #6e9bff);
+  --accent-fonce: light-dark(#1a3f8f, #9bbbff);
+  --accent-doux: light-dark(#e9effc, #1f2b47);
+  --survol: light-dark(#f5f8fe, #222837);
+  --vert: light-dark(#1e8e5a, #3dbf84);
+  --vert-texte: light-dark(#146b43, #6fd6a5);
+  --vert-doux: light-dark(#e3f4ea, #17352a);
+  --alerte-doux: light-dark(#fff6e5, #3a2c12);
+  --alerte-bord: light-dark(#f3d9a4, #5c4618);
+  --alerte-texte: light-dark(#7a4a06, #f2c97a);
+  --rouge: light-dark(#c23b32, #f07468);
+  --rouge-doux: light-dark(#fdecea, #3d1c1a);
+  --dossier: light-dark(#7fa2e8, #5f86d6);
+  --sur-accent: light-dark(#fff, #0e1320); /* texte posé sur la couleur d'accent */
+}
+:root[data-theme="clair"] {
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
+:root[data-theme="sombre"] {
+  color-scheme: dark;
+}
+
+/* Navigateurs trop anciens pour light-dark() (iOS avant 17.5) : couleurs claires, sans choix de thème. */
+@supports not (color: light-dark(#000, #fff)) {
   :root {
-    --fond: #121418;
-    --carte: #1b1e24;
-    --bord: #2c3038;
-    --bord-doux: #252931;
-    --texte: #eceef2;
-    --texte-2: #c9cdd6;
-    --texte-3: #9aa0ac;
-    --texte-4: #8a909c; /* contraste ≥ 4,5:1 sur les fonds sombres */
-    --accent: #6e9bff;
-    --accent-fonce: #9bbbff;
-    --accent-doux: #1f2b47;
-    --survol: #222837;
-    --vert: #3dbf84;
-    --vert-texte: #6fd6a5;
-    --vert-doux: #17352a;
-    --alerte-doux: #3a2c12;
-    --alerte-bord: #5c4618;
-    --alerte-texte: #f2c97a;
-    --rouge: #f07468;
-    --rouge-doux: #3d1c1a;
-    --dossier: #5f86d6;
-    color-scheme: dark;
+    --fond: #f4f5f7;
+    --carte: #ffffff;
+    --bord: #e3e5ea;
+    --bord-doux: #eef0f3;
+    --texte: #15181e;
+    --texte-2: #3a404c;
+    --texte-3: #5b6270;
+    --texte-4: #646a76;
+    --accent: #2457c5;
+    --accent-fonce: #1a3f8f;
+    --accent-doux: #e9effc;
+    --survol: #f5f8fe;
+    --vert: #1e8e5a;
+    --vert-texte: #146b43;
+    --vert-doux: #e3f4ea;
+    --alerte-doux: #fff6e5;
+    --alerte-bord: #f3d9a4;
+    --alerte-texte: #7a4a06;
+    --rouge: #c23b32;
+    --rouge-doux: #fdecea;
+    --dossier: #7fa2e8;
+    --sur-accent: #fff;
   }
 }

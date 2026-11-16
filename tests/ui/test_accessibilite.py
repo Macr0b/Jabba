@@ -52,7 +52,7 @@ def test_chaque_ecran_respecte_wcag_22_aa(page):
 PETITES_CIBLES = """() => [...document.querySelectorAll('a, button, input, select, summary, [role=button]')]
   .filter(e => !(e.tagName === 'A' && e.closest('p, li, dd, .note')))  // lien dans une phrase : exempté
   .filter(e => { const s = getComputedStyle(e); return s.visibility !== 'hidden' && s.display !== 'none' && e.offsetParent; })
-  .map(e => ({e, r: e.getBoundingClientRect()}))
+  .map(e => ({e, r: ((e.tagName === 'INPUT' && e.closest('label')) || e).getBoundingClientRect()}))  // une case dans son libellé : on clique sur tout le libellé
   .filter(({r}) => r.width > 0 && r.height > 0 && (r.width < 24 || r.height < 24))
   .map(({e, r}) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${[...e.classList].join('.')} « ${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 20)} » ${Math.round(r.width)}×${Math.round(r.height)}`)"""
 

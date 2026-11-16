@@ -1,0 +1,30 @@
+/* Carte « Apparence » : trois choix côte à côte (Comme l'appareil, Clair, Sombre). */
+.choix-theme {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.option-theme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+  background: var(--carte);
+  cursor: pointer;
+  font-size: 14px;
+}
+.option-theme:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  color: var(--accent-fonce);
+  font-weight: 600;
+}
+.option-theme input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
