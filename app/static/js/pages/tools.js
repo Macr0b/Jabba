@@ -5,7 +5,7 @@
 import { confirmAction, toast } from "../components/dialogs.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
-import { formatWhen } from "../core/format.js";
+import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml, followTask } from "../core/tasks.js";
@@ -30,7 +30,7 @@ pages.outils = async () => {
     return `
       <article class="carte pad outil${active ? "" : " eteint"}">
         <div class="haut">
-          <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}${versionText(item.id)}</div></div></div>
+          <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}${versionText(item.id)}</div>${active ? `<div class="conso note" data-conso="${escapeHtml(item.id)}"></div>` : ""}</div></div>
           ${
             item.systeme || !item.modifiable
               ? `<span class="pastille ${badge[item.etat] || "p-gris"}">${escapeHtml(item.etat[0].toUpperCase() + item.etat.slice(1))}</span>`
@@ -72,6 +72,16 @@ pages.outils = async () => {
     <div class="grille g2">${system.map(card).join("")}</div>
     <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
       Jabba regarde chaque jour si une version plus récente existe${versions.lu ? ` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})` : ""} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>`;
+  // Consommation de chaque outil : arrive un peu après (docker stats prend 1 à 2 secondes).
+  api("/api/outils-conso")
+    .then((usage) => {
+      content.querySelectorAll("[data-conso]").forEach((element) => {
+        const measured = usage[element.dataset.conso];
+        if (!measured) return;
+        element.textContent = `Mémoire ${formatBytes(measured.memoire)} · processeur ${String(measured.processeur).replace(".", ",")} %`;
+      });
+    })
+    .catch(() => {});
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;
     try {

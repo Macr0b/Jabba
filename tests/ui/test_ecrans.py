@@ -133,3 +133,8 @@ def test_chaque_ecran_s_ouvre_sans_erreur(page):
         aller(page, ecran)
         page.wait_for_timeout(400)
         expect(page.locator("#contenu h1").first).to_be_visible()
+
+
+def test_consommation_des_outils(page):
+    aller(page, "outils")
+    expect(page.locator('[data-conso="nextcloud"]')).to_have_text("Mémoire 610 Mo · processeur 2,4 %")

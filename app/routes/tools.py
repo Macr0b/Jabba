@@ -7,6 +7,7 @@ Sommaire :
   POST /api/outils/{pid}/demarrer        start_tool
   POST /api/outils/{pid}/arreter         stop_tool
   POST /api/outils/{pid}/mettre-a-jour   update_tool
+  GET  /api/outils-conso                 usage_per_tool (mémoire et processeur de chaque outil)
   GET  /api/outils-versions              tool_versions (mise à jour disponible ?)
   POST /api/outils-versions/verifier     check_tool_versions
 """
@@ -18,7 +19,7 @@ from fastapi.responses import Response
 
 import config
 from security import guard
-from services import background_tasks, tool_updates, tools
+from services import background_tasks, tool_updates, tool_usage, tools
 
 router = APIRouter()
 
@@ -78,6 +79,12 @@ def update_tool(pid: str, request: Request):
     script = f"cd '{tool['dossier']}' && docker compose pull && docker compose up -d && docker image prune -f"
     tool_updates.forget(pid)
     return background_tasks.start_task(f"Mise à jour de {tool['nom']}", script, request.state.nom, pid)
+
+
+@router.get("/api/outils-conso")
+async def usage_per_tool(request: Request):
+    guard.require_admin(request)
+    return await asyncio.to_thread(tool_usage.read_usage)
 
 
 @router.get("/api/outils-versions")
