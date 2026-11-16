@@ -24,7 +24,7 @@ from starlette.datastructures import UploadFile
 
 import config
 from security import guard
-from services import activity_log, disk_browser, files_source, home_data, nextcloud_files, safe_files
+from services import activity_log, disk_browser, files_source, home_data, nextcloud_files, safe_files, trash
 
 router = APIRouter()
 
@@ -418,41 +418,13 @@ async def search(q: str = ""):
 
 @router.get("/api/corbeille")
 async def list_trash():
-    if config.DEMO and files_source.files_source() != "disque":
-        from services.demo_data import TRASH
-
-        return {"elements": TRASH, "garde": 30}
-    entries = await asyncio.to_thread(disk_browser.list_trash)
-    if files_source.files_source() == "nextcloud":
-        nextcloud_files.require_nextcloud()
-        entries = await nextcloud_files.nextcloud_trash() + entries
-    entries.sort(key=lambda entry: -entry["supprime"])
-    return {"elements": entries, "garde": 30}
+    return {"elements": await trash.list_entries(), "garde": 30}
 
 
 @router.post("/api/corbeille/restaurer")
 async def restore_from_trash(request: Request):
     body = await request.json()
-    identifier, source_path = str(body.get("id", "")), body.get("source")
-    if config.DEMO and source_path != "disque":
-        return {"ok": True, "chemin": "/Documents"}
-    if source_path == "disque":
-        path = files_source.run_disk_action(lambda: disk_browser.restore(identifier, *files_source.disk_params()))
-    else:
-        nextcloud_files.require_nextcloud()
-        if "/" in identifier:
-            raise HTTPException(400, "Élément invalide")
-        async with nextcloud_files.client() as dav_client:
-            response = await dav_client.request(
-                "MOVE",
-                nextcloud_files.trash_url(identifier),
-                headers={
-                    "Destination": config.NC_URL
-                    + f"/remote.php/dav/trashbin/{quote(config.NC_USER)}/restore/{quote(identifier, safe='')}"
-                },
-            )
-        await nextcloud_files.check_response(response, "Restauration")
-        path = body.get("origine") or "/"
+    path = await trash.restore_entry(str(body.get("id", "")), body.get("source"), body.get("origine"))
     activity_log.record("fichier", f"{path} restauré depuis la corbeille", request.state.nom)
     return {"ok": True, "chemin": path}
 

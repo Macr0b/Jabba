@@ -23,13 +23,27 @@ export const kindOf = (name) =>
 export const viewUrl = (item) => "/api/fichiers/voir?chemin=" + encodeURIComponent(item);
 export const downloadUrl = (item) => "/api/fichiers/telecharger?chemin=" + encodeURIComponent(item);
 
-export function entryIcon(entry) {
+// size : 128 pour la liste, 256 pour la grille.
+export function entryIcon(entry, size = 128) {
   if (entry.dossier) return `<span class="ic-dossier${entry.externe ? " ext" : ""}" aria-hidden="true"></span>`;
   if (THUMBNAIL_EXTENSIONS.includes(extensionOf(entry.nom))) {
-    return `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="/api/fichiers/apercu?chemin=${encodeURIComponent(entry.chemin)}" onerror="this.parentNode.className='ic-fichier';this.remove()"></span>`;
+    return `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="/api/fichiers/apercu?chemin=${encodeURIComponent(entry.chemin)}&taille=${size}"></span>`;
   }
   return `<span class="ic-fichier${kindOf(entry.nom) ? " " + kindOf(entry.nom) : ""}" aria-hidden="true"></span>`;
 }
+
+// Aperçu impossible (fichier abîmé, format inconnu) : on remet l'icône de fichier.
+// Écouté ici plutôt qu'avec onerror="…", que la politique de sécurité de la page bloque.
+document.addEventListener(
+  "error",
+  (event) => {
+    const image = event.target;
+    if (image.tagName !== "IMG" || !image.parentNode || !image.parentNode.classList.contains("vignette")) return;
+    image.parentNode.className = "ic-fichier";
+    image.remove();
+  },
+  true,
+);
 
 // Visionneuse : photos, vidéos, musique, PDF et textes, sans quitter l'appli.
 export const viewerElement = $("#visionneuse");

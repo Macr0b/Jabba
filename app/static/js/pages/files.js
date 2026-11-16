@@ -2,12 +2,12 @@
 //
 // Sommaire :
 //   partagé : pages.fichiers (écran), pages.corbeille (écran)
-//   interne : openEntry, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
+//   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
 import { confirmAction, dialogElement, chooseFromMenu, toast } from "../components/dialogs.js";
+import { attachSelection, SHORTCUTS } from "../components/file_selection.js";
+import { uploadFiles } from "../components/upload_queue.js";
 import { kindOf, entryIcon, downloadUrl, openViewer } from "../components/viewer.js";
-import { shareFolder } from "../components/share.js";
 import { api } from "../core/api.js";
-import { state } from "../core/state.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
@@ -160,6 +160,77 @@ function locationPickerHtml(list, path, link) {
     .join("")}</nav>`;
 }
 
+// ------------------------------------------------------------ liste : tri, affichage, éléments
+const SORT_OPTIONS = [
+  ["nom", 1, "Nom (A → Z)"],
+  ["nom", -1, "Nom (Z → A)"],
+  ["modifie", -1, "Date (récent d'abord)"],
+  ["modifie", 1, "Date (ancien d'abord)"],
+  ["taille", -1, "Taille (gros d'abord)"],
+  ["taille", 1, "Taille (petit d'abord)"],
+];
+const DEFAULT_VIEW = { vue: "liste", tri: "nom", sens: 1 };
+const collator = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
+
+function readViewPreferences(path) {
+  try {
+    const saved = JSON.parse(localStorage.getItem("jabba-vue:" + path) || "null");
+    return { ...DEFAULT_VIEW, ...(saved || {}) };
+  } catch (_) {
+    return { ...DEFAULT_VIEW };
+  }
+}
+function saveViewPreferences(path, preferences) {
+  try {
+    localStorage.setItem("jabba-vue:" + path, JSON.stringify(preferences));
+  } catch (_) {
+    /* navigation privée : le choix vaut pour cette visite seulement */
+  }
+}
+
+// Les dossiers restent toujours en haut, comme dans le Finder.
+function sortEntries(list, key, direction) {
+  const value = (entry) =>
+    key === "taille" ? entry.taille || 0 : key === "modifie" ? Date.parse(entry.modifie) || 0 : entry.nom;
+  return [...list].sort((a, b) => {
+    if (a.dossier !== b.dossier) return a.dossier ? -1 : 1;
+    const compared =
+      key === "nom" ? collator.compare(a.nom, b.nom) : value(a) - value(b) || collator.compare(a.nom, b.nom);
+    return compared * direction;
+  });
+}
+
+const checkboxHtml = (item, index) =>
+  `<input type="checkbox" class="case" data-choix="${index}" aria-label="Sélectionner ${escapeHtml(item.nom)}">`;
+const nameLinkHtml = (item, index, link) =>
+  item.dossier
+    ? `<a href="${link(item.chemin)}">${escapeHtml(item.nom)}</a>`
+    : `<a href="${downloadUrl(item.chemin)}" data-ouvrir="${index}">${escapeHtml(item.nom)}</a>`;
+const dropTarget = (item) => (item.dossier && item.ecriture ? ` data-dossier="${escapeHtml(item.chemin)}"` : "");
+
+function rowHtml(item, index, link) {
+  return `
+        <div class="ligne element" role="row" data-i="${index}"${dropTarget(item)}>
+          <span class="nom" role="cell">${checkboxHtml(item, index)}${entryIcon(item)}
+            <span>${nameLinkHtml(item, index, link)}
+            <span class="mobile-detail">${formatBytes(item.taille)} · ${formatWhen(item.modifie)}</span></span></span>
+          <span class="gris col-l" role="cell">${formatBytes(item.taille)}</span>
+          <span class="gris col-l" role="cell">${formatWhen(item.modifie)}</span>
+          <button class="btn-menu" type="button" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
+        </div>`;
+}
+
+function tileHtml(item, index, link) {
+  return `
+        <div class="tuile-fichier element" role="gridcell" data-i="${index}"${dropTarget(item)}>
+          ${checkboxHtml(item, index)}
+          <span class="apercu-tuile">${entryIcon(item, 256)}</span>
+          <span class="nom-tuile-fichier">${nameLinkHtml(item, index, link)}</span>
+          <span class="note">${item.dossier ? "Dossier" : formatBytes(item.taille)}</span>
+          <button class="btn-menu" type="button" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
+        </div>`;
+}
+
 pages.fichiers = async (params) => {
   if (params.get("q")) return showSearchResults(params.get("q"));
   const path = params.get("chemin") || "/";
@@ -181,6 +252,14 @@ pages.fichiers = async (params) => {
     )
     .join('<span class="sep">/</span>');
   const title = parts.length ? parts[parts.length - 1] : "Fichiers";
+  const preferences = readViewPreferences(path);
+  const entries = sortEntries(data.elements, preferences.tri, preferences.sens);
+  const grid = preferences.vue === "grille";
+  const sortHeader = (key, label, extraClass = "") => {
+    const active = preferences.tri === key;
+    const order = active ? (preferences.sens === 1 ? "ascending" : "descending") : "none";
+    return `<span class="${extraClass}" role="columnheader" aria-sort="${order}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
+  };
   content.innerHTML = `
     <div class="entete">
       <div><h1>${escapeHtml(title)}${data.ecriture ? "" : '<span class="lecture-seule">Lecture seule</span>'}</h1>
@@ -196,23 +275,23 @@ pages.fichiers = async (params) => {
     ${locationPickerHtml(locations, path, link)}
     <div class="ligne-nav">${navigationBarHtml(path, link, data.source === "disque" ? "Serveur" : "Nextcloud")}
     <nav class="fil" aria-label="Emplacement">${thread}</nav></div>
-    <section class="carte tableau" aria-label="Contenu du dossier">
-      <div class="ligne titres"><span>Nom</span><span class="col-l">Taille</span><span class="col-l">Modifié</span><span></span></div>
+    <div class="outils-liste">
+      <label class="choix-tri"><span>Trier par</span>
+        <select id="tri" aria-label="Trier par">${SORT_OPTIONS.map(([key, sens, label]) => `<option value="${key}:${sens}"${preferences.tri === key && preferences.sens === sens ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+      <div class="bascule-vue" role="group" aria-label="Affichage">
+        <button class="btn btn-petit${grid ? "" : " actif"}" type="button" data-vue="liste" aria-pressed="${!grid}">Liste</button>
+        <button class="btn btn-petit${grid ? " actif" : ""}" type="button" data-vue="grille" aria-pressed="${grid}">Grille</button>
+      </div>
+      <button class="lien" type="button" id="aide-clavier" aria-expanded="false">Raccourcis clavier</button>
+    </div>
+    <dl class="raccourcis" id="raccourcis" hidden>${SHORTCUTS.map(([keys, label]) => `<dt><kbd>${escapeHtml(keys)}</kbd></dt><dd>${escapeHtml(label)}</dd>`).join("")}</dl>
+    <section class="carte tableau${grid ? " vue-grille" : ""}" aria-label="Contenu du dossier" role="${grid ? "grid" : "table"}" aria-multiselectable="true">
+      ${grid ? "" : `<div class="ligne titres" role="row">${sortHeader("nom", "Nom")}${sortHeader("taille", "Taille", "col-l")}${sortHeader("modifie", "Modifié", "col-l")}<span></span></div>`}
       ${
-        data.elements.length
-          ? data.elements
-              .map(
-                (item, index) => `
-        <div class="ligne"${item.dossier && item.ecriture ? ` data-dossier="${escapeHtml(item.chemin)}"` : ""}>
-          <span class="nom">${entryIcon(item)}
-            <span>${item.dossier ? `<a href="${link(item.chemin)}">${escapeHtml(item.nom)}</a>` : `<a href="${downloadUrl(item.chemin)}" data-ouvrir="${index}">${escapeHtml(item.nom)}</a>`}
-            <span class="mobile-detail">${formatBytes(item.taille)} · ${formatWhen(item.modifie)}</span></span></span>
-          <span class="gris col-l">${formatBytes(item.taille)}</span>
-          <span class="gris col-l">${formatWhen(item.modifie)}</span>
-          <button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
-        </div>`,
-              )
-              .join("")
+        entries.length
+          ? grid
+            ? `<div class="grille-fichiers">${entries.map((item, index) => tileHtml(item, index, link)).join("")}</div>`
+            : entries.map((item, index) => rowHtml(item, index, link)).join("")
           : `<div class="vide">Ce dossier est vide.</div>`
       }
       ${data.ecriture ? `<div class="depot" id="depot">Glisse des fichiers ici pour les envoyer dans « ${escapeHtml(title)} »</div>` : ""}
@@ -225,15 +304,45 @@ pages.fichiers = async (params) => {
   const parentLink = content.querySelector(".nav-fichiers a");
   if (parentLink) parentLink.id = "nav-fichiers-parent";
   wireSearch();
+  const openAt = (index) => {
+    const entry = entries[index];
+    if (entry.dossier) location.hash = link(entry.chemin);
+    else if (kindOf(entry.nom)) openViewer(entries, index);
+    else location.href = downloadUrl(entry.chemin);
+  };
   content.querySelectorAll("[data-ouvrir]").forEach((element) =>
     element.addEventListener("click", (event) => {
-      const entry = data.elements[+element.dataset.ouvrir];
+      const entry = entries[+element.dataset.ouvrir];
       if (kindOf(entry.nom)) {
         event.preventDefault();
-        openViewer(data.elements, +element.dataset.ouvrir);
+        openViewer(entries, +element.dataset.ouvrir);
       }
     }),
   );
+  // Tri et affichage, mémorisés pour ce dossier.
+  const savePreference = (change) => {
+    saveViewPreferences(path, { ...preferences, ...change });
+    reload();
+  };
+  content.querySelectorAll("[data-tri]").forEach((button) => {
+    button.onclick = () =>
+      savePreference({
+        tri: button.dataset.tri,
+        sens: preferences.tri === button.dataset.tri ? -preferences.sens : button.dataset.tri === "nom" ? 1 : -1,
+      });
+  });
+  $("#tri").onchange = (event) => {
+    const [key, sens] = event.target.value.split(":");
+    savePreference({ tri: key, sens: +sens });
+  };
+  content.querySelectorAll("[data-vue]").forEach((button) => {
+    button.onclick = () => savePreference({ vue: button.dataset.vue });
+  });
+  $("#aide-clavier").onclick = (event) => {
+    const list = $("#raccourcis");
+    list.hidden = !list.hidden;
+    event.target.setAttribute("aria-expanded", String(!list.hidden));
+  };
   const star = $("#etoile");
   if (star)
     star.onclick = async () => {
@@ -244,22 +353,7 @@ pages.fichiers = async (params) => {
       }
       reload();
     };
-  const send = async (files) => {
-    if (!files.length) return;
-    const formData = new FormData();
-    for (const item of files) formData.append("fichiers", item, item.name);
-    toast(`Envoi de ${files.length} fichier${files.length > 1 ? "s" : ""}…`);
-    try {
-      const data = await api("/api/fichiers/envoyer?chemin=" + encodeURIComponent(path), {
-        method: "POST",
-        body: formData,
-      });
-      toast(`${data.envoyes.length} fichier${data.envoyes.length > 1 ? "s envoyés" : " envoyé"}`);
-    } catch (error) {
-      toast(error.message, true);
-    }
-    reload();
-  };
+  const send = (files) => uploadFiles(path, files, reload);
 
   if (data.ecriture) {
     $("#nouveau").onclick = async () => {
@@ -276,7 +370,10 @@ pages.fichiers = async (params) => {
     };
     const choices = $("#choix");
     $("#envoyer").onclick = () => choices.click();
-    choices.onchange = () => send([...choices.files]);
+    choices.onchange = () => {
+      send([...choices.files]);
+      choices.value = "";
+    };
     const dropZone = $("#depot"),
       area = $(".tableau");
     ["dragenter", "dragover"].forEach((value) =>
@@ -292,111 +389,26 @@ pages.fichiers = async (params) => {
       }),
     );
     area.addEventListener("drop", (event) => {
-      if (!event.defaultPrevented || !event.jabbaPris)
-        send([...event.dataTransfer.files].filter((item) => item.size || item.type));
+      if (!event.defaultPrevented || !event.jabbaPris) send([...event.dataTransfer.files]);
     });
   }
 
   // Glisser des fichiers directement sur un dossier de la liste.
-  content.querySelectorAll(".ligne[data-dossier]").forEach((row) => enableDrop(row, row.dataset.dossier, reload));
+  content.querySelectorAll(".element[data-dossier]").forEach((row) => enableDrop(row, row.dataset.dossier, reload));
 
-  content.querySelectorAll(".btn-menu").forEach((element) =>
-    element.addEventListener("click", async () => {
-      const entry = data.elements[+element.dataset.i];
-      const parent = path.replace(/\/$/, "");
-      const choices = [];
-      if (entry.dossier) {
-        choices.push({ texte: "Ouvrir", f: () => (location.hash = link(entry.chemin)) });
-        if (data.source === "nextcloud" && state.admin)
-          choices.push({ texte: "Partager avec…", f: () => shareFolder(entry.chemin, entry.nom) });
-        choices.push({
-          texte: "Ajouter à l'accès rapide",
-          f: async () => {
-            try {
-              await toggleFavorite(entry.chemin, false);
-            } catch (error) {
-              toast(error.message, true);
-            }
-          },
-        });
-      } else {
-        if (kindOf(entry.nom)) choices.push({ texte: "Voir", f: () => openViewer(data.elements, +element.dataset.i) });
-        choices.push({ texte: "Télécharger", f: () => (location.href = downloadUrl(entry.chemin)) });
+  attachSelection(entries, {
+    folder: data,
+    after: reload,
+    open: openAt,
+    link,
+    addToQuickAccess: async (folderPath) => {
+      try {
+        await toggleFavorite(folderPath, false);
+      } catch (error) {
+        toast(error.message, true);
       }
-      if (entry.ecriture && data.ecriture) {
-        choices.push({
-          texte: "Renommer",
-          f: async () => {
-            const name = await confirmAction({ titre: "Renommer", champ: entry.nom, valider: "Renommer" });
-            if (!name || name === entry.nom) return;
-            if (/[\\/]/.test(name)) return toast("Le nom ne peut pas contenir / ou \\", true);
-            try {
-              await api("/api/fichiers/deplacer", {
-                method: "POST",
-                json: { de: entry.chemin, vers: parent + "/" + name },
-              });
-              toast("Renommé");
-            } catch (error) {
-              toast(error.message, true);
-            }
-            reload();
-          },
-        });
-        choices.push({
-          texte: "Déplacer vers…",
-          f: async () => {
-            const destination = await confirmAction({
-              titre: "Déplacer vers",
-              texte: "Chemin du dossier de destination, par exemple /Documents/Archives",
-              champ: parent || "/",
-              valider: "Déplacer",
-            });
-            if (!destination) return;
-            try {
-              await api("/api/fichiers/deplacer", {
-                method: "POST",
-                json: { de: entry.chemin, vers: destination.replace(/\/$/, "") + "/" + entry.nom },
-              });
-              toast("Déplacé");
-            } catch (error) {
-              toast(error.message, true);
-            }
-            reload();
-          },
-        });
-        choices.push({
-          texte: "Supprimer",
-          danger: true,
-          f: async () => {
-            const text =
-              "Il part dans la corbeille : tu peux le récupérer pendant 30 jours (Fichiers → Corbeille)." +
-              (entry.dossier ? " Supprimer un dossier entier demande le mot de passe du serveur." : "");
-            if (
-              !(await confirmAction({
-                titre: `Supprimer « ${entry.nom} » ?`,
-                texte: text,
-                valider: "Supprimer",
-                danger: true,
-              }))
-            )
-              return;
-            try {
-              await api("/api/fichiers/supprimer", {
-                method: "POST",
-                json: { chemin: entry.chemin, dossier: entry.dossier },
-              });
-              toast("Mis à la corbeille");
-            } catch (error) {
-              toast(error.message, true);
-            }
-            reload();
-          },
-        });
-      }
-      const item = await chooseFromMenu(entry.nom, choices);
-      if (item) setTimeout(item.f, 50);
-    }),
-  );
+    },
+  });
 };
 
 // ------------------------------------------------------------ corbeille

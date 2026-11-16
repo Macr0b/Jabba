@@ -18,7 +18,12 @@
       "À appliquer : relancer le script d'installation, ou choisir dans Système (Jabba remet alors le minuteur de 4 h à jour).",
       "Mots de passe plus sûrs, selon la règle du NIST (2025) : 15 caractères minimum, aucune obligation de majuscule ou de symbole (une phrase de quelques mots convient), refus des mots de passe courants, des suites de touches (azerty, 123456…), des répétitions, de ceux construits sur ton nom, et de ceux déjà apparus dans une fuite de données (seul le début de leur empreinte est envoyé pour la vérification, jamais le mot de passe). Les mots de passe actuels continuent de marcher.",
       "Double vérification, au choix de chaque admin (Système, carte « Double vérification ») : Face ID, Touch ID ou clé USB (clé d'accès), ou appli d'authentification (Mots de passe d'Apple, Google Authenticator…), avec 10 codes de secours à usage unique. Un super admin peut la retirer à quelqu'un qui a perdu son téléphone.",
-      "Correction : les fenêtres de dialogue affichent de nouveau leur texte d'explication et le bon libellé de bouton."
+      "Correction : les fenêtres de dialogue affichent de nouveau leur texte d'explication et le bon libellé de bouton.",
+      "Fichiers, comme dans le Finder : sélection de plusieurs éléments (case à cocher, ⌘/Ctrl + clic, Maj + clic, appui long sur iPhone) avec une barre Télécharger · Déplacer · Corbeille ; clic droit ; raccourcis clavier (flèches, Entrée, Espace, ⌘A, Suppr, F2, /, Échap).",
+      "Fichiers : tri par nom, date ou taille, et vue en grille de vignettes ; le choix est mémorisé pour chaque dossier.",
+      "Fichiers : plusieurs éléments ou un dossier se téléchargent en un seul .zip.",
+      "Fichiers : plus de confirmation avant de mettre à la corbeille, de déplacer ou de renommer : le message propose « Annuler » pendant 10 secondes.",
+      "Envois : une barre d'avancement par fichier ; un fichier en erreur garde son bouton « Réessayer » sans renvoyer les autres."
     ]
   },
   {

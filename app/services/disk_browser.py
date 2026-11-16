@@ -152,7 +152,11 @@ def delete(path, disks, read_only):
     real_path = _writable_path(path, disks, read_only)
     if not os.path.exists(real_path):
         raise Refusal(404, "Introuvable")
-    identifier = time.strftime("%Y%m%d-%H%M%S-") + os.urandom(3).hex()
+    now = time.time()
+    # date, microsecondes puis hasard : trié par nom, le plus récent vient en premier
+    identifier = (
+        time.strftime("%Y%m%d-%H%M%S-", time.localtime(now)) + f"{int(now * 1e6) % 10**6:06d}-" + os.urandom(3).hex()
+    )
     trash_dir = os.path.join(TRASH_NAME, identifier)
     os.makedirs(trash_dir, exist_ok=True)
     folder = os.path.isdir(real_path)

@@ -2,8 +2,9 @@
 //
 // Sommaire :
 //   partagé : pages.accueil (écran), folderLink, enableDrop, toggleFavorite, toolIcon, COMING_SOON
-//   interne : TILE_ICONS, loadQuickAccess, uploadTo
+//   interne : TILE_ICONS, loadQuickAccess
 import { toast } from "../components/dialogs.js";
+import { uploadFiles } from "../components/upload_queue.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatDuration, formatBytes, formatPercent } from "../core/format.js";
@@ -90,26 +91,6 @@ async function loadQuickAccess() {
   );
 }
 
-async function uploadTo(path, files) {
-  files = files.filter((item) => item.size || item.type);
-  if (!files.length) return false;
-  const formData = new FormData();
-  for (const item of files) formData.append("fichiers", item, item.name);
-  const name = path.split("/").filter(Boolean).pop() || "Mes fichiers";
-  toast(`Envoi de ${files.length} fichier${files.length > 1 ? "s" : ""} dans « ${name} »…`);
-  try {
-    const data = await api("/api/fichiers/envoyer?chemin=" + encodeURIComponent(path), {
-      method: "POST",
-      body: formData,
-    });
-    toast(`${data.envoyes.length} fichier${data.envoyes.length > 1 ? "s copiés" : " copié"} dans « ${name} »`);
-    return true;
-  } catch (error) {
-    toast(error.message, true);
-    return false;
-  }
-}
-
 // Fait d'un élément (tuile, ligne de dossier) une cible de dépôt de fichiers.
 export function enableDrop(element, path, after) {
   let counter = 0;
@@ -135,7 +116,7 @@ export function enableDrop(element, path, after) {
     event.jabbaPris = true;
     counter = 0;
     element.classList.remove("cible");
-    if (await uploadTo(path, [...event.dataTransfer.files])) after();
+    uploadFiles(path, [...event.dataTransfer.files], after);
   });
 }
 

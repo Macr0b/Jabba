@@ -4,12 +4,27 @@
 //   partagé : toast, dialogElement, dialogForm, confirmAction, chooseFromMenu
 import { $, escapeHtml } from "../core/dom.js";
 
-export function toast(text, isError = false) {
+// action (facultatif) : {label, run} → un bouton dans le message, par exemple « Annuler ».
+export function toast(text, isError = false, action = null) {
   const element = document.createElement("div");
-  element.className = "toast" + (isError ? " err" : "");
-  element.textContent = text;
+  element.className = "toast" + (isError ? " err" : "") + (action ? " avec-action" : "");
+  element.setAttribute("role", isError ? "alert" : "status");
+  const message = document.createElement("span");
+  message.textContent = text;
+  element.appendChild(message);
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toast-action";
+    button.textContent = action.label;
+    button.onclick = () => {
+      element.remove();
+      action.run();
+    };
+    element.appendChild(button);
+  }
   $("#toasts").appendChild(element);
-  setTimeout(() => element.remove(), isError ? 7000 : 3500);
+  setTimeout(() => element.remove(), isError ? 7000 : action ? 10000 : 3500);
 }
 
 export const dialogElement = $("#dialogue"),

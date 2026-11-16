@@ -1,0 +1,296 @@
+/* Écran Fichiers : tri, grille, sélection multiple, barre d'actions, envois, raccourcis. */
+.outils-liste {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--texte-3);
+}
+.choix-tri {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.choix-tri select {
+  min-height: 32px;
+}
+.bascule-vue {
+  display: flex;
+  gap: 4px;
+}
+.bascule-vue .btn.actif {
+  background: var(--accent-doux);
+  color: var(--accent-fonce);
+  border-color: var(--accent);
+}
+.raccourcis {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+}
+.raccourcis[hidden] {
+  display: none;
+}
+.raccourcis dd {
+  margin: 0;
+  color: var(--texte-3);
+}
+kbd {
+  font:
+    600 12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 1px 6px;
+  border: 1px solid var(--bord);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--fond);
+}
+button.tri {
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+  min-height: 24px;
+}
+button.tri.actif {
+  color: var(--texte);
+}
+
+/* Cases à cocher : visibles au survol, au clavier, ou dès qu'une sélection a commencé. */
+.element .case {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  opacity: 0;
+  cursor: pointer;
+}
+.element:hover .case,
+.element:focus-within .case,
+.selection-active .element .case,
+.element .case:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .element .case {
+    display: none;
+  }
+  .selection-active .element .case {
+    display: block;
+  }
+}
+.element {
+  -webkit-touch-callout: none;
+  outline-offset: -2px;
+}
+.element:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.tableau .ligne.element.choisi,
+.tuile-fichier.choisi {
+  background: var(--accent-doux);
+}
+
+/* Grille de vignettes */
+.grille-fichiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+.tuile-fichier {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 8px;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 0;
+}
+.tuile-fichier:hover {
+  background: var(--survol);
+}
+.tuile-fichier .case {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+}
+.tuile-fichier .btn-menu {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+.apercu-tuile {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bord-doux);
+}
+.apercu-tuile .vignette {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+}
+.apercu-tuile .ic-dossier {
+  width: 64px;
+  height: 50px;
+  border-radius: 6px;
+}
+.apercu-tuile .ic-fichier {
+  width: 44px;
+  height: 56px;
+  border-width: 3px;
+}
+.nom-tuile-fichier {
+  width: 100%;
+  font-weight: 500;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nom-tuile-fichier a {
+  color: var(--texte);
+}
+
+/* Barre d'actions de la sélection, collée en bas de l'écran */
+.barre-selection {
+  position: sticky;
+  bottom: 16px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px auto 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.barre-selection strong {
+  margin-right: 6px;
+}
+
+/* Message avec bouton (« Annuler ») */
+.toast.avec-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.toast-action {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 600 14px inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 24px;
+  padding: 2px 0;
+}
+
+/* Envois de fichiers : un avancement par fichier */
+.envois {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 19;
+  width: min(380px, calc(100vw - 40px));
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+}
+.envois-titre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.envois-titre .btn {
+  margin-left: auto;
+}
+.envois ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.envoi {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--bord-doux);
+}
+.envoi-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.envoi-erreur {
+  display: block;
+  color: var(--rouge);
+  font-size: 12px;
+  white-space: normal;
+}
+.envoi progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 4px;
+  accent-color: var(--accent);
+}
+.envoi[data-etat="fini"] progress {
+  accent-color: var(--vert, #3da06a);
+}
+.envoi-etat.ok {
+  color: var(--vert, #3da06a);
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .envois {
+    left: 10px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .barre-selection {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .grille-fichiers {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+    padding: 10px;
+  }
+  #aide-clavier {
+    display: none;
+  }
+}

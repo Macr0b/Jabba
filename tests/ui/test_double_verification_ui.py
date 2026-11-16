@@ -62,7 +62,9 @@ def se_connecter(p):
     expect(fenetre.locator("button.btn-p")).to_have_text("Continuer")
     p.fill("input[name=identifiant]", "serveur-demo")
     p.fill("input[name=mdp]", "demo-mot-de-passe")
-    p.press("input[name=mdp]", "Enter")
+    # on attend la réponse : la fenêtre se ferme avant, et recharger trop tôt couperait la connexion
+    with p.expect_response(lambda r: "/api/admin/connexion" in r.url):
+        p.press("input[name=mdp]", "Enter")
 
 
 def test_face_id_et_appli(page_localhost):

@@ -93,6 +93,7 @@ def appli():
         JABBA_DOSSIER_INVITES=f"{d}/invites",
         JABBA_LECTURE=f"{d}/lecture",
         JABBA_DEMO_SOURCE="disque",
+        JABBA_CORBEILLE=f"{d}/corbeille",
         DOSSIERS_DISQUE=f"Films et séries={d}/films",
         JABBA_JOURNAUX_AUTRES="",
     )
