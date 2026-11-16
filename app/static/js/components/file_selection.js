@@ -19,16 +19,17 @@ import {
   renameEntry,
   selectionChoices,
 } from "./file_actions.js";
+import { t } from "../core/i18n.js";
 
 export const SHORTCUTS = [
-  ["↑ ↓ ← →", "se déplacer"],
-  ["Entrée", "ouvrir"],
-  ["Espace", "sélectionner"],
-  ["⌘A / Ctrl+A", "tout sélectionner"],
-  ["Suppr ou ⌘⌫", "mettre à la corbeille"],
+  ["↑ ↓ ← →", t("se déplacer")],
+  [t("Entrée"), "ouvrir"],
+  [t("Espace"), t("sélectionner")],
+  ["⌘A / Ctrl+A", t("tout sélectionner")],
+  [t("Suppr ou ⌘⌫"), t("mettre à la corbeille")],
   ["F2", "renommer"],
   ["/", "chercher"],
-  ["Échap", "tout désélectionner"],
+  [t("Échap"), t("tout désélectionner")],
 ];
 const LONG_PRESS_MS = 550;
 let current = null; // {entries, context, selected: Set, anchor, focus}
@@ -63,14 +64,14 @@ function renderBar() {
     bar.id = "barre-selection";
     bar.className = "barre-selection";
     bar.setAttribute("role", "toolbar");
-    bar.setAttribute("aria-label", "Actions sur la sélection");
+    bar.setAttribute("aria-label", t("Actions sur la sélection"));
     content.appendChild(bar);
   }
   const count = current.selected.size;
   const writable = current.context.folder.ecriture && selectedEntries().every((entry) => entry.ecriture);
-  bar.innerHTML = `<strong>${count} sélectionné${count > 1 ? "s" : ""}</strong>
+  bar.innerHTML = t`<strong>${count} sélectionné${count > 1 ? "s" : ""}</strong>
     <button class="btn btn-petit" type="button" data-action="telecharger">Télécharger</button>
-    ${writable ? '<button class="btn btn-petit" type="button" data-action="deplacer">Déplacer</button><button class="btn btn-petit btn-danger" type="button" data-action="corbeille">Corbeille</button>' : ""}
+    ${writable ? t('<button class="btn btn-petit" type="button" data-action="deplacer">Déplacer</button><button class="btn btn-petit btn-danger" type="button" data-action="corbeille">Corbeille</button>') : ""}
     <button class="btn btn-petit" type="button" data-action="aucun" aria-label="Tout désélectionner">✕</button>`;
   bar.querySelectorAll("[data-action]").forEach((button) => {
     button.onclick = () => runOnSelection(button.dataset.action);
@@ -95,7 +96,7 @@ async function openMenu(index) {
   const choices = multiple
     ? selectionChoices(entries, current.context)
     : itemChoices(entries[0], { ...current.context, list: current.entries, index });
-  const choice = await chooseFromMenu(multiple ? `${entries.length} éléments` : entries[0].nom, choices);
+  const choice = await chooseFromMenu(multiple ? t`${entries.length} éléments` : entries[0].nom, choices);
   if (choice) setTimeout(choice.f, 50);
 }
 

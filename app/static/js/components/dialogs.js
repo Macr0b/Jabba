@@ -3,6 +3,7 @@
 // Sommaire :
 //   partagé : toast, dialogElement, dialogForm, confirmAction, chooseFromMenu
 import { $, escapeHtml } from "../core/dom.js";
+import { t } from "../core/i18n.js";
 
 // action (facultatif) : {label, run} → un bouton dans le message, par exemple « Annuler ».
 export function toast(text, isError = false, action = null) {
@@ -37,7 +38,7 @@ export function confirmAction({
   danger = false,
 }) {
   return new Promise((resolve) => {
-    dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
+    dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
       ${field !== null ? `<input type="text" name="champ" value="${escapeHtml(field)}" aria-label="${escapeHtml(title)}" autocomplete="off" autocapitalize="off">` : ""}
       <div class="actions"><button class="btn" value="non" type="submit">Annuler</button>
       <button class="btn ${danger ? "btn-danger" : "btn-p"}" value="oui" type="submit">${escapeHtml(confirmLabel)}</button></div>`;
@@ -57,7 +58,7 @@ export function confirmAction({
 }
 export function chooseFromMenu(title, choices) {
   return new Promise((resolve) => {
-    dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2><div class="menu-actions">${choices
+    dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2><div class="menu-actions">${choices
       .map(
         (item, index) =>
           `<button class="btn ${item.danger ? "btn-danger" : ""}" value="${index}" type="submit">${escapeHtml(item.texte)}</button>`,

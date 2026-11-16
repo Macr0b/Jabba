@@ -3,6 +3,7 @@
 // Sommaire :
 //   partagé : formatBytes, formatPercent, formatDuration, formatWhen, timeAgo, formatGigabytes, timeOf, dayOf, shortDuration
 
+import { t } from "./i18n.js";
 export function formatBytes(item) {
   if (item == null) return "—";
   const user = ["o", "Ko", "Mo", "Go", "To"];
@@ -30,7 +31,7 @@ export function formatWhen(isoDate) {
     now = new Date();
   const days = Math.floor((new Date(now.toDateString()) - new Date(data.toDateString())) / 86400000);
   if (days === 0) return "Aujourd'hui " + data.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  if (days === 1) return "Hier";
+  if (days === 1) return t("Hier");
   if (days < 7)
     return data.toLocaleDateString("fr-FR", { weekday: "long" }).replace(/^./, (item) => item.toUpperCase());
   return data.toLocaleDateString("fr-FR", {
@@ -39,11 +40,11 @@ export function formatWhen(isoDate) {
     year: data.getFullYear() === now.getFullYear() ? undefined : "numeric",
   });
 }
-export const timeAgo = (value) => (value ? formatWhen(new Date(value * 1000).toISOString()) : "Jamais");
+export const timeAgo = (value) => (value ? formatWhen(new Date(value * 1000).toISOString()) : t("Jamais"));
 
 // ------------------------------------------------------------ comptes Nextcloud
 export const formatGigabytes = (item) =>
-  item == null ? "illimité" : String(Math.round((item / 1073741824) * 10) / 10).replace(".", ",") + " Go";
+  item == null ? t("illimité") : String(Math.round((item / 1073741824) * 10) / 10).replace(".", ",") + " Go";
 
 // ------------------------------------------------------------ sauvegardes
 export const timeOf = (value) =>

@@ -11,6 +11,7 @@ import { pickFolder } from "./folder_picker.js";
 import { requestFiles } from "./public_mode_card.js";
 import { shareFolder } from "./share.js";
 import { downloadUrl, kindOf, openViewer } from "./viewer.js";
+import { t } from "../core/i18n.js";
 
 const countLabel = (count, one, many) => `${count} ${count > 1 ? many : one}`;
 const parentOf = (path) => path.replace(/\/[^/]*$/, "") || "/";
@@ -22,18 +23,21 @@ export function downloadEntries(entries) {
     return;
   }
   const query = entries.map((entry) => "chemin=" + encodeURIComponent(entry.chemin)).join("&");
-  toast("Préparation du .zip… le téléchargement démarre dès qu'il est prêt.");
+  toast(t("Préparation du .zip… le téléchargement démarre dès qu'il est prêt."));
   location.href = "/api/fichiers/zip?" + query;
 }
 
 export async function renameEntry(entry, after) {
-  const name = await confirmAction({ titre: "Renommer", champ: entry.nom, valider: "Renommer" });
+  const name = await confirmAction({ titre: t("Renommer"), champ: entry.nom, valider: t("Renommer") });
   if (!name || name === entry.nom) return;
-  if (/[\\/]/.test(name)) return toast("Le nom ne peut pas contenir / ou \\", true);
+  if (/[\\/]/.test(name)) return toast(t("Le nom ne peut pas contenir / ou \\"), true);
   const target = parentOf(entry.chemin).replace(/\/$/, "") + "/" + name;
   try {
     await api("/api/fichiers/deplacer", { method: "POST", json: { de: entry.chemin, vers: target } });
-    toast("Renommé", false, { label: "Annuler", run: () => undoMoves([{ de: entry.chemin, vers: target }], after) });
+    toast(t("Renommé"), false, {
+      label: t("Annuler"),
+      run: () => undoMoves([{ de: entry.chemin, vers: target }], after),
+    });
   } catch (error) {
     toast(error.message, true);
   }
@@ -49,7 +53,7 @@ async function undoMoves(moves, after) {
       failed++;
     }
   }
-  toast(failed ? `${failed} élément(s) n'ont pas pu revenir` : "Annulé", Boolean(failed));
+  toast(failed ? t`${failed} élément(s) n'ont pas pu revenir` : t("Annulé"), Boolean(failed));
   after();
 }
 
@@ -57,7 +61,7 @@ async function undoMoves(moves, after) {
 export async function moveEntries(entries, after, destination = null) {
   if (destination === null)
     destination = await pickFolder({
-      title: entries.length > 1 ? `Déplacer ${entries.length} éléments` : `Déplacer « ${entries[0].nom} »`,
+      title: entries.length > 1 ? t`Déplacer ${entries.length} éléments` : t`Déplacer « ${entries[0].nom} »`,
       start: parentOf(entries[0].chemin),
       excluded: entries.filter((entry) => entry.dossier).map((entry) => entry.chemin),
     });
@@ -65,7 +69,7 @@ export async function moveEntries(entries, after, destination = null) {
   const inside = entries.find(
     (entry) => entry.dossier && (destination === entry.chemin || destination.startsWith(entry.chemin + "/")),
   );
-  if (inside) return toast(`« ${inside.nom} » ne peut pas aller dans lui-même.`, true);
+  if (inside) return toast(t`« ${inside.nom} » ne peut pas aller dans lui-même.`, true);
   const folder = destination.replace(/\/$/, "");
   const moves = [];
   const errors = [];
@@ -80,8 +84,8 @@ export async function moveEntries(entries, after, destination = null) {
     }
   }
   if (moves.length)
-    toast(`${countLabel(moves.length, "élément déplacé", "éléments déplacés")}`, false, {
-      label: "Annuler",
+    toast(`${countLabel(moves.length, t("élément déplacé"), t("éléments déplacés"))}`, false, {
+      label: t("Annuler"),
       run: () => undoMoves(moves, after),
     });
   if (errors.length) toast(errors.join(" · "), true);
@@ -101,12 +105,12 @@ export async function deleteEntries(entries, after) {
     }
   }
   if (deleted.length)
-    toast(`${countLabel(deleted.length, "élément mis", "éléments mis")} à la corbeille`, false, {
-      label: "Annuler",
+    toast(t`${countLabel(deleted.length, t("élément mis"), t("éléments mis"))} à la corbeille`, false, {
+      label: t("Annuler"),
       run: async () => {
         try {
           const result = await api("/api/fichiers/annuler-suppression", { method: "POST", json: { chemins: deleted } });
-          toast(`${countLabel(result.restaures.length, "élément remis", "éléments remis")} en place`);
+          toast(t`${countLabel(result.restaures.length, t("élément remis"), t("éléments remis"))} en place`);
         } catch (error) {
           toast(error.message, true);
         }
@@ -121,31 +125,31 @@ export async function deleteEntries(entries, after) {
 export function itemChoices(entry, context) {
   const choices = [];
   if (entry.dossier) {
-    choices.push({ texte: "Ouvrir", f: () => (location.hash = context.link(entry.chemin)) });
+    choices.push({ texte: t("Ouvrir"), f: () => (location.hash = context.link(entry.chemin)) });
     if (context.folder.source === "nextcloud" && state.admin)
-      choices.push({ texte: "Partager avec…", f: () => shareFolder(entry.chemin, entry.nom) });
+      choices.push({ texte: t("Partager avec…"), f: () => shareFolder(entry.chemin, entry.nom) });
     if (context.folder.source === "nextcloud" && context.publicOpen)
-      choices.push({ texte: "Demander des fichiers…", f: () => requestFiles(entry) });
-    choices.push({ texte: "Ajouter à l'accès rapide", f: () => context.addToQuickAccess(entry.chemin) });
-    choices.push({ texte: "Télécharger (.zip)", f: () => downloadEntries([entry]) });
+      choices.push({ texte: t("Demander des fichiers…"), f: () => requestFiles(entry) });
+    choices.push({ texte: t("Ajouter à l'accès rapide"), f: () => context.addToQuickAccess(entry.chemin) });
+    choices.push({ texte: t("Télécharger (.zip)"), f: () => downloadEntries([entry]) });
   } else {
-    if (kindOf(entry.nom)) choices.push({ texte: "Voir", f: () => openViewer(context.list, context.index) });
-    choices.push({ texte: "Télécharger", f: () => downloadEntries([entry]) });
+    if (kindOf(entry.nom)) choices.push({ texte: t("Voir"), f: () => openViewer(context.list, context.index) });
+    choices.push({ texte: t("Télécharger"), f: () => downloadEntries([entry]) });
   }
   if (entry.ecriture && context.folder.ecriture) {
-    choices.push({ texte: "Renommer", f: () => renameEntry(entry, context.after) });
-    choices.push({ texte: "Déplacer vers…", f: () => moveEntries([entry], context.after) });
-    choices.push({ texte: "Mettre à la corbeille", danger: true, f: () => deleteEntries([entry], context.after) });
+    choices.push({ texte: t("Renommer"), f: () => renameEntry(entry, context.after) });
+    choices.push({ texte: t("Déplacer vers…"), f: () => moveEntries([entry], context.after) });
+    choices.push({ texte: t("Mettre à la corbeille"), danger: true, f: () => deleteEntries([entry], context.after) });
   }
   return choices;
 }
 
 // Le menu d'une sélection de plusieurs éléments.
 export function selectionChoices(entries, context) {
-  const choices = [{ texte: `Télécharger (${entries.length}, en .zip)`, f: () => downloadEntries(entries) }];
+  const choices = [{ texte: t`Télécharger (${entries.length}, en .zip)`, f: () => downloadEntries(entries) }];
   if (context.folder.ecriture && entries.every((entry) => entry.ecriture)) {
-    choices.push({ texte: "Déplacer vers…", f: () => moveEntries(entries, context.after) });
-    choices.push({ texte: "Mettre à la corbeille", danger: true, f: () => deleteEntries(entries, context.after) });
+    choices.push({ texte: t("Déplacer vers…"), f: () => moveEntries(entries, context.after) });
+    choices.push({ texte: t("Mettre à la corbeille"), danger: true, f: () => deleteEntries(entries, context.after) });
   }
   return choices;
 }

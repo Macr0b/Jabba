@@ -5,6 +5,7 @@
 import { dialogForm, dialogElement } from "../components/dialogs.js";
 import { chooseMyPassword, confirmPassword, adminLogin } from "./admin_session.js";
 import { escapeHtml } from "./dom.js";
+import { t } from "./i18n.js";
 
 // ------------------------------------------------------------ outils
 // La connexion admin est un cookie protégé, posé par le serveur et gardé 30 jours sur l'appareil.
@@ -19,10 +20,10 @@ export async function api(path, options = {}, secondAttempt = false) {
   try {
     result = await fetch(path, item);
   } catch (_) {
-    throw Object.assign(new Error("Le serveur ne répond pas."), { injoignable: "reseau" });
+    throw Object.assign(new Error(t("Le serveur ne répond pas.")), { injoignable: "reseau" });
   }
   if (result.status >= 502 && result.status <= 504)
-    throw Object.assign(new Error("L'appli Jabba ne répond pas sur le serveur."), { injoignable: "appli" });
+    throw Object.assign(new Error(t("L'appli Jabba ne répond pas sur le serveur.")), { injoignable: "appli" });
   let body = null;
   try {
     body = await result.json();
@@ -37,11 +38,11 @@ export async function api(path, options = {}, secondAttempt = false) {
         ? await confirmPassword()
         : await adminLogin();
     if (ok) return api(path, options, true);
-    throw new Error("Action annulée : mot de passe non saisi.");
+    throw new Error(t("Action annulée : mot de passe non saisi."));
   }
   if (!result.ok) {
     const data = body && (body.detail || body.erreur);
-    throw new Error((data && (data.message || (typeof data === "string" ? data : null))) || `Erreur ${result.status}`);
+    throw new Error((data && (data.message || (typeof data === "string" ? data : null))) || t`Erreur ${result.status}`);
   }
   return body;
 }
@@ -51,11 +52,11 @@ export function formBody({
   titre: title,
   texte: text = "",
   champs: fields,
-  valider: confirmLabel = "Valider",
+  valider: confirmLabel = t("Valider"),
   secondaire: secondary = null,
 }) {
   return new Promise((resolve) => {
-    dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
+    dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
       ${fields
         .map((item) =>
           item.cache

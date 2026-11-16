@@ -7,6 +7,7 @@ import { toast } from "./dialogs.js";
 import { startVideo, activePlayer } from "./player.js";
 import { api, formBody } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
+import { t } from "../core/i18n.js";
 
 // ------------------------------------------------------------ fichiers
 const EXTENSIONS = {
@@ -55,19 +56,19 @@ export async function openViewer(list, index) {
   let body;
   if (item === "image") body = `<img src="${viewUrl(entry.chemin)}" alt="${escapeHtml(entry.nom)}">`;
   else if (item === "video")
-    body = `<div class="lecteur" id="lecteur"><p class="note">Préparation de la vidéo…</p></div>`;
+    body = t`<div class="lecteur" id="lecteur"><p class="note">Préparation de la vidéo…</p></div>`;
   else if (item === "audio")
     body = `<div class="audio"><span class="ic-fichier audio grand" aria-hidden="true"></span><audio src="${viewUrl(entry.chemin)}" controls autoplay></audio></div>`;
   else if (item === "pdf") body = `<iframe src="${viewUrl(entry.chemin)}" title="${escapeHtml(entry.nom)}"></iframe>`;
-  else body = `<pre class="texte">Chargement…</pre>`;
-  viewerElement.innerHTML = `
+  else body = t`<pre class="texte">Chargement…</pre>`;
+  viewerElement.innerHTML = t`
     <div class="barre-vision">
       <button class="btn btn-petit" data-v="fermer">✕ Fermer</button>
       <strong class="nom-vision">${escapeHtml(entry.nom)}</strong>
       <span class="actions">
         ${visible.length > 1 ? `<button class="btn btn-petit" data-v="prec" aria-label="Précédent">‹</button><span class="note">${position + 1} / ${visible.length}</span><button class="btn btn-petit" data-v="suiv" aria-label="Suivant">›</button>` : ""}
-        ${item === "pdf" ? `<a class="btn btn-petit" href="${viewUrl(entry.chemin)}" target="_blank" rel="noopener">Plein écran ↗</a>` : ""}
-        ${item === "video" ? `<button class="btn btn-petit" data-v="jellyfin">Regarder dans Jellyfin</button>` : ""}
+        ${item === "pdf" ? t`<a class="btn btn-petit" href="${viewUrl(entry.chemin)}" target="_blank" rel="noopener">Plein écran ↗</a>` : ""}
+        ${item === "video" ? t`<button class="btn btn-petit" data-v="jellyfin">Regarder dans Jellyfin</button>` : ""}
         <a class="btn btn-petit" href="${downloadUrl(entry.chemin)}">Télécharger</a>
       </span>
     </div>
@@ -98,12 +99,12 @@ export async function openViewer(list, index) {
   if (media)
     media.addEventListener("error", () => {
       viewerElement.querySelector(".corps-vision").innerHTML =
-        `<div class="message-vision"><p>Ce format ne se lit pas dans le navigateur.</p><p class="note">${item === "video" ? "Regarde-le dans Jellyfin, ou télécharge-le." : "Télécharge-le pour l'écouter."}</p></div>`;
+        t`<div class="message-vision"><p>Ce format ne se lit pas dans le navigateur.</p><p class="note">${item === "video" ? t("Regarde-le dans Jellyfin, ou télécharge-le.") : t("Télécharge-le pour l'écouter.")}</p></div>`;
     });
   if (item === "texte") {
     try {
       const response = await fetch(viewUrl(entry.chemin), { headers: { Range: "bytes=0-1048575" } });
-      if (!response.ok) throw new Error(`Erreur ${response.status}`);
+      if (!response.ok) throw new Error(t`Erreur ${response.status}`);
       const value = await response.text();
       const preview = viewerElement.querySelector("pre.texte");
       if (preview) preview.textContent = value;
@@ -125,20 +126,21 @@ async function watchInJellyfin(entry) {
   let body = await response.json().catch(() => ({}));
   if (response.status === 409 && body.detail && body.detail.cle_jellyfin) {
     const answers = await formBody({
-      titre: "Relier Jabba à Jellyfin",
-      texte:
+      titre: t("Relier Jabba à Jellyfin"),
+      texte: t(
         "Une seule fois : dans Jellyfin, Tableau de bord → Clés API → +, nom « Jabba », puis copie la clé et colle-la ici.",
-      champs: [{ nom: "cle", label: "Clé API Jellyfin", indice: "32 caractères" }],
-      valider: "Relier",
+      ),
+      champs: [{ nom: "cle", label: t("Clé API Jellyfin"), indice: t("32 caractères") }],
+      valider: t("Relier"),
     });
     if (!answers || answers === "secondaire") return;
     await api("/api/jellyfin/cle", { method: "POST", json: { cle: answers.cle } });
-    toast("Jabba est relié à Jellyfin");
+    toast(t("Jabba est relié à Jellyfin"));
     response = await fetch(url, { credentials: "same-origin" });
     body = await response.json().catch(() => ({}));
   }
   if (!response.ok)
-    throw new Error((body.detail && (body.detail.message || body.detail)) || `Erreur ${response.status}`);
+    throw new Error((body.detail && (body.detail.message || body.detail)) || t`Erreur ${response.status}`);
   if (activePlayer) {
     const element = $("#lecteur video");
     if (element) element.pause();

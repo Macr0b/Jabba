@@ -6,11 +6,12 @@
 import { api } from "../core/api.js";
 import { escapeHtml } from "../core/dom.js";
 import { dialogElement, dialogForm, toast } from "./dialogs.js";
+import { t } from "../core/i18n.js";
 
 const parentOf = (path) => path.replace(/\/[^/]*$/, "") || "/";
 
 // Renvoie le chemin choisi, ou null. `excluded` : dossiers où l'on ne peut pas aller (ceux qu'on déplace).
-export function pickFolder({ title, start = "/", confirmLabel = "Déplacer ici", excluded = [] }) {
+export function pickFolder({ title, start = "/", confirmLabel = t("Déplacer ici"), excluded = [] }) {
   return new Promise((resolve) => {
     let current = start;
     let chosen = null;
@@ -30,14 +31,14 @@ export function pickFolder({ title, start = "/", confirmLabel = "Déplacer ici",
       }
       const folders = listing.elements.filter((entry) => entry.dossier && !blocked(entry.chemin));
       const writable = listing.ecriture && current !== "/" && !blocked(current);
-      dialogForm.innerHTML = `<h2>${escapeHtml(title)}</h2>
-        <p class="chemin-choisi"><span class="note">Dans :</span> <strong>${escapeHtml(current === "/" ? "Tous les emplacements" : current)}</strong></p>
+      dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2>
+        <p class="chemin-choisi"><span class="note">Dans :</span> <strong>${escapeHtml(current === "/" ? t("Tous les emplacements") : current)}</strong></p>
         <div class="liste-dossiers" role="list">
-          ${current !== "/" ? '<button class="ligne-dossier" type="button" data-aller=".." role="listitem">↑ Dossier parent</button>' : ""}
+          ${current !== "/" ? t('<button class="ligne-dossier" type="button" data-aller=".." role="listitem">↑ Dossier parent</button>') : ""}
           ${folders.map((entry) => `<button class="ligne-dossier" type="button" data-aller="${escapeHtml(entry.chemin)}" role="listitem"><span class="ic-dossier" aria-hidden="true"></span>${escapeHtml(entry.nom)}<span aria-hidden="true">›</span></button>`).join("")}
-          ${folders.length ? "" : '<p class="note">Aucun sous-dossier.</p>'}
+          ${folders.length ? "" : t('<p class="note">Aucun sous-dossier.</p>')}
         </div>
-        ${writable ? "" : `<p class="note">${current === "/" ? "Ouvre un dossier pour y déplacer." : "Ce dossier est en lecture seule."}</p>`}
+        ${writable ? "" : `<p class="note">${current === "/" ? t("Ouvre un dossier pour y déplacer.") : t("Ce dossier est en lecture seule.")}</p>`}
         <div class="actions"><button class="btn" value="non" type="submit" formnovalidate>Annuler</button>
         <button class="btn btn-p" value="oui" type="submit"${writable ? "" : " disabled"}>${escapeHtml(confirmLabel)}</button></div>`;
       dialogForm.querySelectorAll("[data-aller]").forEach((button) => {

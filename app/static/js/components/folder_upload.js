@@ -9,6 +9,7 @@
 import { api } from "../core/api.js";
 import { toast } from "./dialogs.js";
 import { uploadFiles } from "./upload_queue.js";
+import { t } from "../core/i18n.js";
 
 // Un dossier rend ses entrées par paquets de 100 au plus : on lit jusqu'au bout.
 function readAll(reader) {
@@ -68,7 +69,7 @@ export async function uploadItems(path, items, after) {
       await api("/api/fichiers/dossier", { method: "POST", json: { chemin: `${base}/${dir}` } });
     } catch (error) {
       if (!/existe|déjà/i.test(error.message)) {
-        toast(`Dossier « ${dir} » : ${error.message}`, true);
+        toast(t`Dossier « ${dir} » : ${error.message}`, true);
         return;
       }
     }

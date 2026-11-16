@@ -10,9 +10,10 @@ import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml, followTask } from "../core/tasks.js";
 import { COMING_SOON, toolIcon } from "./home.js";
+import { t } from "../core/i18n.js";
 
 pages.outils = async () => {
-  content.innerHTML = `<div class="entete"><div><h1>Établi</h1></div></div>${loadingHtml()}`;
+  content.innerHTML = t`<div class="entete"><div><h1>Établi</h1></div></div>${loadingHtml()}`;
   const [tools, versions] = await Promise.all([
     api("/api/outils"),
     api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
@@ -34,51 +35,51 @@ pages.outils = async () => {
           ${
             item.systeme || !item.modifiable
               ? `<span class="pastille ${badge[item.etat] || "p-gris"}">${escapeHtml(item.etat[0].toUpperCase() + item.etat.slice(1))}</span>`
-              : `<button class="interrupteur" role="switch" aria-checked="${active}" aria-label="${active ? "Désactiver" : "Activer"} ${escapeHtml(item.nom)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
+              : `<button class="interrupteur" role="switch" aria-checked="${active}" aria-label="${active ? t("Désactiver") : t("Activer")} ${escapeHtml(item.nom)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
           }
         </div>
-        ${updateAvailable(item.id) ? `<div class="bandeau"><span>Une version plus récente est disponible.</span></div>` : ""}
-        ${item.etat === "en panne" || item.etat === "partiel" ? `<div class="note" style="color:var(--rouge)">${item.etat === "en panne" ? "En panne : essaie Redémarrer." : "Une partie de l'outil ne tourne pas : essaie Redémarrer."}</div>` : ""}
+        ${updateAvailable(item.id) ? t`<div class="bandeau"><span>Une version plus récente est disponible.</span></div>` : ""}
+        ${item.etat === "en panne" || item.etat === "partiel" ? `<div class="note" style="color:var(--rouge)">${item.etat === "en panne" ? t("En panne : essaie Redémarrer.") : t("Une partie de l'outil ne tourne pas : essaie Redémarrer.")}</div>` : ""}
         ${
           active && !item.systeme
             ? `<div class="actions">
           ${
             item.lien
               ? item.dans_appli
-                ? `<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(item.id)}">Ouvrir</a>`
+                ? t`<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(item.id)}">Ouvrir</a>`
                 : item.id === "nextcloud"
-                  ? `<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Gérer<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Nextcloud complet</a>`
-                  : `<a class="btn btn-p" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Ouvrir</a>`
+                  ? t`<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Gérer<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Nextcloud complet</a>`
+                  : t`<a class="btn btn-p" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Ouvrir</a>`
               : ""
           }
           ${
             item.modifiable
-              ? `<button class="btn" data-action="redemarrer" data-id="${escapeHtml(item.id)}">Redémarrer</button>
+              ? t`<button class="btn" data-action="redemarrer" data-id="${escapeHtml(item.id)}">Redémarrer</button>
           <button class="btn${updateAvailable(item.id) ? " btn-p" : ""}" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button>`
               : ""
           }
         </div>`
             : ""
         }
-        ${item.systeme && item.modifiable ? `<div class="actions"><button class="btn" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button></div>` : ""}
+        ${item.systeme && item.modifiable ? t`<div class="actions"><button class="btn" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button></div>` : ""}
       </article>`;
   };
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="entete"><div><h1>Établi</h1><p class="sous-titre">Active les outils dont tu as besoin. Un outil désactivé ne consomme rien et garde ses données.</p></div></div>
     <div class="grille g2">${workbenchTools.map(card).join("")}</div>
     <h2 class="titre-section">Bientôt dans l'établi</h2>
-    <div class="grille g2">${COMING_SOON.map((item) => `<article class="carte pad outil eteint"><div class="haut"><div class="titre-outil">${toolIcon({ nom: item.nom })}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div><span class="pastille p-gris">Bientôt</span></div></article>`).join("")}</div>
+    <div class="grille g2">${COMING_SOON.map((item) => t`<article class="carte pad outil eteint"><div class="haut"><div class="titre-outil">${toolIcon({ nom: item.nom })}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div><span class="pastille p-gris">Bientôt</span></div></article>`).join("")}</div>
     <h2 class="titre-section">Système</h2>
     <div class="grille g2">${system.map(card).join("")}</div>
     <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
-      Jabba regarde chaque jour si une version plus récente existe${versions.lu ? ` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})` : ""} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>`;
+      Jabba regarde chaque jour si une version plus récente existe${versions.lu ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})` : ""} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>`;
   // Consommation de chaque outil : arrive un peu après (docker stats prend 1 à 2 secondes).
   api("/api/outils-conso")
     .then((usage) => {
       content.querySelectorAll("[data-conso]").forEach((element) => {
         const measured = usage[element.dataset.conso];
         if (!measured) return;
-        element.textContent = `Mémoire ${formatBytes(measured.memoire)} · processeur ${String(measured.processeur).replace(".", ",")} %`;
+        element.textContent = t`Mémoire ${formatBytes(measured.memoire)} · processeur ${String(measured.processeur).replace(".", ",")} %`;
       });
     })
     .catch(() => {});
@@ -113,10 +114,11 @@ pages.outils = async () => {
       if (
         !enable &&
         !(await confirmAction({
-          titre: `Désactiver ${item.nom} ?`,
-          texte:
+          titre: t`Désactiver ${item.nom} ?`,
+          texte: t(
             "Il ne sera plus accessible, sur aucun appareil, jusqu'à ce que tu le réactives. Ses réglages et ses données sont conservés.",
-          valider: "Désactiver",
+          ),
+          valider: t("Désactiver"),
           danger: true,
         }))
       )
@@ -139,11 +141,11 @@ pages.outils = async () => {
     element.addEventListener("click", async () => {
       const item = tools.find((item) => item.id === element.dataset.id);
       const texts = {
-        redemarrer: ["Redémarrer " + item.nom + " ?", "Il sera indisponible quelques secondes.", "Redémarrer"],
+        redemarrer: ["Redémarrer " + item.nom + " ?", t("Il sera indisponible quelques secondes."), t("Redémarrer")],
         "mettre-a-jour": [
           "Mettre à jour " + item.nom + " ?",
-          "Il sera indisponible pendant la mise à jour (1 à 5 minutes).",
-          "Mettre à jour",
+          t("Il sera indisponible pendant la mise à jour (1 à 5 minutes)."),
+          t("Mettre à jour"),
         ],
       }[element.dataset.action];
       if (!(await confirmAction({ titre: texts[0], texte: texts[1], valider: texts[2] }))) return;
@@ -167,9 +169,9 @@ pages.ouvrir = async (params) => {
     api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
   ]);
   const item = tools.find((item) => item.id === params.get("outil"));
-  if (!item || !item.lien) throw new Error("Outil introuvable ou désactivé.");
+  if (!item || !item.lien) throw new Error(t("Outil introuvable ou désactivé."));
   document.body.classList.add("plein-ecran");
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="barre-outil">
       <a class="btn btn-petit" href="#/outils">← Établi</a>
       <span class="titre-outil">${toolIcon(item, 24)}<strong>${escapeHtml(item.nom)}</strong></span>

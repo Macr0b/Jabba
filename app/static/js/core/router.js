@@ -7,12 +7,13 @@ import { pages } from "./pages.js";
 import { state } from "./state.js";
 import { errorHtml } from "./tasks.js";
 import { lastFailure, showUnreachable } from "../pages/help.js";
+import { t } from "./i18n.js";
 
 // ------------------------------------------------------------ navigation
 state.me = null;
 export function showError(entry) {
   if (entry && entry.injoignable) return showUnreachable(entry.injoignable);
-  content.innerHTML = `<div class="entete"><div><h1>Oups</h1></div></div>${errorHtml(entry)}`;
+  content.innerHTML = t`<div class="entete"><div><h1>Oups</h1></div></div>${errorHtml(entry)}`;
 }
 
 // Chaque navigation a un numéro. Un écran lent qui finit après qu'on soit passé à un autre
@@ -45,7 +46,8 @@ export async function router() {
   });
   document.title =
     "Jabba · " +
-    ({ outils: "Établi", ouvrir: "Outil", nuage: "Comptes Nextcloud" }[page] || page[0].toUpperCase() + page.slice(1));
+    ({ outils: t("Établi"), ouvrir: t("Outil"), nuage: t("Comptes Nextcloud") }[page] ||
+      page[0].toUpperCase() + page.slice(1));
   try {
     await pages[page](new URLSearchParams(query || ""));
   } catch (error) {

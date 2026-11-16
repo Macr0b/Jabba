@@ -24,6 +24,7 @@ import { pages } from "./core/pages.js";
 import { showError, router } from "./core/router.js";
 import { state } from "./core/state.js";
 import { rememberedServer } from "./pages/help.js";
+import { t } from "./core/i18n.js";
 
 window.addEventListener("hashchange", router);
 
@@ -40,8 +41,8 @@ window.addEventListener("hashchange", router);
     document.body.classList.toggle("mode-invite", state.me.mode === "invite");
     $("#qui").innerHTML =
       state.me.mode === "invite"
-        ? `Mode invité · v${escapeHtml(state.me.version)}`
-        : `${escapeHtml(state.me.admin.identifiant)} · ${state.me.admin.rang === "super" ? "super admin" : "admin"}<br>v${escapeHtml(state.me.version)} · <a href="#" id="sortir">Se déconnecter</a>`;
+        ? t`Mode invité · v${escapeHtml(state.me.version)}`
+        : t`${escapeHtml(state.me.admin.identifiant)} · ${state.me.admin.rang === "super" ? t("super admin") : "admin"}<br>v${escapeHtml(state.me.version)} · <a href="#" id="sortir">Se déconnecter</a>`;
     const logoutLink = $("#sortir");
     if (logoutLink)
       logoutLink.onclick = (event) => {

@@ -8,6 +8,7 @@
 // Le panneau reste en bas à droite tant qu'un envoi est en cours ou a échoué.
 import { escapeHtml } from "../core/dom.js";
 import { formatBytes } from "../core/format.js";
+import { t } from "../core/i18n.js";
 
 const PARALLEL_UPLOADS = 2;
 const queue = []; // {id, file, path, state: attente|envoi|fini|erreur, sent, message, done}
@@ -19,7 +20,7 @@ function panel() {
   if (panelElement && document.body.contains(panelElement)) return panelElement;
   panelElement = document.createElement("section");
   panelElement.className = "envois";
-  panelElement.setAttribute("aria-label", "Envois en cours");
+  panelElement.setAttribute("aria-label", t("Envois en cours"));
   panelElement.setAttribute("aria-live", "polite");
   document.body.appendChild(panelElement);
   return panelElement;
@@ -31,8 +32,8 @@ function renderItem(item) {
     item.state === "fini"
       ? '<span class="envoi-etat ok">✓</span>'
       : item.state === "erreur"
-        ? `<button class="btn btn-petit" type="button" data-reessayer="${item.id}">Réessayer</button>`
-        : `<span class="envoi-etat">${item.state === "attente" ? "En attente" : percent + " %"}</span>`;
+        ? t`<button class="btn btn-petit" type="button" data-reessayer="${item.id}">Réessayer</button>`
+        : `<span class="envoi-etat">${item.state === "attente" ? t("En attente") : percent + " %"}</span>`;
   return `<li class="envoi" data-etat="${item.state}">
       <span class="envoi-nom">${escapeHtml(item.file.name)}<span class="note"> · ${formatBytes(item.file.size)}</span>
         ${item.message ? `<span class="envoi-erreur">${escapeHtml(item.message)}</span>` : ""}</span>
@@ -51,8 +52,8 @@ function render() {
   const finished = visible.filter((item) => item.state === "fini").length;
   const failed = visible.filter((item) => item.state === "erreur").length;
   const element = panel();
-  element.innerHTML = `<div class="envois-titre"><strong>${finished} / ${visible.length} envoyé${finished > 1 ? "s" : ""}</strong>
-      ${failed ? `<span class="note">${failed} en erreur</span>` : ""}
+  element.innerHTML = t`<div class="envois-titre"><strong>${finished} / ${visible.length} envoyé${finished > 1 ? "s" : ""}</strong>
+      ${failed ? t`<span class="note">${failed} en erreur</span>` : ""}
       <button class="btn btn-petit" type="button" id="fermer-envois"${running || queue.some((item) => item.state === "attente") ? " disabled" : ""}>Fermer</button></div>
     <ul>${visible.map(renderItem).join("")}</ul>`;
   element.querySelector("#fermer-envois").onclick = () => {
@@ -92,13 +93,13 @@ function sendOne(item) {
       else {
         item.state = "erreur";
         item.message =
-          request.status === 401 ? "Reconnecte-toi, puis réessaie." : message || `Erreur ${request.status}`;
+          request.status === 401 ? t("Reconnecte-toi, puis réessaie.") : message || t`Erreur ${request.status}`;
       }
       resolve();
     };
     request.onerror = () => {
       item.state = "erreur";
-      item.message = "Le serveur ne répond pas.";
+      item.message = t("Le serveur ne répond pas.");
       resolve();
     };
     request.send(formData);

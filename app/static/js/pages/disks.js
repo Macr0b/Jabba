@@ -11,12 +11,13 @@ import { formatBytes, formatPercent } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml } from "../core/tasks.js";
+import { t } from "../core/i18n.js";
 
 let disksRefresh = 0;
 pages.disques = async () => {
   const tick = ++disksRefresh;
   if (!content.querySelector(".disque"))
-    content.innerHTML = `<div class="entete"><div><h1>Disques</h1></div></div>${loadingHtml()}`;
+    content.innerHTML = t`<div class="entete"><div><h1>Disques</h1></div></div>${loadingHtml()}`;
   const disks = await api("/api/disques");
   // Un disque qu'on branche apparaît tout seul : on regarde toutes les 10 secondes.
   const fingerprint = JSON.stringify(disks);
@@ -30,7 +31,7 @@ pages.disques = async () => {
     }
     setTimeout(follow, 10000);
   }, 10000);
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="entete"><div><h1>Disques</h1><p class="sous-titre">Ce qui est branché sur le serveur</p></div>
       <button class="btn" id="rafraichir">Actualiser</button></div>
     <section class="carte pad" id="sante-disques"><h2>Santé des disques</h2><div class="squelette" style="margin-top:10px"></div></section>
@@ -38,7 +39,7 @@ pages.disques = async () => {
       .map(
         (item) => `
       <article class="carte pad disque">
-        <div class="entete"><div><h2>${escapeHtml(item.modele || item.nom)}</h2><div class="note">${formatBytes(item.taille)} · ${item.externe ? "Externe (USB)" : "Interne"} · ${escapeHtml(item.nom)}</div></div></div>
+        <div class="entete"><div><h2>${escapeHtml(item.modele || item.nom)}</h2><div class="note">${formatBytes(item.taille)} · ${item.externe ? t("Externe (USB)") : t("Interne")} · ${escapeHtml(item.nom)}</div></div></div>
         <div class="parts">${
           item.partitions.length
             ? item.partitions
@@ -50,20 +51,20 @@ pages.disques = async () => {
             ${item.usage ? `<div class="jauge"><span style="width:${formatPercent(item.usage)}%"></span></div>` : ""}
             ${
               item.disque_jabba
-                ? `<div class="reglages-disque">
-              <label class="ligne-reglage"><span><strong>Écriture autorisée</strong><br><span class="note">${item.disque_jabba.ecriture ? "On peut ajouter et modifier des fichiers. Éjecte avant de débrancher." : "Lecture seule : tu peux débrancher à tout moment."}</span></span>
+                ? t`<div class="reglages-disque">
+              <label class="ligne-reglage"><span><strong>Écriture autorisée</strong><br><span class="note">${item.disque_jabba.ecriture ? t("On peut ajouter et modifier des fichiers. Éjecte avant de débrancher.") : t("Lecture seule : tu peux débrancher à tout moment.")}</span></span>
                 <button class="interrupteur" role="switch" aria-checked="${item.disque_jabba.ecriture}" data-mode="${escapeHtml(item.disque_jabba.nom)}"><span></span></button></label>
               <div class="actions"><button class="btn" data-ejecter="${escapeHtml(item.disque_jabba.nom)}">Éjecter</button>
-              ${item.disque_jabba.auto ? `<button class="btn btn-danger" data-oublier="${escapeHtml(item.disque_jabba.nom)}">Oublier ce disque</button>` : ""}</div>
+              ${item.disque_jabba.auto ? t`<button class="btn btn-danger" data-oublier="${escapeHtml(item.disque_jabba.nom)}">Oublier ce disque</button>` : ""}</div>
             </div>`
                 : ""
             }
-            ${item.oublie ? `<div class="reglages-disque"><span class="note">Disque oublié : il n'est plus ajouté tout seul.</span><button class="btn" data-reprendre="${escapeHtml(item.oublie)}">Utiliser ce disque</button></div>` : ""}
-            ${item.illisible && !item.montage ? `<div class="reglages-disque"><span class="note">Format ${escapeHtml(item.illisible)} : illisible par le serveur. Pour l'utiliser ici, reformate-le en exFAT depuis le Mac (Utilitaire de disque).</span></div>` : ""}
+            ${item.oublie ? t`<div class="reglages-disque"><span class="note">Disque oublié : il n'est plus ajouté tout seul.</span><button class="btn" data-reprendre="${escapeHtml(item.oublie)}">Utiliser ce disque</button></div>` : ""}
+            ${item.illisible && !item.montage ? t`<div class="reglages-disque"><span class="note">Format ${escapeHtml(item.illisible)} : illisible par le serveur. Pour l'utiliser ici, reformate-le en exFAT depuis le Mac (Utilitaire de disque).</span></div>` : ""}
           </div>`,
                 )
                 .join("")
-            : `<div class="note part">Aucune partition lisible</div>`
+            : t`<div class="note part">Aucune partition lisible</div>`
         }
         </div>
       </article>`,
@@ -74,7 +75,7 @@ pages.disques = async () => {
   $("#rafraichir").onclick = () => pages.disques().catch(showError);
   diskHealthCard().catch((error) => {
     const element = $("#sante-disques");
-    if (element) element.innerHTML = `<h2>Santé des disques</h2><p class="note">${escapeHtml(error.message)}</p>`;
+    if (element) element.innerHTML = t`<h2>Santé des disques</h2><p class="note">${escapeHtml(error.message)}</p>`;
   });
   content.querySelectorAll("[data-mode]").forEach((element) =>
     element.addEventListener("click", async () => {
@@ -83,17 +84,18 @@ pages.disques = async () => {
       if (
         writable &&
         !(await confirmAction({
-          titre: `Autoriser l'écriture sur ${name} ?`,
-          texte:
+          titre: t`Autoriser l'écriture sur ${name} ?`,
+          texte: t(
             "Tu pourras ajouter et modifier des fichiers depuis l'appli, Nextcloud et le Finder. Avant de débrancher le disque, il faudra cliquer sur « Éjecter ». Jellyfin, lui, reste en lecture seule.",
-          valider: "Autoriser",
+          ),
+          valider: t("Autoriser"),
         }))
       )
         return;
       element.disabled = true;
       try {
         await api(`/api/disques/${encodeURIComponent(name)}/mode`, { method: "POST", json: { ecriture: writable } });
-        toast(writable ? `${name} : écriture autorisée` : `${name} : lecture seule`);
+        toast(writable ? t`${name} : écriture autorisée` : t`${name} : lecture seule`);
       } catch (error) {
         toast(error.message, true);
       }
@@ -105,17 +107,18 @@ pages.disques = async () => {
       const name = element.dataset.oublier;
       if (
         !(await confirmAction({
-          titre: `Oublier ${name} ?`,
-          texte:
+          titre: t`Oublier ${name} ?`,
+          texte: t(
             "Il disparaît de l'appli, de Nextcloud et de Jellyfin, et ne sera plus ajouté tout seul quand tu le branches. Son contenu n'est pas touché.",
-          valider: "Oublier",
+          ),
+          valider: t("Oublier"),
           danger: true,
         }))
       )
         return;
       try {
         await api(`/api/disques/${encodeURIComponent(name)}/oublier`, { method: "POST" });
-        toast(`${name} oublié`);
+        toast(t`${name} oublié`);
       } catch (error) {
         toast(error.message, true);
       }
@@ -126,7 +129,7 @@ pages.disques = async () => {
     element.addEventListener("click", async () => {
       try {
         await api("/api/disques/reprendre", { method: "POST", json: { uuid: element.dataset.reprendre } });
-        toast("Le disque sera ajouté dans quelques secondes");
+        toast(t("Le disque sera ajouté dans quelques secondes"));
       } catch (error) {
         toast(error.message, true);
       }
@@ -137,12 +140,12 @@ pages.disques = async () => {
     element.addEventListener("click", async () => {
       const name = element.dataset.ejecter;
       element.disabled = true;
-      element.textContent = "Éjection…";
+      element.textContent = t("Éjection…");
       try {
         await api(`/api/disques/${encodeURIComponent(name)}/ejecter`, { method: "POST" });
         await confirmAction({
-          titre: `Tu peux débrancher ${name}`,
-          texte: "Toutes les copies sont terminées. Rebranché, il reviendra tout seul.",
+          titre: t`Tu peux débrancher ${name}`,
+          texte: t("Toutes les copies sont terminées. Rebranché, il reviendra tout seul."),
           valider: "OK",
         });
       } catch (error) {

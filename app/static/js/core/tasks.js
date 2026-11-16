@@ -5,6 +5,7 @@
 import { toast } from "../components/dialogs.js";
 import { api } from "./api.js";
 import { escapeHtml } from "./dom.js";
+import { t } from "./i18n.js";
 
 export async function followTask(item) {
   toast(`${item.titre}…`);
@@ -12,7 +13,7 @@ export async function followTask(item) {
     await new Promise((result) => setTimeout(result, 2000));
     const data = await api(`/api/taches/${item.id}`);
     if (data.etat !== "en cours") {
-      if (data.etat === "terminé") toast(`${data.titre} : terminé`);
+      if (data.etat === "terminé") toast(t`${data.titre} : terminé`);
       else toast(`${data.titre} : erreur. ${data.journal.slice(-200)}`, true);
       return data;
     }

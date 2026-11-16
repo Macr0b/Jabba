@@ -7,6 +7,7 @@ import { toast } from "./dialogs.js";
 import { viewUrl, viewerElement } from "./viewer.js";
 import { api } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
+import { t } from "../core/i18n.js";
 
 // ------------------------------------------------------------ lecteur vidéo
 // Si le navigateur sait lire le fichier, on le lit tel quel. Sinon le serveur le
@@ -71,10 +72,10 @@ async function openPlayer(entry, info, directPlay) {
   const defaultAudio = (info.audios.find((track) => track.defaut) || info.audios[0] || {}).index;
   const playback = { sid: null, debut: 0, audio: defaultAudio, sous: null, hls: null, glisse: false, fini: false };
   const texts = info.soustitres.filter((value) => value.texte);
-  area.innerHTML = `
+  area.innerHTML = t`
     <video playsinline webkit-playsinline disablepictureinpicture></video>
     <div class="saut-indic gauche" id="saut-gauche" hidden></div><div class="saut-indic droite" id="saut-droite" hidden></div>
-    <div class="etat-lecteur" id="etat-lecteur">${directPlay ? "Chargement…" : "Le serveur prépare la vidéo…"}</div>
+    <div class="etat-lecteur" id="etat-lecteur">${directPlay ? t("Chargement…") : t("Le serveur prépare la vidéo…")}</div>
     <div class="commandes">
       <input type="range" class="barre" id="lect-barre" min="0" max="${Math.floor(info.duree)}" value="0" step="1" aria-label="Position">
       <div class="ligne-commandes">
@@ -91,11 +92,11 @@ async function openPlayer(entry, info, directPlay) {
         </div>
       </div>
       <div class="menu-lect" id="lect-menu" hidden>
-        ${info.audios.length > 1 ? `<label>Son<select id="lect-audio">${info.audios.map((track) => `<option value="${track.index}"${track.index === defaultAudio ? " selected" : ""}>${escapeHtml(track.nom)}</option>`).join("")}</select></label>` : ""}
-        ${texts.length ? `<label>Sous-titres<select id="lect-sous"><option value="">Aucun</option>${texts.map((value) => `<option value="${value.index}">${escapeHtml(value.nom)}</option>`).join("")}</select></label>` : ""}
+        ${info.audios.length > 1 ? t`<label>Son<select id="lect-audio">${info.audios.map((track) => `<option value="${track.index}"${track.index === defaultAudio ? " selected" : ""}>${escapeHtml(track.nom)}</option>`).join("")}</select></label>` : ""}
+        ${texts.length ? t`<label>Sous-titres<select id="lect-sous"><option value="">Aucun</option>${texts.map((value) => `<option value="${value.index}">${escapeHtml(value.nom)}</option>`).join("")}</select></label>` : ""}
       </div>
     </div>
-    <p class="note lect-info">${directPlay ? "Lu directement" : `Lu par le serveur (format ${escapeHtml((info.video.codec || "?").toUpperCase())})`}${info.soustitres.length > texts.length ? " · certains sous-titres sont des images : non affichés" : ""} · touche deux fois à gauche ou à droite de l'image : 10 s</p>`;
+    <p class="note lect-info">${directPlay ? t("Lu directement") : t`Lu par le serveur (format ${escapeHtml((info.video.codec || "?").toUpperCase())})`}${info.soustitres.length > texts.length ? t(" · certains sous-titres sont des images : non affichés") : ""} · touche deux fois à gauche ou à droite de l'image : 10 s</p>`;
   const video = area.querySelector("video"),
     bar = $("#lect-barre"),
     timeLabel = $("#lect-temps"),
@@ -134,7 +135,7 @@ async function openPlayer(entry, info, directPlay) {
               directPlay = false;
               playback.sid = null;
               from(seconds);
-            } else show("Ce format ne se lit pas dans le navigateur.");
+            } else show(t("Ce format ne se lit pas dans le navigateur."));
           },
           { once: true },
         );
@@ -150,11 +151,11 @@ async function openPlayer(entry, info, directPlay) {
           },
           { once: true },
         );
-        video.play().catch(() => show("Clique sur ▶ pour lancer la lecture."));
+        video.play().catch(() => show(t("Clique sur ▶ pour lancer la lecture.")));
       } else video.currentTime = seconds;
       return;
     }
-    show("Le serveur prépare la vidéo…");
+    show(t("Le serveur prépare la vidéo…"));
     if (playback.hls) {
       playback.hls.destroy();
       playback.hls = null;
@@ -222,23 +223,23 @@ async function openPlayer(entry, info, directPlay) {
       });
       playback.hls.on(window.Hls.Events.MANIFEST_PARSED, () => playback.hls.startLoad(0)); // toujours depuis le premier morceau
       playback.hls.on(window.Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) show("Lecture interrompue. Clique sur ▶ pour reprendre.");
+        if (data.fatal) show(t("Lecture interrompue. Clique sur ▶ pour reprendre."));
       });
       playback.hls.loadSource(session.url);
       playback.hls.attachMedia(video);
     }
-    video.play().catch(() => show("Clique sur ▶ pour lancer la lecture."));
+    video.play().catch(() => show(t("Clique sur ▶ pour lancer la lecture.")));
   };
 
   video.addEventListener("playing", () => show(""));
-  video.addEventListener("waiting", () => show("Chargement…"));
+  video.addEventListener("waiting", () => show(t("Chargement…")));
   video.addEventListener("play", () => {
     playButton.innerHTML = PLAYER_ICONS.pause;
-    playButton.setAttribute("aria-label", "Pause");
+    playButton.setAttribute("aria-label", t("Pause"));
   });
   video.addEventListener("pause", () => {
     playButton.innerHTML = PLAYER_ICONS.jouer;
-    playButton.setAttribute("aria-label", "Lecture");
+    playButton.setAttribute("aria-label", t("Lecture"));
   });
   video.addEventListener("timeupdate", () => {
     const seconds = playback.debut + video.currentTime;
@@ -385,7 +386,7 @@ async function openPlayer(entry, info, directPlay) {
     volume = $("#lect-volume");
   const updateSound = () => {
     soundButton.innerHTML = video.muted || video.volume === 0 ? PLAYER_ICONS.muet : PLAYER_ICONS.son;
-    soundButton.setAttribute("aria-label", video.muted ? "Remettre le son" : "Couper le son");
+    soundButton.setAttribute("aria-label", video.muted ? t("Remettre le son") : t("Couper le son"));
     volume.value = String(video.muted ? 0 : video.volume);
   };
   try {
@@ -429,7 +430,7 @@ async function openPlayer(entry, info, directPlay) {
   const updateFullscreen = () => {
     const fullscreen = isFullscreen();
     $("#lect-plein").innerHTML = fullscreen ? PLAYER_ICONS.sortir : PLAYER_ICONS.plein;
-    $("#lect-plein").setAttribute("aria-label", fullscreen ? "Quitter le plein écran" : "Plein écran");
+    $("#lect-plein").setAttribute("aria-label", fullscreen ? t("Quitter le plein écran") : t("Plein écran"));
   };
   document.addEventListener("fullscreenchange", updateFullscreen);
   document.addEventListener("webkitfullscreenchange", updateFullscreen);
@@ -454,7 +455,7 @@ async function openPlayer(entry, info, directPlay) {
           if (video.paused) video.play().catch(() => {});
         }
       } catch (_) {
-        toast("Image dans l'image impossible pour cette vidéo.", true);
+        toast(t("Image dans l'image impossible pour cette vidéo."), true);
       }
     };
     const leavePip = () => {

@@ -8,6 +8,7 @@ import { secondLoginStep } from "../components/second_factor.js";
 import { api, formBody } from "./api.js";
 import { $, escapeHtml } from "./dom.js";
 import { state } from "./state.js";
+import { t } from "./i18n.js";
 
 state.serverAccount = "serveur"; // nom du serveur = identifiant du super admin principal
 state.admin = null; // {identifiant, rang, compte_serveur}
@@ -40,8 +41,8 @@ function rememberLogin(result) {
 // Redemander le mot de passe avant une action sensible (déjà connecté).
 export async function confirmPassword() {
   const answers = await formBody({
-    titre: "Confirme ton mot de passe",
-    texte: "Cette action est sensible : ton mot de passe est redemandé (valable ensuite 10 minutes).",
+    titre: t("Confirme ton mot de passe"),
+    texte: t("Cette action est sensible : ton mot de passe est redemandé (valable ensuite 10 minutes)."),
     champs: [
       {
         nom: "identifiant",
@@ -49,9 +50,9 @@ export async function confirmPassword() {
         valeur: (state.admin && state.admin.identifiant) || readSavedIdentifier(),
         autocomplete: "username",
       },
-      { nom: "mdp", type: "password", label: "Mot de passe", autocomplete: "current-password" },
+      { nom: "mdp", type: "password", label: t("Mot de passe"), autocomplete: "current-password" },
     ],
-    valider: "Confirmer",
+    valider: t("Confirmer"),
   });
   if (!answers || answers === "secondaire") return false;
   try {
@@ -77,14 +78,14 @@ export async function adminLogin() {
   let identifier = readSavedIdentifier();
   for (let attempt = 0; attempt < 3; attempt++) {
     const answers = await formBody({
-      titre: "Connexion admin",
-      texte: `Identifiant « ${state.serverAccount} » = compte du serveur, avec son mot de passe. La connexion reste mémorisée 30 jours sur cet appareil.`,
+      titre: t("Connexion admin"),
+      texte: t`Identifiant « ${state.serverAccount} » = compte du serveur, avec son mot de passe. La connexion reste mémorisée 30 jours sur cet appareil.`,
       champs: [
-        { nom: "identifiant", label: "Identifiant", valeur: identifier, autocomplete: "username" },
-        { nom: "mdp", type: "password", label: "Mot de passe", autocomplete: "current-password" },
+        { nom: "identifiant", label: t("Identifiant"), valeur: identifier, autocomplete: "username" },
+        { nom: "mdp", type: "password", label: t("Mot de passe"), autocomplete: "current-password" },
       ],
-      valider: "Continuer",
-      secondaire: "Mot de passe oublié ?",
+      valider: t("Continuer"),
+      secondaire: t("Mot de passe oublié ?"),
     });
     if (answers === null) return false;
     if (answers === "secondaire") {
@@ -120,9 +121,11 @@ export async function adminLogin() {
 // Un admin (compte de l'appli) choisit son mot de passe : obligatoire après un mot de passe provisoire.
 export async function chooseMyPassword(force = false) {
   const answers = await formBody({
-    titre: force ? "Choisis ton mot de passe" : "Changer mon mot de passe",
+    titre: force ? t("Choisis ton mot de passe") : t("Changer mon mot de passe"),
     texte: force
-      ? "Ton mot de passe actuel est provisoire. Choisis le tien (15 caractères minimum, une phrase de quelques mots convient) : l'app Mots de passe proposera de l'enregistrer."
+      ? t(
+          "Ton mot de passe actuel est provisoire. Choisis le tien (15 caractères minimum, une phrase de quelques mots convient) : l'app Mots de passe proposera de l'enregistrer.",
+        )
       : "",
     champs: [
       {
@@ -133,20 +136,20 @@ export async function chooseMyPassword(force = false) {
       },
       ...(force
         ? []
-        : [{ nom: "ancien", type: "password", label: "Mot de passe actuel", autocomplete: "current-password" }]),
-      { nom: "nouveau", type: "password", label: "Nouveau mot de passe", autocomplete: "new-password" },
+        : [{ nom: "ancien", type: "password", label: t("Mot de passe actuel"), autocomplete: "current-password" }]),
+      { nom: "nouveau", type: "password", label: t("Nouveau mot de passe"), autocomplete: "new-password" },
       {
         nom: "confirmation",
         type: "password",
-        label: "Nouveau mot de passe, encore une fois",
+        label: t("Nouveau mot de passe, encore une fois"),
         autocomplete: "new-password",
       },
     ],
-    valider: "Enregistrer",
+    valider: t("Enregistrer"),
   });
   if (!answers || answers === "secondaire") return false;
   if (answers.nouveau !== answers.confirmation) {
-    toast("Les deux mots de passe ne sont pas identiques.", true);
+    toast(t("Les deux mots de passe ne sont pas identiques."), true);
     return chooseMyPassword(force);
   }
   try {
@@ -156,7 +159,7 @@ export async function chooseMyPassword(force = false) {
       true,
     );
     rememberLogin(data);
-    toast("Mot de passe enregistré");
+    toast(t("Mot de passe enregistré"));
     return true;
   } catch (error) {
     toast(error.message, true);
@@ -166,19 +169,20 @@ export async function chooseMyPassword(force = false) {
 
 async function forgottenPassword(identifier) {
   const answers = await formBody({
-    titre: "Mot de passe oublié",
-    texte: `Pour le compte du serveur (« ${state.serverAccount} »), tu utiliseras ton code de secours. Pour un autre compte, la demande part chez le super admin.`,
-    champs: [{ nom: "identifiant", label: "Ton identifiant", valeur: identifier, autocomplete: "username" }],
-    valider: "Continuer",
+    titre: t("Mot de passe oublié"),
+    texte: t`Pour le compte du serveur (« ${state.serverAccount} »), tu utiliseras ton code de secours. Pour un autre compte, la demande part chez le super admin.`,
+    champs: [{ nom: "identifiant", label: t("Ton identifiant"), valeur: identifier, autocomplete: "username" }],
+    valider: t("Continuer"),
   });
   if (!answers || answers === "secondaire") return;
   try {
     const data = await api("/api/comptes-oubli", { method: "POST", json: { identifiant: answers.identifiant } }, true);
     if (data.serveur) return recoverPassword();
     await confirmAction({
-      titre: "Demande envoyée",
-      texte:
+      titre: t("Demande envoyée"),
+      texte: t(
         "Si cet identifiant existe et qu'il est relié à ton compte Tailscale, le super admin est prévenu. Dès qu'il accepte, tu reçois une alerte et ton mot de passe provisoire s'affiche ici, sur cet appareil. Sinon, rien n'est envoyé : demande directement à un super admin de te recréer un compte.",
+      ),
       valider: "OK",
     });
   } catch (error) {
@@ -195,7 +199,7 @@ export async function showPasswordReset() {
     return;
   }
   await new Promise((resolve) => {
-    dialogForm.innerHTML = `<h2>Ton mot de passe provisoire</h2>
+    dialogForm.innerHTML = t`<h2>Ton mot de passe provisoire</h2>
       <p>Identifiant : <strong>${escapeHtml(result.identifiant)}</strong>. Ce mot de passe ne sera <strong>plus affiché</strong> : il sert une fois, dans les 24 h, puis tu choisis le tien.</p>
       <p class="code-secours">${escapeHtml(result.mot_de_passe)}</p>
       <div class="actions"><button class="btn" type="button" id="copier-code">Copier</button><button class="btn btn-p" value="ok" type="submit">Me connecter</button></div>`;
@@ -205,9 +209,9 @@ export async function showPasswordReset() {
     $("#copier-code").onclick = async () => {
       try {
         await navigator.clipboard.writeText(result.mot_de_passe);
-        toast("Copié");
+        toast(t("Copié"));
       } catch (_) {
-        toast("Copie impossible : sélectionne-le à la main.", true);
+        toast(t("Copie impossible : sélectionne-le à la main."), true);
       }
     };
   });
@@ -217,7 +221,7 @@ export async function showPasswordReset() {
 
 export async function showRecoveryCode(code) {
   await new Promise((resolve) => {
-    dialogForm.innerHTML = `<h2>Ton code de secours</h2>
+    dialogForm.innerHTML = t`<h2>Ton code de secours</h2>
       <p>Il sert si tu oublies le mot de passe du serveur. Il ne sera <strong>plus jamais affiché</strong> : enregistre-le maintenant dans l'app Mots de passe (dans les notes de l'entrée « ${escapeHtml(state.serverAccount)} ») et note-le sur papier.</p>
       <p class="code-secours">${escapeHtml(code)}</p>
       <div class="actions"><button class="btn" type="button" id="copier-code">Copier</button><button class="btn btn-p" value="ok" type="submit">C'est noté</button></div>`;
@@ -226,9 +230,9 @@ export async function showRecoveryCode(code) {
     $("#copier-code").onclick = async () => {
       try {
         await navigator.clipboard.writeText(code);
-        toast("Code copié");
+        toast(t("Code copié"));
       } catch (_) {
-        toast("Copie impossible : sélectionne le code à la main.", true);
+        toast(t("Copie impossible : sélectionne le code à la main."), true);
       }
     };
   });
@@ -236,35 +240,35 @@ export async function showRecoveryCode(code) {
 
 async function recoverPassword() {
   const answers = await formBody({
-    titre: "Mot de passe oublié",
-    texte: "Tape ton code de secours (les 6 mots), puis choisis un nouveau mot de passe pour le serveur.",
+    titre: t("Mot de passe oublié"),
+    texte: t("Tape ton code de secours (les 6 mots), puis choisis un nouveau mot de passe pour le serveur."),
     champs: [
-      { nom: "code", label: "Code de secours" },
+      { nom: "code", label: t("Code de secours") },
       { nom: "identifiant", cache: true, valeur: state.serverAccount, autocomplete: "username" },
       {
         nom: "nouveau",
         type: "password",
-        label: "Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)",
+        label: t("Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)"),
         autocomplete: "new-password",
       },
       {
         nom: "confirmation",
         type: "password",
-        label: "Nouveau mot de passe, encore une fois",
+        label: t("Nouveau mot de passe, encore une fois"),
         autocomplete: "new-password",
       },
     ],
-    valider: "Changer le mot de passe",
+    valider: t("Changer le mot de passe"),
   });
   if (!answers || answers === "secondaire") return;
-  if (answers.nouveau !== answers.confirmation) return toast("Les deux mots de passe ne sont pas identiques.", true);
+  if (answers.nouveau !== answers.confirmation) return toast(t("Les deux mots de passe ne sont pas identiques."), true);
   try {
     const result = await api(
       "/api/admin/secours",
       { method: "POST", json: { code: answers.code, nouveau: answers.nouveau } },
       true,
     );
-    toast("Mot de passe changé");
+    toast(t("Mot de passe changé"));
     await showRecoveryCode(result.code);
   } catch (error) {
     toast(error.message, true);

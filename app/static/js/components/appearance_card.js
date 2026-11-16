@@ -1,17 +1,18 @@
 // Carte « Apparence » de l'écran Système : clair, sombre, ou comme l'appareil.
 //
 // Sommaire :
-//   partagé : appearanceCard, applyTheme
+//   partagé : appearanceCard, applyTheme (et le choix de la langue, dès qu'une traduction existe)
 //   interne : THEMES, THEME_COLORS, savedTheme
 //
 // Le choix vaut pour cet appareil (gardé dans le navigateur) : le Mac peut rester en clair
 // pendant que l'iPhone suit son propre réglage.
 import { $ } from "../core/dom.js";
+import { chooseLanguage, LANGUAGE, LANGUAGES, t } from "../core/i18n.js";
 
 const THEMES = [
-  ["auto", "Comme l'appareil"],
-  ["clair", "Clair"],
-  ["sombre", "Sombre"],
+  ["auto", t("Comme l'appareil")],
+  ["clair", t("Clair")],
+  ["sombre", t("Sombre")],
 ];
 const THEME_COLORS = { clair: "#F4F5F7", sombre: "#121418" };
 
@@ -44,7 +45,7 @@ export function appearanceCard() {
   const element = $("#apparence");
   if (!element) return;
   const current = savedTheme();
-  element.innerHTML = `<h2>Apparence</h2>
+  element.innerHTML = t`<h2>Apparence</h2>
     <p class="note" style="margin:6px 0 12px">Pour cet appareil seulement.</p>
     <div class="choix-theme" role="radiogroup" aria-label="Thème">${THEMES.map(
       ([value, label]) =>
@@ -53,4 +54,16 @@ export function appearanceCard() {
   element.querySelectorAll('input[name="theme"]').forEach((input) => {
     input.onchange = () => applyTheme(input.value);
   });
+  // Choix de la langue : seulement quand une traduction existe (voir core/i18n.js).
+  if (Object.keys(LANGUAGES).length > 1) {
+    element.insertAdjacentHTML(
+      "beforeend",
+      `<label class="ligne-reglage" style="margin-top:12px"><span>${t("Langue")}</span><select id="langue">${Object.entries(
+        LANGUAGES,
+      )
+        .map(([code, name]) => `<option value="${code}"${code === LANGUAGE ? " selected" : ""}>${name}</option>`)
+        .join("")}</select></label>`,
+    );
+    $("#langue").onchange = (event) => chooseLanguage(event.target.value);
+  }
 }

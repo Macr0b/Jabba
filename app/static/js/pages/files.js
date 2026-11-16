@@ -16,6 +16,7 @@ import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml } from "../core/tasks.js";
 import { toggleFavorite, folderLink } from "./home.js";
+import { t } from "../core/i18n.js";
 
 function openEntry(list, index) {
   const entry = list[index];
@@ -38,11 +39,11 @@ function wireSearch() {
 }
 
 async function showSearchResults(query) {
-  content.innerHTML = `<div class="entete"><div><h1>Recherche</h1><p class="sous-titre">« ${escapeHtml(query)} »</p></div></div>${searchBarHtml(query)}${loadingHtml(4)}`;
+  content.innerHTML = t`<div class="entete"><div><h1>Recherche</h1><p class="sous-titre">« ${escapeHtml(query)} »</p></div></div>${searchBarHtml(query)}${loadingHtml(4)}`;
   wireSearch();
   const data = await api("/api/recherche?q=" + encodeURIComponent(query));
   const element = data.elements;
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="entete"><div><h1>Recherche</h1><p class="sous-titre">${element.length} résultat${element.length > 1 ? "s" : ""} pour « ${escapeHtml(query)} »</p></div>
       <div class="actions"><a class="btn" href="#/fichiers">← Fichiers</a></div></div>
     ${searchBarHtml(query)}
@@ -56,16 +57,16 @@ async function showSearchResults(query) {
           <span class="nom">${entryIcon(item)}
             <span><a href="#" data-ouvrir="${index}">${escapeHtml(item.nom)}</a>
             <span class="detail-chemin"><a href="${folderLink(item.chemin.split("/").slice(0, -1).join("/") || "/")}">${escapeHtml(item.chemin.split("/").slice(0, -1).join("/") || "/")}</a></span></span></span>
-          <span class="gris col-l">${item.dossier ? "Dossier" : formatBytes(item.taille)}</span>
+          <span class="gris col-l">${item.dossier ? t("Dossier") : formatBytes(item.taille)}</span>
           <span class="gris col-l">${formatWhen(item.modifie)}</span>
           <span></span>
         </div>`,
               )
               .join("")
-          : `<div class="vide">Rien trouvé. Essaie un autre mot, ou une partie du nom.</div>`
+          : t`<div class="vide">Rien trouvé. Essaie un autre mot, ou une partie du nom.</div>`
       }
     </section>
-    ${data.complet ? "" : `<p class="note">La recherche s'est arrêtée avant la fin (trop de fichiers). Précise ta recherche.</p>`}`;
+    ${data.complet ? "" : t`<p class="note">La recherche s'est arrêtée avant la fin (trop de fichiers). Précise ta recherche.</p>`}`;
   wireSearch();
   content.querySelectorAll("[data-ouvrir]").forEach((node) =>
     node.addEventListener("click", (event) => {
@@ -107,7 +108,7 @@ function navigationBarHtml(path, link, root) {
     <button class="btn btn-petit" id="nav-suiv" title="Suivant (⌘])" aria-label="Suivant"${history.pos < history.pile.length - 1 ? "" : " disabled"}>›</button>
     ${
       path !== "/"
-        ? `<a class="btn btn-petit" href="${link(parent)}" title="Dossier parent (⌘↑)">↑ Dossier parent</a>
+        ? t`<a class="btn btn-petit" href="${link(parent)}" title="Dossier parent (⌘↑)">↑ Dossier parent</a>
     <a class="btn btn-petit" href="${link("/")}" title="Revenir au début">⌂ ${escapeHtml(root)}</a>`
         : ""
     }
@@ -164,12 +165,12 @@ function locationPickerHtml(list, path, link) {
 
 // ------------------------------------------------------------ liste : tri, affichage, éléments
 const SORT_OPTIONS = [
-  ["nom", 1, "Nom (A → Z)"],
-  ["nom", -1, "Nom (Z → A)"],
-  ["modifie", -1, "Date (récent d'abord)"],
-  ["modifie", 1, "Date (ancien d'abord)"],
-  ["taille", -1, "Taille (gros d'abord)"],
-  ["taille", 1, "Taille (petit d'abord)"],
+  ["nom", 1, t("Nom (A → Z)")],
+  ["nom", -1, t("Nom (Z → A)")],
+  ["modifie", -1, t("Date (récent d'abord)")],
+  ["modifie", 1, t("Date (ancien d'abord)")],
+  ["taille", -1, t("Taille (gros d'abord)")],
+  ["taille", 1, t("Taille (petit d'abord)")],
 ];
 const DEFAULT_VIEW = { vue: "liste", tri: "nom", sens: 1 };
 const collator = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
@@ -228,7 +229,7 @@ function tileHtml(item, index, link) {
           ${checkboxHtml(item, index)}
           <span class="apercu-tuile">${entryIcon(item, 256)}</span>
           <span class="nom-tuile-fichier">${nameLinkHtml(item, index, link)}</span>
-          <span class="note">${item.dossier ? "Dossier" : formatBytes(item.taille)}</span>
+          <span class="note">${item.dossier ? t("Dossier") : formatBytes(item.taille)}</span>
           <button class="btn-menu" type="button" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
         </div>`;
 }
@@ -237,7 +238,7 @@ pages.fichiers = async (params) => {
   if (params.get("q")) return showSearchResults(params.get("q"));
   const path = params.get("chemin") || "/";
   rememberFolder(path);
-  content.innerHTML = `<div class="entete"><div><h1>Fichiers</h1></div></div>${loadingHtml(5)}`;
+  content.innerHTML = t`<div class="entete"><div><h1>Fichiers</h1></div></div>${loadingHtml(5)}`;
   const [data, locations] = await Promise.all([
     api("/api/fichiers?chemin=" + encodeURIComponent(path)),
     readLocations(),
@@ -245,7 +246,7 @@ pages.fichiers = async (params) => {
   const parts = path.split("/").filter(Boolean);
   const link = (item) => "#/fichiers?chemin=" + encodeURIComponent(item);
   const thread = [
-    `<a href="${link("/")}"${data.source === "disque" ? "" : ' data-chemin="/"'}>${data.source === "disque" ? "Serveur" : "Nextcloud"}</a>`,
+    `<a href="${link("/")}"${data.source === "disque" ? "" : ' data-chemin="/"'}>${data.source === "disque" ? t("Serveur") : t("Nextcloud")}</a>`,
   ]
     .concat(
       parts.map((value, index) =>
@@ -255,28 +256,28 @@ pages.fichiers = async (params) => {
       ),
     )
     .join('<span class="sep">/</span>');
-  const title = parts.length ? parts[parts.length - 1] : "Fichiers";
+  const title = parts.length ? parts[parts.length - 1] : t("Fichiers");
   const preferences = readViewPreferences(path);
   const entries = sortEntries(data.elements, preferences.tri, preferences.sens);
   const grid = preferences.vue === "grille";
   const sortHeader = (key, label, extraClass = "") => {
     const active = preferences.tri === key;
-    return `<span class="${extraClass}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}" aria-label="Trier par ${label.toLowerCase()}${active ? (preferences.sens === 1 ? ", ordre croissant" : ", ordre décroissant") : ""}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
+    return `<span class="${extraClass}"><button class="tri${active ? " actif" : ""}" type="button" data-tri="${key}" aria-label="Trier par ${label.toLowerCase()}${active ? (preferences.sens === 1 ? t(", ordre croissant") : t(", ordre décroissant")) : ""}">${label}${active ? (preferences.sens === 1 ? " ↑" : " ↓") : ""}</button></span>`;
   };
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="entete">
-      <div><h1>${escapeHtml(title)}${data.ecriture ? "" : '<span class="lecture-seule">Lecture seule</span>'}</h1>
-        <p class="sous-titre">${data.source === "disque" ? "Disque du serveur (Nextcloud désactivé)" : "Ton Nextcloud · synchronisé avec l'iPhone et le Finder"}</p></div>
+      <div><h1>${escapeHtml(title)}${data.ecriture ? "" : t('<span class="lecture-seule">Lecture seule</span>')}</h1>
+        <p class="sous-titre">${data.source === "disque" ? t("Disque du serveur (Nextcloud désactivé)") : t("Ton Nextcloud · synchronisé avec l'iPhone et le Finder")}</p></div>
       <div class="actions">
-        ${path !== "/" ? `<button class="btn" id="etoile" aria-pressed="${data.favori}">${data.favori ? "★ Favori" : "☆ Favori"}</button>` : ""}
+        ${path !== "/" ? `<button class="btn" id="etoile" aria-pressed="${data.favori}">${data.favori ? t("★ Favori") : t("☆ Favori")}</button>` : ""}
         <a class="btn" href="#/corbeille">Corbeille</a>
-        ${data.lien_nextcloud ? `<a class="btn" href="${escapeHtml(data.lien_nextcloud)}" target="_blank" rel="noopener">Ouvrir dans Nextcloud</a>` : ""}
-        ${data.ecriture ? `<button class="btn" id="nouveau">Nouveau dossier</button><button class="btn" id="envoyer-dossier">Envoyer un dossier</button><button class="btn btn-p" id="envoyer">Envoyer des fichiers</button>` : ""}
+        ${data.lien_nextcloud ? t`<a class="btn" href="${escapeHtml(data.lien_nextcloud)}" target="_blank" rel="noopener">Ouvrir dans Nextcloud</a>` : ""}
+        ${data.ecriture ? t`<button class="btn" id="nouveau">Nouveau dossier</button><button class="btn" id="envoyer-dossier">Envoyer un dossier</button><button class="btn btn-p" id="envoyer">Envoyer des fichiers</button>` : ""}
       </div>
     </div>
     ${searchBarHtml()}
     ${locationPickerHtml(locations, path, link)}
-    <div class="ligne-nav">${navigationBarHtml(path, link, data.source === "disque" ? "Serveur" : "Nextcloud")}
+    <div class="ligne-nav">${navigationBarHtml(path, link, data.source === "disque" ? t("Serveur") : t("Nextcloud"))}
     <nav class="fil" aria-label="Emplacement">${thread}</nav></div>
     <div class="outils-liste">
       <label class="choix-tri"><span>Trier par</span>
@@ -289,15 +290,15 @@ pages.fichiers = async (params) => {
     </div>
     <dl class="raccourcis" id="raccourcis" hidden>${SHORTCUTS.map(([keys, label]) => `<dt><kbd>${escapeHtml(keys)}</kbd></dt><dd>${escapeHtml(label)}</dd>`).join("")}</dl>
     <section class="carte tableau${grid ? " vue-grille" : ""}" aria-label="Contenu du dossier">
-      ${grid ? "" : `<div class="ligne titres">${sortHeader("nom", "Nom")}${sortHeader("taille", "Taille", "col-l")}${sortHeader("modifie", "Modifié", "col-l")}<span></span></div>`}
+      ${grid ? "" : `<div class="ligne titres">${sortHeader("nom", t("Nom"))}${sortHeader("taille", t("Taille"), "col-l")}${sortHeader("modifie", t("Modifié"), "col-l")}<span></span></div>`}
       ${
         entries.length
           ? grid
             ? `<div class="grille-fichiers">${entries.map((item, index) => tileHtml(item, index, link)).join("")}</div>`
             : entries.map((item, index) => rowHtml(item, index, link)).join("")
-          : `<div class="vide">Ce dossier est vide.</div>`
+          : t`<div class="vide">Ce dossier est vide.</div>`
       }
-      ${data.ecriture ? `<div class="depot" id="depot">Glisse des fichiers ou des dossiers ici pour les envoyer dans « ${escapeHtml(title)} »</div>` : ""}
+      ${data.ecriture ? t`<div class="depot" id="depot">Glisse des fichiers ou des dossiers ici pour les envoyer dans « ${escapeHtml(title)} »</div>` : ""}
     </section>
     <input type="file" id="choix" multiple hidden>
     <input type="file" id="choix-dossier" webkitdirectory multiple hidden>`;
@@ -361,12 +362,12 @@ pages.fichiers = async (params) => {
 
   if (data.ecriture) {
     $("#nouveau").onclick = async () => {
-      const name = await confirmAction({ titre: "Nouveau dossier", champ: "", valider: "Créer" });
+      const name = await confirmAction({ titre: t("Nouveau dossier"), champ: "", valider: t("Créer") });
       if (!name) return;
-      if (/[\\/]/.test(name)) return toast("Le nom ne peut pas contenir / ou \\", true);
+      if (/[\\/]/.test(name)) return toast(t("Le nom ne peut pas contenir / ou \\"), true);
       try {
         await api("/api/fichiers/dossier", { method: "POST", json: { chemin: path + "/" + name } });
-        toast("Dossier créé");
+        toast(t("Dossier créé"));
       } catch (error) {
         toast(error.message, true);
       }
@@ -427,13 +428,13 @@ pages.fichiers = async (params) => {
 
 // ------------------------------------------------------------ corbeille
 pages.corbeille = async () => {
-  content.innerHTML = `<div class="entete"><div><h1>Corbeille</h1></div></div>${loadingHtml(4)}`;
+  content.innerHTML = t`<div class="entete"><div><h1>Corbeille</h1></div></div>${loadingHtml(4)}`;
   const data = await api("/api/corbeille");
   const element = data.elements;
   const days = (value) => Math.max(0, data.garde - Math.floor((Date.now() / 1000 - value) / 86400));
-  content.innerHTML = `
+  content.innerHTML = t`
     <div class="entete"><div><h1>Corbeille</h1><p class="sous-titre">Ce que tu as supprimé, gardé ${data.garde} jours puis effacé tout seul.</p></div>
-      <div class="actions"><a class="btn" href="#/fichiers">← Fichiers</a>${element.length ? `<button class="btn btn-danger" id="vider">Vider la corbeille</button>` : ""}</div></div>
+      <div class="actions"><a class="btn" href="#/fichiers">← Fichiers</a>${element.length ? t`<button class="btn btn-danger" id="vider">Vider la corbeille</button>` : ""}</div></div>
     <section class="carte tableau" aria-label="Éléments supprimés">
       <div class="ligne titres"><span>Nom</span><span class="col-l">Taille</span><span class="col-l">Supprimé</span><span></span></div>
       ${
@@ -443,14 +444,14 @@ pages.corbeille = async () => {
                 (item, index) => `
         <div class="ligne">
           <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
-            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${item.origine ? "Venait de " + escapeHtml(item.origine) : "Origine inconnue"} · encore ${days(item.supprime)} j</span></span></span>
+            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${item.origine ? "Venait de " + escapeHtml(item.origine) : t("Origine inconnue")} · encore ${days(item.supprime)} j</span></span></span>
           <span class="gris col-l">${formatBytes(item.taille)}</span>
           <span class="gris col-l">${formatWhen(new Date(item.supprime * 1000).toISOString())}</span>
           <button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>
         </div>`,
               )
               .join("")
-          : `<div class="vide">La corbeille est vide.</div>`
+          : t`<div class="vide">La corbeille est vide.</div>`
       }
     </section>
     <p class="note">Restaurer remet l'élément à sa place. Effacer pour de bon demande le mot de passe du serveur.</p>`;
@@ -460,16 +461,16 @@ pages.corbeille = async () => {
     emptyButton.onclick = async () => {
       if (
         !(await confirmAction({
-          titre: "Vider la corbeille ?",
-          texte: `Les ${element.length} éléments seront effacés pour de bon. Impossible de revenir en arrière.`,
-          valider: "Tout effacer",
+          titre: t("Vider la corbeille ?"),
+          texte: t`Les ${element.length} éléments seront effacés pour de bon. Impossible de revenir en arrière.`,
+          valider: t("Tout effacer"),
           danger: true,
         }))
       )
         return;
       try {
         await api("/api/corbeille/effacer", { method: "POST", json: { tout: true } });
-        toast("Corbeille vidée");
+        toast(t("Corbeille vidée"));
       } catch (error) {
         toast(error.message, true);
       }
@@ -481,14 +482,14 @@ pages.corbeille = async () => {
       const choices = [];
       if (entry.origine)
         choices.push({
-          texte: "Restaurer",
+          texte: t("Restaurer"),
           f: async () => {
             try {
               const data = await api("/api/corbeille/restaurer", {
                 method: "POST",
                 json: { id: entry.id, source: entry.source, origine: entry.origine },
               });
-              toast(`Restauré dans ${data.chemin}`);
+              toast(t`Restauré dans ${data.chemin}`);
             } catch (error) {
               toast(error.message, true);
             }
@@ -496,14 +497,14 @@ pages.corbeille = async () => {
           },
         });
       choices.push({
-        texte: "Effacer pour de bon",
+        texte: t("Effacer pour de bon"),
         danger: true,
         f: async () => {
           if (
             !(await confirmAction({
-              titre: `Effacer « ${entry.nom} » pour de bon ?`,
-              texte: "Impossible de revenir en arrière.",
-              valider: "Effacer",
+              titre: t`Effacer « ${entry.nom} » pour de bon ?`,
+              texte: t("Impossible de revenir en arrière."),
+              valider: t("Effacer"),
               danger: true,
             }))
           )
@@ -513,7 +514,7 @@ pages.corbeille = async () => {
               method: "POST",
               json: { id: entry.id, source: entry.source, nom: entry.nom },
             });
-            toast("Effacé");
+            toast(t("Effacé"));
           } catch (error) {
             toast(error.message, true);
           }

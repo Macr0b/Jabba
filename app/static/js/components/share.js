@@ -4,12 +4,13 @@
 //   partagé : groupLabel, folderTargets, shareFolder
 import { chooseFromMenu, toast } from "./dialogs.js";
 import { api } from "../core/api.js";
+import { t } from "../core/i18n.js";
 
 // Nom affiché d'un groupe : « Tous les membres », « Gérant et au-dessus », ou le nom du groupe.
 export function groupLabel(groupId, cloud) {
-  if (groupId === cloud.tous) return "Tous les membres";
+  if (groupId === cloud.tous) return t("Tous les membres");
   const rank = (cloud.rangs || []).find((entry) => entry.id === groupId);
-  return rank ? `${rank.nom} et au-dessus` : groupId;
+  return rank ? t`${rank.nom} et au-dessus` : groupId;
 }
 
 // À qui donner un dossier : tous, puis les rangs (du plus haut au plus bas), puis les groupes.
@@ -31,18 +32,18 @@ export async function shareFolder(path, name) {
     return;
   }
   const target = await chooseFromMenu(
-    `Partager « ${name} » avec…`,
+    t`Partager « ${name} » avec…`,
     folderTargets(cloud).map((group) => ({ texte: groupLabel(group.id, cloud), id: group.id })),
   );
   if (!target) return;
   const mode = await chooseFromMenu(`${target.texte} pourra…`, [
-    { texte: "Voir seulement", id: "lecture" },
-    { texte: "Voir et modifier", id: "ecriture" },
+    { texte: t("Voir seulement"), id: "lecture" },
+    { texte: t("Voir et modifier"), id: "ecriture" },
   ]);
   if (!mode) return;
   try {
     await api("/api/partages", { method: "POST", json: { chemin: path, groupe: target.id, mode: mode.id } });
-    toast(`« ${name} » partagé avec ${target.texte}. Il apparaît dans leur Nextcloud.`);
+    toast(t`« ${name} » partagé avec ${target.texte}. Il apparaît dans leur Nextcloud.`);
   } catch (error) {
     toast(error.message, true);
   }
