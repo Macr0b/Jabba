@@ -22,7 +22,9 @@ def test_aucun_nom_inconnu_dans_l_interface():
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-@pytest.mark.skipif(not shutil.which("node") or not os.path.isdir(os.path.join(OUTILS, "node_modules")), reason="outils absents")
+@pytest.mark.skipif(
+    not shutil.which("node") or not os.path.isdir(os.path.join(OUTILS, "node_modules")), reason="outils absents"
+)
 def test_la_verification_voit_un_nom_inconnu(tmp_path):
     fautif = tmp_path / "fautif.js"
     fautif.write_text('import { toast } from "./dialogs.js";\nexport function f() { toast(messageInconnu); }\n')
