@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : diskHealthCard
-//   interne : STATE_CLASSES, diskLine
+//   interne : STATE_CLASSES, usageText, diskLine
 import { api } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
 import { formatWhen } from "../core/format.js";
@@ -10,10 +10,20 @@ import { toast } from "./dialogs.js";
 
 const STATE_CLASSES = { bon: "p-ok", a_surveiller: "p-alerte", critique: "p-rouge", inconnu: "p-gris" };
 
+// Heures de fonctionnement cumulées depuis la fabrication (compteur du disque), pas depuis le démarrage.
+function usageText(hours) {
+  const days = Math.round(hours / 24);
+  const total =
+    days >= 365
+      ? `${String(Math.round((days / 365) * 10) / 10).replace(".", ",")} an${days >= 730 ? "s" : ""}`
+      : `${days} jours`;
+  return `${total} de fonctionnement depuis sa fabrication`;
+}
+
 function diskLine(disk) {
   const facts = [
     disk.temperature != null ? `${disk.temperature} °C` : "",
-    disk.heures != null ? `${Math.round(disk.heures / 24)} jours allumé` : "",
+    disk.heures != null ? usageText(disk.heures) : "",
     disk.usure != null ? `usé à ${disk.usure} %` : "",
     disk.endormi ? "endormi au dernier passage" : "",
   ].filter(Boolean);
