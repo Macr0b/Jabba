@@ -32,7 +32,7 @@ def list_shared_folders(request: Request):
 @router.post("/api/partages")
 async def share_folder(request: Request):
     """Partage un dossier de l'écran Fichiers avec un rang ou un groupe."""
-    guard.require_admin(request, fort=True)
+    guard.require_admin(request, strong=True)
     body = await request.json()
     path = nextcloud_files.clean_path(str(body.get("chemin", "")))
     group, mode = str(body.get("groupe", "")), str(body.get("mode", ""))

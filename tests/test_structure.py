@@ -71,3 +71,40 @@ def test_chaque_module_point_nom_existe():
                 if not hasattr(module, node.attr):
                     absents.append(f"{os.path.relpath(path, APP)}:{node.lineno} {node.value.id}.{node.attr}")
     assert not absents, absents
+
+
+def test_parametres_nommes_existent():
+    """« guard.require_admin(request, strong=True) » : le paramètre strong existe bien dans la fonction appelée."""
+    erreurs = []
+    for path in glob.glob(os.path.join(APP, "**", "*.py"), recursive=True):
+        tree = ast.parse(open(path, encoding="utf-8").read())
+        project = _modules_du_projet(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Name):  # fonction du même fichier
+                module_tree, name = tree, node.func.id
+            elif (
+                isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id in project
+            ):
+                module_path = os.path.join(APP, *project[node.func.value.id].split(".")) + ".py"
+                module_tree, name = ast.parse(open(module_path, encoding="utf-8").read()), node.func.attr
+            else:
+                continue
+            function = next(
+                (
+                    f
+                    for f in module_tree.body
+                    if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) and f.name == name
+                ),
+                None,
+            )
+            if function is None or function.args.kwarg:
+                continue
+            noms = {a.arg for a in function.args.args + function.args.kwonlyargs}
+            for keyword in node.keywords:
+                if keyword.arg and keyword.arg not in noms:
+                    erreurs.append(f"{os.path.relpath(path, APP)}:{node.lineno} {name}({keyword.arg}=…)")
+    assert not erreurs, erreurs
