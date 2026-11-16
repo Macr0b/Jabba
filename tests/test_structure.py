@@ -3,8 +3,19 @@ import ast
 import glob
 import importlib.util
 import os
+import sys
 
 from conftest import APP
+
+
+def _existe(module):
+    """Le module existe-t-il ? (un module déjà chargé sans __spec__ compte comme existant)."""
+    if module in sys.modules:
+        return True
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ValueError, ModuleNotFoundError):
+        return False
 
 
 def _imports(path):
@@ -22,14 +33,10 @@ def test_tous_les_imports_existent():
     manquants = []
     for path in glob.glob(os.path.join(APP, "**", "*.py"), recursive=True):
         for line, module, name in _imports(path):
-            if importlib.util.find_spec(module.split(".")[0]) is None:
+            if not _existe(module):
                 manquants.append(f"{os.path.relpath(path, APP)}:{line} {module}")
                 continue
-            if name and importlib.util.find_spec(module) is not None:
-                spec = importlib.util.find_spec(module)
-                # « from paquet import module » : le module doit exister dans le paquet.
-                if spec.submodule_search_locations and importlib.util.find_spec(f"{module}.{name}") is None:
-                    mod = importlib.import_module(module)
-                    if not hasattr(mod, name):
-                        manquants.append(f"{os.path.relpath(path, APP)}:{line} {module}.{name}")
+            # « from module import nom » : nom est un sous-module ou un objet du module.
+            if name and not _existe(f"{module}.{name}") and not hasattr(importlib.import_module(module), name):
+                manquants.append(f"{os.path.relpath(path, APP)}:{line} {module}.{name}")
     assert not manquants, manquants
