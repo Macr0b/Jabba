@@ -94,6 +94,6 @@ def current_mode():
             return interpret(open(DEMO_FILE).read(), True)
         except OSError:
             return interpret("", True)
-    code, content, _ = commands.run_on_host(["cat", CHOICE_FILE])
-    active = commands.run_on_host(["systemctl", "is-enabled", "--quiet", f"{UNIT}.timer"])[0] == 0
+    code, content, _ = commands.run_action("lire_regle_redemarrage")
+    active = commands.run_action("minuteur_redemarrage")[0] == 0
     return interpret(content if code == 0 else "", active)

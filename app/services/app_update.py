@@ -136,9 +136,7 @@ from services import notifications
 
 # ---------------------------------------------------------------- mise à jour de l'appli
 def app_folder():
-    code, output, _ = commands.run_on_host(
-        ["docker", "inspect", "-f", '{{index .Config.Labels "com.docker.compose.project.working_dir"}}', "jabba-app"]
-    )
+    code, output, _ = commands.run_action("dossier_appli")
     data = output.strip()
     return data if code == 0 and re.fullmatch(r"/[\w./-]+", data) else None
 
@@ -151,8 +149,8 @@ def update_state():
     if not CURRENT_UPDATE["unite"]:
         return {"statut": "aucune"}
     unit_name = CURRENT_UPDATE["unite"] + ".service"
-    _, active, _ = commands.run_on_host(["systemctl", "show", "-p", "ActiveState", "--value", unit_name])
-    _, log, _ = commands.run_on_host(["journalctl", "-u", unit_name, "--no-pager", "-o", "cat", "-n", "300"])
+    _, active, _ = commands.run_action("etat_tache", unite=unit_name)
+    _, log, _ = commands.run_action("journal_tache", unite=unit_name)
     lines = [line for line in log.splitlines() if line.strip()]
     if active.strip() in ("active", "activating", "reloading"):
         return {

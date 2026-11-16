@@ -19,12 +19,7 @@ POWER_STATE = {"secteur": None, "batterie": None, "etat": None, "arret_prevu": F
 
 
 def read_power():
-    script = (
-        'for f in /sys/class/power_supply/*; do [ -e "$f/type" ] || continue; '
-        'echo "$(cat $f/type)|$(cat $f/online 2>/dev/null)|$(cat $f/capacity 2>/dev/null)|$(cat $f/status 2>/dev/null)'
-        '|$(cat $f/power_now 2>/dev/null)|$(cat $f/current_now 2>/dev/null)|$(cat $f/voltage_now 2>/dev/null)"; done'
-    )
-    _, output, _ = commands.run_shell_on_host(script, timeout=10)
+    _, output, _ = commands.run_action("alimentation")
     on_mains, battery, state = None, None, None
     for line in output.splitlines():
         fields, online, capacity, status, power, intensite, voltage = (line.split("|") + [""] * 7)[:7]

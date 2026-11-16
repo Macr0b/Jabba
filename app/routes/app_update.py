@@ -14,7 +14,7 @@ import time
 from fastapi import APIRouter, HTTPException, Request
 
 import config
-from host import commands
+from host import actions, commands
 from security import guard
 from services import activity_log, app_update
 from version import VERSION
@@ -38,12 +38,7 @@ def update_info(verifier: int = 0):
             "disponible": True,
         }
     folder = app_update.app_folder()
-    ready = bool(
-        config.REPOSITORY
-        and folder
-        and commands.run_on_host(["test", "-d", folder + "/.git"])[0] == 0
-        and commands.run_on_host(["sh", "-c", "command -v git"])[0] == 0
-    )
+    ready = bool(config.REPOSITORY and folder and commands.run_action("appli_prete", dossier=folder)[0] == 0)
     latest = app_update.latest_release(config.REPOSITORY, force=bool(verifier)) if config.REPOSITORY else None
     return {
         "actuelle": VERSION,
@@ -79,11 +74,13 @@ def install_update(request: Request):
             409,
             "Cette appli n'a pas de clé de publication (cle_publication.pub) : impossible de vérifier une nouvelle version.",
         )
-    script = app_update.install_script(folder, latest["tag"], key)
     activity_log.record("appli", f"Mise à jour de l'appli vers {latest['version']} lancée", request.state.nom)
     # Lancée par le serveur lui-même : elle continue pendant que l'appli redémarre.
     unit = f"jabba-maj-{int(time.time())}"
-    code, _, error_output = commands.start_on_host(unit, script)
+    try:
+        code, _, error_output = commands.run_action("installer_appli", dossier=folder, tag=latest["tag"], unite=unit)
+    except actions.ActionError as error:
+        raise HTTPException(409, str(error))
     if code != 0:
         raise HTTPException(500, "Lancement impossible : " + error_output[:200])
     app_update.CURRENT_UPDATE.update(unite=unit, version=latest["version"], debut=time.time(), signale=False)

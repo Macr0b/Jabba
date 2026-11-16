@@ -239,3 +239,70 @@ def test_occ_passe_par_la_liste_fermee(monkeypatch):
     assert vu[1][1] == "motdepasse-long" and "motdepasse-long" not in vu[1][0]
     assert commands.occ(["maintenance:mode", "--on"])[0] == 1  # refusée, rien lancé
     assert len(vu) == 2
+
+
+def test_actions_systeme_sans_parametre():
+    for nom in (
+        "version_systeme",
+        "noyau",
+        "redemarrage_requis",
+        "journal_mises_a_jour",
+        "appareils_tailscale",
+        "alimentation",
+        "redemarrer_serveur",
+        "lire_regle_redemarrage",
+        "minuteur_redemarrage",
+        "dossier_appli",
+    ):
+        commande, delai = actions.build(nom, {})
+        assert commande and 0 < delai <= 60
+
+
+def test_regle_de_redemarrage():
+    commande, _ = actions.build("regle_redemarrage", {"mode": "auto"})
+    assert commande[:2] == ["sh", "-c"] and "echo auto >" in commande[2]
+    with pytest.raises(actions.ActionError):
+        actions.build("regle_redemarrage", {"mode": "auto; reboot"})
+
+
+def test_mise_a_jour_de_l_appli_cle_lue_par_le_service(monkeypatch):
+    from services import app_update
+
+    cle = "ssh-ed25519 " + "A" * 68
+    monkeypatch.setattr(app_update, "publication_key", lambda: cle)
+    commande, _ = actions.build(
+        "installer_appli", {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "jabba-maj-1700000000"}
+    )
+    assert commande[:2] == ["sh", "-c"] and commande[3:6] == ["tache", actions.TASKS_DIR, "jabba-maj-1700000000"]
+    script = commande[6]
+    assert cle in script and "${LIGNE% *}" in script  # le script arrive intact, ${…} compris
+    assert "$3" in commande[2] and "/opt/jabba" not in commande[2]  # jamais collé dans le texte du shell
+    for args in (
+        {"dossier": "/opt/jabba", "tag": "v0.14.0; reboot", "unite": "jabba-maj-1"},
+        {"dossier": "/opt/../etc", "tag": "v0.14.0", "unite": "jabba-maj-1"},
+        {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "sshd"},
+    ):
+        with pytest.raises(actions.ActionError):
+            actions.build("installer_appli", args)
+    monkeypatch.setattr(app_update, "publication_key", lambda: None)  # sans clé chez le service : rien ne s'installe
+    with pytest.raises(actions.ActionError):
+        actions.build("installer_appli", {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "jabba-maj-1"})
+
+
+def test_tache_de_fond_ecrit_puis_lance_le_script(tmp_path):
+    import subprocess
+
+    commande, _ = actions._background("jabba-test-1", 'echo "${HOME:+ok}"')
+    texte = commande[2].replace("exec systemd-run", "cat").replace(' --unit="$2" --collect sh', "")
+    sortie = subprocess.run(
+        ["sh", "-c", texte, "tache", str(tmp_path), "jabba-test-1", commande[6]], capture_output=True, text=True
+    )
+    assert sortie.stdout == 'rm -f "$0"\necho "${HOME:+ok}"'
+    assert (tmp_path / "jabba-test-1.sh").read_text() == sortie.stdout
+
+
+def test_suivi_des_taches():
+    assert actions.build("etat_tache", {"unite": "jabba-maj-12"})[0][-1] == "jabba-maj-12"
+    for unite in ("ssh", "jabba-maj-", "jabba-maj-1;x", "--all"):
+        with pytest.raises(actions.ActionError):
+            actions.build("journal_tache", {"unite": unite})

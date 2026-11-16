@@ -306,6 +306,119 @@ def check_input(name, text):
     return text
 
 
+# ---------------------------------------------------------------- système
+TASKS_DIR = "/var/lib/jabba/taches"
+TASK_UNIT = re.compile(r"jabba-[a-z]{2,20}-\d{1,12}")
+APP_FOLDER = re.compile(r"/[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}")
+# Une tâche de fond va au bout même si l'appli redémarre. Son script est posé dans un fichier (pas
+# en ligne de commande : systemd y remplacerait ${…}), passé ici comme argument ($3), jamais
+# collé dans le texte. Le fichier s'efface dès que le script démarre.
+BACKGROUND = 'umask 077 && mkdir -p "$1" && printf "%s" "$3" > "$1/$2.sh" && exec systemd-run --unit="$2" --collect sh "$1/$2.sh"'
+POWER_SCRIPT = (
+    'for f in /sys/class/power_supply/*; do [ -e "$f/type" ] || continue; '
+    'echo "$(cat $f/type)|$(cat $f/online 2>/dev/null)|$(cat $f/capacity 2>/dev/null)|$(cat $f/status 2>/dev/null)'
+    '|$(cat $f/power_now 2>/dev/null)|$(cat $f/current_now 2>/dev/null)|$(cat $f/voltage_now 2>/dev/null)"; done'
+)
+REBOOT = "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"
+
+
+def _background(unit, script):
+    return ["sh", "-c", BACKGROUND, "tache", TASKS_DIR, unit, 'rm -f "$0"\n' + script], 30
+
+
+def _task_unit(value):
+    unit = str(value or "")
+    if not TASK_UNIT.fullmatch(unit):
+        raise ActionError(f"Tâche refusée : {unit!r}")
+    return unit
+
+
+def _app_folder(value):
+    folder = str(value or "")
+    if not APP_FOLDER.fullmatch(folder) or ".." in folder:
+        raise ActionError(f"Dossier de l'appli refusé : {folder!r}")
+    return folder
+
+
+def _os_release(args):
+    return ["cat", "/etc/os-release"], 10
+
+
+def _kernel(args):
+    return ["uname", "-r"], 10
+
+
+def _reboot_required(args):
+    return ["test", "-f", "/var/run/reboot-required"], 10
+
+
+def _updates_log(args):
+    return ["tail", "-n", "200", "/var/log/unattended-upgrades/unattended-upgrades.log"], 10
+
+
+def _tailscale_devices(args):
+    return ["tailscale", "status", "--json"], 10
+
+
+def _power(args):
+    return ["sh", "-c", POWER_SCRIPT], 10
+
+
+def _reboot(args):
+    return ["systemd-run", "--on-active=3", "sh", "-c", REBOOT], 10
+
+
+def _restart_policy_read(args):
+    from services import restart_policy
+
+    return ["cat", restart_policy.CHOICE_FILE], 10
+
+
+def _restart_policy_timer(args):
+    from services import restart_policy
+
+    return ["systemctl", "is-enabled", "--quiet", f"{restart_policy.UNIT}.timer"], 10
+
+
+def _restart_policy_apply(args):
+    from services import restart_policy
+
+    mode = args.get("mode")
+    if mode not in restart_policy.MODES:
+        raise ActionError(f"Mode refusé : {mode!r}")
+    return ["sh", "-c", restart_policy.apply_script(mode)], 60
+
+
+def _app_folder_action(args):
+    template = '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+    return ["docker", "inspect", "-f", template, "jabba-app"], 10
+
+
+def _app_update_ready(args):
+    return ["sh", "-c", 'test -d "$1/.git" && command -v git', "pret", _app_folder(args.get("dossier"))], 10
+
+
+def _app_update_install(args):
+    """La clé qui vérifie la signature est lue ICI, dans les fichiers du service : l'appli ne la fournit pas."""
+    from services import app_update
+
+    try:
+        script = app_update.install_script(
+            _app_folder(args.get("dossier")), str(args.get("tag") or ""), app_update.publication_key()
+        )
+    except ValueError as error:
+        raise ActionError(str(error))
+    return _background(_task_unit(args.get("unite")), script)
+
+
+def _task_state(args):
+    return ["systemctl", "show", "-p", "ActiveState", "--value", _task_unit(args.get("unite"))], 10
+
+
+def _task_log(args):
+    return ["journalctl", "-u", _task_unit(args.get("unite")), "--no-pager", "-o", "cat", "-n", "300"], 10
+
+
 ACTIONS = {
     "nom_du_serveur": _server_name,
     "espace_disques": _disk_space,
@@ -330,6 +443,21 @@ ACTIONS = {
     "conteneur_actif": _container_running,
     "outil": _tool,
     "nextcloud": _nextcloud,
+    "version_systeme": _os_release,
+    "noyau": _kernel,
+    "redemarrage_requis": _reboot_required,
+    "journal_mises_a_jour": _updates_log,
+    "appareils_tailscale": _tailscale_devices,
+    "alimentation": _power,
+    "redemarrer_serveur": _reboot,
+    "lire_regle_redemarrage": _restart_policy_read,
+    "minuteur_redemarrage": _restart_policy_timer,
+    "regle_redemarrage": _restart_policy_apply,
+    "dossier_appli": _app_folder_action,
+    "appli_prete": _app_update_ready,
+    "installer_appli": _app_update_install,
+    "etat_tache": _task_state,
+    "journal_tache": _task_log,
 }
 NAMES = tuple(ACTIONS)
 

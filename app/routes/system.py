@@ -35,7 +35,7 @@ def task_state(tid: str):
 # ---------------------------------------------------------------- accueil / système
 @router.get("/api/moi")
 def who_am_i(request: Request):
-    server = "serveur-demo" if config.DEMO else commands.run_on_host(["hostname"])[1].strip()
+    server = "serveur-demo" if config.DEMO else commands.run_action("nom_du_serveur")[1].strip()
     session = request.state.session
     return {
         "login": request.state.user,
@@ -63,7 +63,7 @@ def home_state():
     files_source.wake_disks()
     disks = measurements.disk_space(["/", "/srv/data"])
     tools_list = tools.list_tools()
-    code, _, _ = commands.run_on_host(["test", "-f", "/var/run/reboot-required"])
+    code, _, _ = commands.run_action("redemarrage_requis")
     problems = [
         tool["nom"]
         for tool in tools_list
@@ -90,21 +90,19 @@ def system_state():
         from services.demo_data import SYSTEM
 
         return SYSTEM
-    _, name, _ = commands.run_on_host(["hostname"])
-    _, os_release, _ = commands.run_on_host(["cat", "/etc/os-release"])
+    _, name, _ = commands.run_action("nom_du_serveur")
+    _, os_release, _ = commands.run_action("version_systeme")
     pretty = re.search(r'PRETTY_NAME="([^"]+)"', os_release)
-    _, kernel, _ = commands.run_on_host(["uname", "-r"])
-    code, _, _ = commands.run_on_host(["test", "-f", "/var/run/reboot-required"])
-    _, log_text, _ = commands.run_shell_on_host(
-        "tail -n 200 /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null"
-    )
+    _, kernel, _ = commands.run_action("noyau")
+    code, _, _ = commands.run_action("redemarrage_requis")
+    _, log_text, _ = commands.run_action("journal_mises_a_jour")
     latest = None
     for line in log_text.splitlines():
         match = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d)", line)
         if match:
             latest = match.group(1)
     devices = []
-    status, tailscale_output, _ = commands.run_on_host(["tailscale", "status", "--json"], timeout=10)
+    status, tailscale_output, _ = commands.run_action("appareils_tailscale")
     if status == 0:
         try:
             status_data = json.loads(tailscale_output)
@@ -146,7 +144,7 @@ async def set_restart_policy(request: Request):
         with open(restart_policy.DEMO_FILE, "w") as file:
             file.write(mode + "\n")
     else:
-        code, _, error_output = commands.run_shell_on_host(restart_policy.apply_script(mode), timeout=60)
+        code, _, error_output = commands.run_action("regle_redemarrage", mode=mode)
         if code != 0:
             raise HTTPException(500, error_output.strip()[-200:] or "Échec du réglage.")
     activity_log.record(
@@ -164,15 +162,7 @@ def reboot_server(request: Request):
         return {"ok": True}
     activity_log.record("systeme", "Redémarrage du serveur demandé", request.state.nom)
     # « redemarrer » (posé par le script d'installation) note le redémarrage au journal du serveur.
-    commands.run_on_host(
-        [
-            "systemd-run",
-            "--on-active=3",
-            "sh",
-            "-c",
-            "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot",
-        ]
-    )
+    commands.run_action("redemarrer_serveur")
     return {"ok": True}
 
 
