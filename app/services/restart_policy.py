@@ -74,3 +74,26 @@ def message(auto):
     if auto:
         return "Une mise à jour du système le demande. Il se fera seul à 4 h."
     return "Une mise à jour du système le demande. Redémarre le serveur quand tu es devant (Système)."
+
+
+# ---- ajouté au découpage de main.py
+import os
+from services import restart_policy
+import config
+from host import commands
+
+
+# ---------------------------------------------------------------- redémarrage après une mise à jour
+REDEM_DEMO = os.path.join(os.environ.get("JABBA_DATA", "/data"), "redemarrage-demo.txt")
+
+
+def mode_redemarrage():
+    """{"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main."""
+    if config.DEMO:
+        try:
+            return restart_policy.lire(open(REDEM_DEMO).read(), True)
+        except OSError:
+            return restart_policy.lire("", True)
+    code, contenu, _ = commands.hote(["cat", restart_policy.FICHIER])
+    actif = commands.hote(["systemctl", "is-enabled", "--quiet", f"{restart_policy.UNITE}.timer"])[0] == 0
+    return restart_policy.lire(contenu if code == 0 else "", actif)

@@ -265,3 +265,132 @@ def restaurer(executer, d, donnees_hote, ident, chemin, demo=False):
     if not demo:
         executer(["chown", "-R", "1000:1000", base], 600)
     return os.path.join(cible, nom)
+
+
+# ---- ajouté au découpage de main.py
+import os
+import subprocess
+import threading
+from services import backups
+from services import activity_log
+from services import app_update
+from services import notifications
+from fastapi import HTTPException
+import config
+from host import commands
+from services import files_source
+
+
+# ---------------------------------------------------------------- sauvegardes
+SAUV_DEMO = {}   # en démo : le processus de la sauvegarde en cours
+
+
+def sauv_executer(cmd, timeout=120):
+    """Une commande restic : sur le serveur, ou en démo dans le conteneur."""
+    if config.DEMO:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout, r.stderr
+    return commands.hote(cmd, timeout)
+
+
+def sauv_donnees_hote():
+    """Le dossier des données de l'appli, vu depuis le serveur (la clé et l'état y sont)."""
+    if config.DEMO:
+        return backups.DOSSIER
+    d = app_update.dossier_appli()
+    if not d:
+        raise HTTPException(500, "Dossier de l'appli introuvable.")
+    return os.path.join(d, "donnees")
+
+
+def sauv_en_cours(d):
+    if not d["unite"]:
+        return False
+    if config.DEMO:
+        p = SAUV_DEMO.get(d["unite"])
+        return bool(p and p.poll() is None)
+    _, actif, _ = commands.hote(["systemctl", "show", "-p", "ActiveState", "--value", d["unite"] + ".service"])
+    return actif.strip() in ("active", "activating")
+
+
+def sauv_disque_present(d):
+    return True if config.DEMO else bool(d["chemin"]) and files_source.disque_present(d["chemin"])
+
+
+def lancer_sauvegarde(qui=None):
+    d = backups.lire()
+    if not d["chemin"] or not backups.phrase():
+        raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
+    if sauv_en_cours(d):
+        raise HTTPException(409, "Une sauvegarde est déjà en cours.")
+    if not sauv_disque_present(d):
+        raise HTTPException(409, f"Le disque {d['disque']} n'est pas branché.")
+    script = backups.script(d, sauv_donnees_hote(), config.DEMO)
+    unite = f"jabba-sauvegarde-{int(time.time())}"
+    if config.DEMO:
+        SAUV_DEMO[unite] = subprocess.Popen(["bash", "-c", script])
+    else:
+        # Lancée par le serveur lui-même, en douceur (le serveur reste réactif) :
+        # elle va au bout même si l'appli redémarre.
+        code, _, err = commands.lancer_sur_serveur(unite, script, "bash", ("Nice=10", "IOSchedulingClass=idle"))
+        if code != 0:
+            raise HTTPException(500, "Lancement impossible : " + err[:200])
+    d.update(unite=unite, lancee=int(time.time()))
+    backups.ecrire(d)
+    activity_log.noter("sauvegardes", f"Sauvegarde lancée vers {d['disque']}" + ("" if qui else " (automatique)"), qui)
+    return unite
+
+
+def suivre_sauvegarde():
+    """Quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté."""
+    d = backups.lire()
+    if not d["unite"] or sauv_en_cours(d):
+        return d
+    e = backups.lire_etat()
+    res = backups.resultat(e) if (e.get("debut") or 0) >= d["lancee"] - 5 else None
+    if res is None:
+        res = {"ok": False, "debut": d["lancee"], "fin": int(time.time()), "duree": 0,
+               "erreur": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?)."}
+    d["unite"] = None
+    d["dernier"] = res
+    if res["ok"]:
+        d["derniere_reussie"] = res
+        d["alerte_absent"] = None
+        activity_log.noter("sauvegardes", "Sauvegarde terminée" + (f" ({res['avert'].strip()})" if res.get("avert") else ""), None)
+        if res.get("avert"):
+            notifications.envoyer("sauvegardes", "Sauvegarde incomplète", res["avert"], "/#/sauvegardes", famille="sauvegardes", noter=False)
+    else:
+        # Une alerte par jour au plus (la sauvegarde est retentée chaque heure).
+        jour = time.strftime("%Y-%m-%d")
+        if d.get("alerte_echec") != jour:
+            notifications.envoyer("sauvegardes", "Sauvegarde échouée", res["erreur"] + (" Nouvel essai dans une heure." if d["actif"] else ""),
+                           "/#/sauvegardes", famille="sauvegardes")
+        else:
+            activity_log.noter("sauvegardes", "Sauvegarde échouée — " + res["erreur"])
+        d["alerte_echec"] = jour
+    backups.ecrire(d)
+    return d
+
+
+def surveiller_sauvegardes():
+    d = suivre_sauvegarde()
+    if d["unite"] or not backups.due(d):
+        return
+    if sauv_disque_present(d):
+        lancer_sauvegarde()
+        return
+    # Disque absent : on prévient une fois par jour, et la copie part dès qu'il revient.
+    jour = time.strftime("%Y-%m-%d")
+    if d.get("alerte_absent") != jour:
+        d["alerte_absent"] = jour
+        backups.ecrire(d)
+        notifications.envoyer("sauvegardes", "Sauvegarde en attente",
+                       f"Le disque {d['disque']} n'est pas branché : la sauvegarde partira dès son retour.",
+                       "/#/sauvegardes", famille="sauvegardes")
+
+
+def _sauv_lisible(d):
+    if not d["chemin"] or not backups.phrase():
+        raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
+    if not sauv_disque_present(d):
+        raise HTTPException(409, f"Branche le disque {d['disque']} pour voir les sauvegardes.")

@@ -413,3 +413,49 @@ def supprimer_rang(occ, d, rid):
                 del d["rang_de"][uid]
     d["rangs"] = [r for r in rangs_de(d) if r["id"] != rid]
     occ(["group:delete", rid])
+
+
+# ---- ajouté au découpage de main.py
+import os
+import threading
+from services import activity_log
+from services import notifications
+from services import nextcloud_accounts
+from host import commands
+from security import guard
+
+
+def nuage_usage_en_fond(uids=None):
+    if uids is not None or time.time() - nextcloud_accounts.USAGE["t"] > 600:
+        nextcloud_accounts.USAGE["t"] = time.time()
+        threading.Thread(target=lambda: nextcloud_accounts.actualiser_usage(commands.occ, uids), daemon=True).start()
+
+
+def surveiller_inscriptions():
+    """Nouvelle inscription en attente : alerte aux super admins (une fois par compte)."""
+    code, sortie, _ = commands.occ(["user:list", "--disabled", "--limit=0", "--output=json"])
+    if code != 0:
+        return
+    try:
+        desactives = json.loads(sortie or "{}")
+    except ValueError:
+        return
+    d = nextcloud_accounts.lire()
+    vus = set(d["en_attente_vus"])
+    attente = set()
+    for uid, nom in desactives.items():
+        c, s, _ = commands.occ(["user:setting", uid, "registration", "send_welcome_mail_on_enable"])
+        if c == 0 and s.strip() == "yes":
+            attente.add(uid)
+            if uid not in vus:
+                notifications.envoyer("comptes", "Inscription à valider", f"{nom} ({uid}) demande un compte Nextcloud.", "/#/nuage",
+                               famille="nuage", pour=guard.pour_super())
+    if attente != vus:
+        d["en_attente_vus"] = sorted(attente)
+        nextcloud_accounts.ecrire(d)
+    # Un disque ajouté à la main dans Nextcloud (ou avant cette version) serait vu par tous les comptes.
+    try:
+        for nom in nextcloud_accounts.reserver_disques(commands.occ):
+            activity_log.noter("nuage", f"Disque {nom} réservé aux admins dans Nextcloud (il était visible par tous les comptes)")
+    except nextcloud_accounts.Erreur:
+        pass

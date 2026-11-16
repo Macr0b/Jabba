@@ -12,29 +12,31 @@ import uuid
 
 import pytest
 
-import main
+import glob
+
 from conftest import APP, EN_ROOT
+from host import commands
 
 
 def test_le_script_passe_par_un_fichier(monkeypatch):
     appels = []
-    monkeypatch.setattr(main, "hote", lambda cmd, timeout=30, entree=None: (appels.append((cmd, entree)), (0, "", ""))[1])
+    monkeypatch.setattr(commands, "hote", lambda cmd, timeout=30, entree=None: (appels.append((cmd, entree)), (0, "", ""))[1])
     script = 'L="a b"; echo "${L% *}"'
-    main.lancer_sur_serveur("jabba-test-1", script, "bash", ("Nice=10",))
+    commands.lancer_sur_serveur("jabba-test-1", script, "bash", ("Nice=10",))
     (ecrire, contenu), (lancer, _) = appels
     assert contenu.endswith(script) and contenu.startswith('rm -f "$0"')
     assert "$" not in " ".join(lancer)                       # rien que systemd puisse remplacer
-    assert lancer == ["systemd-run", "--unit=jabba-test-1", "--collect", "-p", "Nice=10", "bash", f"{main.DOSSIER_TACHES}/jabba-test-1.sh"]
+    assert lancer == ["systemd-run", "--unit=jabba-test-1", "--collect", "-p", "Nice=10", "bash", f"{commands.DOSSIER_TACHES}/jabba-test-1.sh"]
 
 
 def test_nom_de_tache_verifie():
     with pytest.raises(ValueError):
-        main.lancer_sur_serveur("x; reboot", "true")
+        commands.lancer_sur_serveur("x; reboot", "true")
 
 
 def test_aucun_script_en_ligne_de_commande_de_systemd_run():
     """Garde-fou : plus de « systemd-run … sh -c <script> » avec ${…} dans le code."""
-    source = open(os.path.join(APP, "main.py")).read()
+    source = "".join(open(f).read() for f in glob.glob(os.path.join(APP, "**", "*.py"), recursive=True))
     for appel in re.findall(r'hote\(\["systemd-run".*?\]\)', source, re.S):
         assert "${" not in appel and "script" not in appel, appel
 
@@ -48,10 +50,10 @@ def test_vrai_systemd_run(tmp_path):
     os.chmod(tmp_path, 0o755)
     sortie = tmp_path / "sortie"
     unite = "jabba-test-" + uuid.uuid4().hex[:8]
-    os.makedirs(main.DOSSIER_TACHES, exist_ok=True)
-    with open(f"{main.DOSSIER_TACHES}/{unite}.sh", "w") as f:
+    os.makedirs(commands.DOSSIER_TACHES, exist_ok=True)
+    with open(f"{commands.DOSSIER_TACHES}/{unite}.sh", "w") as f:
         f.write(f'rm -f "$0"\nL="jabba v1.2.3 abc"\necho "${{L% *}}|${{L##* }}" > {sortie}\n')
-    cmd = main.commande_tache(unite)
+    cmd = commands.commande_tache(unite)
     subprocess.run([cmd[0], "--wait"] + cmd[1:], check=True, capture_output=True)
     assert sortie.read_text().strip() == "jabba v1.2.3|abc"
-    assert not os.path.exists(f"{main.DOSSIER_TACHES}/{unite}.sh")
+    assert not os.path.exists(f"{commands.DOSSIER_TACHES}/{unite}.sh")

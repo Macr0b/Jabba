@@ -223,3 +223,28 @@ def scruter(hote, hote_entree, nextcloud_actif, prevenir, autres_noms):
         prevenir("nouveau_disque", f"Nouveau disque : {entree['nom']}",
                  "Prêt, en lecture seule" + (", visible dans Nextcloud" if nc else "") +
                  f". Jellyfin le voit dans /disques/{entree['dossier']}.", "/#/disques")
+
+
+# ---- ajouté au découpage de main.py
+import os
+import threading
+from services import disk_browser
+from services import auto_disks
+from services import notifications
+from host import commands
+from services import files_source
+
+
+def scruter_disques():
+    files_source.reveiller_disques()   # un disque rebranché est ouvert tout seul, sans attendre qu'on le consulte
+    auto_disks.scruter(commands.hote, commands.hote_entree, lambda: files_source.source() == "nextcloud",
+                         lambda t, ti, tx, u: notifications.envoyer(t, ti, tx, u, famille="disque"),
+                         lambda: list(files_source.disques_env()) + list(disk_browser.racines()))
+
+
+def relier_disques_nextcloud():
+    if files_source.source() != "nextcloud":
+        return
+    for x in auto_disks.lire()["disques"]:
+        if not x.get("nextcloud"):
+            auto_disks.relier_nextcloud(commands.hote, x)

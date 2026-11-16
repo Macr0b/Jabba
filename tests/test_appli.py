@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from security import accounts
 import main
+from services import guest_network
 
 H = {"X-Jabba": "1"}
 
@@ -47,7 +48,7 @@ def test_dockge_jamais_ouvert_au_wifi(client):
 
 
 def test_regles_pare_feu_bloquent_toujours_dockge():
-    regles = main.regles_voulues("enp1s0", {"wifi": {"dockge": True, "jellyfin": True}})
+    regles = guest_network.regles_voulues("enp1s0", {"wifi": {"dockge": True, "jellyfin": True}})
     assert any("--ctorigdstport 5001" in r for r in regles)
     assert not any("--ctorigdstport 8096" in r for r in regles)
 

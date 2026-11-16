@@ -107,3 +107,66 @@ def script(dossier, tag, cle):
     return (f"cd '{dossier}' && {remettre} && {git} fetch --quiet --tags --force origin && {verifier} && "
             f"{git} -c advice.detachedHead=false checkout --quiet --force \"$SHA\" && "
             "docker compose up -d --build && docker image prune -f")
+
+
+# ---- ajouté au découpage de main.py
+import os
+import re
+from services import app_update
+from services import notifications
+import config
+from host import commands
+
+
+# ---------------------------------------------------------------- mise à jour de l'appli
+def dossier_appli():
+    code, sortie, _ = commands.hote(["docker", "inspect", "-f", '{{index .Config.Labels "com.docker.compose.project.working_dir"}}', "jabba-app"])
+    d = sortie.strip()
+    return d if code == 0 and re.fullmatch(r"/[\w./-]+", d) else None
+
+
+MAJ = {"unite": None, "version": None, "debut": 0, "signale": False}
+
+
+def etat_maj():
+    """Où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine."""
+    if not MAJ["unite"]:
+        return {"statut": "aucune"}
+    u = MAJ["unite"] + ".service"
+    _, actif, _ = commands.hote(["systemctl", "show", "-p", "ActiveState", "--value", u])
+    _, log, _ = commands.hote(["journalctl", "-u", u, "--no-pager", "-o", "cat", "-n", "300"])
+    lignes = [l for l in log.splitlines() if l.strip()]
+    if actif.strip() in ("active", "activating", "reloading"):
+        return {"statut": "en_cours", "version": MAJ["version"], "depuis": int(time.time() - MAJ["debut"]), **avancement_maj(lignes)}
+    if any(app_update.MARQUE_REFUS in l for l in lignes):
+        if not MAJ["signale"]:
+            MAJ["signale"] = True
+            notifications.envoyer("securite", "Mise à jour refusée",
+                           f"La version {MAJ['version']} publiée sur GitHub n'est pas signée par la clé attendue : rien n'a été installé. "
+                           "Si tu n'as rien publié toi-même, ton compte GitHub est peut-être piraté.", "/#/systeme", famille="appli")
+        return {"statut": "echec", "version": MAJ["version"],
+                "detail": ["Signature refusée : cette version n'est pas signée par la clé attendue. Rien n'a été installé, l'appli actuelle continue."]}
+    if any("Failed with result" in l or "status=" in l and "status=0/" not in l for l in lignes):
+        detail = [l for l in lignes if not l.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in l][-6:]
+        if not MAJ["signale"]:
+            MAJ["signale"] = True
+            notifications.envoyer("mises_a_jour", "Mise à jour échouée",
+                           f"La version {MAJ['version']} ne s'est pas installée. Détails dans Système.", "/#/systeme", famille="appli")
+        return {"statut": "echec", "version": MAJ["version"], "detail": detail}
+    return {"statut": "termine", "version": MAJ["version"]}
+
+
+def avancement_maj(lignes):
+    """Étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure."""
+    texte = "\n".join(lignes)
+    if re.search(r"Container \S+\s+(Recreate|Starting|Started|Running)", texte):
+        return {"etape": "Redémarrage de l'appli", "pourcent": 92}
+    etapes = re.findall(r"\[(?:[\w-]+ )?(\d+)/(\d+)\]", texte)
+    if etapes:
+        x, y = (int(v) for v in etapes[-1])
+        return {"etape": f"Construction de l'appli (étape {x} sur {y})", "pourcent": 20 + round(65 * x / max(y, 1))}
+    if "Signature valable" in texte and not re.search(r"Building|building|load build definition", texte):
+        return {"etape": "Signature vérifiée", "pourcent": 15}
+    if re.search(r"Building|building|load build definition|resolve image config", texte):
+        return {"etape": "Construction de l'appli", "pourcent": 20}
+    return {"etape": "Téléchargement de la nouvelle version", "pourcent": 8}
