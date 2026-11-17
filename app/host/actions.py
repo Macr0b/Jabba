@@ -20,6 +20,7 @@ Nextcloud, système, réseau invités, sauvegardes, compte du serveur).
 
 import hmac
 import re
+import shlex
 
 MOUNT_ROOTS = ("/srv/", "/mnt/", "/media/")
 DEVICE = re.compile(r"/dev/(sd[a-z]{1,2}|nvme\d{1,2}n\d{1,2}|mmcblk\d{1,2}|hd[a-z])")
@@ -129,6 +130,8 @@ ANTIVIRUS_COMPOSE = """services:
   antivirus:
     image: clamav/clamav:stable
     container_name: antivirus
+    # Priorité basse : une longue analyse de disque ne ralentit pas le reste du serveur.
+    cpu_shares: 256
     volumes:
       - signatures:/var/lib/clamav
       - /srv:/srv:ro
@@ -162,6 +165,16 @@ def _scan_files(args):
     # --fdpass : le fichier est ouvert ici et transmis à clamd, qui n'a pas besoin d'avoir le droit de le lire.
     command = ["docker", "exec", "antivirus", "clamdscan", "--no-summary", "--infected", "--fdpass", "--"]
     return command + checked, 1800
+
+
+def _scan_disk(args):
+    """Analyse complète d'un disque, en tâche de fond (des heures pour un gros disque), en priorité basse.
+    Le résultat (lignes « chemin: menace FOUND ») se lit ensuite dans le journal de la tâche."""
+    path = _folder_path(args.get("chemin"))
+    if not path.startswith("/srv/"):
+        raise ActionError("L'antivirus ne voit que /srv")
+    script = "exec docker exec antivirus clamdscan --no-summary --infected --fdpass -- " + shlex.quote(path) + "\n"
+    return _background(_task_unit(args.get("unite")), script, "sh", ("Nice=19", "IOSchedulingClass=idle"))
 
 
 # ---------------------------------------------------------------- outils (conteneurs Docker)
@@ -801,6 +814,7 @@ ACTIONS = {
     "installer_antivirus": _install_antivirus,
     "retirer_antivirus": _remove_antivirus,
     "analyser_fichiers": _scan_files,
+    "analyser_disque": _scan_disk,
     "liste_conteneurs": _list_containers,
     "conso_conteneurs": _containers_usage,
     "image_du_conteneur": _container_image,

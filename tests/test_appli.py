@@ -138,3 +138,18 @@ def test_adresses_de_l_interface_changent_a_chaque_version(client):
     for adresse in ("/static/v1/../../main.py", "/static/v1/%2e%2e/%2e%2e/main.py", "/static/v1/..%2f..%2fmain.py"):
         assert "app.mount" not in client.get(adresse).text  # jamais un fichier hors de l'interface
     assert client.get("/static/vX/js/main.js").status_code == 404  # « vX » n'est pas une version
+
+
+def test_antivirus_disques_par_l_api(client, tmp_path, monkeypatch):
+    """La carte de l'Établi : les disques, cocher pour la semaine, analyser maintenant (démo)."""
+    from services import antivirus
+
+    monkeypatch.setattr(antivirus, "STATE_FILE", str(tmp_path / "av.json"))
+    connecter(client, "serveur-demo", "demo-mot-de-passe")
+    disques = client.get("/api/antivirus", headers=H).json()["disques"]
+    assert disques[0] == {"chemin": "/srv/data", "nom": "Disque de données", "chaque_semaine": True, "analyse": None}
+    r = client.post("/api/antivirus/disques", json={"chemin": "/srv/data", "chaque_semaine": False}, headers=H)
+    assert r.status_code == 200
+    assert client.get("/api/antivirus", headers=H).json()["disques"][0]["chaque_semaine"] is False
+    assert client.post("/api/antivirus/analyser", json={"chemin": "/etc"}, headers=H).status_code == 404
+    assert client.post("/api/antivirus/analyser", json={"chemin": "/srv/data"}, headers=H).status_code == 200

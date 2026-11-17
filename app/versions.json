@@ -4,7 +4,9 @@
     "date": "2026-11-17",
     "changements": [
       "Les vidéos AVI (et WMV, FLV, MPG, M2TS, 3GP, OGV, DivX) s'ouvrent dans le lecteur au lieu d'être téléchargées : le serveur les convertit, comme les MKV.",
-      "Disques USB en exFAT, FAT ou NTFS : Nextcloud peut maintenant y écrire (supprimer, renommer, déposer) quand l'écriture est autorisée. Pour un disque déjà ajouté, couper puis rétablir « Écriture autorisée » dans Disques applique la correction."
+      "Disques USB en exFAT, FAT ou NTFS : Nextcloud peut maintenant y écrire (supprimer, renommer, déposer) quand l'écriture est autorisée. Pour un disque déjà ajouté, couper puis rétablir « Écriture autorisée » dans Disques applique la correction.",
+      "Écran Disques : chaque tuile porte le nom de ce qu'elle contient (R2-D2, Disque de données, Disque système), le modèle en petit ; les partitions de démarrage et de swap sont repliées. Mêmes noms dans la carte Santé et ses alertes.",
+      "Antivirus installé de base (une seule fois, si le serveur a au moins 4 Go de mémoire ; jamais réinstallé s'il a été retiré). En plus des dépôts des invités : les nouveaux fichiers du disque de données chaque heure, et les disques cochés en entier chaque semaine, la nuit, en priorité basse (le disque de données est coché de base). Bouton « Analyser maintenant » pour chaque disque."
     ]
   },
   {

@@ -111,3 +111,11 @@ body.plein-ecran main {
     font-size: 12px;
   }
 }
+
+/* Antivirus : un disque par ligne (nom et dernière analyse ; chaque semaine ; analyser maintenant). */
+.disque-antivirus .actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
