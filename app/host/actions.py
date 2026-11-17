@@ -463,10 +463,14 @@ def _task_log(args):
 # entier (ce qui lui permettrait d'y écrire n'importe quoi). Les chemins et noms passent par des
 # variables (ENVIRON pour awk, $1… pour le shell), jamais dans le texte des scripts.
 AUTO_DISKS_ROOT = "/srv/disques"
+# exFAT, FAT et NTFS n'ont pas de droits par fichier : ils sont donnés au montage. Le compte du
+# serveur (1000) en est propriétaire, et le groupe www-data (33, Nextcloud) peut aussi écrire ;
+# les autres (Jellyfin…) lisent seulement.
+SHARED_RIGHTS = "uid=1000,gid=33,umask=002"
 DISK_FORMATS = {  # format reconnu -> (type pour fstab, options)
-    "exfat": ("exfat", "uid=1000,gid=1000"),
-    "vfat": ("vfat", "uid=1000,gid=1000,utf8"),
-    "ntfs": ("ntfs3", "uid=1000,gid=1000"),
+    "exfat": ("exfat", SHARED_RIGHTS),
+    "vfat": ("vfat", SHARED_RIGHTS + ",utf8"),
+    "ntfs": ("ntfs3", SHARED_RIGHTS),
     "ext4": ("ext4", ""),
 }
 UUID = re.compile(r"[0-9A-Fa-f][0-9A-Fa-f-]{3,35}")
@@ -494,9 +498,15 @@ DISK_MODE = (
     FSTAB
     + """set -e
 T=$(mktemp)
-if ! P="$1" M="$2" awk '!/^[[:space:]]*#/ && NF>=4 && $2==ENVIRON["P"] {
+if ! P="$1" M="$2" R="$3" awk '!/^[[:space:]]*#/ && NF>=4 && $2==ENVIRON["P"] {
+  shared = ($3 == "exfat" || $3 == "vfat" || $3 == "ntfs3")
   n = split($4, o, ","); s = ENVIRON["M"]
-  for (i = 1; i <= n; i++) if (o[i] != "ro" && o[i] != "rw") s = s "," o[i]
+  for (i = 1; i <= n; i++) {
+    if (o[i] == "ro" || o[i] == "rw") continue
+    if (shared && o[i] ~ /^(uid|gid|umask|fmask|dmask)=/) continue
+    s = s "," o[i]
+  }
+  if (shared) s = s "," ENVIRON["R"]
   $4 = s; f = 1 }
   {print} END {exit !f}' "$F" > "$T"; then
   rm -f "$T"; echo "Ce disque n'est pas déclaré sur le serveur." >&2; exit 4
@@ -607,7 +617,9 @@ def _disk_mode(args):
     if path == "/srv/data":
         raise ActionError("Le disque de données reste en écriture.")
     mode = "rw" if args.get("ecriture") is True else "ro"
-    return ["sh", "-c", DISK_MODE, "mode", path, mode], 30
+    # Les droits partagés sont remis à chaque réglage : un disque déclaré avant la 0.15.1 (gid=1000)
+    # devient inscriptible par Nextcloud la prochaine fois qu'on le règle.
+    return ["sh", "-c", DISK_MODE, "mode", path, mode, SHARED_RIGHTS], 30
 
 
 def _forget_disk(args):

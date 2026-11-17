@@ -3,7 +3,8 @@
     "version": "0.15.1",
     "date": "2026-11-17",
     "changements": [
-      "Les vidéos AVI (et WMV, FLV, MPG, M2TS, 3GP, OGV, DivX) s'ouvrent dans le lecteur au lieu d'être téléchargées : le serveur les convertit, comme les MKV."
+      "Les vidéos AVI (et WMV, FLV, MPG, M2TS, 3GP, OGV, DivX) s'ouvrent dans le lecteur au lieu d'être téléchargées : le serveur les convertit, comme les MKV.",
+      "Disques USB en exFAT, FAT ou NTFS : Nextcloud peut maintenant y écrire (supprimer, renommer, déposer) quand l'écriture est autorisée. Pour un disque déjà ajouté, couper puis rétablir « Écriture autorisée » dans Disques applique la correction."
     ]
   },
   {

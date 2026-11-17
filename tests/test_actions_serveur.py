@@ -350,20 +350,20 @@ def test_disque_declare_regle_puis_oublie(tmp_path):
     lignes = fstab.read_text().splitlines()
     assert lignes[:3] == FSTAB_DEPART.splitlines()  # rien d'autre n'a bougé
     assert lignes[3] == "# Ajouté par l'appli Jabba : Mes photos"
-    assert lignes[4].startswith("UUID=1234-ABCD /srv/disques/Mes-photos exfat ro,uid=1000")
+    assert lignes[4].startswith("UUID=1234-ABCD /srv/disques/Mes-photos exfat ro,uid=1000,gid=33,umask=002,nofail")
     assert (tmp_path / "fstab.jabba-bak").read_text() == FSTAB_DEPART
     assert _lancer_sur_faux_serveur(tmp_path, declarer).returncode == 3  # déjà déclaré : refusé
 
     ecriture = actions.build("mode_disque", {"chemin": "/srv/disques/Mes-photos", "ecriture": True})[0]
     assert _lancer_sur_faux_serveur(tmp_path, ecriture).returncode == 0
     ligne = fstab.read_text().splitlines()[4]
-    assert ligne.split()[3].startswith("rw,uid=1000") and ",ro" not in ligne
+    assert ligne.split()[3].startswith("rw,") and ",ro" not in ligne and "gid=33,umask=002" in ligne
     assert fstab.read_text().splitlines()[:4] == lignes[:4]
     lecture = actions.build("mode_disque", {"chemin": "/srv/disques/Mes-photos", "ecriture": "oui"})[
         0
     ]  # seul True vaut écriture
     _lancer_sur_faux_serveur(tmp_path, lecture)
-    assert fstab.read_text().splitlines()[4].split()[3].startswith("ro,uid=1000")
+    assert fstab.read_text().splitlines()[4].split()[3].startswith("ro,")
     absent = actions.build("mode_disque", {"chemin": "/srv/disques/Autre", "ecriture": True})[0]
     avant = fstab.read_text()
     assert _lancer_sur_faux_serveur(tmp_path, absent).returncode == 4 and fstab.read_text() == avant
@@ -552,3 +552,21 @@ def test_plus_aucune_commande_directe_hors_de_la_liste_fermee():
             continue
         texte = open(fichier, encoding="utf-8").read()
         assert "run_on_host" not in texte and "nsenter" not in texte, fichier
+
+
+def test_ancien_disque_rendu_inscriptible_pour_nextcloud(tmp_path):
+    """Un disque exFAT déclaré avant la 0.15.1 (gid=1000) : Nextcloud (www-data, 33) ne pouvait pas y écrire.
+    Le régler en écriture remet les droits partagés ; un disque ext4 garde ses options."""
+    fstab = tmp_path / "fstab"
+    fstab.write_text(
+        "UUID=aaaa / ext4 defaults 0 1\n"
+        "UUID=B1 /srv/disques/R2-D2 exfat ro,uid=1000,gid=1000,nofail,x-systemd.automount 0 0\n"
+        "UUID=c2 /srv/disques/Linux ext4 ro,nofail,x-systemd.automount 0 0\n"
+    )
+    for chemin in ("/srv/disques/R2-D2", "/srv/disques/Linux"):
+        commande = actions.build("mode_disque", {"chemin": chemin, "ecriture": True})[0]
+        assert _lancer_sur_faux_serveur(tmp_path, commande).returncode == 0
+    lignes = fstab.read_text().splitlines()
+    assert lignes[1].split()[3] == "rw,nofail,x-systemd.automount,uid=1000,gid=33,umask=002"
+    assert lignes[2].split()[3] == "rw,nofail,x-systemd.automount"
+    assert lignes[0] == "UUID=aaaa / ext4 defaults 0 1"
