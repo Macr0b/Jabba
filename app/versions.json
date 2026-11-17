@@ -1,7 +1,7 @@
 [
   {
     "version": "0.14.0",
-    "date": "2026-11-16",
+    "date": "2026-11-17",
     "changements": [
       "Apparence (Système) : clair, sombre, ou comme l'appareil. Le choix vaut pour chaque appareil et s'applique dès l'ouverture, sans flash.",
       "Santé des disques : le temps affiché est le total de fonctionnement depuis la fabrication du disque (et non depuis le dernier démarrage), désormais écrit clairement.",
