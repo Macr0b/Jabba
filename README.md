@@ -66,6 +66,7 @@ app/
   main.py          point d'entrée : branche les routes et la surveillance
   config.py        réglages lus au démarrage (.env)
   guest_door.py    la porte du Wi-Fi (page invités, conteneur sans pouvoirs)
+  interface_files.py  fichiers de l'interface : adresses avec la version, revérifiés à chaque ouverture
   watchers.py      surveillance en fond (disques, batterie, mises à jour…)
   host/            actions sur le serveur : liste fermée (actions.py), service privilégié (host_service.py), ancienne voie (commands.py)
   security/        contrôle d'accès, sessions, comptes admin, mot de passe du serveur, règles des mots de passe, double vérification

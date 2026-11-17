@@ -195,3 +195,8 @@ def test_envois_en_cours_sur_le_disque_et_caches(etat):
 
     assert tempfile.gettempdir().endswith(".envois-en-cours")
     assert os.path.basename(tempfile.gettempdir()).startswith(".")
+
+
+def test_porte_des_invites_interface_reverifiee():
+    r = wifi().get("/static/js/core/i18n.js")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"

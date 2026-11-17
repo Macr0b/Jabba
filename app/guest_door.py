@@ -9,8 +9,8 @@ import os
 import tempfile
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from interface_files import InterfaceFiles, index_page
 
 from services import guests
 
@@ -93,10 +93,10 @@ def forbidden(reste: str):
     raise HTTPException(404, "Indisponible sur le Wi-Fi : l'administration passe par Tailscale.")
 
 
-app.mount("/static", StaticFiles(directory=guests.STATIC_DIR), name="static")
+app.mount("/static", InterfaceFiles(directory=guests.STATIC_DIR), name="static")
 
 
 @app.get("/")
 @app.get("/{reste:path}")
 def wifi_page(reste: str = ""):
-    return FileResponse(os.path.join(guests.STATIC_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
+    return index_page(guests.STATIC_DIR)

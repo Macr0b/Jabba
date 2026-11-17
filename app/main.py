@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from interface_files import InterfaceFiles, index_page
 
 import config
 import watchers
@@ -118,7 +118,7 @@ def service_worker():
     )
 
 
-app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
+app.mount("/static", InterfaceFiles(directory=config.STATIC_DIR), name="static")
 
 
 @app.get("/")
@@ -126,4 +126,4 @@ app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
 def page(reste: str = ""):
     if reste.startswith("api/"):
         raise HTTPException(404)
-    return FileResponse(os.path.join(config.STATIC_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
+    return index_page(config.STATIC_DIR)

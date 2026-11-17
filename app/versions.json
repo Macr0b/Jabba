@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.14.1",
+    "date": "2026-11-17",
+    "changements": [
+      "Après une mise à jour, l'interface est toujours la nouvelle : les adresses des scripts et des styles portent la version de Jabba, et le navigateur revérifie chaque fichier. Avant, il pouvait garder d'anciens écrans plusieurs jours (le bouton Terminal restait visible, l'antivirus n'apparaissait pas dans l'Établi)."
+    ]
+  },
+  {
     "version": "0.14.0",
     "date": "2026-11-17",
     "changements": [
