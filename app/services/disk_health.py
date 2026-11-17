@@ -20,7 +20,7 @@ import time
 
 import config
 from host import actions, commands
-from services import json_files, notifications
+from services import disk_names, json_files, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "sante-disques.json")
@@ -105,7 +105,7 @@ def assess(report):
 
 # ---------------------------------------------------------------- lecture
 def _physical_disks():
-    code, output, _ = commands.run_action("liste_disques")
+    code, output, _ = commands.run_action("arbre_disques")
     if code != 0:
         return []
     try:
@@ -142,7 +142,7 @@ def _smart_report(path, usb):
 
 DEMO_DISKS = {
     "demo-ssd": {
-        "nom": "SSD interne /dev/sda",
+        "nom": "Disque système",
         "etat": "bon",
         "raisons": [],
         "temperature": 36,
@@ -151,7 +151,7 @@ DEMO_DISKS = {
         "compteurs": {},
     },
     "demo-r2": {
-        "nom": "R2-D2 /dev/sdb",
+        "nom": "R2-D2",
         "etat": "a_surveiller",
         "raisons": ["3 secteurs remplacés"],
         "temperature": 41,
@@ -173,7 +173,7 @@ def check_all(now=None):
     current = {}
     for device in _physical_disks():
         key = device.get("serial") or device["path"]
-        name = " ".join(part for part in (device.get("model") or "", device["path"]) if part).strip()
+        name = disk_names.title(device)
         report = _smart_report(device["path"], device.get("tran") == "usb")
         if report is None:
             old = previous.get(key)
@@ -195,7 +195,8 @@ def check_all(now=None):
         if got_worse or (counts_grew and before):
             notifications.send(
                 "sante_disques",
-                f"Disque {LABELS[level].lower()} : {name}",
+                f"Disque {LABELS[level].lower()} : {name}"
+                + (f" ({device['model'].strip()})" if device.get("model") else ""),
                 " · ".join(reasons) + ". Vérifie que la sauvegarde est à jour.",
                 "/#/disques",
                 family="disque",

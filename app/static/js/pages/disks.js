@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : pages.disques (écran)
-//   interne : disksRefresh (la carte Santé des disques : components/disk_health_card.js)
+//   interne : partitionsHtml, disksRefresh (la carte Santé des disques : components/disk_health_card.js)
 import { confirmAction, dialogElement, toast } from "../components/dialogs.js";
 import { diskHealthCard } from "../components/disk_health_card.js";
 import { api } from "../core/api.js";
@@ -12,6 +12,32 @@ import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml } from "../core/tasks.js";
 import { t } from "../core/i18n.js";
+
+/** Les lignes des partitions d'un disque (nom, usage, réglages des disques de Jabba). */
+function partitionsHtml(partitions) {
+  return partitions
+    .map(
+      (item) => `
+  <div class="part">
+    <div><strong>${escapeHtml(item.etiquette || item.nom)}</strong> <span class="note">· ${escapeHtml(item.type || "?")} · ${formatBytes(item.taille)}</span><div class="note">${escapeHtml(item.role)}${item.montage && item.role !== item.montage ? " · " + escapeHtml(item.montage) : ""}</div></div>
+    <div class="note">${item.usage ? formatBytes(item.usage.utilise) + t(" utilisés") : ""}</div>
+    ${item.usage ? `<div class="jauge"><span style="width:${formatPercent(item.usage)}%"></span></div>` : ""}
+    ${
+      item.disque_jabba
+        ? t`<div class="reglages-disque">
+      <label class="ligne-reglage"><span><strong>Écriture autorisée</strong><br><span class="note">${item.disque_jabba.ecriture ? t("On peut ajouter et modifier des fichiers. Éjecte avant de débrancher.") : t("Lecture seule : tu peux débrancher à tout moment.")}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${item.disque_jabba.ecriture}" data-mode="${escapeHtml(item.disque_jabba.nom)}"><span></span></button></label>
+      <div class="actions"><button class="btn" data-ejecter="${escapeHtml(item.disque_jabba.nom)}">Éjecter</button>
+      ${item.disque_jabba.auto ? t`<button class="btn btn-danger" data-oublier="${escapeHtml(item.disque_jabba.nom)}">Oublier ce disque</button>` : ""}</div>
+    </div>`
+        : ""
+    }
+    ${item.oublie ? t`<div class="reglages-disque"><span class="note">Disque oublié : il n'est plus ajouté tout seul.</span><button class="btn" data-reprendre="${escapeHtml(item.oublie)}">Utiliser ce disque</button></div>` : ""}
+    ${item.illisible && !item.montage ? t`<div class="reglages-disque"><span class="note">Format ${escapeHtml(item.illisible)} : illisible par le serveur. Pour l'utiliser ici, reformate-le en exFAT depuis le Mac (Utilitaire de disque).</span></div>` : ""}
+  </div>`,
+    )
+    .join("");
+}
 
 let disksRefresh = 0;
 pages.disques = async () => {
@@ -39,31 +65,13 @@ pages.disques = async () => {
       .map(
         (item) => `
       <article class="carte pad disque">
-        <div class="entete"><div><h2>${escapeHtml(item.modele || item.nom)}</h2><div class="note">${formatBytes(item.taille)} · ${item.externe ? t("Externe (USB)") : t("Interne")} · ${escapeHtml(item.nom)}</div></div></div>
+        <div class="entete"><div><h2>${escapeHtml(item.titre || item.modele || item.nom)}</h2><div class="note">${escapeHtml(item.genre || "")} · ${formatBytes(item.taille)}${item.modele ? " · " + escapeHtml(item.modele) : ""}</div></div></div>
         <div class="parts">${
           item.partitions.length
-            ? item.partitions
-                .map(
-                  (item) => `
-          <div class="part">
-            <div><strong>${escapeHtml(item.etiquette || item.nom)}</strong> <span class="note">· ${escapeHtml(item.type || "?")} · ${formatBytes(item.taille)}</span><div class="note">${escapeHtml(item.role)}${item.montage && item.role !== item.montage ? " · " + escapeHtml(item.montage) : ""}</div></div>
-            <div class="note">${item.usage ? formatBytes(item.usage.utilise) + t(" utilisés") : ""}</div>
-            ${item.usage ? `<div class="jauge"><span style="width:${formatPercent(item.usage)}%"></span></div>` : ""}
-            ${
-              item.disque_jabba
-                ? t`<div class="reglages-disque">
-              <label class="ligne-reglage"><span><strong>Écriture autorisée</strong><br><span class="note">${item.disque_jabba.ecriture ? t("On peut ajouter et modifier des fichiers. Éjecte avant de débrancher.") : t("Lecture seule : tu peux débrancher à tout moment.")}</span></span>
-                <button class="interrupteur" role="switch" aria-checked="${item.disque_jabba.ecriture}" data-mode="${escapeHtml(item.disque_jabba.nom)}"><span></span></button></label>
-              <div class="actions"><button class="btn" data-ejecter="${escapeHtml(item.disque_jabba.nom)}">Éjecter</button>
-              ${item.disque_jabba.auto ? t`<button class="btn btn-danger" data-oublier="${escapeHtml(item.disque_jabba.nom)}">Oublier ce disque</button>` : ""}</div>
-            </div>`
-                : ""
-            }
-            ${item.oublie ? t`<div class="reglages-disque"><span class="note">Disque oublié : il n'est plus ajouté tout seul.</span><button class="btn" data-reprendre="${escapeHtml(item.oublie)}">Utiliser ce disque</button></div>` : ""}
-            ${item.illisible && !item.montage ? t`<div class="reglages-disque"><span class="note">Format ${escapeHtml(item.illisible)} : illisible par le serveur. Pour l'utiliser ici, reformate-le en exFAT depuis le Mac (Utilitaire de disque).</span></div>` : ""}
-          </div>`,
-                )
-                .join("")
+            ? partitionsHtml(item.partitions.filter((part) => !part.technique)) +
+              (item.partitions.some((part) => part.technique)
+                ? t`<details class="parts-techniques"><summary class="note">Partitions techniques (${item.partitions.filter((part) => part.technique).length}) : on n'y touche pas</summary>${partitionsHtml(item.partitions.filter((part) => part.technique))}</details>`
+                : "")
             : t`<div class="note part">Aucune partition lisible</div>`
         }
         </div>

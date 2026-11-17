@@ -133,6 +133,19 @@ def test_entretien_des_disques(page):
     expect(carte.locator("[data-defragmenter]")).to_have_count(0)  # rien à défragmenter sous 31
 
 
+def test_tuiles_des_disques_nommees(page):
+    """Chaque tuile porte le nom de ce qu'elle contient ; le modèle en petit ; démarrage et swap repliés."""
+    aller(page, "disques")
+    titres = page.locator("article.disque h2")
+    expect(titres).to_have_text(["Disque système", "Disque de données", "R2-D2", "PHOTOS 2019", "Time Machine"])
+    systeme = page.locator("article.disque").first
+    expect(systeme).to_contain_text("Disque interne")
+    expect(systeme).to_contain_text("SSD 128 Go")
+    technique = systeme.locator("details.parts-techniques")
+    expect(technique).to_contain_text("Partitions techniques (1)")
+    expect(technique.locator(".part")).to_be_hidden()  # replié par défaut
+
+
 def test_antivirus_propose_dans_l_etabli(page):
     aller(page, "outils")
     offre = page.locator("#offre-antivirus")

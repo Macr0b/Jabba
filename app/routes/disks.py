@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Request
 import config
 from host import actions, commands
 from security import guard
-from services import activity_log, auto_disks, files_source, measurements
+from services import activity_log, auto_disks, disk_names, files_source, measurements
 
 router = APIRouter()
 
@@ -84,14 +84,17 @@ def list_disks():
                     if (partition.get("uuid") or "").lower() in forgotten and not mountpoint
                     else None,
                     "illisible": auto_disks.UNREADABLE.get((partition.get("fstype") or "").lower()),
+                    "technique": disk_names.is_technical(partition),
                 }
             )
         result.append(
             {
                 "nom": device["name"],
+                "titre": disk_names.title(device),
+                "genre": disk_names.kind(device),
                 "modele": (device.get("model") or "").strip(),
                 "taille": device["size"],
-                "externe": bool(device.get("rm")) or device.get("tran") == "usb",
+                "externe": disk_names.is_external(device),
                 "partitions": shares,
             }
         )

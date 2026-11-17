@@ -64,3 +64,13 @@
   outline-offset: -2px;
   background: var(--accent-doux) !important;
 }
+
+/* Partitions techniques (démarrage, swap) : repliées, on n'y touche jamais. */
+.parts-techniques summary {
+  cursor: pointer;
+  padding: 10px 0 4px;
+  min-height: 24px;
+}
+.parts-techniques[open] summary {
+  margin-bottom: 4px;
+}

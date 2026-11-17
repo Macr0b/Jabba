@@ -105,6 +105,8 @@ SYSTEM = {
 DISKS = [
     {
         "nom": "sdb",
+        "titre": "Disque système",
+        "genre": "Disque interne",
         "modele": "SSD 128 Go",
         "taille": 128 * 10**9,
         "externe": False,
@@ -117,6 +119,7 @@ DISKS = [
                 "montage": "/boot/efi",
                 "role": "Démarrage",
                 "usage": None,
+                "technique": True,
             },
             {
                 "nom": "sdb2",
@@ -131,6 +134,8 @@ DISKS = [
     },
     {
         "nom": "sda",
+        "titre": "Disque de données",
+        "genre": "Disque interne",
         "modele": "HDD 1 To",
         "taille": 10**12,
         "externe": False,
@@ -148,7 +153,9 @@ DISKS = [
     },
     {
         "nom": "sdc",
-        "modele": "R2-D2",
+        "titre": "R2-D2",
+        "genre": "Disque externe USB",
+        "modele": "WDC WD20SDRW",
         "taille": 2 * 10**12,
         "externe": True,
         "partitions": [
@@ -166,6 +173,8 @@ DISKS = [
     },
     {
         "nom": "sdd",
+        "titre": "PHOTOS 2019",
+        "genre": "Disque externe USB",
         "modele": "Clé USB",
         "taille": 64 * 10**9,
         "externe": True,
@@ -184,6 +193,8 @@ DISKS = [
     },
     {
         "nom": "sde",
+        "titre": "Time Machine",
+        "genre": "Disque externe USB",
         "modele": "Disque Mac",
         "taille": 500 * 10**9,
         "externe": True,

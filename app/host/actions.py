@@ -66,10 +66,6 @@ def _disk_space(args):
     return ["df", "-B1", "--output=target,size,used", *[_df_path(path) for path in paths]], 30
 
 
-def _physical_disks(args):
-    return ["lsblk", "-J", "-d", "-b", "-o", "NAME,PATH,MODEL,SERIAL,TRAN,TYPE,SIZE"], 30
-
-
 def _smartctl_installed(args):
     return ["sh", "-c", "command -v smartctl"], 10
 
@@ -477,7 +473,7 @@ UUID = re.compile(r"[0-9A-Fa-f][0-9A-Fa-f-]{3,35}")
 DISK_FOLDER = re.compile(r"[\w.-]{1,60}")
 DISK_NAME = re.compile(r"[\w .-]{1,60}")
 FSTAB = "F=/etc/fstab\n"
-DISK_TREE_COLUMNS = "NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,RM,TRAN,TYPE,MODEL,HOTPLUG,PARTTYPE"
+DISK_TREE_COLUMNS = "NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,RM,TRAN,TYPE,MODEL,SERIAL,HOTPLUG,PARTTYPE"
 DECLARE_DISK = (
     FSTAB
     + """set -e
@@ -792,7 +788,6 @@ def _change_server_password(args):
 ACTIONS = {
     "nom_du_serveur": _server_name,
     "espace_disques": _disk_space,
-    "liste_disques": _physical_disks,
     "smartctl_installe": _smartctl_installed,
     "sante_disque": _disk_health,
     "est_monte": _is_mounted,
