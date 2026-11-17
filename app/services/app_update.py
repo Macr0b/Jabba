@@ -85,6 +85,11 @@ def is_newer(current, other):
     return bool(current_tuple and other_tuple and other_tuple > current_tuple)
 
 
+# Depuis la 0.15, l'appli n'a plus accès à tous les appareils : la carte graphique lui est donnée
+# par compose.yaml (JABBA_GPU), posée ici pour les installations d'avant (même ligne qu'installer.sh).
+GPU_SETTING = "[ -e /dev/dri/renderD128 ] && ! grep -q '^JABBA_GPU=' .env && echo 'JABBA_GPU=/dev/dri/renderD128' >> .env"
+
+
 def install_script(folder, tag, key):
     """Commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli).
 
@@ -121,6 +126,7 @@ def install_script(folder, tag, key):
     return (
         f"cd '{folder}' && {restore_owner} && {git_command} fetch --quiet --tags --force origin && {verify} && "
         f'{git_command} -c advice.detachedHead=false checkout --quiet --force "$SHA" && '
+        f"{{ {GPU_SETTING} || true; }} && "
         "docker compose up -d --build && docker image prune -f"
     )
 

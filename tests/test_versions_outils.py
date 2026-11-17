@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from conftest import faux_service
 
 from services import tool_updates
 
@@ -94,7 +95,7 @@ def serveur(tmp_path, monkeypatch):
             return 0, f"{depots}|32.0.1\n", ""
         return 1, "", ""
 
-    monkeypatch.setattr(tool_updates.commands, "run_on_host", hote)
+    faux_service(monkeypatch, hote)
     alertes = []
     monkeypatch.setattr(tool_updates.notifications, "send", lambda *a, **k: alertes.append(a))
     return locales, alertes

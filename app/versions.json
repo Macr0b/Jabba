@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.15.0",
+    "date": "2026-11-17",
+    "changements": [
+      "L'appli web n'a plus aucun droit sur le serveur : ni tous les pouvoirs (privileged), ni la vue sur ses processus, et seulement les capacités utiles pour écrire dans les dossiers et décoder les fichiers sans droits. Toute action passe par le service jabba-hote et sa liste fermée ; l'ancienne voie de secours est retirée.",
+      "Si le service jabba-hote ne répond pas, l'appli le dit (« Le service du serveur ne répond pas ») au lieu d'agir elle-même.",
+      "La carte graphique est donnée au lecteur vidéo de façon explicite (posé tout seul à l'installation ou à la mise à jour s'il y en a une)."
+    ]
+  },
+  {
     "version": "0.14.1",
     "date": "2026-11-17",
     "changements": [

@@ -7,11 +7,17 @@ services:
     # Réseau de Jabba, mais écoute seulement sur 127.0.0.1:8090 :
     # on n'y entre que par Tailscale (tailscale serve).
     network_mode: host
-    # Pour lancer les actions sur Jabba (outils, disques, redémarrage).
-    # Ce conteneur ne reçoit rien d'inconnu : ni la page invités (service ci-dessous),
-    # ni les fichiers à décoder (ffmpeg et Pillow tournent sans droits, bac_a_sable.py).
-    pid: host
-    privileged: true
+    # Aucun droit sur le serveur : toute action passe par le service jabba-hote (liste fermée).
+    # Il garde seulement de quoi écrire dans /srv au nom du compte du serveur (CHOWN, DAC_OVERRIDE,
+    # FOWNER) et lancer ffmpeg et Pillow sans droits (SETUID, SETGID, SETPCAP, KILL : bac_a_sable.py).
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID, SETPCAP, KILL]
+    security_opt:
+      - no-new-privileges:true
+    # La carte graphique, pour le lecteur vidéo (JABBA_GPU dans .env, posé à l'installation
+    # s'il y en a une). Sans elle : un appareil inutile, et la vidéo est convertie sans elle.
+    devices:
+      - "${JABBA_GPU:-/dev/null}:${JABBA_GPU:-/dev/jabba-sans-gpu}"
     depends_on: [jabba-hote]
     volumes:
       - ./donnees:/data
@@ -27,8 +33,7 @@ services:
 
   # Le service privilégié : le seul à agir sur le serveur, et seulement par une liste fermée
   # d'actions (app/host/actions.py). Aucun réseau ; il n'écoute que sur une prise locale
-  # (/run/jabba/hote.sock) partagée avec l'appli. L'appli migre vers lui famille par famille ;
-  # à la dernière étape, elle perdra tous ses droits (recommandation ANSSI).
+  # (/run/jabba/hote.sock) partagée avec l'appli, qui, elle, n'a aucun droit (recommandation ANSSI).
   jabba-hote:
     image: jabba-app:local
     container_name: jabba-hote

@@ -416,6 +416,8 @@ fi
 sed -i "s#dockge=http://[^,]*:5001#dockge=https://$TS_NOM:5001#" .env
 # Compte du serveur : la porte du Wi-Fi (page invités) tourne avec lui, pas en root.
 grep -q '^JABBA_UID=' .env || printf 'JABBA_UID=%s\nJABBA_GID=%s\n' "$(id -u "$MOI")" "$(id -g "$MOI")" >> .env
+# Carte graphique : donnée au lecteur vidéo de l'appli s'il y en a une (compose.yaml, JABBA_GPU).
+[ -e /dev/dri/renderD128 ] && ! grep -q '^JABBA_GPU=' .env && echo 'JABBA_GPU=/dev/dri/renderD128' >> .env
 # Lancée par systemd : la construction va au bout même si ce script s'arrête en route
 # (par exemple s'il tourne dans le terminal de l'appli, qui redémarre à ce moment-là).
 info "Construction de l'appli : 3 à 10 minutes."

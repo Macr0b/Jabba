@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from conftest import faux_service
 
 from services import disk_health
 
@@ -91,7 +92,7 @@ def serveur(tmp_path, monkeypatch):
     faux = FauxServeur()
     monkeypatch.setattr(disk_health, "STATE_FILE", str(tmp_path / "sante.json"))
     monkeypatch.setattr(disk_health.config, "DEMO", False)  # on teste la vraie lecture, avec un faux serveur
-    monkeypatch.setattr(disk_health.commands, "run_on_host", faux)
+    faux_service(monkeypatch, faux)
     alertes = []
     monkeypatch.setattr(disk_health.notifications, "send", lambda *a, **k: alertes.append(a))
     faux.alertes = alertes

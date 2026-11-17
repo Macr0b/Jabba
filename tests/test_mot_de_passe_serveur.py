@@ -3,8 +3,9 @@
 import subprocess
 
 import pytest
+from conftest import faux_service
 
-from host import actions, commands, system_crypt
+from host import actions, system_crypt
 from security import server_password
 
 
@@ -58,7 +59,7 @@ def test_verification_par_le_serveur(monkeypatch):
         vu.append((commande, input_text))
         return 0, f"rob:{empreinte}:19000:0:99999:7:::\n", ""
 
-    monkeypatch.setattr(commands, "run_on_host", faux_hote)
+    faux_service(monkeypatch, faux_hote)
     monkeypatch.setattr(server_password, "_failures", {})
     assert server_password.check_password("rob", "Bon-mot-de-passe")
     assert not server_password.check_password("rob", "Mauvais")
@@ -82,9 +83,8 @@ def test_seul_un_compte_de_personne(tmp_path):
 
 def test_changement_par_le_service(monkeypatch):
     vu = []
-    monkeypatch.setattr(
-        commands,
-        "run_on_host",
+    faux_service(
+        monkeypatch,
         lambda commande, timeout=30, input_text=None: vu.append((commande, input_text)) or (0, "", ""),
     )
     monkeypatch.setenv("JABBA_VERIF_FUITES", "0")

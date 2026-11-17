@@ -7,6 +7,7 @@ import threading
 import time
 
 import pytest
+from conftest import faux_service
 
 from host import actions, commands, host_service
 
@@ -110,7 +111,6 @@ def test_par_la_prise_du_service(monkeypatch):
         time.sleep(0.02)
     assert oct(os.stat(chemin).st_mode)[-3:] == "660"
     monkeypatch.setattr(commands, "HOST_SOCKET", chemin)
-    monkeypatch.setattr(commands, "run_on_host", lambda *a, **k: pytest.fail("l'ancienne voie ne doit pas servir"))
     assert commands.run_action("est_monte", chemin="/srv/disques/R2") == (0, "mountpoint -q /srv/disques/R2", "")
     with pytest.raises(actions.ActionError):
         commands.run_action("ejecter", chemin="/etc")  # refusé avant même d'être envoyé
@@ -127,16 +127,10 @@ def test_par_la_prise_du_service(monkeypatch):
     fil.join(5)
 
 
-def test_sans_service_l_ancienne_voie_avec_la_meme_commande(monkeypatch):
+def test_sans_service_rien_n_est_lance(monkeypatch):
+    """Plus d'ancienne voie : sans le service, l'appli ne peut rien faire sur le serveur, et le dit."""
     monkeypatch.setattr(commands, "HOST_SOCKET", "/nulle/part.sock")
-    vu = []
-    monkeypatch.setattr(
-        commands,
-        "run_on_host",
-        lambda commande, timeout=30, input_text=None: vu.append((commande, timeout)) or (0, "", ""),
-    )
-    commands.run_action("lire_fstab")
-    assert vu == [(["cat", "/etc/fstab"], 10)]
+    assert commands.run_action("lire_fstab") == (1, "", commands.NO_SERVICE)
 
 
 def test_service_isole_dans_compose():
@@ -150,6 +144,20 @@ def test_service_isole_dans_compose():
     assert hote["volumes"] == ["/run/jabba:/run/jabba"]  # ne voit ni les données de l'appli, ni /srv
     assert "/run/jabba:/run/jabba" in services["jabba-app"]["volumes"]
     assert "jabba-hote" in services["jabba-app"]["depends_on"]
+
+
+def test_l_appli_n_a_aucun_droit_sur_le_serveur():
+    """Dernière étape : seul jabba-hote agit sur le serveur ; l'appli n'en a plus les moyens."""
+    import yaml
+
+    racine = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    appli = yaml.safe_load(open(os.path.join(racine, "compose.yaml")))["services"]["jabba-app"]
+    assert "privileged" not in appli and "pid" not in appli  # ni tous les pouvoirs, ni les processus du serveur
+    assert appli["cap_drop"] == ["ALL"] and "no-new-privileges:true" in appli["security_opt"]
+    # Rien qui permette d'entrer dans le serveur ou de monter un disque.
+    assert not {"SYS_ADMIN", "SYS_PTRACE", "SYS_CHROOT", "SYS_MODULE", "NET_ADMIN", "MKNOD"} & set(appli["cap_add"])
+    assert appli["devices"] == ["${JABBA_GPU:-/dev/null}:${JABBA_GPU:-/dev/jabba-sans-gpu}"]
+    assert not any("docker.sock" in str(volume) or str(volume).startswith("/:") for volume in appli["volumes"])
 
 
 def test_gestes_sur_les_outils():
@@ -226,9 +234,8 @@ def test_mot_de_passe_par_entree_standard():
 
 def test_occ_passe_par_la_liste_fermee(monkeypatch):
     vu = []
-    monkeypatch.setattr(
-        commands,
-        "run_on_host",
+    faux_service(
+        monkeypatch,
         lambda commande, timeout=30, input_text=None: vu.append((commande, input_text)) or (0, "ok", ""),
     )
     monkeypatch.setattr(commands.config, "DEMO", False)
