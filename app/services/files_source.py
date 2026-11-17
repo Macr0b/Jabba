@@ -72,7 +72,10 @@ def open_disk(path):
 
 def rescan_in_nextcloud(path):
     """Nextcloud garde en mémoire le contenu d'un disque, même vide (disque débranché) :
-    on lui fait relire le disque et on remet son réglage lecture seule / écriture."""
+    on lui fait relire le disque et on remet son réglage lecture seule / écriture.
+    Seulement si le disque est bien ouvert : relu vide, Nextcloud oublierait ses fichiers et leurs partages."""
+    if not _mount(path):
+        return
     code, output, _ = commands.occ(["files_external:list", "--output=json"])
     if code != 0:
         return  # Nextcloud arrêté ou absent

@@ -122,16 +122,9 @@ async def set_disk_mode(nom: str, request: Request):
         raise HTTPException(404, "Ce disque n'est pas déclaré sur le serveur.")
     if code != 0:
         raise HTTPException(500, "Impossible d'enregistrer le réglage : " + error_output[:200])
-    # Même réglage côté Nextcloud, s'il est activé.
-    code, output, _ = commands.occ(["files_external:list", "--output=json"])
-    if code == 0:
-        try:
-            for mount in json.loads(output):
-                if mount.get("mount_point", "").strip("/") == nom:
-                    readonly = "false" if writable else "true"
-                    commands.occ(["files_external:option", str(mount["mount_id"]), "readonly", readonly])
-        except ValueError:
-            pass
+    # Même réglage côté Nextcloud, qui relit aussi le disque : il garde en mémoire les droits de
+    # chaque fichier, et refuserait sinon de supprimer ou de renommer (« lecture seule ? »).
+    threading.Thread(target=files_source.rescan_in_nextcloud, args=(path,), daemon=True).start()
     activity_log.record("disque", f"{nom} : {'écriture autorisée' if writable else 'lecture seule'}", request.state.nom)
     return {"ok": True, "ecriture": writable}
 

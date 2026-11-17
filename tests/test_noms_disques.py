@@ -79,3 +79,37 @@ def test_l_ecran_garde_le_reglage_pendant_que_le_disque_se_rouvre(monkeypatch):
     partie = disque["partitions"][0]
     assert partie["disque_jabba"] == {"nom": "R2-D2", "ecriture": True, "auto": True}
     assert partie["role"] == "Disque externe (en cours d'ouverture)"
+
+
+def test_nextcloud_relit_le_disque_apres_un_changement_de_droits(monkeypatch):
+    """Nextcloud garde les droits de chaque fichier : sans relecture, il refuse de supprimer."""
+    import json
+
+    from services import files_source
+
+    appels = []
+
+    def occ(args, **k):
+        appels.append(args)
+        if args[0] == "files_external:list":
+            return (
+                0,
+                json.dumps(
+                    [{"mount_id": 3, "mount_point": "/R2-D2", "configuration": {"datadir": "/mnt/disques/R2-D2"}}]
+                ),
+                "",
+            )
+        if args[0] == "user:list":
+            return 0, json.dumps({"rob": "Rob", "lea": "Léa"}), ""
+        return 0, "", ""
+
+    monkeypatch.setattr(files_source.commands, "occ", occ)
+    monkeypatch.setattr(files_source, "is_writable", lambda path: True)
+    monkeypatch.setattr(files_source, "_mount", lambda path: True)
+    files_source.rescan_in_nextcloud("/srv/disques/R2-D2")
+    assert ["files_external:option", "3", "readonly", "false"] in appels
+    assert ["files:scan", "--path=/rob/files/R2-D2"] in appels and ["files:scan", "--path=/lea/files/R2-D2"] in appels
+    appels.clear()
+    monkeypatch.setattr(files_source, "_mount", lambda path: False)  # disque pas ouvert : on ne relit pas
+    files_source.rescan_in_nextcloud("/srv/disques/R2-D2")
+    assert appels == []
