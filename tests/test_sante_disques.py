@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from conftest import faux_service
+from service_factice import faux_service
 
 from services import disk_health
 
@@ -127,6 +127,16 @@ def test_disque_endormi_garde_sa_derniere_lecture(serveur):
     etat = disk_health.check_all(now=2000)
     assert etat["disques"]["U2"]["endormi"] is True and etat["disques"]["U2"]["etat"] == "bon"
     assert etat["disques"]["U2"]["lu"] == 1000
+
+
+def test_disque_endormi_prend_le_nouveau_nom(serveur):
+    """Un nom enregistré avant la 0.15.1 (« modèle /dev/sdb ») est remplacé même si le disque dort."""
+    disk_health.check_all(now=1000)
+    etat = disk_health._read_state()
+    etat["disques"]["U2"]["nom"] = "R2 /dev/sdb"
+    disk_health._write_state(etat)
+    serveur.endormis.add("/dev/sdb")
+    assert disk_health.check_all(now=2000)["disques"]["U2"]["nom"] == "Disque externe"
 
 
 def test_disque_jamais_lu(serveur):

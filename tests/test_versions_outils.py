@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from conftest import faux_service
+from service_factice import faux_service
 
 from services import tool_updates
 

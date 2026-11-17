@@ -35,16 +35,17 @@ function loadHls() {
 export async function startVideo(entry) {
   if (activePlayer) activePlayer.fin();
   let info = null;
+  let serverError = "";
   try {
     info = await api("/api/lecture/infos?chemin=" + encodeURIComponent(entry.chemin));
-  } catch (_) {
-    /* moteur indisponible : lecture directe */
+  } catch (error) {
+    serverError = error.message || ""; // moteur indisponible ou fichier illisible : on essaie la lecture directe
   }
   if (!$("#lecteur")) return;
   // Même lecteur pour toutes les vidéos : lu tel quel quand le navigateur sait le faire, converti sinon.
   return openPlayer(
     entry,
-    info || { duree: 0, audios: [], soustitres: [], video: { codec: "" }, inconnu: true },
+    info || { duree: 0, audios: [], soustitres: [], video: { codec: "" }, inconnu: true, erreur: serverError },
     !info || info.directe,
   );
 }
@@ -87,9 +88,9 @@ async function openPlayer(entry, info, directPlay) {
     timeLabel = $("#lect-temps"),
     playButton = $("#lect-jouer"),
     state = $("#etat-lecteur");
-  const show = (seconds) => {
-    state.textContent = seconds;
-    state.hidden = !seconds;
+  const show = (message) => {
+    state.textContent = message;
+    state.hidden = !message;
   };
 
   const subtitles = () => {
@@ -120,7 +121,11 @@ async function openPlayer(entry, info, directPlay) {
               directPlay = false;
               playback.sid = null;
               from(seconds);
-            } else show(t("Ce format ne se lit pas dans le navigateur."));
+            } else
+              show(
+                t("Ce format ne se lit pas dans le navigateur.") +
+                  (info.erreur ? " " + t`Le serveur n'a pas pu le convertir : ${info.erreur}` : ""),
+              );
           },
           { once: true },
         );

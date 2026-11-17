@@ -3,7 +3,7 @@
 import subprocess
 
 import pytest
-from conftest import faux_service
+from service_factice import faux_service
 
 from host import actions, system_crypt
 from security import server_password

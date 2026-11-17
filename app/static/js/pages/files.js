@@ -4,7 +4,7 @@
 //   partagé : pages.fichiers (écran)
 //   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
 import { confirmAction, dialogElement, toast } from "../components/dialogs.js";
-import { attachSelection, SHORTCUTS } from "../components/file_selection.js";
+import { attachSelection, selectAll, SHORTCUTS } from "../components/file_selection.js";
 import { publicModeOpen } from "../components/public_mode_card.js";
 import { enableDrop } from "../components/drop_targets.js";
 import { droppedItems, pickedItems, uploadItems } from "../components/folder_upload.js";
@@ -286,6 +286,7 @@ pages.fichiers = async (params) => {
         <button class="btn btn-petit${grid ? "" : " actif"}" type="button" data-vue="liste" aria-pressed="${!grid}">Liste</button>
         <button class="btn btn-petit${grid ? " actif" : ""}" type="button" data-vue="grille" aria-pressed="${grid}">Grille</button>
       </div>
+      ${entries.length ? t`<button class="btn btn-petit" type="button" id="tout-selectionner">Tout sélectionner</button>` : ""}
       <button class="lien" type="button" id="aide-clavier" aria-expanded="false">Raccourcis clavier</button>
     </div>
     <dl class="raccourcis" id="raccourcis" hidden>${SHORTCUTS.map(([keys, label]) => `<dt><kbd>${escapeHtml(keys)}</kbd></dt><dd>${escapeHtml(label)}</dd>`).join("")}</dl>
@@ -410,6 +411,8 @@ pages.fichiers = async (params) => {
   if (data.ecriture)
     content.querySelectorAll(".fil a[data-chemin]").forEach((crumb) => enableDrop(crumb, crumb.dataset.chemin, reload));
 
+  const selectAllButton = $("#tout-selectionner");
+  if (selectAllButton) selectAllButton.onclick = selectAll;
   attachSelection(entries, {
     folder: data,
     publicOpen: data.source === "nextcloud" && (await publicModeOpen()),

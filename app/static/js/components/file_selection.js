@@ -1,7 +1,7 @@
 // Sélection de plusieurs fichiers, barre d'actions, clic droit et raccourcis clavier de l'écran Fichiers.
 //
 // Sommaire :
-//   partagé : attachSelection, SHORTCUTS
+//   partagé : attachSelection, selectAll, SHORTCUTS
 //   interne : current, items, setSelected, refresh, renderBar, openMenu, moveFocus, columnCount, onKey
 //
 // Souris : case à cocher, ⌘/Ctrl + clic pour ajouter, Maj + clic pour une plage, clic droit = menu,
@@ -53,6 +53,13 @@ function refresh() {
   renderBar();
 }
 
+/** Tout sélectionner (bouton de l'écran Fichiers, ⌘A / Ctrl+A). */
+export function selectAll() {
+  if (!current) return;
+  current.entries.forEach((_, index) => current.selected.add(index));
+  refresh();
+}
+
 function renderBar() {
   let bar = $("#barre-selection");
   if (!current.selected.size) {
@@ -69,7 +76,9 @@ function renderBar() {
   }
   const count = current.selected.size;
   const writable = current.context.folder.ecriture && selectedEntries().every((entry) => entry.ecriture);
+  const everything = count === current.entries.length;
   bar.innerHTML = t`<strong>${count} sélectionné${count > 1 ? "s" : ""}</strong>
+    ${everything ? "" : t('<button class="btn btn-petit" type="button" data-action="tout">Tout sélectionner</button>')}
     <button class="btn btn-petit" type="button" data-action="telecharger">Télécharger</button>
     ${writable ? t('<button class="btn btn-petit" type="button" data-action="deplacer">Déplacer</button><button class="btn btn-petit btn-danger" type="button" data-action="corbeille">Corbeille</button>') : ""}
     <button class="btn btn-petit" type="button" data-action="aucun" aria-label="Tout désélectionner">✕</button>`;
@@ -84,6 +93,7 @@ function runOnSelection(action) {
   if (action === "telecharger") downloadEntries(entries);
   else if (action === "deplacer") moveEntries(entries, after);
   else if (action === "corbeille") deleteEntries(entries, after);
+  else if (action === "tout") selectAll();
   else {
     current.selected.clear();
     refresh();
@@ -152,8 +162,7 @@ function onKey(event) {
   };
   if (command && event.key.toLowerCase() === "a") {
     event.preventDefault();
-    current.entries.forEach((_, index) => current.selected.add(index));
-    return refresh();
+    return selectAll();
   }
   if (event.key === "Delete" || (command && event.key === "Backspace")) {
     const entries = current.selected.size ? selectedEntries() : focused ? [focused] : [];

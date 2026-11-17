@@ -7,7 +7,7 @@ import threading
 import time
 
 import pytest
-from conftest import faux_service
+from service_factice import faux_service
 
 from host import actions, commands, host_service
 

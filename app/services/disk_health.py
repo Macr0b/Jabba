@@ -178,7 +178,9 @@ def check_all(now=None):
         if report is None:
             old = previous.get(key)
             current[key] = (
-                {**old, "endormi": True} if old else {"nom": name, "etat": "inconnu", "raisons": [], "lu": None}
+                {**old, "nom": name, "endormi": True}
+                if old
+                else {"nom": name, "etat": "inconnu", "raisons": [], "lu": None}
             )
             continue
         level, reasons, details = assess(report)

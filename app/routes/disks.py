@@ -43,6 +43,9 @@ def list_disks():
     usage = measurements.disk_space([mount for mount in mounted if mount.startswith("/")]) if mounted else {}
     roles = {"/": "Système", "/boot/efi": "Démarrage", "/srv/data": "Données"}
     known = {path: name for name, path in files_source.known_disks().items()}
+    # Un disque de Jabba garde ses réglages même pendant qu'il se rouvre (juste après « Écriture autorisée »).
+    by_uuid = {(files_source.disk_uuid(path) or "").lower(): path for path in known}
+    by_uuid.pop("", None)
     auto = {disk["chemin"] for disk in auto_disks.read()["disques"]}
     forgotten = set(auto_disks.read()["oublies"])
     result = []
@@ -60,6 +63,7 @@ def list_disks():
             ):
                 continue
             mountpoint = partition.get("mountpoint")
+            jabba_path = mountpoint if mountpoint in known else by_uuid.get((partition.get("uuid") or "").lower())
             shares.append(
                 {
                     "nom": partition["name"],
@@ -70,15 +74,17 @@ def list_disks():
                     "role": (
                         "Disque externe"
                         if mountpoint in known
+                        else "Disque externe (en cours d'ouverture)"
+                        if jabba_path
                         else roles.get(mountpoint, "Non utilisé" if not mountpoint else mountpoint)
                     ),
                     "usage": usage.get(mountpoint),
                     "disque_jabba": {
-                        "nom": known[mountpoint],
-                        "ecriture": files_source.is_writable(mountpoint),
-                        "auto": mountpoint in auto,
+                        "nom": known[jabba_path],
+                        "ecriture": files_source.is_writable(jabba_path),
+                        "auto": jabba_path in auto,
                     }
-                    if mountpoint in known
+                    if jabba_path
                     else None,
                     "oublie": (partition.get("uuid") or "").lower()
                     if (partition.get("uuid") or "").lower() in forgotten and not mountpoint

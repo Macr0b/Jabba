@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.15.2",
+    "date": "2026-11-17",
+    "changements": [
+      "Fichiers : bouton « Tout sélectionner » (en plus de ⌘A), aussi dans la barre de sélection.",
+      "Disques : l'interrupteur « Écriture autorisée » ne disparaît plus pendant que le disque se rouvre.",
+      "Santé des disques : les nouveaux noms (R2-D2, Disque système…) remplacent tout de suite les anciens, même pour un disque en veille.",
+      "Lecteur vidéo : si le serveur ne peut pas convertir une vidéo, la raison est affichée."
+    ]
+  },
+  {
     "version": "0.15.1",
     "date": "2026-11-17",
     "changements": [

@@ -208,3 +208,13 @@ def test_envoyer_un_dossier_entier(page, dossier, tmp_path):
     expect(page.locator(".element a")).to_have_text(["Jour 1", "carte.txt"])
     page.locator(".element", has_text="Jour 1").locator("a").click()
     expect(page.locator(".element a")).to_have_text(["plage.txt"])
+
+
+def test_tout_selectionner(page, dossier):
+    """Un bouton visible, en plus de ⌘A : tout le dossier est sélectionné, la barre d'actions apparaît."""
+    page.get_by_role("button", name="Tout sélectionner").first.click()
+    barre = page.locator("#barre-selection")
+    expect(barre).to_be_visible()
+    total = page.locator(".element").count()
+    expect(barre).to_contain_text(f"{total} sélectionné")
+    expect(barre.get_by_role("button", name="Tout sélectionner")).to_have_count(0)  # déjà tout

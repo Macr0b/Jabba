@@ -1,6 +1,5 @@
 """Réglages communs des tests : l'appli tourne en démo, dans un dossier jetable."""
 
-import json
 import os
 import shutil
 import subprocess
@@ -85,13 +84,3 @@ def video(tmp_path_factory):
     )
     os.chmod(d, 0o755)
     return str(sortie)
-
-
-def faux_service(monkeypatch, runner):
-    """Le service privilégié sans prise : chaque demande passe par host_service.handle (les vraies
-    vérifications), puis `runner(commande, délai, entrée)` joue la commande à la place du serveur."""
-    from host import commands, host_service
-
-    monkeypatch.setattr(
-        commands, "_ask_service", lambda request, timeout: host_service.handle(json.dumps(request), runner)
-    )
