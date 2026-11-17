@@ -63,9 +63,9 @@ async def enable_backups(request: Request):
     if backups.is_running(settings):
         raise HTTPException(409, "Une sauvegarde est en cours.")
     if not config.DEMO:
-        code, _, _ = commands.run_on_host(["sh", "-c", "command -v restic"])
+        code, _, _ = commands.run_action("restic_installe")
         if code != 0:
-            code, _, error_output = commands.run_on_host(["apt-get", "install", "-y", "restic"], timeout=600)
+            code, _, error_output = commands.run_action("installer_restic")
             if code != 0:
                 raise HTTPException(500, "Installation de restic impossible : " + error_output[-200:])
     new_value = None
@@ -120,7 +120,7 @@ def backup_history(request: Request):
     settings = backups.read()
     backups.require_readable(settings)
     try:
-        return {"copies": backups.snapshots(backups.run_restic, settings, backups.host_data_dir(), config.DEMO)}
+        return {"copies": backups.snapshots(settings, backups.host_data_dir())}
     except RuntimeError as error:
         if "does not exist" in str(error) or "unable to open config" in str(error):
             return {"copies": []}
@@ -135,9 +135,7 @@ def browse_backup(request: Request, id: str, chemin: str = "/"):
     settings = backups.read()
     backups.require_readable(settings)
     try:
-        return {
-            "elements": backups.browse(backups.run_restic, settings, backups.host_data_dir(), id, chemin, config.DEMO)
-        }
+        return {"elements": backups.browse(settings, backups.host_data_dir(), id, chemin)}
     except RuntimeError as error:
         raise HTTPException(500, str(error))
 
@@ -153,7 +151,7 @@ async def restore_from_backup(request: Request):
     settings = backups.read()
     backups.require_readable(settings)
     try:
-        target = backups.restore(backups.run_restic, settings, backups.host_data_dir(), identifier, path, config.DEMO)
+        target = backups.restore(settings, backups.host_data_dir(), identifier, path)
     except RuntimeError as error:
         raise HTTPException(500, str(error))
     activity_log.record("sauvegardes", f"Restauré : {path} (copie {identifier}) → {target}", request.state.nom)

@@ -5,16 +5,13 @@ elle entre dans ses espaces de noms avec nsenter. Tout passe par ce fichier.
 
 Sommaire :
   run_action : une action de la liste fermée (host/actions.py), par le service privilégié
-  run_on_host / run_on_host_with_input / run_shell_on_host : lancer une commande et attendre
-                                 (ancienne voie, en cours de remplacement par run_action)
-  task_command / start_on_host : lancer un script en tâche de fond (systemd-run), qui survit
-                                 au redémarrage de l'appli
-  occ : une commande d'administration de Nextcloud
+  run_on_host : l'ancienne voie (nsenter depuis l'appli), utilisée seulement par run_action
+                quand le service privilégié n'est pas là ; elle disparaîtra avec la dernière étape
+  occ : une commande d'administration de Nextcloud (action « nextcloud »)
 """
 
 import json
 import os
-import re
 import socket
 import subprocess
 
@@ -35,8 +32,9 @@ def run_action(name, input_text=None, **args):
     """
     command, timeout = actions.build(name, args)
     input_text = actions.check_input(name, input_text)
+    to_host = actions.host_input(name, args, input_text)
     if not os.path.exists(HOST_SOCKET):
-        return run_on_host(command, timeout=timeout, input_text=input_text)
+        return actions.finish(name, run_on_host(command, timeout=timeout, input_text=to_host), input_text)
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             connection.settimeout(timeout + 10)
@@ -52,7 +50,7 @@ def run_action(name, input_text=None, **args):
     except OSError:
         # Service arrêté (prise restée là) : tant que l'appli garde ses droits, l'ancienne voie dépanne.
         # Cette solution de secours disparaîtra avec la dernière étape (l'appli sans droits).
-        return run_on_host(command, timeout=timeout, input_text=input_text)
+        return actions.finish(name, run_on_host(command, timeout=timeout, input_text=to_host), input_text)
     try:
         reply = json.loads(answer)
     except ValueError:
@@ -66,44 +64,6 @@ def run_on_host(command, timeout=30, input_text=None):
     full_command = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--"] + command
     completed = subprocess.run(full_command, capture_output=True, text=True, timeout=timeout, input=input_text)
     return completed.returncode, completed.stdout, completed.stderr
-
-
-def run_on_host_with_input(command, input_text, timeout=30):
-    return run_on_host(command, timeout=timeout, input_text=input_text)
-
-
-TASKS_DIR = "/var/lib/jabba/taches"
-
-
-def task_command(unit, interpreter="sh", properties=()):
-    """La commande systemd-run qui lance le script déjà posé pour `unite` (voir lancer_sur_serveur)."""
-    return (
-        ["systemd-run", f"--unit={unit}", "--collect"]
-        + [argument for prop in properties for argument in ("-p", prop)]
-        + [interpreter, f"{TASKS_DIR}/{unit}.sh"]
-    )
-
-
-def start_on_host(unit, script, interpreter="sh", properties=()):
-    """Lance `script` sur le serveur, en tâche de fond (systemd-run) : elle va au bout même si l'appli redémarre.
-
-    Le script est d'abord écrit dans un fichier, puis lancé depuis ce fichier. Surtout pas en ligne
-    de commande : systemd y remplace lui-même tout ce qui ressemble à ${…} avant de le passer au
-    shell, ce qui casse le script en silence. Le fichier s'efface dès que le script démarre.
-    """
-    if not re.fullmatch(r"[a-z0-9-]{3,60}", unit):
-        raise ValueError("Nom de tâche inattendu")
-    path = f"{TASKS_DIR}/{unit}.sh"
-    code, _, error_output = run_on_host_with_input(
-        ["sh", "-c", f"umask 077 && mkdir -p {TASKS_DIR} && cat > {path}"], 'rm -f "$0"\n' + script
-    )
-    if code != 0:
-        return code, "", error_output
-    return run_on_host(task_command(unit, interpreter, properties))
-
-
-def run_shell_on_host(script, timeout=30):
-    return run_on_host(["sh", "-c", script], timeout)
 
 
 # ---------------------------------------------------------------- comptes Nextcloud

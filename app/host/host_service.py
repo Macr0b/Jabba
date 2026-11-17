@@ -45,10 +45,12 @@ def handle(raw, runner=None):
         name = request["action"]
         command, timeout = actions.build(name, request.get("args"))
         input_text = actions.check_input(name, request.get("entree"))
+        to_host = actions.host_input(name, request.get("args"), input_text)
     except (ValueError, KeyError, TypeError) as error:
         return {"code": REFUSED, "sortie": "", "erreur": f"Refusé : {error}"}
     print("action:", name, flush=True)
-    code, output, error_output = runner(command, timeout, input_text)
+    result = runner(command, timeout, to_host)
+    code, output, error_output = actions.finish(name, result, input_text)
     return {"code": code, "sortie": output, "erreur": error_output}
 
 

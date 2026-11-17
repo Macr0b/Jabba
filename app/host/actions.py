@@ -9,13 +9,16 @@ Sommaire
 - ActionError                 : paramètre refusé.
 - build(name, args)           : (commande, délai) pour une action connue, sinon ActionError.
 - check_input(name, text)     : seules certaines actions reçoivent un texte sur l'entrée standard (un mot de passe).
+- host_input(name, args, text): ce qui part vraiment vers la commande (rien pour une vérification de mot de passe).
+- finish(name, result, text)  : le résultat rendu à l'appli (une vérification ne rend que oui ou non).
 - NAMES                       : les actions connues.
 - vérifications               : _folder_path, _device
 
-La migration se fait par familles (voir README, « Organisation du code ») : les actions
-non encore migrées passent toujours par host.commands.run_on_host.
+Toutes les commandes de l'appli sur le serveur passent par ici (familles : disques, outils,
+Nextcloud, système, réseau invités, sauvegardes, compte du serveur).
 """
 
+import hmac
 import re
 
 MOUNT_ROOTS = ("/srv/", "/mnt/", "/media/")
@@ -264,7 +267,7 @@ OCC_BASE = ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
 # Le mot de passe arrive sur l'entrée standard et devient la variable OC_PASS lue par occ :
 # il n'apparaît jamais dans la liste des processus du serveur.
 WITH_PASSWORD = 'export OC_PASS="$(cat)"; exec "$@"'
-INPUT_ACTIONS = frozenset({"nextcloud"})
+INPUT_ACTIONS = frozenset({"nextcloud", "verifier_mot_de_passe_serveur", "changer_mot_de_passe_serveur"})
 
 
 def _nextcloud(args):
@@ -306,6 +309,37 @@ def check_input(name, text):
     return text
 
 
+def host_input(name, args, text):
+    """Le texte donné à la commande sur le serveur. Le mot de passe à vérifier, lui, ne quitte pas le service."""
+    if name == "verifier_mot_de_passe_serveur":
+        return None
+    if name == "changer_mot_de_passe_serveur":
+        if not text or ":" in text or "\n" in text:
+            raise ActionError("Mot de passe refusé (ni « : » ni retour à la ligne).")
+        return f"{args['utilisateur']}:{text}\n"
+    return text
+
+
+def finish(name, result, text):
+    """Pour une vérification de mot de passe, l'empreinte de /etc/shadow reste dans le service :
+    l'appli reçoit seulement 0 (bon), 1 (mauvais) ou 2 (compte illisible ou verrouillé)."""
+    if name != "verifier_mot_de_passe_serveur":
+        return result
+    from host import system_crypt
+
+    code, output, error_output = result
+    if code != 0:
+        return code, "", error_output[:200]
+    fields = output.split(":")
+    password_hash = fields[1] if len(fields) > 1 else ""
+    if not password_hash or password_hash[0] in "!*":
+        return 2, "", "Compte verrouillé ou illisible."
+    computed = system_crypt.hash_with_setting(text or "", password_hash) or ""
+    if hmac.compare_digest(computed, password_hash):
+        return 0, "ok", ""
+    return 1, "", "Mot de passe incorrect."
+
+
 # ---------------------------------------------------------------- système
 TASKS_DIR = "/var/lib/jabba/taches"
 TASK_UNIT = re.compile(r"jabba-[a-z]{2,20}-\d{1,12}")
@@ -313,7 +347,10 @@ APP_FOLDER = re.compile(r"/[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}")
 # Une tâche de fond va au bout même si l'appli redémarre. Son script est posé dans un fichier (pas
 # en ligne de commande : systemd y remplacerait ${…}), passé ici comme argument ($3), jamais
 # collé dans le texte. Le fichier s'efface dès que le script démarre.
-BACKGROUND = 'umask 077 && mkdir -p "$1" && printf "%s" "$3" > "$1/$2.sh" && exec systemd-run --unit="$2" --collect sh "$1/$2.sh"'
+BACKGROUND = (
+    'umask 077 && mkdir -p "$1" && printf "%s" "$3" > "$1/$2.sh" && D="$1" && U="$2" && shift 3'
+    ' && exec systemd-run --unit="$U" --collect "$@" "$D/$U.sh"'
+)
 POWER_SCRIPT = (
     'for f in /sys/class/power_supply/*; do [ -e "$f/type" ] || continue; '
     'echo "$(cat $f/type)|$(cat $f/online 2>/dev/null)|$(cat $f/capacity 2>/dev/null)|$(cat $f/status 2>/dev/null)'
@@ -322,8 +359,10 @@ POWER_SCRIPT = (
 REBOOT = "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"
 
 
-def _background(unit, script):
-    return ["sh", "-c", BACKGROUND, "tache", TASKS_DIR, unit, 'rm -f "$0"\n' + script], 30
+def _background(unit, script, interpreter="sh", properties=()):
+    """Les propriétés (Nice=10…) et l'interpréteur suivent le script, en arguments de systemd-run."""
+    options = [part for prop in properties for part in ("-p", prop)]
+    return ["sh", "-c", BACKGROUND, "tache", TASKS_DIR, unit, 'rm -f "$0"\n' + script, *options, interpreter], 30
 
 
 def _task_unit(value):
@@ -588,6 +627,156 @@ def _cancel_battery_shutdown(args):
     return ["systemctl", "stop", "jabba-arret.timer"], 10
 
 
+# ---------------------------------------------------------------- réseau invités (pare-feu)
+FIREWALL_CHAIN = "JABBA-WIFI"
+INTERFACE = re.compile(r"[A-Za-z0-9_.-]{1,15}")
+# Une règle par port fermé au Wi-Fi ; la chaîne n'est refaite que si elle a changé.
+FIREWALL = """I="$1"; shift
+status=0
+for T in iptables ip6tables; do
+  "$T" -S DOCKER-USER >/dev/null 2>&1 || continue
+  want=$(for p in "$@"; do echo "-A JABBA-WIFI -i $I -p tcp -m conntrack --ctorigdstport $p --ctdir ORIGINAL -j DROP"; done)
+  have=$("$T" -S JABBA-WIFI 2>/dev/null | grep '^-A ')
+  if [ "$want" = "$have" ] && "$T" -C DOCKER-USER -j JABBA-WIFI 2>/dev/null; then continue; fi
+  "$T" -N JABBA-WIFI 2>/dev/null
+  "$T" -F JABBA-WIFI || { status=1; continue; }
+  for p in "$@"; do
+    "$T" -A JABBA-WIFI -i "$I" -p tcp -m conntrack --ctorigdstport "$p" --ctdir ORIGINAL -j DROP || status=1
+  done
+  "$T" -C DOCKER-USER -j JABBA-WIFI 2>/dev/null || "$T" -I DOCKER-USER -j JABBA-WIFI || status=1
+done
+exit $status
+"""
+
+
+def _network_route(args):
+    return ["ip", "-o", "-4", "route", "get", "1.1.1.1"], 10
+
+
+def _wifi_firewall(args):
+    interface = str(args.get("interface") or "")
+    if not INTERFACE.fullmatch(interface):
+        raise ActionError(f"Carte réseau refusée : {interface!r}")
+    ports = args.get("ports")
+    if not isinstance(ports, list) or len(ports) > 64:
+        raise ActionError("Ports refusés")
+    for port in ports:
+        if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+            raise ActionError(f"Port refusé : {port!r}")
+    return ["sh", "-c", FIREWALL, "pare-feu", interface, *(str(port) for port in sorted(ports))], 60
+
+
+# ---------------------------------------------------------------- sauvegardes (restic)
+SNAPSHOT_ID = re.compile(r"[0-9a-f]{8,64}")
+RESTORE_STAMP = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}h\d{2}")
+RESTORE_ROOT = "/srv/data/dossiers/Restaurations"
+RESTORE = 'restic "$@" && chown -R 1000:1000 "$0"'
+BACKUP_PROPERTIES = ("Nice=10", "IOSchedulingClass=idle")
+
+
+def _data_folder(value):
+    """Le dossier des données de l'appli (la clé des sauvegardes y est)."""
+    folder = _app_folder(value)
+    if not folder.endswith("/donnees"):
+        raise ActionError(f"Dossier des données refusé : {folder!r}")
+    return folder
+
+
+def _snapshot_path(value):
+    path = str(value or "")
+    if not path.startswith("/") or len(path) > 4096 or "\x00" in path or "\n" in path:
+        raise ActionError(f"Chemin dans la copie refusé : {path!r}"[:200])
+    return path
+
+
+def _restic_env(args):
+    from services import backups
+
+    disk = _folder_path(args.get("disque"))
+    return [
+        "env",
+        f"RESTIC_REPOSITORY={disk}/{backups.REPOSITORY_FOLDER}",
+        f"RESTIC_PASSWORD_FILE={_data_folder(args.get('donnees'))}/sauvegardes.cle",
+        "RESTIC_CACHE_DIR=/var/cache/restic-jabba",
+    ]
+
+
+def _restic_installed(args):
+    return ["sh", "-c", "command -v restic"], 10
+
+
+def _install_restic(args):
+    return ["apt-get", "install", "-y", "restic"], 600
+
+
+def _restic(args):
+    """Lire les copies, en parcourir une, ou en remettre un morceau dans Restaurations/ (jamais par-dessus)."""
+    gesture = args.get("geste")
+    env = _restic_env(args)
+    if gesture == "copies":
+        return [*env, "restic", "--no-lock", "snapshots", "--tag", "jabba", "--json"], 120
+    snapshot = str(args.get("copie") or "")
+    if not SNAPSHOT_ID.fullmatch(snapshot):
+        raise ActionError(f"Copie refusée : {snapshot!r}")
+    path = _snapshot_path(args.get("chemin"))
+    if gesture == "parcourir":
+        return [*env, "restic", "--no-lock", "ls", "--json", snapshot, path], 120
+    if gesture != "restaurer":
+        raise ActionError(f"Geste refusé : {gesture!r}")
+    stamp = str(args.get("horodatage") or "")
+    if not RESTORE_STAMP.fullmatch(stamp) or path == "/":
+        raise ActionError("Restauration refusée")
+    parent, name = path.rsplit("/", 1)
+    target = f"{RESTORE_ROOT}/{stamp} ({snapshot})"
+    restic_args = ["--no-lock", "restore", f"{snapshot}:{parent or '/'}", "--target", target, "--include", "/" + name]
+    return [*env, "sh", "-c", RESTORE, RESTORE_ROOT, *restic_args], 3600
+
+
+def _start_backup(args):
+    """Le script de la sauvegarde est écrit ICI, à partir des réglages : l'appli ne fournit pas de script."""
+    from services import backups
+
+    sources = args.get("sources")
+    if not isinstance(sources, list) or not sources or not set(sources) <= set(backups.PATHS):
+        raise ActionError(f"Sources refusées : {sources!r}")
+    settings = {"chemin": _folder_path(args.get("disque")), "sources": {key: True for key in sources}}
+    script = backups.backup_script(settings, _data_folder(args.get("donnees")))
+    return _background(_task_unit(args.get("unite")), script, "bash", BACKUP_PROPERTIES)
+
+
+# ---------------------------------------------------------------- compte du serveur
+SERVER_USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
+# Seulement un compte de personne (numéro 1000 à 59999) : jamais root ni un compte de service.
+HUMAN_ACCOUNT = (
+    'u=$(id -u "$1" 2>/dev/null) && [ "$u" -ge 1000 ] && [ "$u" -lt 60000 ] || { echo "Compte refusé" >&2; exit 5; }\n'
+)
+
+
+def _server_user(value):
+    user = str(value or "")
+    if not SERVER_USER.fullmatch(user):
+        raise ActionError(f"Compte refusé : {user!r}")
+    return user
+
+
+def _first_account(args):
+    return ["getent", "passwd", "1000"], 10
+
+
+def _check_server_password(args):
+    return [
+        "sh",
+        "-c",
+        HUMAN_ACCOUNT + 'exec getent shadow "$1"',
+        "verifier",
+        _server_user(args.get("utilisateur")),
+    ], 10
+
+
+def _change_server_password(args):
+    return ["sh", "-c", HUMAN_ACCOUNT + "exec chpasswd", "changer", _server_user(args.get("utilisateur"))], 30
+
+
 ACTIONS = {
     "nom_du_serveur": _server_name,
     "espace_disques": _disk_space,
@@ -637,6 +826,15 @@ ACTIONS = {
     "installer_smartmontools": _install_smartmontools,
     "arret_batterie": _battery_shutdown,
     "annuler_arret_batterie": _cancel_battery_shutdown,
+    "route_reseau": _network_route,
+    "pare_feu_wifi": _wifi_firewall,
+    "restic_installe": _restic_installed,
+    "installer_restic": _install_restic,
+    "restic": _restic,
+    "lancer_sauvegarde": _start_backup,
+    "compte_serveur": _first_account,
+    "verifier_mot_de_passe_serveur": _check_server_password,
+    "changer_mot_de_passe_serveur": _change_server_password,
 }
 NAMES = tuple(ACTIONS)
 

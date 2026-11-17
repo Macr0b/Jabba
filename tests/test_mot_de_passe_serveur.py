@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from host import system_crypt
+from host import actions, commands, system_crypt
 from security import server_password
 
 
@@ -37,14 +37,64 @@ def test_empreinte_invalide():
     assert system_crypt.hash_with_setting("x", "$9$inconnu$") is None
 
 
+def test_la_verification_ne_rend_que_oui_ou_non():
+    """Le service compare lui-même : l'empreinte de /etc/shadow ne sort pas, le mot de passe ne va pas au serveur."""
+    empreinte = _empreinte_openssl("Bon-mot-de-passe", "abcdefgh", "-6")
+    lu = (0, f"rob:{empreinte}:19000:0:99999:7:::\n", "")
+    nom = "verifier_mot_de_passe_serveur"
+    assert actions.host_input(nom, {"utilisateur": "rob"}, "Bon-mot-de-passe") is None
+    assert actions.finish(nom, lu, "Bon-mot-de-passe") == (0, "ok", "")
+    code, sortie, erreur = actions.finish(nom, lu, "Mauvais")
+    assert code == 1 and empreinte not in sortie + erreur
+    assert actions.finish(nom, (0, "rob:!:19000::::::\n", ""), "Bon-mot-de-passe")[0] == 2
+    assert actions.finish(nom, (5, "", "Compte refusé"), "x")[0] == 5
+
+
 def test_verification_par_le_serveur(monkeypatch):
     empreinte = _empreinte_openssl("Bon-mot-de-passe", "abcdefgh", "-6")
-    faux_hote = lambda commande: (0, f"rob:{empreinte}:19000:0:99999:7:::\n", "")
+    vu = []
+
+    def faux_hote(commande, timeout=30, input_text=None):
+        vu.append((commande, input_text))
+        return 0, f"rob:{empreinte}:19000:0:99999:7:::\n", ""
+
+    monkeypatch.setattr(commands, "run_on_host", faux_hote)
     monkeypatch.setattr(server_password, "_failures", {})
-    assert server_password.check_password(faux_hote, "rob", "Bon-mot-de-passe")
-    assert not server_password.check_password(faux_hote, "rob", "Mauvais")
-    verrouille = lambda commande: (0, "rob:!:19000::::::\n", "")
-    assert not server_password.check_password(verrouille, "rob", "Bon-mot-de-passe")
+    assert server_password.check_password("rob", "Bon-mot-de-passe")
+    assert not server_password.check_password("rob", "Mauvais")
+    assert all(entree is None for _, entree in vu)  # le mot de passe n'est jamais envoyé au serveur
+    assert server_password._failures and len(next(iter(server_password._failures.values()))) == 1
+    assert not server_password.check_password("root; reboot", "Bon-mot-de-passe")  # compte refusé, rien lancé
+    assert len(vu) == 2
+
+
+def test_seul_un_compte_de_personne(tmp_path):
+    """root ou un compte de service ne peuvent être ni vérifiés ni changés."""
+    commande, _ = actions.build("changer_mot_de_passe_serveur", {"utilisateur": "root"})
+    sortie = subprocess.run(
+        ["sh", "-c", commande[2].replace("exec chpasswd", "echo change"), *commande[3:]], capture_output=True, text=True
+    )
+    assert sortie.returncode == 5 and "change" not in sortie.stdout
+    for compte in ("Root", "-x", "a b", "rob:x"):
+        with pytest.raises(actions.ActionError):
+            actions.build("verifier_mot_de_passe_serveur", {"utilisateur": compte})
+
+
+def test_changement_par_le_service(monkeypatch):
+    vu = []
+    monkeypatch.setattr(
+        commands,
+        "run_on_host",
+        lambda commande, timeout=30, input_text=None: vu.append((commande, input_text)) or (0, "", ""),
+    )
+    monkeypatch.setenv("JABBA_VERIF_FUITES", "0")
+    server_password.change_password("rob", "Une phrase de passe bien longue")
+    commande, entree = vu[0]
+    assert commande[:2] == ["sh", "-c"] and "chpasswd" in commande[2] and commande[-1] == "rob"
+    assert entree == "rob:Une phrase de passe bien longue\n"
+    assert "Une phrase" not in " ".join(commande)  # jamais dans la liste des processus
+    with pytest.raises(actions.ActionError):
+        actions.host_input("changer_mot_de_passe_serveur", {"utilisateur": "rob"}, "a\nroot:x")
 
 
 def test_blocage_par_personne(monkeypatch):

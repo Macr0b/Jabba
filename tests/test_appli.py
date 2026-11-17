@@ -38,9 +38,9 @@ def test_dockge_jamais_ouvert_au_wifi(client):
 
 
 def test_regles_pare_feu_bloquent_toujours_dockge():
-    regles = guest_network.wanted_rules("enp1s0", {"wifi": {"dockge": True, "jellyfin": True}})
-    assert any("--ctorigdstport 5001" in r for r in regles)
-    assert not any("--ctorigdstport 8096" in r for r in regles)
+    ports = guest_network.closed_ports({"wifi": {"dockge": True, "jellyfin": True}})
+    assert 5001 in ports  # Dockge n'est jamais ouvert au Wi-Fi, même coché
+    assert 8096 not in ports
 
 
 def test_api_admin_sans_session(client):

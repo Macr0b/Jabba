@@ -22,15 +22,23 @@ import json
 import os
 import secrets
 import shlex
+import subprocess
 import threading
 import time
 from datetime import datetime
+
+from fastapi import HTTPException
+
+import config
+from host import actions, commands
+from services import activity_log, app_update, files_source, json_files, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "sauvegardes.json")
 KEY_FILE = os.path.join(DATA_DIR, "sauvegardes.cle")
 STATE_FILE = os.path.join(DATA_DIR, "sauvegarde-etat.json")
 REPOSITORY_FOLDER = ".sauvegardes-jabba"
+RESTORE_ROOT = "/srv/data/dossiers/Restaurations"
 KEEP = {"jours": 7, "semaines": 4, "mois": 6}
 SOURCES = {
     "fichiers": ("Fichiers", "Tes dossiers sur le serveur (/srv/data), sans les films ni les téléchargements"),
@@ -217,21 +225,46 @@ def next_run(settings):
 
 
 # ---------------------------------------------------------------- lire les copies
-def restic_command(settings, host_dir, demo=False):
+def restic_command(settings, host_dir):
+    """En démo seulement : restic lancé dans le conteneur (sur le serveur, c'est l'action « restic »)."""
     return [
         "env",
         f"RESTIC_REPOSITORY={repository(settings)}",
         f"RESTIC_PASSWORD_FILE={os.path.join(host_dir, 'sauvegardes.cle')}",
-        f"RESTIC_CACHE_DIR={'/tmp/restic-jabba-cache' if demo else '/var/cache/restic-jabba'}",
+        "RESTIC_CACHE_DIR=/tmp/restic-jabba-cache",
         "restic",
         "--no-lock",
     ]
 
 
-def snapshots(run, settings, host_dir, demo=False):
-    code, output, error_output = run(
-        restic_command(settings, host_dir, demo) + ["snapshots", "--tag", "jabba", "--json"], 120
-    )
+def run_restic(settings, host_dir, gesture, timeout, **args):
+    """Une lecture ou une restauration restic : par la liste fermée sur le serveur, ou dans le conteneur en démo."""
+    if not config.DEMO:
+        try:
+            return commands.run_action("restic", geste=gesture, disque=settings["chemin"], donnees=host_dir, **args)
+        except actions.ActionError as error:
+            return 1, "", str(error)
+    command = restic_command(settings, host_dir)
+    if gesture == "copies":
+        command += ["snapshots", "--tag", "jabba", "--json"]
+    elif gesture == "parcourir":
+        command += ["ls", "--json", args["copie"], args["chemin"]]
+    else:
+        parent, name = args["chemin"].rsplit("/", 1)
+        target = os.path.join(restore_root(), f"{args['horodatage']} ({args['copie']})")
+        command += ["restore", f"{args['copie']}:{parent or '/'}", "--target", target, "--include", "/" + name]
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+    return completed.returncode, completed.stdout, completed.stderr
+
+
+def restore_root():
+    if config.DEMO:
+        return os.environ.get("JABBA_DEMO_RESTAURER", RESTORE_ROOT)
+    return RESTORE_ROOT
+
+
+def snapshots(settings, host_dir):
+    code, output, error_output = run_restic(settings, host_dir, "copies", 120)
     if code != 0:
         raise RuntimeError(error_output.strip()[-200:] or "Sauvegardes illisibles.")
     items = json.loads(output or "[]")
@@ -247,9 +280,9 @@ def snapshots(run, settings, host_dir, demo=False):
     ]
 
 
-def browse(run, settings, host_dir, identifier, path, demo=False):
+def browse(settings, host_dir, identifier, path):
     path = "/" + path.strip("/")
-    code, output, error_output = run(restic_command(settings, host_dir, demo) + ["ls", "--json", identifier, path], 120)
+    code, output, error_output = run_restic(settings, host_dir, "parcourir", 120, copie=identifier, chemin=path)
     if code != 0:
         raise RuntimeError(error_output.strip()[-200:] or "Copie illisible.")
     entries = []
@@ -277,49 +310,20 @@ def browse(run, settings, host_dir, identifier, path, demo=False):
     return entries
 
 
-def restore(run, settings, host_dir, identifier, path, demo=False):
+def restore(settings, host_dir, identifier, path):
     """Remet `chemin` tel qu'il était dans la copie `ident`, dans Restaurations/<date>/ (jamais par-dessus)."""
     path = "/" + path.strip("/")
-    parent, name = os.path.dirname(path) or "/", os.path.basename(path)
-    base = (
-        os.environ.get("JABBA_DEMO_RESTAURER", "/srv/data/dossiers/Restaurations")
-        if demo
-        else "/srv/data/dossiers/Restaurations"
-    )
-    target = os.path.join(base, time.strftime("%Y-%m-%d %Hh%M") + f" ({identifier})")
-    code, _, error_output = run(
-        restic_command(settings, host_dir, demo)
-        + ["restore", f"{identifier}:{parent}", "--target", target, "--include", "/" + name],
-        3600,
+    stamp = time.strftime("%Y-%m-%d %Hh%M")
+    code, _, error_output = run_restic(
+        settings, host_dir, "restaurer", 3600, copie=identifier, chemin=path, horodatage=stamp
     )
     if code != 0:
         raise RuntimeError(error_output.strip()[-200:] or "Restauration impossible.")
-    if not demo:
-        run(["chown", "-R", "1000:1000", base], 600)
-    return os.path.join(target, name)
+    return os.path.join(restore_root(), f"{stamp} ({identifier})", os.path.basename(path))
 
-
-# ---- ajouté au découpage de main.py
-import os
-import subprocess
-import threading
-
-from fastapi import HTTPException
-
-import config
-from host import commands
-from services import activity_log, app_update, files_source, json_files, notifications
 
 # ---------------------------------------------------------------- sauvegardes
 DEMO_STATE = {}  # en démo : le processus de la sauvegarde en cours
-
-
-def run_restic(command, timeout=120):
-    """Une commande restic : sur le serveur, ou en démo dans le conteneur."""
-    if config.DEMO:
-        completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
-        return completed.returncode, completed.stdout, completed.stderr
-    return commands.run_on_host(command, timeout)
 
 
 def host_data_dir():
@@ -338,9 +342,10 @@ def is_running(settings):
     if config.DEMO:
         process = DEMO_STATE.get(settings["unite"])
         return bool(process and process.poll() is None)
-    _, active, _ = commands.run_on_host(
-        ["systemctl", "show", "-p", "ActiveState", "--value", settings["unite"] + ".service"]
-    )
+    try:
+        _, active, _ = commands.run_action("etat_tache", unite=settings["unite"])
+    except actions.ActionError:
+        return False
     return active.strip() in ("active", "activating")
 
 
@@ -356,15 +361,15 @@ def start_backup(who=None):
         raise HTTPException(409, "Une sauvegarde est déjà en cours.")
     if not disk_is_present(settings):
         raise HTTPException(409, f"Le disque {settings['disque']} n'est pas branché.")
-    script_content = backup_script(settings, host_data_dir(), config.DEMO)
     unit = f"jabba-sauvegarde-{int(time.time())}"
     if config.DEMO:
-        DEMO_STATE[unit] = subprocess.Popen(["bash", "-c", script_content])
+        DEMO_STATE[unit] = subprocess.Popen(["bash", "-c", backup_script(settings, host_data_dir(), demo=True)])
     else:
         # Lancée par le serveur lui-même, en douceur (le serveur reste réactif) :
         # elle va au bout même si l'appli redémarre.
-        code, _, error_output = commands.start_on_host(
-            unit, script_content, "bash", ("Nice=10", "IOSchedulingClass=idle")
+        sources = [key for key, value in settings["sources"].items() if value]
+        code, _, error_output = commands.run_action(
+            "lancer_sauvegarde", disque=settings["chemin"], donnees=host_data_dir(), sources=sources, unite=unit
         )
         if code != 0:
             raise HTTPException(500, "Lancement impossible : " + error_output[:200])

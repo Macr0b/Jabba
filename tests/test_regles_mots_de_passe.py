@@ -4,6 +4,7 @@ import hashlib
 
 import pytest
 
+from host import commands
 from security import accounts, password_rules, server_password
 
 
@@ -102,10 +103,11 @@ def test_les_comptes_appliquent_les_regles():
     assert refus.value.code == 400
 
 
-def test_le_mot_de_passe_du_serveur_applique_les_regles():
+def test_le_mot_de_passe_du_serveur_applique_les_regles(monkeypatch):
     appels = []
+    monkeypatch.setattr(commands, "run_action", lambda *a, **k: appels.append(a) or (0, "", ""))
     with pytest.raises(ValueError, match="15 caractères"):
-        server_password.change_password(lambda *a: appels.append(a), "rob", "court")
+        server_password.change_password("rob", "court")
     with pytest.raises(ValueError, match="«"):
-        server_password.change_password(lambda *a: appels.append(a), "rob", "deux points : interdits ici")
+        server_password.change_password("rob", "deux points : interdits ici")
     assert appels == []  # rien n'est envoyé au serveur

@@ -293,7 +293,7 @@ def test_tache_de_fond_ecrit_puis_lance_le_script(tmp_path):
     import subprocess
 
     commande, _ = actions._background("jabba-test-1", 'echo "${HOME:+ok}"')
-    texte = commande[2].replace("exec systemd-run", "cat").replace(' --unit="$2" --collect sh', "")
+    texte = commande[2].replace(' --unit="$U" --collect "$@"', "").replace("exec systemd-run", "cat")
     sortie = subprocess.run(
         ["sh", "-c", texte, "tache", str(tmp_path), "jabba-test-1", commande[6]], capture_output=True, text=True
     )
@@ -428,3 +428,120 @@ def test_ajout_automatique_d_un_disque_usb(tmp_path, monkeypatch):
     assert auto_disks.forget("Vacances")["uuid"] == "5e5e-0002"
     assert demandes == [("oublier_disque", {"chemin": "/srv/disques/Vacances", "nom": "Vacances"})]
     assert auto_disks.known_disks() == {} and "5e5e-0002" in auto_disks.read()["oublies"]
+
+
+# ---------------------------------------------------------------- réseau invités
+def test_pare_feu_wifi(tmp_path):
+    import subprocess
+
+    commande, _ = actions.build("pare_feu_wifi", {"interface": "wlp2s0", "ports": [8096, 5001]})
+    assert commande[3:] == ["pare-feu", "wlp2s0", "5001", "8096"]
+    # Joué avec un faux iptables qui note ce qu'on lui demande.
+    outils = tmp_path / "outils"
+    outils.mkdir()
+    journal = tmp_path / "journal"
+    for outil in ("iptables", "ip6tables"):
+        (outils / outil).write_text(
+            f'#!/bin/sh\necho "{outil} $*" >> {journal}\ncase "$1" in -C) exit 1;; esac\nexit 0\n'
+        )
+        (outils / outil).chmod(0o755)
+    env = {**os.environ, "PATH": f"{outils}:{os.environ['PATH']}"}
+    assert subprocess.run(["sh", "-c", commande[2], *commande[3:]], env=env).returncode == 0
+    lignes = journal.read_text().splitlines()
+    assert (
+        "iptables -A JABBA-WIFI -i wlp2s0 -p tcp -m conntrack --ctorigdstport 5001 --ctdir ORIGINAL -j DROP" in lignes
+    )
+    assert "ip6tables -I DOCKER-USER -j JABBA-WIFI" in lignes
+    for args in (
+        {"interface": "wlp2s0; reboot", "ports": [80]},
+        {"interface": "wlp2s0", "ports": ["80; reboot"]},
+        {"interface": "wlp2s0", "ports": [0]},
+        {"interface": "wlp2s0", "ports": [True]},
+        {"interface": "wlp2s0", "ports": "80"},
+    ):
+        with pytest.raises(actions.ActionError):
+            actions.build("pare_feu_wifi", args)
+
+
+# ---------------------------------------------------------------- sauvegardes
+SAUVEGARDE = {"disque": "/srv/disques/Gros", "donnees": "/opt/stacks/jabba/donnees"}
+
+
+def test_restic_lire_et_parcourir():
+    commande, _ = actions.build("restic", {**SAUVEGARDE, "geste": "copies"})
+    assert commande[:4] == [
+        "env",
+        "RESTIC_REPOSITORY=/srv/disques/Gros/.sauvegardes-jabba",
+        "RESTIC_PASSWORD_FILE=/opt/stacks/jabba/donnees/sauvegardes.cle",
+        "RESTIC_CACHE_DIR=/var/cache/restic-jabba",
+    ]
+    assert commande[4:] == ["restic", "--no-lock", "snapshots", "--tag", "jabba", "--json"]
+    commande, _ = actions.build(
+        "restic", {**SAUVEGARDE, "geste": "parcourir", "copie": "abcd1234", "chemin": "/srv/data/a b"}
+    )
+    assert commande[-3:] == ["--json", "abcd1234", "/srv/data/a b"]
+
+
+def test_restic_restaure_toujours_a_cote():
+    commande, delai = actions.build(
+        "restic",
+        {
+            **SAUVEGARDE,
+            "geste": "restaurer",
+            "copie": "abcd1234",
+            "chemin": "/srv/data/Photos/2024",
+            "horodatage": "2026-11-17 01h30",
+        },
+    )
+    assert commande[4:7] == ["sh", "-c", actions.RESTORE] and commande[7] == actions.RESTORE_ROOT
+    assert commande[8:] == [
+        "--no-lock",
+        "restore",
+        "abcd1234:/srv/data/Photos",
+        "--target",
+        actions.RESTORE_ROOT + "/2026-11-17 01h30 (abcd1234)",
+        "--include",
+        "/2024",
+    ]
+    assert delai == 3600
+    for args in (
+        {"geste": "restaurer", "copie": "abcd1234", "chemin": "/srv/data/x", "horodatage": "../../etc"},
+        {"geste": "restaurer", "copie": "abcd1234", "chemin": "/", "horodatage": "2026-11-17 01h30"},
+        {"geste": "parcourir", "copie": "--help", "chemin": "/"},
+        {"geste": "parcourir", "copie": "abcd1234", "chemin": "relatif"},
+        {"geste": "forget", "copie": "abcd1234", "chemin": "/"},
+        {"geste": "copies", "disque": "/etc"},
+        {"geste": "copies", "donnees": "/root"},
+    ):
+        with pytest.raises(actions.ActionError):
+            actions.build("restic", {**SAUVEGARDE, **args})
+
+
+def test_lancer_une_sauvegarde_script_ecrit_par_le_service():
+    commande, _ = actions.build(
+        "lancer_sauvegarde", {**SAUVEGARDE, "sources": ["fichiers", "outils"], "unite": "jabba-sauvegarde-17"}
+    )
+    script = commande[6]
+    assert (
+        "DISQUE=/srv/disques/Gros" in script
+        and "restic backup" in script
+        and "/etc" not in script.split("restic backup")[1].split("\n")[0]
+    )
+    assert commande[7:] == ["-p", "Nice=10", "-p", "IOSchedulingClass=idle", "bash"]
+    for args in ({"sources": ["fichiers", "/root"]}, {"sources": []}, {"sources": "fichiers"}, {"unite": "sshd"}):
+        with pytest.raises(actions.ActionError):
+            actions.build(
+                "lancer_sauvegarde", {**SAUVEGARDE, "sources": ["fichiers"], "unite": "jabba-sauvegarde-1", **args}
+            )
+
+
+def test_plus_aucune_commande_directe_hors_de_la_liste_fermee():
+    """Garde-fou : en dehors de host/, l'appli ne lance rien sur le serveur sans passer par run_action."""
+    import glob
+
+    racine = os.path.join(os.path.dirname(__file__), "..", "app")
+    for fichier in glob.glob(os.path.join(racine, "**", "*.py"), recursive=True):
+        if os.sep + "host" + os.sep in fichier:
+            continue
+        texte = open(fichier, encoding="utf-8").read()
+        assert "run_on_host" not in texte and "nsenter" not in texte, fichier

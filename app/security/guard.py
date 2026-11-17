@@ -90,7 +90,7 @@ def device_of(request):
     if time.time() - _DEVICES_CACHE["t"] > 120:
         names = {}
         try:
-            code, output, _ = commands.run_on_host(["tailscale", "status", "--json"], timeout=10)
+            code, output, _ = commands.run_action("appareils_tailscale")
             if code == 0:
                 status = json.loads(output)
                 for peer in list((status.get("Peer") or {}).values()) + [status.get("Self") or {}]:
@@ -187,7 +187,7 @@ def server_user():
     """Le compte du serveur dont le mot de passe est celui du super admin principal (par défaut : le premier compte créé)."""
     if config.ADMIN_USER or config.DEMO:
         return config.ADMIN_USER or "demo"
-    _, output, _ = commands.run_on_host(["getent", "passwd", "1000"])
+    _, output, _ = commands.run_action("compte_serveur")
     return output.split(":", 1)[0] or "root"
 
 
@@ -198,7 +198,7 @@ def hostname():
     """Nom du serveur : c'est l'identifiant du super admin principal."""
     if "v" not in _HOSTNAME_CACHE:
         _HOSTNAME_CACHE["v"] = (
-            "serveur-demo" if config.DEMO else (commands.run_on_host(["hostname"])[1].strip().lower() or "serveur")
+            "serveur-demo" if config.DEMO else (commands.run_action("nom_du_serveur")[1].strip().lower() or "serveur")
         )
     return _HOSTNAME_CACHE["v"]
 
@@ -214,7 +214,7 @@ def check_server_password(password):
             return True
         server_password.record_failure()  # comme sur le serveur : l'erreur compte
         return False
-    return server_password.check_password(commands.run_on_host, server_user(), password)
+    return server_password.check_password(server_user(), password)
 
 
 def super_admin_logins():
@@ -291,7 +291,7 @@ def _change_server_password(new_value):
             raise HTTPException(400, str(error))
         return
     try:
-        server_password.change_password(commands.run_on_host_with_input, server_user(), new_value)
+        server_password.change_password(server_user(), new_value)
     except ValueError as error:
         raise HTTPException(400, str(error))
     except RuntimeError as error:

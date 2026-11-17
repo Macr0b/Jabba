@@ -1,6 +1,6 @@
 """Mot de passe du super admin principal = mot de passe du compte du serveur (celui de sudo).
 
-- vérifié contre /etc/shadow du serveur, jamais enregistré ;
+- vérifié par le service privilégié contre /etc/shadow du serveur, jamais enregistré ;
 - une fois saisi, valable 10 minutes (jeton en mémoire) ;
 - 5 essais ratés = blocage 10 minutes ;
 - changement du mot de passe, et code de secours en cas d'oubli.
@@ -14,7 +14,7 @@ import secrets
 import threading
 import time
 
-from host import system_crypt
+from host import actions, commands
 from security import password_rules
 from services import json_files
 
@@ -80,20 +80,18 @@ def _record_failure():
         _failures.setdefault(requester.get(), []).append(time.time())
 
 
-def check_password(host_runner, user, password):
-    """True si le mot de passe est celui du compte `utilisateur` sur le serveur."""
+def check_password(user, password):
+    """True si le mot de passe est celui du compte `user` sur le serveur.
+    La comparaison se fait dans le service privilégié : l'empreinte de /etc/shadow n'en sort pas."""
     if not password or is_locked():
         return False
-    code, output, _ = host_runner(["getent", "shadow", user])
-    if code != 0 or ":" not in output:
+    try:
+        code, _, _ = commands.run_action("verifier_mot_de_passe_serveur", input_text=password, utilisateur=user)
+    except actions.ActionError:
         return False
-    password_hash = output.split(":")[1]
-    if not password_hash or password_hash[0] in "!*":
-        return False
-    valid = hmac.compare_digest(system_crypt.hash_with_setting(password, password_hash) or "", password_hash)
-    if not valid:
+    if code == 1:
         _record_failure()
-    return valid
+    return code == 0
 
 
 def new_token(identifier="serveur", rank="super", temporary=False):
@@ -136,11 +134,16 @@ def record_failure():
     _record_failure()
 
 
-def change_password(host_input_runner, user, new_value):
+def change_password(user, new_value):
     password_rules.check(new_value, (user,))
-    if ":" in new_value:
-        raise ValueError("Le mot de passe du serveur ne peut pas contenir « : ».")
-    code, _, error_output = host_input_runner(["chpasswd"], f"{user}:{new_value}\n")
+    if ":" in new_value or "\n" in new_value:
+        raise ValueError("Le mot de passe du serveur ne peut pas contenir « : » ni de retour à la ligne.")
+    try:
+        code, _, error_output = commands.run_action(
+            "changer_mot_de_passe_serveur", input_text=new_value, utilisateur=user
+        )
+    except actions.ActionError as error:
+        raise ValueError(str(error))
     if code != 0:
         raise RuntimeError("Le serveur a refusé le changement : " + error_output[:200])
     forget_tokens()  # on redemande le mot de passe partout

@@ -3,14 +3,14 @@
 Sommaire :
   wifi_address : adresse du serveur sur le Wi-Fi
   sync_guest_tools : copie la liste des outils pour la porte du Wi-Fi
-  wanted_rules, apply_firewall : bloquer au Wi-Fi les outils qui n'y sont pas ouverts
+  closed_ports, apply_firewall : bloquer au Wi-Fi les outils qui n'y sont pas ouverts
   guest_url, shareable_roots : adresse de la page invités, dossiers partageables
 """
 
 import re
 
 import config
-from host import commands
+from host import actions, commands
 from services import files_source, guests, tools
 
 
@@ -19,7 +19,7 @@ def wifi_address():
     """Interface et adresse IP du serveur sur le réseau local (celles de la route par défaut)."""
     if config.DEMO:
         return "eth0", "192.168.1.20"
-    _, output, _ = commands.run_on_host(["ip", "-o", "-4", "route", "get", "1.1.1.1"])
+    _, output, _ = commands.run_action("route_reseau")
     match = re.search(r"dev (\S+) .*src (\S+)", output)
     return (match.group(1), match.group(2)) if match else (None, None)
 
@@ -47,48 +47,29 @@ def sync_guest_tools():
     guests.update(f)
 
 
-FIREWALL_CHAIN = "JABBA-WIFI"
-
-
-def wanted_rules(interface, state):
-    """Une règle par outil fermé au Wi-Fi : bloque son port pour ce qui arrive par la carte réseau du Wi-Fi."""
-    rules = []
-    for pid, port in sorted(tools.PORTS.items()):
-        if pid in tools.NEVER_ON_WIFI or not state["wifi"].get(pid):
-            rules.append(
-                f"-A {FIREWALL_CHAIN} -i {interface} -p tcp -m conntrack --ctorigdstport {port} --ctdir ORIGINAL -j DROP"
-            )
-    return rules
+def closed_ports(state):
+    """Les ports des outils fermés au Wi-Fi (jamais ouverts, ou non cochés « Sur le Wi-Fi »)."""
+    return sorted(port for pid, port in tools.PORTS.items() if pid in tools.NEVER_ON_WIFI or not state["wifi"].get(pid))
 
 
 def apply_firewall():
-    """Les outils non cochés « Sur le Wi-Fi » ne sont plus joignables depuis le réseau local (Tailscale n'est pas touché)."""
+    """Les outils non cochés « Sur le Wi-Fi » ne sont plus joignables depuis le réseau local (Tailscale n'est pas touché).
+    Le service privilégié écrit lui-même les règles (action « pare_feu_wifi ») à partir des ports."""
     if config.DEMO:
         return True
     interface, _ = wifi_address()
-    if not interface or not re.fullmatch(r"[\w.-]+", interface):
+    if not interface:
         return False
-    wanted = wanted_rules(interface, guests.read())
-    changed = True
-    for iptables_tool in ("iptables", "ip6tables"):
-        if commands.run_on_host([iptables_tool, "-S", "DOCKER-USER"])[0] != 0:
-            continue
-        code, current_rules, _ = commands.run_on_host([iptables_tool, "-S", FIREWALL_CHAIN])
-        if (
-            code == 0
-            and [line for line in current_rules.splitlines() if line.startswith("-A ")] == wanted
-            and commands.run_on_host([iptables_tool, "-C", "DOCKER-USER", "-j", FIREWALL_CHAIN])[0] == 0
-        ):
-            continue
-        script = f"{iptables_tool} -N {FIREWALL_CHAIN} 2>/dev/null; {iptables_tool} -F {FIREWALL_CHAIN}"
-        for roots in wanted:
-            script += f" && {iptables_tool} {roots}"
-        script += f" && ({iptables_tool} -C DOCKER-USER -j {FIREWALL_CHAIN} 2>/dev/null || {iptables_tool} -I DOCKER-USER -j {FIREWALL_CHAIN})"
-        code, _, error_output = commands.run_shell_on_host(script)
-        if code != 0:
-            changed = False
-            print("pare-feu :", iptables_tool, error_output[:200], flush=True)
-    return changed
+    try:
+        code, _, error_output = commands.run_action(
+            "pare_feu_wifi", interface=interface, ports=closed_ports(guests.read())
+        )
+    except actions.ActionError as error:
+        print("pare-feu :", error, flush=True)
+        return False
+    if code != 0:
+        print("pare-feu :", error_output[:200], flush=True)
+    return code == 0
 
 
 def guest_url(state):
