@@ -12,7 +12,8 @@ import { t } from "../core/i18n.js";
 // ------------------------------------------------------------ fichiers
 const EXTENSIONS = {
   image: ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "svg", "tif", "tiff"],
-  video: ["mp4", "m4v", "mov", "webm", "mkv"],
+  // Hors mp4, m4v, mov et webm, la vidéo est convertie par le serveur (lecteur vidéo).
+  video: ["mp4", "m4v", "mov", "webm", "mkv", "avi", "wmv", "flv", "mpg", "mpeg", "m2ts", "mts", "3gp", "ogv", "divx"],
   audio: ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"],
   pdf: ["pdf"],
   texte: ["txt", "md", "csv", "log", "json", "yaml", "yml", "ini", "conf", "srt", "nfo", "py", "sh"],

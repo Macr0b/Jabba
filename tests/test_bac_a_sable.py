@@ -1,6 +1,7 @@
 """ffmpeg et Pillow tournent sans aucun droit (revue, point 1)."""
 
 import os
+import subprocess
 
 import pytest
 from conftest import exige_root, outil
@@ -103,3 +104,36 @@ def test_entree_refuse_ce_qui_n_est_pas_un_fichier(tmp_path, monkeypatch):
     with pytest.raises((RuntimeError, OSError)):
         with sandbox.open_input({"entree": str(tmp_path)}):
             pass
+
+
+@outil("ffmpeg")
+def test_avi_converti_et_lu(tmp_path):
+    """Un AVI (MPEG-4 + MP3, le cas courant) : le navigateur ne sait pas le lire, le serveur le convertit."""
+    film = tmp_path / "vieux film.avi"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=3:size=320x240:rate=25",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=duration=3",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "libmp3lame",
+            str(film),
+        ],
+        check=True,
+    )
+    src = {"entree": str(film)}
+    infos = video_player.probe(src)
+    assert infos["video"]["codec"] == "mpeg4" and not video_player.plays_directly(infos)
+    sid, _ = video_player.start(src, infos, 0)
+    assert video_player.session_file(sid, "index.m3u8"), video_player.session_error(sid)
+    video_player.stop(sid)
