@@ -87,7 +87,9 @@ def is_newer(current, other):
 
 # Depuis la 0.15, l'appli n'a plus accès à tous les appareils : la carte graphique lui est donnée
 # par compose.yaml (JABBA_GPU), posée ici pour les installations d'avant (même ligne qu'installer.sh).
-GPU_SETTING = "[ -e /dev/dri/renderD128 ] && ! grep -q '^JABBA_GPU=' .env && echo 'JABBA_GPU=/dev/dri/renderD128' >> .env"
+GPU_SETTING = (
+    "[ -e /dev/dri/renderD128 ] && ! grep -q '^JABBA_GPU=' .env && echo 'JABBA_GPU=/dev/dri/renderD128' >> .env"
+)
 
 
 def install_script(folder, tag, key):
