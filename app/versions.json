@@ -6,7 +6,8 @@
       "Fichiers : bouton « Tout sélectionner » (en plus de ⌘A), aussi dans la barre de sélection.",
       "Disques : l'interrupteur « Écriture autorisée » ne disparaît plus pendant que le disque se rouvre.",
       "Santé des disques : les nouveaux noms (R2-D2, Disque système…) remplacent tout de suite les anciens, même pour un disque en veille.",
-      "Lecteur vidéo : si le serveur ne peut pas convertir une vidéo, la raison est affichée."
+      "Lecteur vidéo : si le serveur ne peut pas convertir une vidéo, la raison est affichée ; l'analyse d'un fichier attend jusqu'à 90 s (disque USB en veille) au lieu d'échouer sans rien dire.",
+      "Disques : après un changement de « Écriture autorisée », Nextcloud relit le disque (sinon il croyait les fichiers toujours en lecture seule et refusait de les supprimer)."
     ]
   },
   {

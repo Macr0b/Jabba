@@ -37,16 +37,29 @@ _HARDWARE = {"teste": False, "options": None}
 # ---------------------------------------------------------------- analyse du fichier
 # ffmpeg et ffprobe tournent sans aucun droit (bac_a_sable) : ils ne reçoivent que le
 # fichier à lire, déjà ouvert par l'appli.
+PROBE_SECONDS = 90  # analyse d'un fichier avant lecture
+
+
 def probe(source):
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
-    with sandbox.open_input(source) as (input_path, file_descriptors):
-        completed = sandbox.run(
-            args + sandbox.without_input_option(input_path),
-            file_descriptors,
-            capture_output=True,
-            text=True,
-            timeout=30,
+    try:
+        with sandbox.open_input(source) as (input_path, file_descriptors):
+            completed = sandbox.run(
+                args + sandbox.without_input_option(input_path),
+                file_descriptors,
+                capture_output=True,
+                text=True,
+                timeout=PROBE_SECONDS,
+            )
+    except subprocess.TimeoutExpired:
+        # Un disque USB en veille met plusieurs secondes à repartir ; un vieil AVI peut être lu en entier.
+        raise RuntimeError(
+            f"Analyse trop longue (plus de {PROBE_SECONDS} s) : disque en veille ou fichier très lent à lire."
         )
+    except FileNotFoundError:
+        raise  # ffprobe absent de l'appli : message à part (routes/player.py)
+    except OSError as error:
+        raise RuntimeError(f"Fichier impossible à ouvrir : {error.strerror or error}")
     if completed.returncode != 0:
         raise RuntimeError("Fichier illisible : " + (completed.stderr.strip()[:200] or "format inconnu"))
     probe_data = json.loads(completed.stdout or "{}")

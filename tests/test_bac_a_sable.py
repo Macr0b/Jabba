@@ -137,3 +137,18 @@ def test_avi_converti_et_lu(tmp_path):
     sid, _ = video_player.start(src, infos, 0)
     assert video_player.session_file(sid, "index.m3u8"), video_player.session_error(sid)
     video_player.stop(sid)
+
+
+def test_analyse_trop_longue_message_clair(monkeypatch, tmp_path):
+    """Un disque en veille ou un fichier lent : le lecteur affiche la raison au lieu de « format inconnu »."""
+    import pytest
+
+    film = tmp_path / "lent.avi"
+    film.write_bytes(b"x")
+
+    def trop_long(*args, **kwargs):
+        raise subprocess.TimeoutExpired("ffprobe", video_player.PROBE_SECONDS)
+
+    monkeypatch.setattr(video_player.sandbox, "run", trop_long)
+    with pytest.raises(RuntimeError, match="Analyse trop longue"):
+        video_player.probe({"entree": str(film)})

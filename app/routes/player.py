@@ -59,10 +59,11 @@ def media_info(path):
         return dict(already[1])
     try:
         media = video_player.probe(playback_source(path))
-    except RuntimeError as error:
-        raise HTTPException(415, str(error))
     except FileNotFoundError:
         raise HTTPException(500, "Le moteur vidéo (ffmpeg) manque dans l'appli.")
+    except RuntimeError as error:
+        print("lecteur :", path, "-", error, flush=True)  # visible dans les journaux de jabba-app
+        raise HTTPException(415, str(error))
     _MEDIA_INFO_CACHE[path] = (time.time(), media)
     return dict(media)
 
