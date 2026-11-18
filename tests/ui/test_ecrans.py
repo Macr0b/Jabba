@@ -174,7 +174,16 @@ def test_outils_a_activer_et_memoire(page):
     aller(page, "outils")
     expect(page.locator("#etabli-memoire")).to_contain_text("Mémoire du serveur")
     expect(page.locator("#etabli-memoire")).to_contain_text("Libre")
-    for outil in ("vaultwarden", "immich", "time-machine", "adguard-home", "paperless", "homebox"):
+    for outil in (
+        "vaultwarden",
+        "immich",
+        "time-machine",
+        "adguard-home",
+        "paperless",
+        "homebox",
+        "ntfy",
+        "changedetection",
+    ):
         interrupteur = page.locator(f'#grille-etabli [data-activer="{outil}"]')
         expect(interrupteur).to_have_attribute("role", "switch")
         expect(interrupteur).to_have_attribute("aria-checked", "false")

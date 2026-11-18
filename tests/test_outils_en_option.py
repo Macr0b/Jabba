@@ -137,3 +137,18 @@ def test_nouveaux_outils_du_catalogue():
     assert len(ports) == len(set(ports)) and not {8090, 8081, 8096, 5001, 9000, 8443} & set(
         ports
     )  # aucun port déjà pris
+
+
+def test_ntfy_et_changedetection():
+    assert (
+        '"127.0.0.1:2586:80"' in catalog.NTFY_COMPOSE
+        and "NTFY_UPSTREAM_BASE_URL: https://ntfy.sh" in catalog.NTFY_COMPOSE
+    )
+    assert catalog.NTFY_ENV == f"NTFY_BASE_URL=https://{catalog.TAILSCALE_MARK}:2586\n"
+    # réseau de l'hôte pour joindre ntfy, mais il n'écoute que le serveur lui-même
+    assert (
+        "network_mode: host" in catalog.CHANGEDETECTION_COMPOSE
+        and "LISTEN_HOST: 127.0.0.1" in catalog.CHANGEDETECTION_COMPOSE
+    )
+    assert "ports:" not in catalog.CHANGEDETECTION_COMPOSE
+    assert catalog.OPTIONAL_TOOLS["changedetection"]["port_local"] == 5005

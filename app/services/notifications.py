@@ -13,7 +13,7 @@ import time
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from services import activity_log, json_files
+from services import activity_log, json_files, ntfy_relay
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 KEY_FILE = os.path.join(DATA_DIR, "vapid.pem")
@@ -141,6 +141,8 @@ def send(media_type, title, text, url="/", force=False, family="alerte", recipie
     data = _read()
     if not force and not data["types"].get(media_type, True):
         return 0
+    if recipients is None:
+        ntfy_relay.forward(media_type, title, text, url)
     targets = [
         subscription
         for subscription in data["abonnements"]

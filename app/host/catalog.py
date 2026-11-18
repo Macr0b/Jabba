@@ -206,6 +206,49 @@ HBOX_OPTIONS_ALLOW_REGISTRATION=true
 HBOX_AUTH_API_KEY_PEPPER={SECRET_MARK}
 """
 
+# Les alertes du serveur sur le téléphone (appli ntfy). L'appli Jabba y publie dans un sujet tiré au sort.
+# upstream : pour l'iPhone, ntfy.sh ne reçoit qu'un signal de réveil, jamais le texte de l'alerte.
+NTFY_COMPOSE = """services:
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "127.0.0.1:2586:80"
+    env_file: .env
+    environment:
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_CACHE_DURATION: 72h
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+    volumes:
+      - ./donnees:/var/lib/ntfy
+"""
+
+NTFY_ENV = f"""NTFY_BASE_URL=https://{TAILSCALE_MARK}:2586
+"""
+
+# Surveille des pages web (prix, retour en stock, notice mise à jour) et prévient quand elles changent.
+# Sur le réseau de l'hôte, mais n'écoute que 127.0.0.1 : il joint ainsi ntfy (127.0.0.1:2586) pour prévenir.
+CHANGEDETECTION_COMPOSE = """services:
+  changedetection:
+    image: ghcr.io/dgtlmoon/changedetection.io:latest
+    container_name: changedetection
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      LISTEN_HOST: 127.0.0.1
+      PORT: "5005"
+      TZ: Europe/Paris
+    volumes:
+      - ./donnees:/datastore
+"""
+
+CHANGEDETECTION_ENV = f"""BASE_URL=https://{TAILSCALE_MARK}:5005
+"""
+
 OPTIONAL_TOOLS = {
     "vaultwarden": {
         "nom": "Vaultwarden",
@@ -261,6 +304,26 @@ OPTIONAL_TOOLS = {
         ),
         "mot_de_passe": True,
         "mot_de_passe_texte": "Mot de passe du compte « admin » de Paperless",
+    },
+    "ntfy": {
+        "nom": "ntfy",
+        "role": "Les alertes du serveur et les rappels d'entretien sur ton téléphone",
+        "memoire_go": 0.05,
+        "port_https": 2586,
+        "port_local": 2586,
+        "fichiers": {"compose.yaml": NTFY_COMPOSE, ".env": NTFY_ENV},
+        "preparer": "",
+        "mot_de_passe": False,
+    },
+    "changedetection": {
+        "nom": "changedetection.io",
+        "role": "Prévient quand une page web change : prix, retour en stock, notice mise à jour",
+        "memoire_go": 0.2,
+        "port_https": 5005,
+        "port_local": 5005,
+        "fichiers": {"compose.yaml": CHANGEDETECTION_COMPOSE, ".env": CHANGEDETECTION_ENV},
+        "preparer": "",
+        "mot_de_passe": False,
     },
     "homebox": {
         "nom": "Homebox",
