@@ -49,6 +49,24 @@ const HELP = {
     ),
     "",
   ],
+  "adguard-home": [
+    t(
+      "Bloque publicités et traqueurs pour toute la maison. Première ouverture : suis l'assistant et garde le port 3000 pour l'interface d'admin. Puis, dans la box (Freebox OS : Paramètres → DHCP), mets l'adresse du serveur comme serveur DNS : tous les appareils en profitent.",
+    ),
+    "https://github.com/AdguardTeam/AdGuardHome/wiki",
+  ],
+  paperless: [
+    t(
+      "Dépose tes papiers (PDF, photos de documents) dans le dossier Paperless/A-classer de Fichiers : Paperless lit le texte, les range et les retrouve par recherche. Connexion : compte « admin » et le mot de passe choisi à l'activation.",
+    ),
+    "https://docs.paperless-ngx.com/",
+  ],
+  homebox: [
+    t(
+      "L'inventaire du fablab ou de la maison : lieux, objets, quantités, étiquettes à QR code. Le premier compte créé devient le propriétaire ; invite les autres depuis Homebox.",
+    ),
+    "https://homebox.software/",
+  ],
   atelier: [
     t(
       "Le carnet de chaque machine : journal des interventions et des pannes, réglages, pièces changées, rappels d'entretien avec alerte à l'échéance, et le dossier de ses manuels.",
@@ -63,6 +81,9 @@ const UNINSTALL = {
   vaultwarden: "/api/etabli/vaultwarden/retirer",
   immich: "/api/etabli/immich/retirer",
   "time-machine": "/api/etabli/time-machine/retirer",
+  "adguard-home": "/api/etabli/adguard-home/retirer",
+  paperless: "/api/etabli/paperless/retirer",
+  homebox: "/api/etabli/homebox/retirer",
   atelier: "/api/etabli/atelier/retirer",
 };
 

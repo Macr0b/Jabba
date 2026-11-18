@@ -7,11 +7,13 @@ Les données (photos, mots de passe, sauvegardes) restent quand on retire un out
 
 Sommaire :
   OPTIONAL_TOOLS : pour chaque outil, son nom, son rôle, la mémoire qu'il prend, ses ports et ses fichiers
-  SECRET_MARK / PASSWORD_MARK : remplacés à l'installation (secret tiré au sort / mot de passe de l'admin)
+  SECRET_MARK / PASSWORD_MARK / TAILSCALE_MARK : remplacés à l'installation (secret tiré au sort,
+                  mot de passe de l'admin, adresse Tailscale du serveur)
 """
 
 SECRET_MARK = "@SECRET_TIRE_AU_SORT@"
 PASSWORD_MARK = "@MOT_DE_PASSE_ADMIN@"
+TAILSCALE_MARK = "@ADRESSE_TAILSCALE@"
 
 VAULTWARDEN_COMPOSE = """services:
   vaultwarden:
@@ -119,6 +121,91 @@ SET_PERMISSIONS=false
 VOLUME_SIZE_LIMIT=0
 """
 
+# Bloqueur de publicités et de traqueurs pour tout le réseau (serveur DNS). La page d'admin (port 3000)
+# ne s'ouvre que par Tailscale ; le DNS (port 53) répond aux appareils de la maison.
+ADGUARD_COMPOSE = """services:
+  adguard-home:
+    image: adguard/adguardhome:latest
+    container_name: adguard-home
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "127.0.0.1:3000:3000/tcp"
+    volumes:
+      - ./travail:/opt/adguardhome/work
+      - ./reglages:/opt/adguardhome/conf
+"""
+
+# Papiers numérisés : on dépose dans « A-classer » (visible dans Fichiers), Paperless lit le texte et range.
+PAPERLESS_COMPOSE = """services:
+  broker:
+    image: docker.io/valkey/valkey:9-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis:/data
+  db:
+    image: docker.io/library/postgres:18
+    restart: unless-stopped
+    volumes:
+      - ./postgres:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./donnees:/usr/src/paperless/data
+      - /srv/data/Paperless/Documents:/usr/src/paperless/media
+      - ./export:/usr/src/paperless/export
+      - /srv/data/Paperless/A-classer:/usr/src/paperless/consume
+    env_file: .env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_DBPASS: ${DB_PASSWORD}
+"""
+
+PAPERLESS_ENV = f"""DB_PASSWORD={SECRET_MARK}
+PAPERLESS_SECRET_KEY={SECRET_MARK}
+PAPERLESS_URL=https://{TAILSCALE_MARK}:8000
+PAPERLESS_OCR_LANGUAGE=fra+eng
+PAPERLESS_TIME_ZONE=Europe/Paris
+PAPERLESS_ADMIN_USER=admin
+PAPERLESS_ADMIN_PASSWORD={PASSWORD_MARK}
+USERMAP_UID=1000
+USERMAP_GID=1000
+"""
+
+# Inventaire (bois, visserie, consommables, outils prêtés), avec étiquettes à QR code.
+HOMEBOX_COMPOSE = """services:
+  homebox:
+    image: ghcr.io/sysadminsmedia/homebox:latest
+    container_name: homebox
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7745:7745"
+    env_file: .env
+    environment:
+      HBOX_OPTIONS_ALLOW_ANALYTICS: "false"
+    volumes:
+      - ./donnees:/data
+"""
+
+HOMEBOX_ENV = f"""# Ouvert pour créer le premier compte ; les suivants s'invitent depuis Homebox.
+HBOX_OPTIONS_ALLOW_REGISTRATION=true
+HBOX_AUTH_API_KEY_PEPPER={SECRET_MARK}
+"""
+
 OPTIONAL_TOOLS = {
     "vaultwarden": {
         "nom": "Vaultwarden",
@@ -149,5 +236,40 @@ OPTIONAL_TOOLS = {
         "fichiers": {"compose.yaml": TIME_MACHINE_COMPOSE, ".env": TIME_MACHINE_ENV},
         "preparer": "mkdir -p /srv/data/TimeMachine && chown 1000:1000 /srv/data/TimeMachine",
         "mot_de_passe": True,
+        "mot_de_passe_texte": "Mot de passe à taper sur le Mac",
+    },
+    "adguard-home": {
+        "nom": "AdGuard Home",
+        "role": "Bloque les publicités et les traqueurs pour tous les appareils de la maison",
+        "memoire_go": 0.1,
+        "port_https": 3000,
+        "port_local": 3000,
+        "fichiers": {"compose.yaml": ADGUARD_COMPOSE},
+        "preparer": "",
+        "mot_de_passe": False,
+    },
+    "paperless": {
+        "nom": "Paperless",
+        "role": "Tes papiers numérisés, lus et rangés tout seuls, retrouvés par recherche",
+        "memoire_go": 1.5,
+        "port_https": 8000,
+        "port_local": 8000,
+        "fichiers": {"compose.yaml": PAPERLESS_COMPOSE, ".env": PAPERLESS_ENV},
+        "preparer": (
+            "mkdir -p /srv/data/Paperless/A-classer /srv/data/Paperless/Documents"
+            " && chown 1000:1000 /srv/data/Paperless /srv/data/Paperless/A-classer /srv/data/Paperless/Documents"
+        ),
+        "mot_de_passe": True,
+        "mot_de_passe_texte": "Mot de passe du compte « admin » de Paperless",
+    },
+    "homebox": {
+        "nom": "Homebox",
+        "role": "L'inventaire : stock, consommables, outils prêtés, étiquettes à QR code",
+        "memoire_go": 0.1,
+        "port_https": 7745,
+        "port_local": 7745,
+        "fichiers": {"compose.yaml": HOMEBOX_COMPOSE, ".env": HOMEBOX_ENV},
+        "preparer": "",
+        "mot_de_passe": False,
     },
 }

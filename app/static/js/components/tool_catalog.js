@@ -45,7 +45,7 @@ function offCardHtml(tool, memory) {
       }
       ${
         tool.mot_de_passe
-          ? t`<label class="champ"><span>Mot de passe à taper sur le Mac (15 caractères au moins)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>`
+          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (15 caractères au moins)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>`
           : ""
       }
       <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>

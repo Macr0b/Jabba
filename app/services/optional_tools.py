@@ -49,6 +49,7 @@ def catalog(installed_ids):
             "memoire": int(tool["memoire_go"] * GIGA),
             "installe": tool_id in installed_ids,
             "mot_de_passe": tool["mot_de_passe"],
+            "mot_de_passe_texte": tool.get("mot_de_passe_texte", ""),
             "port_https": tool["port_https"],
         }
         for tool_id, tool in host_catalog.OPTIONAL_TOOLS.items()

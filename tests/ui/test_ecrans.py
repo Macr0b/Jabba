@@ -174,7 +174,7 @@ def test_outils_a_activer_et_memoire(page):
     aller(page, "outils")
     expect(page.locator("#etabli-memoire")).to_contain_text("Mémoire du serveur")
     expect(page.locator("#etabli-memoire")).to_contain_text("Libre")
-    for outil in ("vaultwarden", "immich", "time-machine"):
+    for outil in ("vaultwarden", "immich", "time-machine", "adguard-home", "paperless", "homebox"):
         interrupteur = page.locator(f'#grille-etabli [data-activer="{outil}"]')
         expect(interrupteur).to_have_attribute("role", "switch")
         expect(interrupteur).to_have_attribute("aria-checked", "false")
@@ -182,6 +182,7 @@ def test_outils_a_activer_et_memoire(page):
     expect(immich).to_contain_text("Prend environ 3,0 Go de mémoire")
     expect(page.locator('[data-offre="time-machine"] input[type="password"]')).to_be_visible()
     expect(page.locator('[data-offre="vaultwarden"] input')).to_have_count(0)
+    expect(page.locator('[data-offre="paperless"]')).to_contain_text("Mot de passe du compte « admin » de Paperless")
 
 
 def test_memoire_d_atelier(page):

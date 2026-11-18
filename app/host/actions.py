@@ -255,12 +255,19 @@ printf "%s" "$1" > compose.yaml
 pass=$(cat)
 if [ -n "$2" ] && [ ! -f .env ]; then
   secret=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
-  printf "%s\n" "$2" | S="$secret" P="$pass" awk '{
-    for (n = 0; n < 2; n++) {
-      mark = n ? "@MOT_DE_PASSE_ADMIN@" : "@SECRET_TIRE_AU_SORT@"; value = n ? ENVIRON["P"] : ENVIRON["S"]
-      i = index($0, mark); if (i) $0 = substr($0, 1, i - 1) value substr($0, i + length(mark))
-    }
-    print }' > .env
+  name=$(tailscale status --json --peers=false 2>/dev/null | sed -n 's/^ *"DNSName": "\\(.*\\)\\.",*$/\\1/p' | head -1)
+  printf "%s\n" "$2" | S="$secret" P="$pass" T="$name" awk 'BEGIN {
+      marks[1] = "@SECRET_TIRE_AU_SORT@"; values[1] = ENVIRON["S"]
+      marks[2] = "@MOT_DE_PASSE_ADMIN@"; values[2] = ENVIRON["P"]
+      marks[3] = "@ADRESSE_TAILSCALE@"; values[3] = ENVIRON["T"] }
+    { for (n = 1; n <= 3; n++) {
+        done = ""; rest = $0
+        while ((i = index(rest, marks[n])) > 0) {
+          done = done substr(rest, 1, i - 1) values[n]; rest = substr(rest, i + length(marks[n]))
+        }
+        $0 = done rest
+      }
+      print }' > .env
 fi
 [ -z "$3" ] || sh -c "$3"
 docker compose up -d
