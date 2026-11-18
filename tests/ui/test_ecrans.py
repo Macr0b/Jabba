@@ -169,6 +169,19 @@ def test_acces_par_le_domaine_dans_l_etabli(page):
     expect(carte.locator("#domaine-activer")).to_be_visible()
 
 
+def test_outils_en_option_et_memoire(page):
+    """L'Établi montre la mémoire du serveur et ce que chaque outil en option prendrait."""
+    aller(page, "outils")
+    expect(page.locator("#etabli-memoire")).to_contain_text("Mémoire du serveur")
+    expect(page.locator("#etabli-memoire")).to_contain_text("Libre")
+    for nom in ("Vaultwarden", "Immich", "Time Machine"):
+        expect(page.locator("#etabli-catalogue")).to_contain_text(nom)
+    immich = page.locator('[data-offre="immich"]')
+    expect(immich).to_contain_text("Prend environ 3,0 Go de mémoire")
+    expect(page.locator('[data-offre="time-machine"] input[type="password"]')).to_be_visible()
+    expect(page.locator('[data-offre="vaultwarden"] input')).to_have_count(0)
+
+
 NUAGE_PRET = {
     "etat": {"present": True, "pret": True, "quota_defaut": "5 GB"},
     "rang": "super",

@@ -17,7 +17,7 @@ from services import activity_log
 TASKS = {}
 
 
-def start_task(title, action, args, who=None, tool=None):
+def start_task(title, action, args, who=None, tool=None, input_text=None):
     task_id = uuid.uuid4().hex[:8]
     TASKS[task_id] = {
         "id": task_id,
@@ -34,7 +34,7 @@ def start_task(title, action, args, who=None, tool=None):
                 time.sleep(3)
                 code, output, error_output = 0, "ok", ""
             else:
-                code, output, error_output = commands.run_action(action, **args)
+                code, output, error_output = commands.run_action(action, input_text=input_text, **args)
             TASKS[task_id]["journal"] = (output + error_output)[-4000:]
             TASKS[task_id]["etat"] = "terminé" if code == 0 else "erreur"
         except Exception as error:  # noqa: BLE001

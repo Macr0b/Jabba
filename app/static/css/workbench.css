@@ -148,3 +148,11 @@ body.plein-ecran main {
 .etape-domaine .note {
   margin: 4px 0 0;
 }
+
+/* Mémoire du serveur (sous le titre de l'Établi) et alerte d'un outil trop gourmand. */
+.memoire-etabli {
+  margin-top: 6px;
+}
+.alerte-memoire {
+  color: var(--rouge);
+}

@@ -92,7 +92,10 @@ def test_ouvrir_puis_fermer(serveur):
     assert serveur["nextcloud"]["trusted_domains"].count("cloud.exemple.fr") == 1
     assert len(serveur["nextcloud"]["trusted_proxies"]) == 2
     domain_access.disable()
-    assert serveur["nextcloud"]["trusted_domains"] == ["localhost", "serveur-test.ts.net"]  # les autres adresses restent
+    assert serveur["nextcloud"]["trusted_domains"] == [
+        "localhost",
+        "serveur-test.ts.net",
+    ]  # les autres adresses restent
     assert serveur["demandes"][-1] == ("retirer_acces_domaine", {})
     assert domain_access.read()["actif"] is False
 

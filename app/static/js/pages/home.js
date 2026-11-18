@@ -117,4 +117,10 @@ document.addEventListener(
   true,
 );
 
-export const COMING_SOON = [{ nom: t("Sauvegarde croisée"), role: t("Une copie chiffrée sur un autre serveur Jabba") }];
+export const COMING_SOON = [
+  { nom: t("Sauvegarde croisée"), role: t("Une copie chiffrée sur un autre serveur Jabba") },
+  {
+    nom: t("Réservations Fab-manager"),
+    role: t("Le calendrier des machines du fablab, et un écran qui affiche les réservations en direct"),
+  },
+];

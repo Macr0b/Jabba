@@ -243,6 +243,67 @@ def _remove_domain_access(args):
     return ["sh", "-c", f"cd {DOMAIN_FOLDER} && docker compose down; rm -rf {DOMAIN_FOLDER}"], 120
 
 
+# ---------------------------------------------------------------- outils en option (host/catalog.py)
+# $0 dossier, $1 compose.yaml, $2 .env (modèle), $3 préparation, $4 port https, $5 port local ;
+# le mot de passe de l'admin arrive sur l'entrée standard. Un .env déjà là est gardé (ses secrets
+# aussi) : réinstaller un outil retrouve ses données.
+OPTIONAL_INSTALL = """set -e
+umask 077
+mkdir -p "$0"
+cd "$0"
+printf "%s" "$1" > compose.yaml
+pass=$(cat)
+if [ -n "$2" ] && [ ! -f .env ]; then
+  secret=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  printf "%s\n" "$2" | S="$secret" P="$pass" awk '{
+    for (n = 0; n < 2; n++) {
+      mark = n ? "@MOT_DE_PASSE_ADMIN@" : "@SECRET_TIRE_AU_SORT@"; value = n ? ENVIRON["P"] : ENVIRON["S"]
+      i = index($0, mark); if (i) $0 = substr($0, 1, i - 1) value substr($0, i + length(mark))
+    }
+    print }' > .env
+fi
+[ -z "$3" ] || sh -c "$3"
+docker compose up -d
+[ -z "$4" ] || tailscale serve --bg --https="$4" "http://127.0.0.1:$5" || echo "Adresse https : active HTTPS Certificates dans la console Tailscale." >&2
+"""
+OPTIONAL_REMOVE = 'cd "$0" && docker compose down; [ -z "$1" ] || tailscale serve --https="$1" off || true'
+ADMIN_PASSWORD = re.compile(r"[A-Za-z0-9._:+=@%!?*,-]{15,64}")
+
+
+def _optional_tool(args):
+    from host import catalog
+
+    name = args.get("outil")
+    if name not in catalog.OPTIONAL_TOOLS:
+        raise ActionError(f"Outil refusé : {name!r}")
+    return name, catalog.OPTIONAL_TOOLS[name]
+
+
+def _install_optional(args):
+    name, tool = _optional_tool(args)
+    files = tool["fichiers"]
+    https = str(tool["port_https"] or "")
+    local = str(tool["port_local"] or "")
+    command = ["sh", "-c", OPTIONAL_INSTALL, f"/opt/stacks/{name}", files["compose.yaml"], files.get(".env", "")]
+    return [*command, tool["preparer"], https, local], 1800
+
+
+def _remove_optional(args):
+    name, tool = _optional_tool(args)
+    return ["sh", "-c", OPTIONAL_REMOVE, f"/opt/stacks/{name}", str(tool["port_https"] or "")], 300
+
+
+def optional_password(name, text):
+    """Le mot de passe demandé par un outil (Time Machine) : 15 caractères au moins, sans espace ni guillemet."""
+    from host import catalog
+
+    if not catalog.OPTIONAL_TOOLS[name]["mot_de_passe"]:
+        return ""
+    if not ADMIN_PASSWORD.fullmatch(text or ""):
+        raise ActionError("Mot de passe refusé : 15 à 64 caractères, lettres, chiffres et . _ : + = @ % ! ? * , -")
+    return text
+
+
 # ---------------------------------------------------------------- outils (conteneurs Docker)
 CONTAINER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
@@ -347,7 +408,9 @@ OCC_BASE = ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
 # Le mot de passe arrive sur l'entrée standard et devient la variable OC_PASS lue par occ :
 # il n'apparaît jamais dans la liste des processus du serveur.
 WITH_PASSWORD = 'export OC_PASS="$(cat)"; exec "$@"'
-INPUT_ACTIONS = frozenset({"nextcloud", "verifier_mot_de_passe_serveur", "changer_mot_de_passe_serveur"})
+INPUT_ACTIONS = frozenset(
+    {"nextcloud", "verifier_mot_de_passe_serveur", "changer_mot_de_passe_serveur", "installer_outil_option"}
+)
 
 
 def _nextcloud(args):
@@ -395,6 +458,8 @@ def host_input(name, args, text):
     """Le texte donné à la commande sur le serveur. Le mot de passe à vérifier, lui, ne quitte pas le service."""
     if name == "verifier_mot_de_passe_serveur":
         return None
+    if name == "installer_outil_option":
+        return optional_password(_optional_tool(args)[0], text)
     if name == "changer_mot_de_passe_serveur":
         if not text or ":" in text or "\n" in text:
             raise ActionError("Mot de passe refusé (ni « : » ni retour à la ligne).")
@@ -895,6 +960,8 @@ ACTIONS = {
     "conteneur_actif": _container_running,
     "outil": _tool,
     "acces_domaine": _domain_access,
+    "installer_outil_option": _install_optional,
+    "retirer_outil_option": _remove_optional,
     "retirer_acces_domaine": _remove_domain_access,
     "nextcloud": _nextcloud,
     "version_systeme": _os_release,

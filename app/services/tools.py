@@ -15,7 +15,7 @@ import httpx
 from fastapi import HTTPException
 
 import config
-from host import commands
+from host import catalog, commands
 
 # ---------------------------------------------------------------- outils (Docker)
 NAMES = {
@@ -25,6 +25,7 @@ NAMES = {
     "antivirus": ("Antivirus", "Analyse les fichiers déposés par les invités (ClamAV)"),
     "jabba-app": ("Appli Jabba", "Cette appli"),
     "adresses": ("Adresses", "Les adresses https des outils"),
+    **{tool_id: (tool["nom"], tool["role"]) for tool_id, tool in catalog.OPTIONAL_TOOLS.items()},
 }
 # Outils du système : toujours actifs, sans interrupteur.
 SYSTEM_TOOLS = {"jabba-app", "adresses"}
@@ -36,7 +37,12 @@ ADRESSES = {
 }
 # Où chaque outil range son icône : l'appli affiche le logo servi par l'outil lui-même.
 # Port local de chaque outil : l'appli y va chercher le logo que l'outil fournit lui-même.
-PORTS = {"jellyfin": 8096, "nextcloud": 8081, "dockge": 5001}
+PORTS = {
+    "jellyfin": 8096,
+    "nextcloud": 8081,
+    "dockge": 5001,
+    **{tool_id: tool["port_local"] for tool_id, tool in catalog.OPTIONAL_TOOLS.items() if tool["port_local"]},
+}
 # Jamais ouverts aux invités du Wi-Fi : ils donnent la main sur le serveur.
 NEVER_ON_WIFI = {"dockge"}
 FALLBACK_ICONS = [
@@ -48,7 +54,8 @@ FALLBACK_ICONS = [
     "/core/img/favicon.ico",
     "/icon.svg",
 ]
-OUTSIDE_APP = {"nextcloud"}
+# Ouverts dans un onglet à part (Nextcloud ; les outils en option refusent souvent d'être affichés dans une autre page).
+OUTSIDE_APP = {"nextcloud", *catalog.OPTIONAL_TOOLS}
 
 
 def list_tools():
@@ -94,6 +101,9 @@ def list_tools():
                 "systeme": pid in SYSTEM_TOOLS,
                 "icone": pid in PORTS,
                 "dans_appli": pid not in OUTSIDE_APP,
+                # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
+                "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
+                "en_option": pid in catalog.OPTIONAL_TOOLS,
             }
         )
     return result
