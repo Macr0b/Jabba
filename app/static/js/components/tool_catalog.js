@@ -13,6 +13,7 @@ import { formatBytes } from "../core/format.js";
 import { t } from "../core/i18n.js";
 import { followTask } from "../core/tasks.js";
 import { toolIcon } from "../pages/home.js";
+import { toolMenuHtml } from "./tool_menu.js";
 
 const LOW_MEMORY = 0.5 * 1024 ** 3; // en dessous, le serveur risque de ramer
 
@@ -32,7 +33,7 @@ function offCardHtml(tool, memory) {
   const tooMuch = remaining < LOW_MEMORY;
   return `<article class="carte pad outil eteint" data-offre="${escapeHtml(tool.id)}">
       <div class="haut"><div class="titre-outil">${toolIcon({ nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
-      <button class="interrupteur" role="switch" aria-checked="false" aria-label="${escapeHtml(t("Activer") + " " + tool.nom)}" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}><span></span></button></div>
+      <div class="haut-droite"><button class="interrupteur" role="switch" aria-checked="false" aria-label="${escapeHtml(t("Activer") + " " + tool.nom)}" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}><span></span></button>${toolMenuHtml(tool)}</div></div>
       ${
         tool.integre
           ? ""
@@ -47,6 +48,7 @@ function offCardHtml(tool, memory) {
           ? t`<label class="champ"><span>Mot de passe à taper sur le Mac (15 caractères au moins)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>`
           : ""
       }
+      <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
     </article>`;
 }
 
@@ -54,8 +56,9 @@ function offCardHtml(tool, memory) {
 function builtInCardHtml(tool) {
   return `<article class="carte pad outil" data-integre="${escapeHtml(tool.id)}">
       <div class="haut"><div class="titre-outil">${toolIcon({ nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
-      <button class="interrupteur" role="switch" aria-checked="true" aria-label="${escapeHtml(t("Désactiver") + " " + tool.nom)}" data-eteindre="${escapeHtml(tool.id)}"><span></span></button></div>
+      <div class="haut-droite"><button class="interrupteur" role="switch" aria-checked="true" aria-label="${escapeHtml(t("Désactiver") + " " + tool.nom)}" data-eteindre="${escapeHtml(tool.id)}"><span></span></button>${toolMenuHtml(tool)}</div></div>
       <div class="actions"><a class="btn btn-p" href="${escapeHtml(tool.page)}">${t("Ouvrir")}</a></div>
+      <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
     </article>`;
 }
 
@@ -89,7 +92,7 @@ async function disableBuiltIn(toolId, reload) {
 }
 
 /** Ajoute les outils à activer dans la grille de l'Établi (`grid`), et la ligne de mémoire. */
-export function bindCatalog(grid, reload) {
+export function bindCatalog(grid, reload, onCards) {
   api("/api/etabli/catalogue")
     .then((result) => {
       const memory = result.memoire;
@@ -114,6 +117,7 @@ export function bindCatalog(grid, reload) {
       grid.querySelectorAll("[data-eteindre]").forEach((toggle) => {
         toggle.onclick = () => disableBuiltIn(toggle.dataset.eteindre, reload);
       });
+      if (onCards) onCards([...builtInOn, ...off]);
     })
     .catch(() => {});
 }

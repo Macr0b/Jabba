@@ -8,6 +8,7 @@ import { $, content, escapeHtml } from "../core/dom.js";
 import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.js";
 import { bindDomain, domainCardHtml } from "../components/domain_card.js";
 import { bindCatalog, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
+import { bindToolMenus, toolMenuHtml } from "../components/tool_menu.js";
 import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
@@ -39,11 +40,11 @@ pages.outils = async () => {
       <article class="carte pad outil${active ? "" : " eteint"}">
         <div class="haut">
           <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}${versionText(item.id)}</div>${active ? `<div class="conso note" data-conso="${escapeHtml(item.id)}"></div>` : ""}</div></div>
-          ${
+          <div class="haut-droite">${
             item.systeme || !item.modifiable
               ? `<span class="pastille ${badge[item.etat] || "p-gris"}">${escapeHtml(item.etat[0].toUpperCase() + item.etat.slice(1))}</span>`
               : `<button class="interrupteur" role="switch" aria-checked="${active}" aria-label="${active ? t("Désactiver") : t("Activer")} ${escapeHtml(item.nom)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
-          }
+          }${toolMenuHtml(item)}</div>
         </div>
         ${updateAvailable(item.id) ? t`<div class="bandeau"><span>Une version plus récente est disponible.</span></div>` : ""}
         ${item.etat === "en panne" || item.etat === "partiel" ? `<div class="note" style="color:var(--rouge)">${item.etat === "en panne" ? t("En panne : essaie Redémarrer.") : t("Une partie de l'outil ne tourne pas : essaie Redémarrer.")}</div>` : ""}
@@ -69,6 +70,7 @@ pages.outils = async () => {
             : ""
         }
         ${item.id === "antivirus" && active ? '<div id="antivirus-detail"></div>' : ""}
+        <div class="panneau-outil" data-panneau="${escapeHtml(item.id)}" hidden></div>
         ${item.systeme && item.modifiable ? t`<div class="actions"><button class="btn" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button></div>` : ""}
       </article>`;
   };
@@ -95,7 +97,11 @@ pages.outils = async () => {
     .catch(() => {});
   bindAntivirus(() => pages.outils().catch(showError));
   bindDomain();
-  bindCatalog($("#grille-etabli"), () => pages.outils().catch(showError));
+  const reloadPage = () => pages.outils().catch(showError);
+  bindToolMenus(content, tools, versions, reloadPage);
+  bindCatalog($("#grille-etabli"), reloadPage, (catalogTools) =>
+    bindToolMenus(content, catalogTools, versions, reloadPage),
+  );
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;
     try {

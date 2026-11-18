@@ -8,6 +8,7 @@
       "Établi : la mémoire du serveur (utilisée, prise par les outils, libre), et avant chaque activation ce qu'il en resterait ; l'activation est bloquée s'il en resterait trop peu.",
       "Mémoire d'atelier (outil de l'appli, qu'on allume dans l'Établi) : pour chaque machine, son journal (interventions, pannes, entretiens, réglages, pièces changées), ses réglages, ses rappels d'entretien avec alerte à l'échéance, et le dossier de ses manuels et photos.",
       "Établi : « Réservations Fab-manager » ajouté aux projets (calendrier des machines du fablab et écran des réservations en direct).",
+      "Établi : un menu « ••• » sur chaque carte — Aide (à quoi sert l'outil, comment s'en servir, lien vers sa documentation) et Informations (état, version, mémoire, dossier, conteneurs), qui s'ouvrent dans la carte ; Désinstaller pour les outils installés par Jabba (leurs données restent).",
       "Fichiers : bouton « Tout sélectionner » (en plus de ⌘A), aussi dans la barre de sélection.",
       "Établi : le projet « Torrent derrière VPN » est retiré de la liste « Bientôt ».",
       "Disques : l'interrupteur « Écriture autorisée » ne disparaît plus pendant que le disque se rouvre.",

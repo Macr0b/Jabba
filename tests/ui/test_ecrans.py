@@ -210,12 +210,36 @@ def test_memoire_d_atelier(page):
     expect(page.locator(".entree-atelier").first).to_contain_text("Vider le bac à déchets")
     page.get_by_role("link", name="← Toutes les machines").click()
     expect(page.locator(".machine-atelier", has_text=machine)).to_contain_text("Speedy 360")
-    aller(page, "outils")  # l'éteindre garde tout ; le rallumer le retrouve
-    page.locator('[data-eteindre="atelier"]').click()
+    aller(page, "outils")  # désinstallée par le menu « ••• », elle garde tout ; rallumée, elle le retrouve
+    page.locator('[data-menu="atelier"]').click()
+    page.get_by_role("menuitem", name="Désinstaller").click()
+    page.locator("dialog[open]").get_by_role("button", name="Désinstaller").click()
     expect(page.locator('[data-activer="atelier"]')).to_have_attribute("aria-checked", "false")
     page.locator('[data-activer="atelier"]').click()
     page.locator('[data-integre="atelier"]').get_by_role("link", name="Ouvrir").click()
     expect(page.locator(".machine-atelier", has_text=machine)).to_be_visible()
+
+
+def test_menu_des_cartes_de_l_etabli(page):
+    """« ••• » sur chaque carte : Aide et Informations s'ouvrent dans la carte ; Désinstaller seulement pour ce que Jabba a installé."""
+    aller(page, "outils")
+    jellyfin = page.locator("article.outil", has=page.locator('[data-menu="jellyfin"]'))
+    jellyfin.locator('[data-menu="jellyfin"]').click()
+    menu = jellyfin.get_by_role("menu")
+    expect(menu).to_be_visible()
+    expect(menu.get_by_role("menuitem")).to_have_text(["Aide", "Informations"])  # installé hors de Jabba
+    menu.get_by_role("menuitem", name="Aide").click()
+    expect(menu).to_be_hidden()
+    expect(jellyfin.locator(".panneau-outil")).to_contain_text("films et séries")
+    jellyfin.locator('[data-menu="jellyfin"]').click()
+    jellyfin.get_by_role("menuitem", name="Informations").click()
+    expect(jellyfin.locator(".panneau-outil")).to_contain_text("Conteneurs")
+    page.keyboard.press("Escape")
+    immich = page.locator('[data-offre="immich"]')
+    immich.locator('[data-menu="immich"]').click()
+    expect(immich.get_by_role("menuitem")).to_have_text(["Aide", "Informations"])  # pas encore installé
+    page.keyboard.press("Escape")
+    expect(immich.get_by_role("menu")).to_be_hidden()
 
 
 NUAGE_PRET = {

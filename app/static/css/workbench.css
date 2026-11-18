@@ -156,3 +156,67 @@ body.plein-ecran main {
 .alerte-memoire {
   color: var(--rouge);
 }
+
+/* Menu « ••• » d'une carte : une liste sous le bouton, et le panneau Aide / Informations dans la carte. */
+.menu-carte {
+  position: relative;
+  display: inline-flex;
+}
+.liste-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 200px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+.liste-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-height: 24px;
+  font: inherit;
+  color: var(--texte);
+  cursor: pointer;
+}
+.liste-menu button:hover,
+.liste-menu button:focus-visible {
+  background: var(--bord-doux);
+}
+.liste-menu button.danger {
+  color: var(--rouge);
+}
+.haut-droite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panneau-outil {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bord-doux);
+}
+.infos-outil {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+.infos-outil dt {
+  color: var(--texte-3);
+}
+.infos-outil dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
