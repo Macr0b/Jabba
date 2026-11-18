@@ -42,6 +42,7 @@ from routes import (
     system,
     tools,
     trash,
+    workshop,
 )
 from security import guard
 from services import activity_log, guests
@@ -97,6 +98,7 @@ for module in (
     files_viewer,
     optional_tools,
     trash,
+    workshop,
     disks,
     disk_health,
     player,

@@ -1,0 +1,69 @@
+/* Mémoire d'atelier : la liste des machines, les formulaires et le journal d'une machine. */
+.machine-atelier {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.machine-atelier:hover,
+.machine-atelier:focus-visible {
+  border-color: var(--accent);
+}
+.formulaire-atelier {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.formulaire-atelier .large,
+.formulaire-atelier .actions {
+  grid-column: 1 / -1;
+}
+.formulaire-ligne {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .formulaire-atelier,
+  .formulaire-ligne {
+    grid-template-columns: 1fr;
+  }
+}
+.champ select,
+.champ textarea,
+#reglages {
+  font: inherit;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bord);
+  background: var(--fond);
+  color: var(--texte);
+  width: 100%;
+  box-sizing: border-box;
+}
+.liste-atelier {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 12px;
+}
+.entree-atelier {
+  border-top: 1px solid var(--bord-doux);
+  padding-top: 12px;
+}
+.entree-atelier .haut {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.entree-atelier .pastille {
+  margin-right: 8px;
+}
+.texte-atelier {
+  white-space: pre-wrap;
+  margin: 6px 0 0;
+}

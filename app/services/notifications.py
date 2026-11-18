@@ -33,6 +33,7 @@ TYPES = {
     ),
     "sauvegardes": ("Sauvegardes", "Sauvegarde échouée, incomplète, ou en attente du disque."),
     "comptes": ("Comptes", "Demande de mot de passe oublié, compte ajouté ou retiré, rang changé."),
+    "atelier": ("Entretien des machines", "Quand un rappel d'entretien de la mémoire d'atelier arrive à échéance."),
 }
 
 

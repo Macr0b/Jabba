@@ -17,6 +17,7 @@ import "./pages/home.js";
 import "./pages/system.js";
 import "./pages/tools.js";
 import "./pages/trash.js";
+import "./pages/workshop.js";
 import { toast } from "./components/dialogs.js";
 import { showPasswordReset, chooseMyPassword, logOut } from "./core/admin_session.js";
 import { api } from "./core/api.js";

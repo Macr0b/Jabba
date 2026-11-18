@@ -3,7 +3,7 @@
 //
 // Sommaire :
 //   partagé : memoryBannerHtml, catalogHtml, bindCatalog, toolHint
-//   interne : offerHtml, memoryAfter
+//   interne : offerHtml, memoryAfter, builtInHtml, bindRemove
 import { confirmAction, toast } from "./dialogs.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
@@ -61,21 +61,28 @@ export function bindCatalog(reload) {
       if (banner)
         banner.innerHTML = t`Mémoire du serveur : <strong>${formatBytes(memory.utilise)}</strong> utilisés sur ${formatBytes(memory.total)}, dont ${formatBytes(memory.outils)} pour les outils. Libre : <strong>${formatBytes(memory.libre)}</strong>.`;
       const offers = result.outils.filter((tool) => !tool.installe);
+      const builtIn = result.outils.filter((tool) => tool.integre && tool.installe);
       const place = $("#etabli-catalogue");
-      if (!place || !offers.length) return;
-      place.innerHTML = t`<h2 class="titre-section">À activer en option</h2><div class="grille g2">${offers.map((tool) => offerHtml(tool, memory)).join("")}</div>`;
+      if (!place) return;
+      place.innerHTML =
+        (builtIn.length
+          ? t`<h2 class="titre-section">Dans l'appli</h2><div class="grille g2">${builtIn.map(builtInHtml).join("")}</div>`
+          : "") +
+        (offers.length
+          ? t`<h2 class="titre-section">À activer en option</h2><div class="grille g2">${offers.map((tool) => offerHtml(tool, memory)).join("")}</div>`
+          : "");
+      bindRemove(place, reload);
       place.querySelectorAll("[data-installer]").forEach((button) => {
         button.onclick = async () => {
           const tool = offers.find((item) => item.id === button.dataset.installer);
           const field = place.querySelector(`[data-mot-de-passe="${tool.id}"]`);
           button.disabled = true;
           try {
-            await followTask(
-              await api(`/api/etabli/${encodeURIComponent(tool.id)}/installer`, {
-                method: "POST",
-                json: { mot_de_passe: field ? field.value : null },
-              }),
-            );
+            const task = await api(`/api/etabli/${encodeURIComponent(tool.id)}/installer`, {
+              method: "POST",
+              json: { mot_de_passe: field ? field.value : null },
+            });
+            if (task) await followTask(task); // un outil de l'appli s'active tout de suite
             toast(t`${tool.nom} est activé`);
             reload();
           } catch (error) {
@@ -86,7 +93,21 @@ export function bindCatalog(reload) {
       });
     })
     .catch(() => {});
-  content.querySelectorAll("[data-retirer]").forEach((button) => {
+  bindRemove(content, reload);
+}
+
+/** Un outil de l'appli activé : on l'ouvre comme un écran, ou on le retire (ses données restent). */
+function builtInHtml(tool) {
+  return `<article class="carte pad outil" data-integre="${escapeHtml(tool.id)}">
+      <div class="haut"><div class="titre-outil">${toolIcon({ nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
+      <span class="pastille p-ok">${t("Actif")}</span></div>
+      <div class="actions"><a class="btn btn-p" href="${escapeHtml(tool.page)}">${t("Ouvrir")}</a>
+      <button class="btn" type="button" data-retirer="${escapeHtml(tool.id)}" data-nom="${escapeHtml(tool.nom)}">${t("Retirer")}</button></div>
+    </article>`;
+}
+
+function bindRemove(scope, reload) {
+  scope.querySelectorAll("[data-retirer]").forEach((button) => {
     button.onclick = async () => {
       const name = button.dataset.nom;
       const ok = await confirmAction({
@@ -99,9 +120,8 @@ export function bindCatalog(reload) {
       });
       if (!ok) return;
       try {
-        await followTask(
-          await api(`/api/etabli/${encodeURIComponent(button.dataset.retirer)}/retirer`, { method: "POST" }),
-        );
+        const task = await api(`/api/etabli/${encodeURIComponent(button.dataset.retirer)}/retirer`, { method: "POST" });
+        if (task) await followTask(task);
         reload();
       } catch (error) {
         toast(error.message, true);

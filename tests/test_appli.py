@@ -153,3 +153,20 @@ def test_antivirus_disques_par_l_api(client, tmp_path, monkeypatch):
     assert client.get("/api/antivirus", headers=H).json()["disques"][0]["chaque_semaine"] is False
     assert client.post("/api/antivirus/analyser", json={"chemin": "/etc"}, headers=H).status_code == 404
     assert client.post("/api/antivirus/analyser", json={"chemin": "/srv/data"}, headers=H).status_code == 200
+
+
+def test_memoire_d_atelier_par_l_api(client, tmp_path, monkeypatch):
+    from services import workshop
+
+    monkeypatch.setattr(workshop, "STATE_FILE", str(tmp_path / "atelier.json"))
+    connecter(client, "serveur-demo", "demo-mot-de-passe")
+    assert client.get("/api/atelier", headers=H).status_code == 404  # pas activée
+    assert client.post("/api/etabli/atelier/installer", json={}, headers=H).status_code == 200
+    machine = client.post("/api/atelier/machines", json={"nom": "Laser"}, headers=H).json()
+    r = client.post(f"/api/atelier/machines/{machine['id']}/journal", json={"titre": "Miroir nettoyé"}, headers=H)
+    assert r.status_code == 200
+    assert (
+        client.post(f"/api/atelier/machines/{machine['id']}/journal", json={"titre": ""}, headers=H).status_code == 400
+    )
+    assert client.get("/api/atelier/machines/inconnue", headers=H).status_code == 404
+    assert client.get("/api/atelier", headers=H).json()["machines"][0]["entrees"] == 1

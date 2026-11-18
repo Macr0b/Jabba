@@ -10,6 +10,7 @@ Sommaire :
   antivirus.watch_deposits : nouveaux dépôts des invités analysés (chaque minute)
   antivirus_disks.watch : analyse des disques (en cours, de la semaine, nouveaux fichiers chaque heure)
   antivirus.install_by_default : antivirus installé de base, une fois, si la mémoire suffit
+  workshop.watch_reminders : rappels d'entretien de la mémoire d'atelier arrivés à échéance
   mass_deletion.watch_mass_deletion : beaucoup de fichiers supprimés d'un coup
   tool_updates.watch_tool_updates : nouvelle version d'un outil (une fois par jour)
   public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
@@ -44,6 +45,7 @@ from services import (
     tool_updates,
     tools,
     video_player,
+    workshop,
 )
 from version import VERSION
 
@@ -200,6 +202,7 @@ def watch_forever():
                 auto_disks.link_disks_to_nextcloud,
                 disk_health.watch_disk_health,
                 antivirus.install_by_default,
+                workshop.watch_reminders,
                 disk_maintenance.watch_fragmentation,
                 mass_deletion.watch_mass_deletion,
                 tool_updates.watch_tool_updates,

@@ -1,7 +1,7 @@
 // Mise en forme des nombres, tailles, durées et dates, à la française.
 //
 // Sommaire :
-//   partagé : formatBytes, formatPercent, formatDuration, formatWhen, timeAgo, formatGigabytes, timeOf, dayOf, shortDuration
+//   partagé : formatBytes, formatPercent, formatDuration, formatDay, formatWhen, timeAgo, formatGigabytes, timeOf, dayOf, shortDuration
 
 import { t } from "./i18n.js";
 export function formatBytes(item) {
@@ -25,6 +25,12 @@ export function formatDuration(value) {
   if (session) return `${session} j ${hours} h`;
   return `${hours} h ${Math.floor((value % 3600) / 60)} min`;
 }
+/** Une date seule (AAAA-MM-JJ), en toutes lettres : « 18 novembre 2026 ». */
+export function formatDay(isoDay) {
+  if (!isoDay) return "—";
+  return new Date(isoDay + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export function formatWhen(isoDate) {
   if (!isoDate) return "—";
   const data = new Date(isoDate),

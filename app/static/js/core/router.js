@@ -34,7 +34,7 @@ export async function router() {
   document.querySelectorAll("[data-page]").forEach((element) => {
     const active =
       element.dataset.page === page ||
-      (element.dataset.page === "outils" && page === "ouvrir") ||
+      (element.dataset.page === "outils" && ["ouvrir", "atelier"].includes(page)) ||
       (element.dataset.page === "comptes" && ["nuage", "utilisateurs"].includes(page)) ||
       (element.dataset.page === "plus" &&
         ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "sauvegardes"].includes(page)) ||
@@ -46,8 +46,9 @@ export async function router() {
   });
   document.title =
     t("Jabba · ") +
-    ({ outils: t("Établi"), ouvrir: t("Outil"), nuage: t("Comptes Nextcloud") }[page] ||
-      page[0].toUpperCase() + page.slice(1));
+    ({ outils: t("Établi"), ouvrir: t("Outil"), nuage: t("Comptes Nextcloud"), atelier: t("Mémoire d'atelier") }[
+      page
+    ] || page[0].toUpperCase() + page.slice(1));
   try {
     await pages[page](new URLSearchParams(query || ""));
   } catch (error) {

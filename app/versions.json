@@ -4,6 +4,10 @@
     "date": "2026-11-17",
     "changements": [
       "Établi : nouvel outil « Accès par le domaine ». On saisit son propre domaine : Nextcloud devient joignable de partout en HTTPS à l'adresse « cloud. » + domaine (Caddy, certificat Let's Encrypt obtenu et renouvelé tout seul, par le seul port 443). Jabba reste réservé à Tailscale. Une liste de vérification guide les étapes (adresse de la box, zone DNS, redirection du port) et se coche toute seule. Les liens de dépôt créés depuis Jabba portent l'adresse publique.",
+      "Établi : outils à activer en option, installés par le serveur avec des fichiers fixés d'avance — Vaultwarden (mots de passe, applis Bitwarden), Immich (photos et vidéos de l'iPhone, rangées sur le disque de données), Time Machine (sauvegarde des Mac par le réseau). Retirer un outil garde ses données.",
+      "Établi : la mémoire du serveur (utilisée, prise par les outils, libre), et avant chaque activation ce qu'il en resterait ; l'activation est bloquée s'il en resterait trop peu.",
+      "Mémoire d'atelier (outil de l'appli, à activer dans l'Établi) : pour chaque machine, son journal (interventions, pannes, entretiens, réglages, pièces changées), ses réglages, ses rappels d'entretien avec alerte à l'échéance, et le dossier de ses manuels et photos.",
+      "Établi : « Réservations Fab-manager » ajouté aux projets (calendrier des machines du fablab et écran des réservations en direct).",
       "Fichiers : bouton « Tout sélectionner » (en plus de ⌘A), aussi dans la barre de sélection.",
       "Établi : le projet « Torrent derrière VPN » est retiré de la liste « Bientôt ».",
       "Disques : l'interrupteur « Écriture autorisée » ne disparaît plus pendant que le disque se rouvre.",

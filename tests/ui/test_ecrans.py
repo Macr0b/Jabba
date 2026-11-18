@@ -182,6 +182,34 @@ def test_outils_en_option_et_memoire(page):
     expect(page.locator('[data-offre="vaultwarden"] input')).to_have_count(0)
 
 
+def test_memoire_d_atelier(page):
+    """Activée dans l'Établi : on ajoute une machine, on note une intervention, on fait un entretien."""
+    import uuid
+
+    machine = "Laser " + uuid.uuid4().hex[:6]  # la démo garde ses données d'un essai à l'autre
+    aller(page, "outils")
+    carte = page.locator('[data-integre="atelier"]')
+    page.locator('[data-installer="atelier"], [data-integre="atelier"]').first.wait_for()
+    if page.locator('[data-installer="atelier"]').count():
+        page.locator('[data-installer="atelier"]').click()
+    expect(carte).to_be_visible()
+    carte.get_by_role("link", name="Ouvrir").click()
+    page.get_by_role("button", name="Ajouter une machine").click()
+    page.locator("#form-machine input[name=nom]").fill(machine)
+    page.locator("#form-machine input[name=modele]").fill("Speedy 360")
+    page.locator("#form-machine").get_by_role("button", name="Ajouter").click()
+    expect(page.locator("h1")).to_have_text(machine)
+    page.locator("#form-entree input[name=titre]").fill("Lentille nettoyée")
+    page.locator("#form-entree").get_by_role("button", name="Noter").click()
+    expect(page.locator(".entree-atelier")).to_contain_text("Lentille nettoyée")
+    page.locator("#form-rappel input[name=titre]").fill("Vider le bac à déchets")
+    page.locator("#form-rappel").get_by_role("button", name="Ajouter le rappel").click()
+    page.get_by_role("button", name="Fait aujourd'hui").click()
+    expect(page.locator(".entree-atelier").first).to_contain_text("Vider le bac à déchets")
+    page.get_by_role("link", name="← Toutes les machines").click()
+    expect(page.locator(".machine-atelier", has_text=machine)).to_contain_text("Speedy 360")
+
+
 NUAGE_PRET = {
     "etat": {"present": True, "pret": True, "quota_defaut": "5 GB"},
     "rang": "super",
