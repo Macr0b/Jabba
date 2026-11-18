@@ -169,13 +169,15 @@ def test_acces_par_le_domaine_dans_l_etabli(page):
     expect(carte.locator("#domaine-activer")).to_be_visible()
 
 
-def test_outils_en_option_et_memoire(page):
-    """L'Établi montre la mémoire du serveur et ce que chaque outil en option prendrait."""
+def test_outils_a_activer_et_memoire(page):
+    """Les nouveaux outils sont dans la grille de l'Établi, interrupteur éteint, avec la mémoire qu'ils prendraient."""
     aller(page, "outils")
     expect(page.locator("#etabli-memoire")).to_contain_text("Mémoire du serveur")
     expect(page.locator("#etabli-memoire")).to_contain_text("Libre")
-    for nom in ("Vaultwarden", "Immich", "Time Machine"):
-        expect(page.locator("#etabli-catalogue")).to_contain_text(nom)
+    for outil in ("vaultwarden", "immich", "time-machine"):
+        interrupteur = page.locator(f'#grille-etabli [data-activer="{outil}"]')
+        expect(interrupteur).to_have_attribute("role", "switch")
+        expect(interrupteur).to_have_attribute("aria-checked", "false")
     immich = page.locator('[data-offre="immich"]')
     expect(immich).to_contain_text("Prend environ 3,0 Go de mémoire")
     expect(page.locator('[data-offre="time-machine"] input[type="password"]')).to_be_visible()
@@ -189,9 +191,9 @@ def test_memoire_d_atelier(page):
     machine = "Laser " + uuid.uuid4().hex[:6]  # la démo garde ses données d'un essai à l'autre
     aller(page, "outils")
     carte = page.locator('[data-integre="atelier"]')
-    page.locator('[data-installer="atelier"], [data-integre="atelier"]').first.wait_for()
-    if page.locator('[data-installer="atelier"]').count():
-        page.locator('[data-installer="atelier"]').click()
+    page.locator('[data-activer="atelier"], [data-integre="atelier"]').first.wait_for()
+    if page.locator('[data-activer="atelier"]').count():
+        page.locator('[data-activer="atelier"]').click()  # l'interrupteur, comme pour les autres outils
     expect(carte).to_be_visible()
     carte.get_by_role("link", name="Ouvrir").click()
     page.get_by_role("button", name="Ajouter une machine").click()
@@ -208,6 +210,12 @@ def test_memoire_d_atelier(page):
     expect(page.locator(".entree-atelier").first).to_contain_text("Vider le bac à déchets")
     page.get_by_role("link", name="← Toutes les machines").click()
     expect(page.locator(".machine-atelier", has_text=machine)).to_contain_text("Speedy 360")
+    aller(page, "outils")  # l'éteindre garde tout ; le rallumer le retrouve
+    page.locator('[data-eteindre="atelier"]').click()
+    expect(page.locator('[data-activer="atelier"]')).to_have_attribute("aria-checked", "false")
+    page.locator('[data-activer="atelier"]').click()
+    page.locator('[data-integre="atelier"]').get_by_role("link", name="Ouvrir").click()
+    expect(page.locator(".machine-atelier", has_text=machine)).to_be_visible()
 
 
 NUAGE_PRET = {

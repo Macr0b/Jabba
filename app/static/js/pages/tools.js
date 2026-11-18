@@ -7,7 +7,7 @@ import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.js";
 import { bindDomain, domainCardHtml } from "../components/domain_card.js";
-import { bindCatalog, catalogHtml, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
+import { bindCatalog, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
 import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
@@ -65,7 +65,6 @@ pages.outils = async () => {
           <button class="btn${updateAvailable(item.id) ? " btn-p" : ""}" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button>`
               : ""
           }
-          ${item.en_option ? t`<button class="btn" data-retirer="${escapeHtml(item.id)}" data-nom="${escapeHtml(item.nom)}">Retirer</button>` : ""}
         </div>${toolHint(item)}`
             : ""
         }
@@ -75,9 +74,8 @@ pages.outils = async () => {
   };
   content.innerHTML = t`
     <div class="entete"><div><h1>Établi</h1><p class="sous-titre">Active les outils dont tu as besoin. Un outil désactivé ne consomme rien et garde ses données.</p>${memoryBannerHtml()}</div></div>
-    <div class="grille g2">${workbenchTools.map(card).join("")}</div>
+    <div class="grille g2" id="grille-etabli">${workbenchTools.map(card).join("")}</div>
     ${workbenchTools.some((item) => item.id === "antivirus") ? "" : antivirusOfferHtml()}
-    ${catalogHtml()}
     ${domainCardHtml()}
     <h2 class="titre-section">Bientôt dans l'établi</h2>
     <div class="grille g2">${COMING_SOON.map((item) => t`<article class="carte pad outil eteint"><div class="haut"><div class="titre-outil">${toolIcon({ nom: item.nom })}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div><span class="pastille p-gris">Bientôt</span></div></article>`).join("")}</div>
@@ -97,7 +95,7 @@ pages.outils = async () => {
     .catch(() => {});
   bindAntivirus(() => pages.outils().catch(showError));
   bindDomain();
-  bindCatalog(() => pages.outils().catch(showError));
+  bindCatalog($("#grille-etabli"), () => pages.outils().catch(showError));
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;
     try {
