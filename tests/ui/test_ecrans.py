@@ -154,6 +154,21 @@ def test_antivirus_propose_dans_l_etabli(page):
     expect(offre.locator("#installer-antivirus")).to_have_text("Installer")
 
 
+def test_acces_par_le_domaine_dans_l_etabli(page):
+    """On saisit son domaine, Jabba met Caddy en place et montre les étapes ; on peut refermer."""
+    aller(page, "outils")
+    carte = page.locator("#carte-domaine")
+    expect(carte).to_contain_text("Jabba reste privé")
+    carte.locator("#domaine-nom").fill("exemple.fr")
+    carte.locator("#domaine-activer").click()
+    expect(carte).to_contain_text("En ligne")
+    expect(carte.locator("a")).to_have_attribute("href", "https://cloud.exemple.fr")
+    expect(carte).to_contain_text("port externe 443, TCP, vers 192.168.1.20, port 8443")
+    carte.locator("#domaine-retirer").click()
+    page.locator("dialog[open]").get_by_role("button", name="Fermer l'accès").click()
+    expect(carte.locator("#domaine-activer")).to_be_visible()
+
+
 NUAGE_PRET = {
     "etat": {"present": True, "pret": True, "quota_defaut": "5 GB"},
     "rang": "super",

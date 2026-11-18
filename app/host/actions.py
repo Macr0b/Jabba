@@ -177,6 +177,72 @@ def _scan_disk(args):
     return _background(_task_unit(args.get("unite")), script, "sh", ("Nice=19", "IOSchedulingClass=idle"))
 
 
+# ---------------------------------------------------------------- accès par le domaine (Caddy)
+# Caddy reçoit Internet (box : port 443 -> serveur : DOMAIN_PORT) et ne sert QUE l'adresse de
+# Nextcloud. Jabba n'a pas d'adresse publique. Le certificat HTTPS (Let's Encrypt) est obtenu et
+# renouvelé par Caddy, par le port 443 seul (épreuve « TLS-ALPN », sans port 80).
+DOMAIN_FOLDER = "/opt/stacks/acces-domaine"
+DOMAIN_PORT = 8443
+HOST_NAME = re.compile(r"(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
+DOMAIN_COMPOSE = """services:
+  acces-domaine:
+    image: caddy:2
+    container_name: acces-domaine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certificats:/data
+      - ./config:/config
+"""
+CADDYFILE = """{
+\thttps_port %(port)d
+\thttp_port %(http_port)d
+\tauto_https disable_redirects
+}
+
+%(address)s {
+\ttls {
+\t\tissuer acme {
+\t\t\tdisable_http_challenge
+\t\t}
+\t}
+\theader Strict-Transport-Security "max-age=31536000"
+\tredir /.well-known/carddav /remote.php/dav 301
+\tredir /.well-known/caldav /remote.php/dav 301
+\treverse_proxy 127.0.0.1:%(target)d
+}
+"""
+# Le dossier et les deux fichiers ($1 et $2 : leur contenu, jamais collé dans le texte du script).
+DOMAIN_INSTALL = (
+    'set -e; mkdir -p "$0"; cd "$0"; printf "%s" "$1" > compose.yaml; printf "%s" "$2" > Caddyfile; '
+    "docker compose up -d; docker compose exec -T acces-domaine caddy reload --config /etc/caddy/Caddyfile || true"
+)
+
+
+def host_name(value):
+    name = str(value or "").strip().lower().rstrip(".")
+    if not HOST_NAME.fullmatch(name):
+        raise ActionError(f"Adresse refusée : {value!r}")
+    return name
+
+
+def caddyfile(address, target_port):
+    return CADDYFILE % {"port": DOMAIN_PORT, "http_port": DOMAIN_PORT - 1, "address": address, "target": target_port}
+
+
+def _domain_access(args):
+    target = args.get("port")
+    if not isinstance(target, int) or isinstance(target, bool) or not 1024 <= target <= 65535 or target == DOMAIN_PORT:
+        raise ActionError(f"Port refusé : {target!r}")
+    content = caddyfile(host_name(args.get("adresse")), target)
+    return ["sh", "-c", DOMAIN_INSTALL, DOMAIN_FOLDER, DOMAIN_COMPOSE, content], 600
+
+
+def _remove_domain_access(args):
+    return ["sh", "-c", f"cd {DOMAIN_FOLDER} && docker compose down; rm -rf {DOMAIN_FOLDER}"], 120
+
+
 # ---------------------------------------------------------------- outils (conteneurs Docker)
 CONTAINER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
@@ -270,8 +336,13 @@ OCC_COMMANDS = frozenset(
         "groupfolders:rename",
         "groupfolders:group",
         "groupfolders:quota",
+        "config:system:get",
+        "config:system:set",
+        "config:system:delete",
     }
 )
+# Réglages système de Nextcloud que l'appli peut lire ou changer (accès par le domaine), et aucun autre.
+OCC_SYSTEM_KEYS = frozenset({"trusted_domains", "trusted_proxies", "overwrite.cli.url"})
 OCC_BASE = ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
 # Le mot de passe arrive sur l'entrée standard et devient la variable OC_PASS lue par occ :
 # il n'apparaît jamais dans la liste des processus du serveur.
@@ -289,6 +360,8 @@ def _nextcloud(args):
     for argument in arguments:
         if not isinstance(argument, str) or len(argument) > 8192 or "\x00" in argument:
             raise ActionError(f"Argument Nextcloud refusé : {argument!r}"[:200])
+    if command.startswith("config:system:") and (not arguments or arguments[0] not in OCC_SYSTEM_KEYS):
+        raise ActionError(f"Réglage Nextcloud refusé : {arguments[:1]!r}")
     timeout = args.get("delai", 60)
     if not isinstance(timeout, int) or not 5 <= timeout <= 3600:
         raise ActionError(f"Délai refusé : {timeout!r}")
@@ -821,6 +894,8 @@ ACTIONS = {
     "details_image": _image_details,
     "conteneur_actif": _container_running,
     "outil": _tool,
+    "acces_domaine": _domain_access,
+    "retirer_acces_domaine": _remove_domain_access,
     "nextcloud": _nextcloud,
     "version_systeme": _os_release,
     "noyau": _kernel,

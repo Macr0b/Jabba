@@ -17,7 +17,7 @@ import datetime
 import os
 import time
 
-from services import json_files, notifications
+from services import domain_access, json_files, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "public.json")
@@ -155,7 +155,7 @@ def create_file_request(ocs, path, days, password, label):
     if password:
         data["password"] = password
     share = ocs("POST", "", data)
-    return {"id": str(share.get("id")), "url": share.get("url"), "expire": expire}
+    return {"id": str(share.get("id")), "url": domain_access.public_link(share.get("url")), "expire": expire}
 
 
 def watch_inactive_accounts(occ, list_accounts, now=None):

@@ -29,6 +29,7 @@ from routes import (
     cloud,
     disk_health,
     disks,
+    domain_access,
     files,
     files_batch,
     files_viewer,
@@ -85,6 +86,7 @@ app.middleware("http")(guard.guard)
 app.include_router(guests.router)
 for module in (
     antivirus,
+    domain_access,
     admin_session,
     accounts,
     system,

@@ -119,3 +119,32 @@ body.plein-ecran main {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* Accès par le domaine : le formulaire, puis les étapes à suivre (faites ou à faire). */
+.formulaire-domaine {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+@media (max-width: 600px) {
+  .formulaire-domaine {
+    grid-template-columns: 1fr;
+  }
+}
+.etapes-domaine {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 12px;
+}
+.etape-domaine {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.etape-domaine .note {
+  margin: 4px 0 0;
+}
