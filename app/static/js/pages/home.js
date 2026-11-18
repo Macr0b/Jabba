@@ -118,6 +118,5 @@ document.addEventListener(
 );
 
 export const COMING_SOON = [
-  { nom: t("Torrent derrière VPN"), role: t("Téléchargements, avec un abonnement VPN") },
   { nom: t("Sauvegarde croisée"), role: t("Une copie chiffrée sur un autre serveur Jabba") },
 ];
