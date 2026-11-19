@@ -21,6 +21,7 @@ import config
 import watchers
 from routes import (
     accounts,
+    ad_blocker,
     admin_session,
     alerts,
     antivirus,
@@ -110,6 +111,7 @@ for module in (
     shares,
     second_factor,
     public_mode,
+    ad_blocker,
 ):
     app.include_router(module.router)
 

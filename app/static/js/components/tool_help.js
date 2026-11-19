@@ -51,7 +51,7 @@ const HELP = {
   ],
   "adguard-home": [
     t(
-      "Bloque publicités et traqueurs pour toute la maison. Première ouverture : suis l'assistant et garde le port 3000 pour l'interface d'admin. Puis, dans la box (Freebox OS : Paramètres → DHCP), mets l'adresse du serveur comme serveur DNS : tous les appareils en profitent.",
+      "Bloque publicités et traqueurs, seulement pour les appareils que tu choisis : menu … → Appareils, un interrupteur par appareil. Un nouvel appareil passe sans filtre. Pour qu'un appareil apparaisse, il doit utiliser le serveur comme DNS : dans la box (Freebox OS : Paramètres → DHCP) pour toute la maison, ou dans les réglages Wi-Fi de l'appareil. La page d'AdGuard (compte « admin ») montre le détail de ce qui est bloqué.",
     ),
     "https://github.com/AdguardTeam/AdGuardHome/wiki",
   ],

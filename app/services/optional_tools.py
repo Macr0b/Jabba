@@ -14,7 +14,7 @@ Sommaire :
 
 from host import actions
 from host import catalog as host_catalog
-from services import background_tasks, measurements, workshop
+from services import ad_blocker, background_tasks, measurements, workshop
 
 GIGA = 1024**3
 # Outils de l'appli elle-même : rien à installer sur le serveur, juste un écran de plus.
@@ -76,6 +76,8 @@ def install(name, password=None, who=None):
     if name not in host_catalog.OPTIONAL_TOOLS:
         raise actions.ActionError(f"Outil refusé : {name!r}")
     actions.optional_password(name, password or "")
+    if name == "adguard-home":
+        ad_blocker.save_password(password)  # l'appli pilote AdGuard (appareils filtrés ou non)
     tool = host_catalog.OPTIONAL_TOOLS[name]
     return background_tasks.start_task(
         f"Installation de {tool['nom']}", "installer_outil_option", {"outil": name}, who, name, password or ""

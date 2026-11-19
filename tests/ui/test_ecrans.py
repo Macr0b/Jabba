@@ -184,7 +184,6 @@ def test_outils_a_activer_et_memoire(page):
         "vaultwarden",
         "immich",
         "time-machine",
-        "adguard-home",
         "paperless",
         "homebox",
         "ntfy",
@@ -293,3 +292,24 @@ def test_dossiers_partages_se_chargent(page):
     aller(page, "nuage")
     page.locator('[data-onglet-btn="partage"]').click()
     expect(page.locator("#partages-liste")).not_to_contain_text("Chargement…")
+
+
+def test_bloqueur_de_pubs_appareil_par_appareil(page):
+    """AdGuard : menu « ••• » → Appareils ; un interrupteur par appareil, rien n'est filtré sans le choisir."""
+    aller(page, "outils")
+    carte = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
+    carte.locator('[data-menu="adguard-home"]').click()
+    expect(carte.get_by_role("menuitem")).to_have_text(["Appareils", "Aide", "Informations", "Désinstaller"])
+    carte.get_by_role("menuitem", name="Appareils").click()
+    panneau = carte.locator(".panneau-outil")
+    expect(panneau).to_contain_text("Un nouvel appareil passe sans filtre")
+    tele = panneau.get_by_role("switch", name="Bloqueur de pubs pour television")
+    expect(tele).to_have_attribute("aria-checked", "false")
+    expect(panneau.get_by_role("switch", name="Bloqueur de pubs pour macbook")).to_have_attribute(
+        "aria-checked", "true"
+    )
+    expect(panneau).to_contain_text("Tailscale · 100.64.0.2")
+    tele.click()
+    expect(tele).to_have_attribute("aria-checked", "true")
+    tele.click()  # et on le rééteint : la démo reste comme au départ pour les autres tests
+    expect(tele).to_have_attribute("aria-checked", "false")

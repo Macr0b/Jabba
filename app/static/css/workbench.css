@@ -253,3 +253,18 @@ body.plein-ecran main {
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* Bloqueur de pubs : un appareil par ligne, son interrupteur à droite. */
+.liste-appareils {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.ligne-appareil {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--bord-doux);
+}

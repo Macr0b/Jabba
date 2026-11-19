@@ -303,7 +303,9 @@ OPTIONAL_TOOLS = {
         "port_local": 3000,
         "fichiers": {"compose.yaml": ADGUARD_COMPOSE, ".env": ADGUARD_ENV},
         "preparer": NONLOCAL_BIND,
-        "mot_de_passe": False,
+        # Gardé par l'appli seule : elle fait l'installation d'AdGuard et règle les appareils (services/ad_blocker.py).
+        "mot_de_passe": True,
+        "mot_de_passe_texte": "Mot de passe du compte « admin » d'AdGuard",
     },
     "paperless": {
         "nom": "Paperless",

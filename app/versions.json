@@ -3,6 +3,7 @@
     "version": "0.16.1",
     "date": "2026-11-19",
     "changements": [
+      "AdGuard Home : le bloqueur de pubs s'allume appareil par appareil, depuis la carte (menu … → Appareils). Aucun appareil n'est filtré de base : un nouveau téléphone passe sans filtre tant qu'on ne l'a pas allumé. Jabba fait lui-même l'installation d'AdGuard avec le mot de passe tapé sur la carte (plus d'assistant).",
       "Établi : une barre de mémoire sous le bandeau, qui se remplit selon ce qu'utilisent les outils et le système.",
       "AdGuard Home s'active : le DNS écoute sur l'adresse de la maison et sur celle de Tailscale, au lieu de tout le serveur (où le résolveur de Debian occupe déjà le port 53).",
       "Mots de passe des outils (Paperless, Time Machine) : tout caractère est accepté, espaces et accents compris, sauf l'apostrophe ; de 15 à 128 caractères.",

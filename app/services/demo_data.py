@@ -17,6 +17,21 @@ HOME_STATE = {
 
 TOOLS = [
     {
+        "id": "adguard-home",
+        "nom": "AdGuard Home",
+        "role": "Bloque les publicités et les traqueurs, appareil par appareil",
+        "etat": "actif",
+        "lien": "https://jabba.exemple.ts.net:3000",
+        "dossier": "/opt/stacks/adguard-home",
+        "conteneurs": [{"nom": "adguard-home", "etat": "running", "statut": "Up 1 hour"}],
+        "modifiable": True,
+        "systeme": False,
+        "icone": False,
+        "dans_appli": False,
+        "port_https": 3000,
+        "en_option": True,
+    },
+    {
         "id": "adresses",
         "nom": "Adresses",
         "role": "Les adresses https des outils",
