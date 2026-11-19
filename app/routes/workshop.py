@@ -7,6 +7,7 @@ Sommaire :
   PATCH  /api/atelier/machines/{id}                    edit_machine
   DELETE /api/atelier/machines/{id}                    remove_machine
   POST   /api/atelier/machines/{id}/journal            add_entry
+  PATCH  /api/atelier/machines/{id}/journal/{entree}   edit_entry (corriger une note)
   DELETE /api/atelier/machines/{id}/journal/{entree}   remove_entry
   POST   /api/atelier/machines/{id}/rappels            add_reminder
   POST   /api/atelier/rappels/{rappel}/fait            reminder_done
@@ -75,6 +76,12 @@ def remove_machine(machine_id: str, request: Request):
 async def add_entry(machine_id: str, request: Request):
     _ready(request)
     return _run(workshop.add_entry, machine_id, await request.json(), request.state.nom)
+
+
+@router.patch("/api/atelier/machines/{machine_id}/journal/{entry_id}")
+async def edit_entry(machine_id: str, entry_id: str, request: Request):
+    _ready(request)
+    return _run(workshop.update_entry, machine_id, entry_id, await request.json())
 
 
 @router.delete("/api/atelier/machines/{machine_id}/journal/{entry_id}")

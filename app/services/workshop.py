@@ -9,7 +9,7 @@ Sommaire :
   machines()                             : la liste, avec la dernière intervention et les rappels dus
   machine(id)                            : une machine, son journal et ses rappels
   add_machine / update_machine / delete_machine
-  add_entry / delete_entry               : le journal d'une machine
+  add_entry / update_entry / delete_entry : le journal d'une machine (une note se corrige)
   add_reminder / reminder_done / delete_reminder : les rappels d'entretien
   due_reminders(today)                   : les rappels arrivés à échéance
   watch_reminders()                      : chaque jour, une alerte par rappel arrivé à échéance
@@ -25,7 +25,15 @@ from services import json_files, notifications
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "atelier.json")
 ENTRY_TYPES = ("intervention", "panne", "entretien", "reglage", "note")
-TEXT_LIMITS = {"nom": 80, "modele": 120, "emplacement": 80, "reglages": 20000, "dossier": 1000}
+TEXT_LIMITS = {
+    "nom": 80,
+    "modele": 120,
+    "emplacement": 80,
+    "reglages": 20000,
+    "dossier": 1000,
+    "titre": 200,
+    "pieces": 1000,
+}
 _lock = threading.Lock()
 
 
@@ -194,6 +202,29 @@ def add_entry(machine_id, fields, who=None):
         state = _read()
         _find(state["machines"], machine_id, "machine")
         state["journal"].append(entry)
+        _write(state)
+    return entry
+
+
+def update_entry(machine_id, entry_id, fields):
+    """Corrige une note du journal : seuls les champs envoyés changent ; la date de modification est gardée."""
+    if "type" in fields and fields["type"] not in ENTRY_TYPES:
+        raise ValueError("Type inconnu.")
+    with _lock:
+        state = _read()
+        entry = _find([item for item in state["journal"] if item["machine"] == machine_id], entry_id, "entrée")
+        changes = {}
+        if "type" in fields:
+            changes["type"] = fields["type"]
+        if "date" in fields:
+            changes["date"] = _date(fields["date"])
+        if "titre" in fields:
+            changes["titre"] = _text(fields["titre"], "titre", required=True)
+        for field in ("texte", "pieces"):
+            if field in fields:
+                changes[field] = _text(fields[field], field)
+        entry.update(changes)
+        entry["modifie"] = datetime.datetime.now().isoformat(timespec="seconds")
         _write(state)
     return entry
 

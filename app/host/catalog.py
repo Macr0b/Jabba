@@ -297,7 +297,7 @@ OPTIONAL_TOOLS = {
     },
     "adguard-home": {
         "nom": "AdGuard Home",
-        "role": "Bloque les publicités et les traqueurs pour tous les appareils de la maison",
+        "role": "Bloque les publicités et les traqueurs, sur les appareils que tu choisis",
         "memoire_go": 0.1,
         "port_https": 3000,
         "port_local": 3000,

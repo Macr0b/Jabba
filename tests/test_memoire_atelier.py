@@ -90,3 +90,26 @@ def test_a_date_egale_le_dernier_note_d_abord(atelier):
         "premier",
     ]
     assert workshop.machines()[0]["derniere"]["titre"] == "troisième"
+
+
+def test_corriger_une_note(atelier):
+    laser = workshop.add_machine({"nom": "Laser"})
+    note = workshop.add_entry(
+        laser["id"], {"type": "note", "date": "2026-11-02", "titre": "Lentile sale", "texte": "x"}, "rob"
+    )
+    corrige = workshop.update_entry(
+        laser["id"], note["id"], {"titre": "Lentille sale", "type": "entretien", "pieces": 'Lentille 2"'}
+    )
+    assert corrige["titre"] == "Lentille sale" and corrige["type"] == "entretien" and corrige["pieces"] == 'Lentille 2"'
+    assert corrige["texte"] == "x" and corrige["date"] == "2026-11-02"  # les champs non envoyés ne bougent pas
+    assert corrige["par"] == "rob" and corrige["modifie"]
+    assert workshop.machine(laser["id"])["journal"][0]["titre"] == "Lentille sale"  # bien enregistré
+    for champs in ({"titre": ""}, {"type": "inconnu"}, {"date": "demain"}, {"titre": "x" * 201}):
+        with pytest.raises(ValueError):
+            workshop.update_entry(laser["id"], note["id"], champs)
+    autre = workshop.add_machine({"nom": "CNC"})
+    with pytest.raises(KeyError):
+        workshop.update_entry(autre["id"], note["id"], {"titre": "y"})  # la note d'une autre machine
+    with pytest.raises(KeyError):
+        workshop.update_entry(laser["id"], "inconnue", {"titre": "y"})
+    assert workshop.machine(laser["id"])["journal"][0]["titre"] == "Lentille sale"  # rien d'abîmé par les refus

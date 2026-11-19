@@ -3,7 +3,8 @@
 //
 // Sommaire :
 //   partagé : pages.atelier (écran : liste, ou une machine avec ?machine=…)
-//   interne : listHtml, machineCardHtml, bindList, showMachine, remindersHtml, journalHtml, entryHtml, bindMachine
+//   interne : listHtml, machineCardHtml, bindList, showMachine, remindersHtml, journalHtml, entryHtml,
+//             entryFieldsHtml, entryEditHtml, bindMachine
 import { confirmAction, toast } from "../components/dialogs.js";
 import { pickFolder } from "../components/folder_picker.js";
 import { api } from "../core/api.js";
@@ -108,11 +109,35 @@ function remindersHtml(reminders) {
       </form></section>`;
 }
 
+/** Les champs d'une note (nouvelle ou à corriger), préremplis avec `entry`. */
+function entryFieldsHtml(entry) {
+  const options = Object.entries(TYPE_LABELS)
+    .map(
+      ([value, label]) =>
+        `<option value="${value}"${entry.type === value ? " selected" : ""}>${escapeHtml(label)}</option>`,
+    )
+    .join("");
+  return t`<label class="champ"><span>Type</span><select name="type">${options}</select></label>
+        <label class="champ"><span>Date</span><input name="date" type="date" value="${escapeHtml(entry.date || today())}" required></label>
+        <label class="champ large"><span>Ce qui s'est passé</span><input name="titre" required maxlength="200" placeholder="Courroie de l'axe X changée" value="${escapeHtml(entry.titre || "")}"></label>
+        <label class="champ large"><span>Détails</span><textarea name="texte" rows="3" maxlength="5000">${escapeHtml(entry.texte || "")}</textarea></label>
+        <label class="champ large"><span>Pièces changées</span><input name="pieces" maxlength="1000" placeholder="Courroie HTD 3M, réf. …" value="${escapeHtml(entry.pieces || "")}"></label>`;
+}
+
+/** Une note en cours de correction : le formulaire prend sa place dans le journal. */
+function entryEditHtml(entry) {
+  return t`<form class="formulaire-atelier" data-form-entree="${escapeHtml(entry.id)}">
+        ${entryFieldsHtml(entry)}
+        <div class="actions"><button class="btn btn-p" type="submit">Enregistrer</button><button class="btn" type="button" data-annuler-entree>Annuler</button></div>
+      </form>`;
+}
+
 function entryHtml(entry) {
-  return `<li class="entree-atelier">
+  return `<li class="entree-atelier" data-entree="${escapeHtml(entry.id)}">
       <div class="haut"><span><span class="pastille ${TYPE_BADGES[entry.type] || "p-gris"}">${escapeHtml(TYPE_LABELS[entry.type] || entry.type)}</span>
         <strong>${escapeHtml(entry.titre)}</strong></span>
-        <span class="note">${escapeHtml(day(entry.date))}${entry.par ? " · " + escapeHtml(entry.par) : ""}
+        <span class="note">${escapeHtml(day(entry.date))}${entry.par ? " · " + escapeHtml(entry.par) : ""}${entry.modifie ? " · " + t("modifiée") : ""}
+        <button class="lien" type="button" data-modifier-entree="${escapeHtml(entry.id)}">${t("Modifier")}</button>
         <button class="lien" type="button" data-retirer-entree="${escapeHtml(entry.id)}">${t("Retirer")}</button></span></div>
       ${entry.texte ? `<p class="texte-atelier">${escapeHtml(entry.texte)}</p>` : ""}
       ${entry.pieces ? t`<p class="note">Pièces : ${escapeHtml(entry.pieces)}</p>` : ""}
@@ -120,16 +145,9 @@ function entryHtml(entry) {
 }
 
 function journalHtml(machine) {
-  const options = Object.entries(TYPE_LABELS)
-    .map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`)
-    .join("");
   return t`<section class="carte pad"><h2>Journal</h2>
       <form class="formulaire-atelier" id="form-entree">
-        <label class="champ"><span>Type</span><select name="type">${options}</select></label>
-        <label class="champ"><span>Date</span><input name="date" type="date" value="${today()}" required></label>
-        <label class="champ large"><span>Ce qui s'est passé</span><input name="titre" required maxlength="200" placeholder="Courroie de l'axe X changée"></label>
-        <label class="champ large"><span>Détails</span><textarea name="texte" rows="3" maxlength="5000"></textarea></label>
-        <label class="champ large"><span>Pièces changées</span><input name="pieces" maxlength="1000" placeholder="Courroie HTD 3M, réf. …"></label>
+        ${entryFieldsHtml({ type: "intervention" })}
         <div class="actions"><button class="btn btn-p" type="submit">Noter</button></div>
       </form>
       ${
@@ -214,6 +232,25 @@ function bindMachine(machine) {
   content.querySelectorAll("[data-retirer-rappel]").forEach((button) => {
     button.onclick = () =>
       send(`/api/atelier/rappels/${encodeURIComponent(button.dataset.retirerRappel)}`, { method: "DELETE" });
+  });
+  content.querySelectorAll("[data-modifier-entree]").forEach((button) => {
+    button.onclick = () => {
+      const entry = machine.journal.find((item) => item.id === button.dataset.modifierEntree);
+      const row = button.closest("[data-entree]");
+      if (!entry || !row) return;
+      row.innerHTML = entryEditHtml(entry);
+      const form = row.querySelector("form");
+      form.querySelector("[name=titre]").focus();
+      form.querySelector("[data-annuler-entree]").onclick = refresh;
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        send(
+          `${base}/journal/${encodeURIComponent(entry.id)}`,
+          { method: "PATCH", json: Object.fromEntries(new FormData(form)) },
+          t("Note corrigée"),
+        );
+      };
+    };
   });
   content.querySelectorAll("[data-retirer-entree]").forEach((button) => {
     button.onclick = async () => {

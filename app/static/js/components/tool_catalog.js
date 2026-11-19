@@ -55,7 +55,8 @@ function offCardHtml(tool, memory) {
       }
       ${
         tool.mot_de_passe
-          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (15 caractères au moins, sans apostrophe)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>`
+          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (15 caractères au moins, sans apostrophe)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>
+            <p class="note alerte-memoire" data-aide-mot-de-passe="${escapeHtml(tool.id)}" hidden>${escapeHtml(t("Tape d'abord le mot de passe ici, puis allume l'interrupteur (ou appuie sur Entrée)."))}</p>`
           : ""
       }
       <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
@@ -75,6 +76,14 @@ function builtInCardHtml(tool) {
 async function enable(tool, grid, reload) {
   const field = grid.querySelector(`[data-mot-de-passe="${tool.id}"]`);
   const toggle = grid.querySelector(`[data-activer="${tool.id}"]`);
+  const hint = grid.querySelector(`[data-aide-mot-de-passe="${tool.id}"]`);
+  if (field && field.value.length < 15) {
+    // Pas encore de mot de passe : on montre où le taper, sans rien lancer.
+    hint.hidden = false;
+    field.focus();
+    return;
+  }
+  if (hint) hint.hidden = true;
   toggle.setAttribute("aria-checked", "true");
   toggle.disabled = true;
   try {
@@ -125,6 +134,17 @@ export function bindCatalog(grid, reload, onCards) {
             grid,
             reload,
           );
+      });
+      grid.querySelectorAll("[data-mot-de-passe]").forEach((field) => {
+        field.onkeydown = (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          enable(
+            off.find((tool) => tool.id === field.dataset.motDePasse),
+            grid,
+            reload,
+          );
+        };
       });
       grid.querySelectorAll("[data-eteindre]").forEach((toggle) => {
         toggle.onclick = () => disableBuiltIn(toggle.dataset.eteindre, reload);
