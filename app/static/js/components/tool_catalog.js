@@ -55,7 +55,7 @@ function offCardHtml(tool, memory) {
       }
       ${
         tool.mot_de_passe
-          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (15 caractères au moins, sans apostrophe)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>
+          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (un nouveau, que tu choisis : pas celui du serveur ; 15 caractères au moins, sans apostrophe)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>
             <p class="note alerte-memoire" data-aide-mot-de-passe="${escapeHtml(tool.id)}" hidden>${escapeHtml(t("Tape d'abord le mot de passe ici, puis allume l'interrupteur (ou appuie sur Entrée)."))}</p>`
           : ""
       }

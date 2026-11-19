@@ -293,7 +293,7 @@ OPTIONAL_TOOLS = {
         "fichiers": {"compose.yaml": TIME_MACHINE_COMPOSE, ".env": TIME_MACHINE_ENV},
         "preparer": "mkdir -p /srv/data/TimeMachine && chown 1000:1000 /srv/data/TimeMachine",
         "mot_de_passe": True,
-        "mot_de_passe_texte": "Mot de passe à taper sur le Mac",
+        "mot_de_passe_texte": "Choisis le mot de passe à taper sur le Mac",
     },
     "adguard-home": {
         "nom": "AdGuard Home",
@@ -305,7 +305,7 @@ OPTIONAL_TOOLS = {
         "preparer": NONLOCAL_BIND,
         # Gardé par l'appli seule : elle fait l'installation d'AdGuard et règle les appareils (services/ad_blocker.py).
         "mot_de_passe": True,
-        "mot_de_passe_texte": "Mot de passe du compte « admin » d'AdGuard",
+        "mot_de_passe_texte": "Choisis le mot de passe du compte « admin » d'AdGuard",
     },
     "paperless": {
         "nom": "Paperless",
@@ -319,7 +319,7 @@ OPTIONAL_TOOLS = {
             " && chown 1000:1000 /srv/data/Paperless /srv/data/Paperless/A-classer /srv/data/Paperless/Documents"
         ),
         "mot_de_passe": True,
-        "mot_de_passe_texte": "Mot de passe du compte « admin » de Paperless",
+        "mot_de_passe_texte": "Choisis le mot de passe du compte « admin » de Paperless",
     },
     "ntfy": {
         "nom": "ntfy",

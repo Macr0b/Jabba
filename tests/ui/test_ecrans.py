@@ -202,7 +202,7 @@ def test_outils_a_activer_et_memoire(page):
     expect(page.locator('[data-offre="time-machine"] input[type="password"]')).to_be_focused()
     expect(page.locator(".toast")).to_have_count(0)
     expect(page.locator('[data-offre="vaultwarden"] input')).to_have_count(0)
-    expect(page.locator('[data-offre="paperless"]')).to_contain_text("Mot de passe du compte « admin » de Paperless")
+    expect(page.locator('[data-offre="paperless"]')).to_contain_text("Choisis le mot de passe du compte « admin » de Paperless (un nouveau, que tu choisis : pas celui du serveur")
 
 
 def test_memoire_d_atelier(page):
