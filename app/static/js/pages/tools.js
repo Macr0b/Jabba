@@ -188,6 +188,7 @@ pages.ouvrir = async (params) => {
     api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
   ]);
   const item = tools.find((item) => item.id === params.get("outil"));
+  if (item && !item.lien && item.port_https) item.lien = `https://${location.hostname}:${item.port_https}`;
   if (!item || !item.lien) throw new Error(t("Outil introuvable ou désactivé."));
   document.body.classList.add("plein-ecran");
   content.innerHTML = t`

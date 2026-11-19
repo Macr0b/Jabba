@@ -252,7 +252,9 @@ def test_menu_des_cartes_de_l_etabli(page):
     jellyfin.locator('[data-menu="jellyfin"]').click()
     menu = jellyfin.get_by_role("menu")
     expect(menu).to_be_visible()
-    expect(menu.get_by_role("menuitem")).to_have_text(["Aide", "Informations"])  # installé hors de Jabba
+    expect(menu.get_by_role("menuitem")).to_have_text(
+        ["Installer sur cet appareil", "Aide", "Informations"]
+    )  # installé hors de Jabba
     menu.get_by_role("menuitem", name="Aide").click()
     expect(menu).to_be_hidden()
     expect(jellyfin.locator(".panneau-outil")).to_contain_text("films et séries")
@@ -310,7 +312,7 @@ def test_bloqueur_de_pubs_appareil_par_appareil(page):
     carte = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
     carte.locator('[data-menu="adguard-home"]').click()
     expect(carte.get_by_role("menuitem")).to_have_text(
-        ["Appareils", "Identifiants", "Aide", "Informations", "Désinstaller"]
+        ["Appareils", "Identifiants", "Installer sur cet appareil", "Aide", "Informations", "Désinstaller"]
     )
     carte.get_by_role("menuitem", name="Appareils").click()
     panneau = carte.locator(".panneau-outil")
@@ -339,3 +341,17 @@ def test_identifiants_d_un_outil(page):
     panneau.get_by_role("button", name="Afficher").click()
     expect(panneau).to_contain_text("demo-adguard-home")
     expect(panneau.get_by_role("button", name="Copier")).to_have_count(2)
+
+
+def test_installer_un_outil_comme_appli(page):
+    """« Installer sur cet appareil » : les clics à faire dans ce navigateur et un lien pour ouvrir l'outil."""
+    aller(page, "outils")
+    carte = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
+    carte.locator('[data-menu="adguard-home"]').click()
+    carte.get_by_role("menuitem", name="Installer sur cet appareil").click()
+    panneau = carte.locator(".panneau-outil")
+    expect(panneau).to_contain_text("devient une appli à part")
+    expect(panneau.locator("strong")).to_contain_text("Dans ")  # les clics propres au navigateur utilisé
+    lien = panneau.get_by_role("link", name="Ouvrir AdGuard Home dans le navigateur")
+    expect(lien).to_have_attribute("target", "_blank")
+    expect(lien).to_have_attribute("href", "https://jabba.exemple.ts.net:3000")

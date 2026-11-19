@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.16.2",
+    "date": "2026-11-19",
+    "changements": [
+      "Établi : plus aucun mot de passe à taper pour activer un outil. Pour AdGuard Home, Paperless et Time Machine, Jabba crée le compte avec un mot de passe tiré au sort ; menu … → Identifiants pour le voir et le copier.",
+      "Les outils de l'Établi s'ouvrent dans Jabba, avec la barre de retour, quand ils l'acceptent ; Jabba le vérifie lui-même. Ceux qui l'interdisent (Vaultwarden, Paperless…) s'ouvrent à part.",
+      "Menu … → Installer sur cet appareil : les clics à faire dans ton navigateur pour faire de l'outil une appli à part (Dock du Mac, écran d'accueil de l'iPhone).",
+      "Mémoire d'atelier : chaque note du journal se corrige sur place (bouton Modifier).",
+      "AdGuard Home : sa description dit qu'il filtre les appareils que tu choisis."
+    ]
+  },
+  {
     "version": "0.16.1",
     "date": "2026-11-19",
     "changements": [

@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 import config
 from host import catalog, commands
+from services import frame_check
 
 # ---------------------------------------------------------------- outils (Docker)
 NAMES = {
@@ -55,7 +56,15 @@ FALLBACK_ICONS = [
     "/icon.svg",
 ]
 # Ouverts dans un onglet à part (Nextcloud ; les outils en option refusent souvent d'être affichés dans une autre page).
-OUTSIDE_APP = {"nextcloud", *catalog.OPTIONAL_TOOLS}
+# Jamais dans un cadre : Nextcloud a son propre écran (Fichiers). Ceux de l'Établi : voir frame_check.
+OUTSIDE_APP = {"nextcloud"}
+
+
+def _in_app(pid):
+    """Dans un cadre de Jabba : les outils connus pour l'accepter, et ceux de l'Établi qui n'interdisent rien."""
+    if pid in catalog.OPTIONAL_TOOLS:
+        return frame_check.allows_framing(catalog.OPTIONAL_TOOLS[pid]["port_local"])
+    return pid not in OUTSIDE_APP
 
 
 def list_tools():
@@ -100,7 +109,7 @@ def list_tools():
                 "modifiable": pid != "jabba-app" and bool(project["dossier"]),
                 "systeme": pid in SYSTEM_TOOLS,
                 "icone": pid in PORTS,
-                "dans_appli": pid not in OUTSIDE_APP,
+                "dans_appli": _in_app(pid),
                 # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
                 "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
                 "en_option": pid in catalog.OPTIONAL_TOOLS,
