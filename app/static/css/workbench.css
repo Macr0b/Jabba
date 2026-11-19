@@ -268,3 +268,15 @@ body.plein-ecran main {
   padding: 8px 0;
   border-top: 1px solid var(--bord-doux);
 }
+
+/* Identifiants d'un outil : deux lignes, le texte à copier en police fixe. */
+.identifiants-outil {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 10px 0 0;
+}
+.identifiants-outil dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

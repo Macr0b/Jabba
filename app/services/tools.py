@@ -104,6 +104,7 @@ def list_tools():
                 # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
                 "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
                 "en_option": pid in catalog.OPTIONAL_TOOLS,
+                "identifiants": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("mot_de_passe", False),
             }
         )
     return result

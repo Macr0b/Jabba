@@ -4,12 +4,11 @@ Par défaut, aucun appareil n'est filtré (le filtrage général est coupé) : u
 sur le Wi-Fi passe sans filtre. Jabba allume le filtrage d'un appareil en le déclarant « client »
 d'AdGuard, avec ses propres réglages (filtrage actif) ; l'éteindre retire ce client.
 La première fois, Jabba fait lui-même l'installation d'AdGuard (à la place de l'assistant), avec
-le compte « admin » et le mot de passe tapé sur la carte de l'Établi.
+le compte « admin » et le mot de passe tiré au sort à l'activation (services/tool_credentials.py).
 
 AdGuard écoute sur le serveur (127.0.0.1:3000) ; l'appli tourne sur le réseau de l'hôte.
 
 Sommaire :
-  save_password(password)        : garde le mot de passe d'admin d'AdGuard (fichier privé)
   devices()                      : {"pret", "message", "appareils": [{ip, nom, protege, tailscale}]}
   set_protected(ip, protected)   : allume / éteint le filtrage d'un appareil
   interne : _client, _ensure_ready, _tailscale_names, _client_name, _demo
@@ -17,7 +16,6 @@ Sommaire :
 
 import ipaddress
 import json
-import os
 import threading
 import time
 
@@ -25,10 +23,8 @@ import httpx
 
 import config
 from host import commands
-from services import json_files
+from services import tool_credentials
 
-DATA_DIR = os.environ.get("JABBA_DATA", "/data")
-PASSWORD_FILE = os.path.join(DATA_DIR, "adguard.json")
 ADDRESS = "http://127.0.0.1:3000"
 ADMIN = "admin"
 CLIENT_PREFIX = "Jabba "
@@ -40,12 +36,8 @@ class AdBlockerError(Exception):
     pass
 
 
-def save_password(password):
-    json_files.save(PASSWORD_FILE, {"mot_de_passe": password}, private=True)
-
-
 def _password():
-    return json_files.load(PASSWORD_FILE, {}).get("mot_de_passe", "")
+    return (tool_credentials.read("adguard-home") or {}).get("mot_de_passe", "")
 
 
 def _client():

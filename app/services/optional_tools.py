@@ -8,13 +8,14 @@ Sommaire :
   BUILT_IN               : les outils qui font partie de l'appli (mémoire d'atelier), activés sans conteneur
   memory_budget(usage)   : mémoire du serveur (totale, utilisée, prise par les outils, libre)
   catalog(installed)     : les outils en option, installés ou non, avec la mémoire qu'ils prendraient
-  install(name, ...)     : installation en tâche longue (mot de passe pour Time Machine)
+  install(name, who)     : installation en tâche longue ; le compte de l'outil (AdGuard, Paperless,
+                           Time Machine) reçoit un mot de passe tiré au sort, rien à taper
   remove(name, who)      : retrait (données gardées)
 """
 
 from host import actions
 from host import catalog as host_catalog
-from services import ad_blocker, background_tasks, measurements, workshop
+from services import background_tasks, measurements, tool_credentials, workshop
 
 GIGA = 1024**3
 # Outils de l'appli elle-même : rien à installer sur le serveur, juste un écran de plus.
@@ -48,8 +49,6 @@ def catalog(installed_ids):
             "role": tool["role"],
             "memoire": int(tool["memoire_go"] * GIGA),
             "installe": tool_id in installed_ids,
-            "mot_de_passe": tool["mot_de_passe"],
-            "mot_de_passe_texte": tool.get("mot_de_passe_texte", ""),
             "port_https": tool["port_https"],
         }
         for tool_id, tool in host_catalog.OPTIONAL_TOOLS.items()
@@ -60,7 +59,6 @@ def catalog(installed_ids):
             "role": tool["role"],
             "memoire": 0,
             "installe": tool["actif"](),
-            "mot_de_passe": False,
             "integre": True,
             "page": tool["page"],
         }
@@ -68,19 +66,18 @@ def catalog(installed_ids):
     ]
 
 
-def install(name, password=None, who=None):
-    """Lève ActionError si l'outil ou le mot de passe est refusé ; sinon, la tâche longue (None pour un outil de l'appli)."""
+def install(name, who=None):
+    """Lève ActionError si l'outil est refusé ; sinon, la tâche longue (None pour un outil de l'appli)."""
     if name in BUILT_IN:
         BUILT_IN[name]["activer"](True)
         return None
     if name not in host_catalog.OPTIONAL_TOOLS:
         raise actions.ActionError(f"Outil refusé : {name!r}")
-    actions.optional_password(name, password or "")
-    if name == "adguard-home":
-        ad_blocker.save_password(password)  # l'appli pilote AdGuard (appareils filtrés ou non)
     tool = host_catalog.OPTIONAL_TOOLS[name]
+    password = tool_credentials.password_for(name) if tool["mot_de_passe"] else ""
+    actions.optional_password(name, password)
     return background_tasks.start_task(
-        f"Installation de {tool['nom']}", "installer_outil_option", {"outil": name}, who, name, password or ""
+        f"Installation de {tool['nom']}", "installer_outil_option", {"outil": name}, who, name, password
     )
 
 

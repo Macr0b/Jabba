@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from services import ad_blocker, optional_tools
+from services import ad_blocker, optional_tools, tool_credentials
 
 
 class FauxAdGuard:
@@ -48,7 +48,7 @@ class FauxAdGuard:
 
 @pytest.fixture
 def adguard(tmp_path, monkeypatch):
-    monkeypatch.setattr(ad_blocker, "PASSWORD_FILE", str(tmp_path / "adguard.json"))
+    monkeypatch.setattr(tool_credentials, "CREDENTIALS_FILE", str(tmp_path / "identifiants.json"))
     monkeypatch.setattr(ad_blocker.config, "DEMO", False)
     monkeypatch.setattr(ad_blocker, "_tailscale_names", lambda: {"100.64.0.2": "macbook"})
     monkeypatch.setattr(ad_blocker.time, "sleep", lambda _: None)
@@ -60,7 +60,7 @@ def adguard(tmp_path, monkeypatch):
             base_url=ad_blocker.ADDRESS, transport=httpx.MockTransport(faux), auth=("admin", ad_blocker._password())
         ),
     )
-    ad_blocker.save_password("Un-mot-de-passe tres long")
+    tool_credentials.password_for("adguard-home")  # tiré au sort à l'activation
     return faux
 
 
@@ -70,7 +70,9 @@ def test_premier_lancement_fait_l_installation_et_coupe_le_filtrage_general(adgu
     chemins = [chemin for chemin, _ in adguard.appels]
     assert chemins.index("/control/install/configure") < chemins.index("/control/filtering/config")
     reglage = dict(adguard.appels)["/control/install/configure"]
-    assert reglage["username"] == "admin" and reglage["password"] == "Un-mot-de-passe tres long"
+    assert (
+        reglage["username"] == "admin" and reglage["password"] == tool_credentials.read("adguard-home")["mot_de_passe"]
+    )
     assert reglage["dns"]["port"] == 53 and reglage["web"]["port"] == 3000
     assert dict(adguard.appels)["/control/filtering/config"]["enabled"] is False  # aucun appareil filtré de base
 
@@ -116,7 +118,7 @@ def test_mot_de_passe_refuse_ou_inconnu(adguard, tmp_path):
     resultat = ad_blocker.devices()
     assert not resultat["pret"] and "Mot de passe d'AdGuard refusé" in resultat["message"]
     adguard.premier_lancement = True
-    (tmp_path / "adguard.json").unlink()
+    (tmp_path / "identifiants.json").unlink()
     assert "Mot de passe d'AdGuard inconnu" in ad_blocker.devices()["message"]
 
 
@@ -131,11 +133,10 @@ def test_adguard_absent(adguard, monkeypatch):
     assert not resultat["pret"] and "ne répond pas" in resultat["message"]
 
 
-def test_le_mot_de_passe_de_la_carte_est_garde_par_l_appli(tmp_path, monkeypatch):
-    monkeypatch.setattr(ad_blocker, "PASSWORD_FILE", str(tmp_path / "adguard.json"))
-    monkeypatch.setattr(optional_tools.background_tasks, "start_task", lambda *args: {"id": "t"})
-    optional_tools.install("adguard-home", "Un-mot-de-passe tres long", "rob")
-    assert ad_blocker._password() == "Un-mot-de-passe tres long"
-    assert (tmp_path / "adguard.json").stat().st_mode & 0o077 == 0  # lisible par l'appli seule
-    with pytest.raises(Exception):
-        optional_tools.install("adguard-home", "court", "rob")
+def test_activer_sans_rien_taper(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool_credentials, "CREDENTIALS_FILE", str(tmp_path / "identifiants.json"))
+    monkeypatch.setattr(tool_credentials.config, "DEMO", False)
+    lance = []
+    monkeypatch.setattr(optional_tools.background_tasks, "start_task", lambda *args: lance.append(args) or {"id": "t"})
+    optional_tools.install("adguard-home", "rob")
+    assert ad_blocker._password() == lance[0][-1] and len(lance[0][-1]) == 24

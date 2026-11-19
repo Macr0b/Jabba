@@ -5,8 +5,10 @@
 //   partagé : toolMenuHtml, bindToolMenus
 //   interne : uninstall
 // AdGuard Home a en plus « Appareils » : le bloqueur de pubs, appareil par appareil (adblock_devices.js).
+// Les outils dont Jabba a créé le compte ont « Identifiants » (tool_login.js).
 import { renderAdblockDevices } from "./adblock_devices.js";
 import { bindMenus, menuHtml } from "./card_menu.js";
+import { renderToolLogin } from "./tool_login.js";
 import { confirmAction, toast } from "./dialogs.js";
 import { canUninstall, helpHtml, infoHtml, uninstallUrl } from "./tool_help.js";
 import { api } from "../core/api.js";
@@ -18,6 +20,7 @@ export function toolMenuHtml(item) {
   const entries = [];
   if (item.id === "adguard-home" && item.installe !== false && item.etat)
     entries.push({ action: "appareils", texte: t("Appareils") });
+  if (item.identifiants && item.etat) entries.push({ action: "identifiants", texte: t("Identifiants") });
   entries.push({ action: "aide", texte: t("Aide") }, { action: "infos", texte: t("Informations") });
   if (item.installable !== false && canUninstall(item.id) && item.installe !== false)
     entries.push({ action: "desinstaller", texte: t("Désinstaller"), danger: true });
@@ -60,6 +63,11 @@ export function bindToolMenus(scope, items, versions, reload) {
       panel.dataset.contenu = action;
       panel.hidden = false;
       return renderAdblockDevices(panel);
+    }
+    if (action === "identifiants") {
+      panel.dataset.contenu = action;
+      panel.hidden = false;
+      return renderToolLogin(panel, item);
     }
     let usage = null;
     if (action === "infos") {

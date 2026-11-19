@@ -30,6 +30,7 @@ TOOLS = [
         "dans_appli": False,
         "port_https": 3000,
         "en_option": True,
+        "identifiants": True,
     },
     {
         "id": "adresses",

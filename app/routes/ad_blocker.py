@@ -31,5 +31,5 @@ async def protect_device(request: Request):
     except ad_blocker.AdBlockerError as error:
         raise HTTPException(400, str(error))
     state = "allumé" if protected else "éteint"
-    activity_log.record(request.state.nom, f"Bloqueur de pubs {state} pour {body.get('ip')}")
+    activity_log.record("outil", f"Bloqueur de pubs {state} pour {body.get('ip')}", request.state.nom)
     return {"ok": True}

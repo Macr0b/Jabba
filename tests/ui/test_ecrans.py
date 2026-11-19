@@ -194,15 +194,7 @@ def test_outils_a_activer_et_memoire(page):
         expect(interrupteur).to_have_attribute("aria-checked", "false")
     immich = page.locator('[data-offre="immich"]')
     expect(immich).to_contain_text("Prend environ 3,0 Go de mémoire")
-    expect(page.locator('[data-offre="time-machine"] input[type="password"]')).to_be_visible()
-    # Interrupteur touché avant d'avoir tapé le mot de passe : la carte montre où le taper, rien ne se lance.
-    page.locator('[data-activer="time-machine"]').click()
-    expect(page.locator('[data-aide-mot-de-passe="time-machine"]')).to_be_visible()
-    expect(page.locator('[data-activer="time-machine"]')).to_have_attribute("aria-checked", "false")
-    expect(page.locator('[data-offre="time-machine"] input[type="password"]')).to_be_focused()
-    expect(page.locator(".toast")).to_have_count(0)
-    expect(page.locator('[data-offre="vaultwarden"] input')).to_have_count(0)
-    expect(page.locator('[data-offre="paperless"]')).to_contain_text("Choisis le mot de passe du compte « admin » de Paperless (un nouveau, que tu choisis : pas celui du serveur")
+    expect(page.locator('#grille-etabli [data-offre] input[type="password"]')).to_have_count(0)  # rien à taper
 
 
 def test_memoire_d_atelier(page):
@@ -317,7 +309,9 @@ def test_bloqueur_de_pubs_appareil_par_appareil(page):
     aller(page, "outils")
     carte = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
     carte.locator('[data-menu="adguard-home"]').click()
-    expect(carte.get_by_role("menuitem")).to_have_text(["Appareils", "Aide", "Informations", "Désinstaller"])
+    expect(carte.get_by_role("menuitem")).to_have_text(
+        ["Appareils", "Identifiants", "Aide", "Informations", "Désinstaller"]
+    )
     carte.get_by_role("menuitem", name="Appareils").click()
     panneau = carte.locator(".panneau-outil")
     expect(panneau).to_contain_text("Un nouvel appareil passe sans filtre")
@@ -331,3 +325,17 @@ def test_bloqueur_de_pubs_appareil_par_appareil(page):
     expect(tele).to_have_attribute("aria-checked", "true")
     tele.click()  # et on le rééteint : la démo reste comme au départ pour les autres tests
     expect(tele).to_have_attribute("aria-checked", "false")
+
+
+def test_identifiants_d_un_outil(page):
+    """Le compte que Jabba a créé dans l'outil : identifiant et mot de passe, masqué puis affiché, à copier."""
+    aller(page, "outils")
+    carte = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
+    carte.locator('[data-menu="adguard-home"]').click()
+    carte.get_by_role("menuitem", name="Identifiants").click()
+    panneau = carte.locator(".panneau-outil")
+    expect(panneau).to_contain_text("admin")
+    expect(panneau).not_to_contain_text("demo-adguard-home")
+    panneau.get_by_role("button", name="Afficher").click()
+    expect(panneau).to_contain_text("demo-adguard-home")
+    expect(panneau.get_by_role("button", name="Copier")).to_have_count(2)

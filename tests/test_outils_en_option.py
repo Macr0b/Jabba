@@ -6,7 +6,7 @@ import subprocess
 import pytest
 
 from host import actions, catalog
-from services import optional_tools
+from services import optional_tools, tool_credentials
 
 
 def _jouer(tmp_path, commande, entree=""):
@@ -90,17 +90,27 @@ def test_catalogue_et_memoire(monkeypatch):
     assert budget == {"total": 8 * 1024**3, "utilise": 5 * 1024**3, "outils": 1000 * 1024**2, "libre": 3 * 1024**3}
     liste = {outil["id"]: outil for outil in optional_tools.catalog({"vaultwarden"})}
     assert liste["vaultwarden"]["installe"] and not liste["immich"]["installe"]
-    assert liste["immich"]["memoire"] == 3 * 1024**3 and liste["time-machine"]["mot_de_passe"]
+    assert liste["immich"]["memoire"] == 3 * 1024**3 and "mot_de_passe" not in liste["time-machine"]
 
 
-def test_installation_en_tache_longue(monkeypatch):
+def test_installation_en_tache_longue(monkeypatch, tmp_path):
+    monkeypatch.setattr(tool_credentials, "CREDENTIALS_FILE", str(tmp_path / "identifiants.json"))
+    monkeypatch.setattr(tool_credentials.config, "DEMO", False)
     lance = []
     monkeypatch.setattr(optional_tools.background_tasks, "start_task", lambda *a: lance.append(a) or {"id": "t1"})
-    assert optional_tools.install("vaultwarden", None, "rob") == {"id": "t1"}
+    assert optional_tools.install("vaultwarden", "rob") == {"id": "t1"}
     assert lance[0][1:] == ("installer_outil_option", {"outil": "vaultwarden"}, "rob", "vaultwarden", "")
+    assert tool_credentials.read("vaultwarden") is None  # son compte se crée dans Vaultwarden lui-même
+    # Time Machine : rien à taper, Jabba tire un mot de passe au sort et le reprend s'il est rallumé.
+    optional_tools.install("time-machine", "rob")
+    mot = lance[1][-1]
+    assert len(mot) == 24 and actions.host_input("installer_outil_option", {"outil": "time-machine"}, mot) == mot
+    optional_tools.install("time-machine", "rob")
+    assert lance[2][-1] == mot
+    assert tool_credentials.read("time-machine") == {"identifiant": "timemachine", "mot_de_passe": mot}
+    assert (tmp_path / "identifiants.json").stat().st_mode & 0o077 == 0  # lisible par l'appli seule
     with pytest.raises(actions.ActionError):
-        optional_tools.install("time-machine", "court", "rob")  # refusé avant de lancer quoi que ce soit
-    assert len(lance) == 1
+        optional_tools.install("inconnu", "rob")
 
 
 def test_paperless_adresse_tailscale_secrets_et_mot_de_passe(tmp_path):
