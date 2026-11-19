@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.16.1",
+    "date": "2026-11-19",
+    "changements": [
+      "Établi : une barre de mémoire sous le bandeau, qui se remplit selon ce qu'utilisent les outils et le système.",
+      "AdGuard Home s'active : le DNS écoute sur l'adresse de la maison et sur celle de Tailscale, au lieu de tout le serveur (où le résolveur de Debian occupe déjà le port 53).",
+      "Mots de passe des outils (Paperless, Time Machine) : tout caractère est accepté, espaces et accents compris, sauf l'apostrophe ; de 15 à 128 caractères.",
+      "Fichiers : une fois tout sélectionné, le bouton devient « Tout désélectionner »."
+    ]
+  },
+  {
     "version": "0.16.0",
     "date": "2026-11-17",
     "changements": [

@@ -256,11 +256,15 @@ pass=$(cat)
 if [ -n "$2" ] && [ ! -f .env ]; then
   secret=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
   name=$(tailscale status --json --peers=false 2>/dev/null | sed -n 's/^ *"DNSName": "\\(.*\\)\\.",*$/\\1/p' | head -1)
-  printf "%s\n" "$2" | S="$secret" P="$pass" T="$name" awk 'BEGIN {
+  lan=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \\([0-9.]*\\).*/\\1/p' | head -1)
+  tsip=$(tailscale ip -4 2>/dev/null | head -1)
+  printf "%s\n" "$2" | S="$secret" P="$pass" T="$name" L="${lan:-127.0.0.1}" I="${tsip:-127.0.0.2}" awk 'BEGIN {
       marks[1] = "@SECRET_TIRE_AU_SORT@"; values[1] = ENVIRON["S"]
       marks[2] = "@MOT_DE_PASSE_ADMIN@"; values[2] = ENVIRON["P"]
-      marks[3] = "@ADRESSE_TAILSCALE@"; values[3] = ENVIRON["T"] }
-    { for (n = 1; n <= 3; n++) {
+      marks[3] = "@ADRESSE_TAILSCALE@"; values[3] = ENVIRON["T"]
+      marks[4] = "@IP_LOCALE@"; values[4] = ENVIRON["L"]
+      marks[5] = "@IP_TAILSCALE@"; values[5] = ENVIRON["I"] }
+    { for (n = 1; n <= 5; n++) {
         done = ""; rest = $0
         while ((i = index(rest, marks[n])) > 0) {
           done = done substr(rest, 1, i - 1) values[n]; rest = substr(rest, i + length(marks[n]))
@@ -274,7 +278,8 @@ docker compose up -d
 [ -z "$4" ] || tailscale serve --bg --https="$4" "http://127.0.0.1:$5" || echo "Adresse https : active HTTPS Certificates dans la console Tailscale." >&2
 """
 OPTIONAL_REMOVE = 'cd "$0" && docker compose down; [ -z "$1" ] || tailscale serve --https="$1" off || true'
-ADMIN_PASSWORD = re.compile(r"[A-Za-z0-9._:+=@%!?*,-]{15,64}")
+# Écrit entre apostrophes dans le .env : tout caractère visible ou espace, sauf l'apostrophe elle-même.
+ADMIN_PASSWORD = re.compile(r"[^\x00-\x1f\x7f']{15,128}")
 
 
 def _optional_tool(args):
@@ -301,13 +306,13 @@ def _remove_optional(args):
 
 
 def optional_password(name, text):
-    """Le mot de passe demandé par un outil (Time Machine) : 15 caractères au moins, sans espace ni guillemet."""
+    """Le mot de passe demandé par un outil (Time Machine, Paperless) : 15 à 128 caractères, sans apostrophe."""
     from host import catalog
 
     if not catalog.OPTIONAL_TOOLS[name]["mot_de_passe"]:
         return ""
     if not ADMIN_PASSWORD.fullmatch(text or ""):
-        raise ActionError("Mot de passe refusé : 15 à 64 caractères, lettres, chiffres et . _ : + = @ % ! ? * , -")
+        raise ActionError("Mot de passe refusé : 15 à 128 caractères, sans apostrophe (').")
     return text
 
 

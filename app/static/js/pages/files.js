@@ -4,7 +4,7 @@
 //   partagé : pages.fichiers (écran)
 //   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
 import { confirmAction, dialogElement, toast } from "../components/dialogs.js";
-import { attachSelection, selectAll, SHORTCUTS } from "../components/file_selection.js";
+import { attachSelection, toggleAll, SHORTCUTS } from "../components/file_selection.js";
 import { publicModeOpen } from "../components/public_mode_card.js";
 import { enableDrop } from "../components/drop_targets.js";
 import { droppedItems, pickedItems, uploadItems } from "../components/folder_upload.js";
@@ -412,7 +412,7 @@ pages.fichiers = async (params) => {
     content.querySelectorAll(".fil a[data-chemin]").forEach((crumb) => enableDrop(crumb, crumb.dataset.chemin, reload));
 
   const selectAllButton = $("#tout-selectionner");
-  if (selectAllButton) selectAllButton.onclick = selectAll;
+  if (selectAllButton) selectAllButton.onclick = toggleAll;
   attachSelection(entries, {
     folder: data,
     publicOpen: data.source === "nextcloud" && (await publicModeOpen()),

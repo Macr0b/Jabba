@@ -218,3 +218,17 @@ def test_tout_selectionner(page, dossier):
     total = page.locator(".element").count()
     expect(barre).to_contain_text(f"{total} sélectionné")
     expect(barre.get_by_role("button", name="Tout sélectionner")).to_have_count(0)  # déjà tout
+    # Une fois tout choisi, le même bouton devient « Tout désélectionner » et vide la sélection.
+    bouton = page.locator("#tout-selectionner")
+    expect(bouton).to_have_text("Tout désélectionner")
+    expect(barre.get_by_role("button", name="Tout désélectionner")).to_be_visible()
+    bouton.click()
+    expect(barre).to_have_count(0)
+    expect(bouton).to_have_text("Tout sélectionner")
+    page.locator(".element input[data-choix]").first.evaluate(
+        "e => e.click()"
+    )  # une partie seulement : le bouton propose de tout prendre
+    expect(bouton).to_have_text("Tout sélectionner")
+    page.locator("#barre-selection").get_by_role("button", name="Tout sélectionner").click()
+    page.locator("#barre-selection").get_by_role("button", name="Tout désélectionner").click()
+    expect(page.locator("#barre-selection")).to_have_count(0)

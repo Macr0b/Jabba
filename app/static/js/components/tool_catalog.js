@@ -17,6 +17,16 @@ import { toolMenuHtml } from "./tool_menu.js";
 
 const LOW_MEMORY = 0.5 * 1024 ** 3; // en dessous, le serveur risque de ramer
 
+/** La barre de mémoire : la part des outils, le reste du système, puis ce qui est libre. */
+export function memoryBarHtml(memory) {
+  const percent = (bytes) => Math.max(0, Math.min(100, (bytes / (memory.total || 1)) * 100)).toFixed(1);
+  const system = Math.max(memory.utilise - memory.outils, 0);
+  return `<div class="barre-memoire" role="img" aria-label="${escapeHtml(t`${formatBytes(memory.utilise)} utilisés sur ${formatBytes(memory.total)}`)}">
+      <span class="part-outils" style="width:${percent(memory.outils)}%"></span><span class="part-systeme" style="width:${percent(system)}%"></span>
+    </div>
+    <div class="legende-memoire"><span><i class="part-outils"></i>${escapeHtml(t("Outils"))}</span><span><i class="part-systeme"></i>${escapeHtml(t("Système"))}</span><span><i></i>${escapeHtml(t("Libre"))}</span></div>`;
+}
+
 export function memoryBannerHtml() {
   return '<div id="etabli-memoire" class="note memoire-etabli"></div>';
 }
@@ -45,7 +55,7 @@ function offCardHtml(tool, memory) {
       }
       ${
         tool.mot_de_passe
-          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (15 caractères au moins)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>`
+          ? t`<label class="champ"><span>${escapeHtml(tool.mot_de_passe_texte)} (15 caractères au moins, sans apostrophe)</span><input type="password" data-mot-de-passe="${escapeHtml(tool.id)}" autocomplete="new-password"></label>`
           : ""
       }
       <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
@@ -98,7 +108,9 @@ export function bindCatalog(grid, reload, onCards) {
       const memory = result.memoire;
       const banner = $("#etabli-memoire");
       if (banner)
-        banner.innerHTML = t`Mémoire du serveur : <strong>${formatBytes(memory.utilise)}</strong> utilisés sur ${formatBytes(memory.total)}, dont ${formatBytes(memory.outils)} pour les outils. Libre : <strong>${formatBytes(memory.libre)}</strong>.`;
+        banner.innerHTML =
+          t`Mémoire du serveur : <strong>${formatBytes(memory.utilise)}</strong> utilisés sur ${formatBytes(memory.total)}, dont ${formatBytes(memory.outils)} pour les outils. Libre : <strong>${formatBytes(memory.libre)}</strong>.` +
+          memoryBarHtml(memory);
       if (!grid) return;
       const builtInOn = result.outils.filter((tool) => tool.integre && tool.installe);
       const off = result.outils.filter((tool) => !tool.installe);

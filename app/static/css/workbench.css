@@ -153,6 +153,39 @@ body.plein-ecran main {
 .memoire-etabli {
   margin-top: 6px;
 }
+.barre-memoire {
+  display: flex;
+  height: 10px;
+  margin-top: 8px;
+  max-width: 520px;
+  background: var(--bord-doux);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.barre-memoire span {
+  height: 100%;
+  transition: width 0.4s;
+}
+.part-outils {
+  background: var(--accent);
+}
+.part-systeme {
+  background: var(--texte-3);
+}
+.legende-memoire {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.legende-memoire i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 3px;
+  background: var(--bord-doux);
+}
 .alerte-memoire {
   color: var(--rouge);
 }

@@ -174,6 +174,12 @@ def test_outils_a_activer_et_memoire(page):
     aller(page, "outils")
     expect(page.locator("#etabli-memoire")).to_contain_text("Mémoire du serveur")
     expect(page.locator("#etabli-memoire")).to_contain_text("Libre")
+    barre = page.locator("#etabli-memoire .barre-memoire")
+    expect(barre).to_have_attribute("role", "img")
+    largeurs = [
+        barre.locator(part).evaluate("e => parseFloat(e.style.width)") for part in (".part-outils", ".part-systeme")
+    ]
+    assert 0 < sum(largeurs) <= 100  # la barre se remplit selon la mémoire utilisée
     for outil in (
         "vaultwarden",
         "immich",

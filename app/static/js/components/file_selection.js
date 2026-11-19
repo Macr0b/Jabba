@@ -1,7 +1,7 @@
 // Sélection de plusieurs fichiers, barre d'actions, clic droit et raccourcis clavier de l'écran Fichiers.
 //
 // Sommaire :
-//   partagé : attachSelection, selectAll, SHORTCUTS
+//   partagé : attachSelection, selectAll, toggleAll, SHORTCUTS
 //   interne : current, items, setSelected, refresh, renderBar, openMenu, moveFocus, columnCount, onKey
 //
 // Souris : case à cocher, ⌘/Ctrl + clic pour ajouter, Maj + clic pour une plage, clic droit = menu,
@@ -50,7 +50,13 @@ function refresh() {
     if (box) box.checked = selected;
   });
   document.body.classList.toggle("selection-active", current.selected.size > 0);
+  const toggle = $("#tout-selectionner");
+  if (toggle) toggle.textContent = allSelected() ? t("Tout désélectionner") : t("Tout sélectionner");
   renderBar();
+}
+
+function allSelected() {
+  return current.entries.length > 0 && current.selected.size === current.entries.length;
 }
 
 /** Tout sélectionner (bouton de l'écran Fichiers, ⌘A / Ctrl+A). */
@@ -58,6 +64,15 @@ export function selectAll() {
   if (!current) return;
   current.entries.forEach((_, index) => current.selected.add(index));
   refresh();
+}
+
+/** Le bouton de l'écran Fichiers : tout sélectionner, puis, une fois tout choisi, tout désélectionner. */
+export function toggleAll() {
+  if (!current) return;
+  if (allSelected()) {
+    current.selected.clear();
+    refresh();
+  } else selectAll();
 }
 
 function renderBar() {
@@ -76,12 +91,12 @@ function renderBar() {
   }
   const count = current.selected.size;
   const writable = current.context.folder.ecriture && selectedEntries().every((entry) => entry.ecriture);
-  const everything = count === current.entries.length;
+  const everything = allSelected();
   bar.innerHTML = t`<strong>${count} sélectionné${count > 1 ? "s" : ""}</strong>
-    ${everything ? "" : t('<button class="btn btn-petit" type="button" data-action="tout">Tout sélectionner</button>')}
+    ${everything ? t('<button class="btn btn-petit" type="button" data-action="aucun">Tout désélectionner</button>') : t('<button class="btn btn-petit" type="button" data-action="tout">Tout sélectionner</button>')}
     <button class="btn btn-petit" type="button" data-action="telecharger">Télécharger</button>
     ${writable ? t('<button class="btn btn-petit" type="button" data-action="deplacer">Déplacer</button><button class="btn btn-petit btn-danger" type="button" data-action="corbeille">Corbeille</button>') : ""}
-    <button class="btn btn-petit" type="button" data-action="aucun" aria-label="Tout désélectionner">✕</button>`;
+    ${everything ? "" : t('<button class="btn btn-petit" type="button" data-action="aucun" aria-label="Tout désélectionner">✕</button>')}`;
   bar.querySelectorAll("[data-action]").forEach((button) => {
     button.onclick = () => runOnSelection(button.dataset.action);
   });

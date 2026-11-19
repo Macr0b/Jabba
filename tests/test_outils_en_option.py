@@ -36,7 +36,11 @@ def test_immich_secret_tire_au_sort_et_garde(tmp_path):
     assert len(secret) == 48
     assert oct((dossier / ".env").stat().st_mode)[-3:] == "600"
     assert (dossier / "compose.yaml").read_text() == catalog.IMMICH_COMPOSE
-    lignes = [ligne for ligne in journal.read_text().splitlines() if not ligne.startswith("tailscale status")]
+    lignes = [
+        ligne
+        for ligne in journal.read_text().splitlines()
+        if not ligne.startswith(("tailscale status", "tailscale ip"))
+    ]
     assert lignes == ["docker compose up -d", "tailscale serve --bg --https=2283 http://127.0.0.1:2283"]
     _jouer(tmp_path, commande)  # réinstallé : le secret (et donc la base) est gardé
     assert (dossier / ".env").read_text() == reglages
@@ -50,12 +54,13 @@ def test_time_machine_mot_de_passe_par_l_entree_standard(tmp_path):
     assert actions.host_input("installer_outil_option", {"outil": "time-machine"}, mot) == mot
     sortie, dossier, journal = _jouer(tmp_path, commande, mot)
     assert sortie.returncode == 0, sortie.stderr
-    assert f"PASSWORD={mot}\n" in (dossier / ".env").read_text()  # recopié tel quel, sans interprétation
+    assert f"PASSWORD='{mot}'\n" in (dossier / ".env").read_text()  # recopié tel quel, sans interprétation
     assert "tailscale serve" not in journal.read_text()  # pas de page web : pas d'adresse https
 
 
 @pytest.mark.parametrize(
-    "mot", ["court", "avec espace dedans!!", 'guillemet"xxxxxxxxxxxxx', "dollar$HOME-xxxxxxx", "a\nPASSWORD=x", None]
+    "mot",
+    ["court", "apostrophe'xxxxxxxxxxxxx", "a\nPASSWORD=xxxxxxxxxxxxxxx", "tab\txxxxxxxxxxxxxxxxx", "x" * 129, None],
 )
 def test_mot_de_passe_refuse(mot):
     with pytest.raises(actions.ActionError):
@@ -123,7 +128,7 @@ def test_paperless_adresse_tailscale_secrets_et_mot_de_passe(tmp_path):
     assert sortie.returncode == 0, sortie.stderr
     reglages = dict(line.split("=", 1) for line in (tmp_path / "pile" / ".env").read_text().splitlines() if "=" in line)
     assert reglages["PAPERLESS_URL"] == "https://serveur-test.exemple.ts.net:8000"
-    assert reglages["PAPERLESS_ADMIN_PASSWORD"] == mot
+    assert reglages["PAPERLESS_ADMIN_PASSWORD"] == f"'{mot}'"
     assert len(reglages["DB_PASSWORD"]) == 48 and reglages["DB_PASSWORD"] == reglages["PAPERLESS_SECRET_KEY"]
 
 
@@ -131,7 +136,9 @@ def test_nouveaux_outils_du_catalogue():
     for outil in ("adguard-home", "paperless", "homebox"):
         commande, _ = actions.build("installer_outil_option", {"outil": outil})
         assert commande[3] == f"/opt/stacks/{outil}"
-    assert '"127.0.0.1:3000:3000/tcp"' in catalog.ADGUARD_COMPOSE and '"53:53/udp"' in catalog.ADGUARD_COMPOSE
+    assert (
+        '"127.0.0.1:3000:3000/tcp"' in catalog.ADGUARD_COMPOSE and '"${IP_LOCALE}:53:53/tcp"' in catalog.ADGUARD_COMPOSE
+    )
     assert '"127.0.0.1:8000:8000"' in catalog.PAPERLESS_COMPOSE and '"127.0.0.1:7745:7745"' in catalog.HOMEBOX_COMPOSE
     ports = [outil["port_local"] for outil in catalog.OPTIONAL_TOOLS.values() if outil["port_local"]]
     assert len(ports) == len(set(ports)) and not {8090, 8081, 8096, 5001, 9000, 8443} & set(
@@ -152,3 +159,70 @@ def test_ntfy_et_changedetection():
     )
     assert "ports:" not in catalog.CHANGEDETECTION_COMPOSE
     assert catalog.OPTIONAL_TOOLS["changedetection"]["port_local"] == 5005
+
+
+@pytest.mark.parametrize(
+    "mot",
+    ["Avec des espaces et é accents", "dollar$HOME-et-\\-barre", 'guillemet"xxxxxxxxxxxxx', "#dièse&et<chevrons>"],
+)
+def test_mot_de_passe_accepte_tout_sauf_apostrophe(mot):
+    assert actions.host_input("installer_outil_option", {"outil": "paperless"}, mot) == mot
+
+
+def test_mot_de_passe_entre_apostrophes_dans_le_env(tmp_path):
+    """Écrit entre apostrophes : Docker Compose ne lit ni $ ni # ni espace comme du code."""
+    mot = "dollar$HOME #pas-un-commentaire"
+    commande, _ = actions.build("installer_outil_option", {"outil": "time-machine"})
+    commande[6] = ""
+    sortie, dossier, _ = _jouer(tmp_path, commande, mot)
+    assert sortie.returncode == 0, sortie.stderr
+    assert f"PASSWORD='{mot}'\n" in (dossier / ".env").read_text()
+
+
+def test_adguard_ecoute_sur_les_adresses_du_serveur(tmp_path):
+    """Pas sur 0.0.0.0:53 (pris par le résolveur de Debian) : l'adresse de la maison et celle de Tailscale."""
+    assert '"53:53' not in catalog.ADGUARD_COMPOSE and '"${IP_LOCALE}:53:53/udp"' in catalog.ADGUARD_COMPOSE
+    assert '"${IP_TAILSCALE}:53:53/udp"' in catalog.ADGUARD_COMPOSE
+    assert "ip_nonlocal_bind=1" in catalog.OPTIONAL_TOOLS["adguard-home"]["preparer"]
+    commande, _ = actions.build("installer_outil_option", {"outil": "adguard-home"})
+    commande[6] = ""  # pas de préparation (sysctl) pendant le test
+    outils = tmp_path / "outils"
+    outils.mkdir()
+    (outils / "ip").write_text("#!/bin/sh\necho '1.1.1.1 via 192.168.1.254 dev enp1s0 src 192.168.1.50 uid 1000'\n")
+    (outils / "tailscale").write_text('#!/bin/sh\n[ "$1" = ip ] && echo 100.64.0.7\nexit 0\n')
+    (outils / "docker").write_text("#!/bin/sh\nexit 0\n")
+    for outil in outils.iterdir():
+        outil.chmod(0o755)
+    env = {**os.environ, "PATH": f"{outils}:{os.environ['PATH']}"}
+    sortie = subprocess.run(
+        ["sh", "-c", commande[2], str(tmp_path / "pile"), *commande[4:]],
+        input="",
+        text=True,
+        capture_output=True,
+        env=env,
+        timeout=10,
+    )
+    assert sortie.returncode == 0, sortie.stderr
+    assert (tmp_path / "pile" / ".env").read_text().split() == ["IP_LOCALE=192.168.1.50", "IP_TAILSCALE=100.64.0.7"]
+
+
+def test_adguard_sans_tailscale_ni_route(tmp_path):
+    """Adresses introuvables : deux adresses locales différentes, jamais 0.0.0.0 ni deux fois la même."""
+    commande, _ = actions.build("installer_outil_option", {"outil": "adguard-home"})
+    commande[6] = ""
+    outils = tmp_path / "outils"
+    outils.mkdir()
+    for nom in ("ip", "tailscale", "docker"):
+        (outils / nom).write_text("#!/bin/sh\nexit 0\n")
+        (outils / nom).chmod(0o755)
+    env = {**os.environ, "PATH": f"{outils}:{os.environ['PATH']}"}
+    sortie = subprocess.run(
+        ["sh", "-c", commande[2], str(tmp_path / "pile"), *commande[4:]],
+        input="",
+        text=True,
+        capture_output=True,
+        env=env,
+        timeout=10,
+    )
+    assert sortie.returncode == 0, sortie.stderr
+    assert (tmp_path / "pile" / ".env").read_text().split() == ["IP_LOCALE=127.0.0.1", "IP_TAILSCALE=127.0.0.2"]

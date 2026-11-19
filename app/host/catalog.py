@@ -14,6 +14,8 @@ Sommaire :
 SECRET_MARK = "@SECRET_TIRE_AU_SORT@"
 PASSWORD_MARK = "@MOT_DE_PASSE_ADMIN@"
 TAILSCALE_MARK = "@ADRESSE_TAILSCALE@"
+LAN_IP_MARK = "@IP_LOCALE@"
+TAILSCALE_IP_MARK = "@IP_TAILSCALE@"
 
 VAULTWARDEN_COMPOSE = """services:
   vaultwarden:
@@ -116,26 +118,38 @@ TIME_MACHINE_COMPOSE = """services:
 TIME_MACHINE_ENV = f"""TM_USERNAME=timemachine
 TM_UID=1000
 TM_GID=1000
-PASSWORD={PASSWORD_MARK}
+PASSWORD='{PASSWORD_MARK}'
 SET_PERMISSIONS=false
 VOLUME_SIZE_LIMIT=0
 """
 
 # Bloqueur de publicités et de traqueurs pour tout le réseau (serveur DNS). La page d'admin (port 3000)
-# ne s'ouvre que par Tailscale ; le DNS (port 53) répond aux appareils de la maison.
+# ne s'ouvre que par Tailscale ; le DNS (port 53) répond sur l'adresse de la maison et sur celle de Tailscale,
+# pas sur 0.0.0.0 : le résolveur de Debian (127.0.0.53) occupe déjà le port 53 du serveur lui-même.
 ADGUARD_COMPOSE = """services:
   adguard-home:
     image: adguard/adguardhome:latest
     container_name: adguard-home
     restart: unless-stopped
     ports:
-      - "53:53/tcp"
-      - "53:53/udp"
+      - "${IP_LOCALE}:53:53/tcp"
+      - "${IP_LOCALE}:53:53/udp"
+      - "${IP_TAILSCALE}:53:53/tcp"
+      - "${IP_TAILSCALE}:53:53/udp"
       - "127.0.0.1:3000:3000/tcp"
     volumes:
       - ./travail:/opt/adguardhome/work
       - ./reglages:/opt/adguardhome/conf
 """
+
+ADGUARD_ENV = f"""IP_LOCALE={LAN_IP_MARK}
+IP_TAILSCALE={TAILSCALE_IP_MARK}
+"""
+
+# Au démarrage, Tailscale peut arriver après Docker : on autorise à réserver une adresse pas encore présente.
+NONLOCAL_BIND = (
+    "sysctl -qw net.ipv4.ip_nonlocal_bind=1 && echo net.ipv4.ip_nonlocal_bind=1 > /etc/sysctl.d/90-jabba-adguard.conf"
+)
 
 # Papiers numérisés : on dépose dans « A-classer » (visible dans Fichiers), Paperless lit le texte et range.
 PAPERLESS_COMPOSE = """services:
@@ -181,7 +195,7 @@ PAPERLESS_URL=https://{TAILSCALE_MARK}:8000
 PAPERLESS_OCR_LANGUAGE=fra+eng
 PAPERLESS_TIME_ZONE=Europe/Paris
 PAPERLESS_ADMIN_USER=admin
-PAPERLESS_ADMIN_PASSWORD={PASSWORD_MARK}
+PAPERLESS_ADMIN_PASSWORD='{PASSWORD_MARK}'
 USERMAP_UID=1000
 USERMAP_GID=1000
 """
@@ -287,8 +301,8 @@ OPTIONAL_TOOLS = {
         "memoire_go": 0.1,
         "port_https": 3000,
         "port_local": 3000,
-        "fichiers": {"compose.yaml": ADGUARD_COMPOSE},
-        "preparer": "",
+        "fichiers": {"compose.yaml": ADGUARD_COMPOSE, ".env": ADGUARD_ENV},
+        "preparer": NONLOCAL_BIND,
         "mot_de_passe": False,
     },
     "paperless": {
