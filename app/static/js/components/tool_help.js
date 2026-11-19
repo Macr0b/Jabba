@@ -57,7 +57,7 @@ const HELP = {
   ],
   paperless: [
     t(
-      "Dépose tes papiers (PDF, photos de documents) dans le dossier Paperless/A-classer de Fichiers : Paperless lit le texte, les range et les retrouve par recherche. Connexion : menu … → Identifiants (compte créé par Jabba).",
+      "Dépose tes papiers (PDF, photos de documents) dans Fichiers › Téléchargements › Paperless-a-classer : Paperless lit le texte, les range et les retrouve par recherche. Connexion : menu … → Identifiants (compte créé par Jabba).",
     ),
     "https://docs.paperless-ngx.com/",
   ],

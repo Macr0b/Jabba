@@ -151,7 +151,8 @@ NONLOCAL_BIND = (
     "sysctl -qw net.ipv4.ip_nonlocal_bind=1 && echo net.ipv4.ip_nonlocal_bind=1 > /etc/sysctl.d/90-jabba-adguard.conf"
 )
 
-# Papiers numérisés : on dépose dans « A-classer » (visible dans Fichiers), Paperless lit le texte et range.
+# Papiers numérisés : on dépose dans Téléchargements › Paperless-a-classer (visible dans Fichiers et
+# Nextcloud, qui y écrivent en groupe www-data) ; Paperless lit le texte, range, puis retire le fichier.
 PAPERLESS_COMPOSE = """services:
   broker:
     image: docker.io/valkey/valkey:9-alpine
@@ -180,7 +181,7 @@ PAPERLESS_COMPOSE = """services:
       - ./donnees:/usr/src/paperless/data
       - /srv/data/Paperless/Documents:/usr/src/paperless/media
       - ./export:/usr/src/paperless/export
-      - /srv/data/Paperless/A-classer:/usr/src/paperless/consume
+      - /srv/data/downloads/Paperless-a-classer:/usr/src/paperless/consume
     env_file: .env
     environment:
       PAPERLESS_REDIS: redis://broker:6379
@@ -315,8 +316,10 @@ OPTIONAL_TOOLS = {
         "port_local": 8000,
         "fichiers": {"compose.yaml": PAPERLESS_COMPOSE, ".env": PAPERLESS_ENV},
         "preparer": (
-            "mkdir -p /srv/data/Paperless/A-classer /srv/data/Paperless/Documents"
-            " && chown 1000:1000 /srv/data/Paperless /srv/data/Paperless/A-classer /srv/data/Paperless/Documents"
+            "mkdir -p /srv/data/downloads/Paperless-a-classer /srv/data/Paperless/Documents"
+            " && chown 1000:1000 /srv/data/Paperless /srv/data/Paperless/Documents"
+            " && chown 1000:33 /srv/data/downloads/Paperless-a-classer"
+            " && chmod 2775 /srv/data/downloads/Paperless-a-classer"
         ),
         "mot_de_passe": True,
         "identifiant": "admin",
