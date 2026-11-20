@@ -51,8 +51,10 @@ def _ensure_ready(client):
     except httpx.HTTPError:
         raise AdBlockerError("AdGuard Home ne répond pas : il démarre peut-être encore.")
     if first_run:
-        if not _password():
-            raise AdBlockerError("Mot de passe d'AdGuard inconnu : retire puis rallume AdGuard dans l'Établi.")
+        # Pas encore de mot de passe (outil rallumé sans réinstallation, ou installé avant la 0.16.2) :
+        # AdGuard attend encore son assistant, Jabba tire le mot de passe au sort maintenant.
+        tool_credentials.password_for("adguard-home")
+        client.auth = (ADMIN, _password())
         listen = {"ip": "0.0.0.0", "port": 3000}
         setup = {"web": listen, "dns": {"ip": "0.0.0.0", "port": 53}, "username": ADMIN, "password": _password()}
         if client.post("/control/install/configure", json=setup).status_code != 200:

@@ -117,9 +117,15 @@ def test_mot_de_passe_refuse_ou_inconnu(adguard, tmp_path):
     adguard.mot_de_passe_ok = False
     resultat = ad_blocker.devices()
     assert not resultat["pret"] and "Mot de passe d'AdGuard refusé" in resultat["message"]
-    adguard.premier_lancement = True
+
+
+def test_premier_lancement_sans_mot_de_passe_garde(adguard, tmp_path):
+    """Rallumé sans réinstallation (ou installé avant la 0.16.2) : Jabba tire le mot de passe au sort à ce moment-là."""
     (tmp_path / "identifiants.json").unlink()
-    assert "Mot de passe d'AdGuard inconnu" in ad_blocker.devices()["message"]
+    adguard.premier_lancement = True
+    assert ad_blocker.devices()["pret"]
+    mot = tool_credentials.read("adguard-home")["mot_de_passe"]
+    assert len(mot) == 24 and dict(adguard.appels)["/control/install/configure"]["password"] == mot
 
 
 def test_adguard_absent(adguard, monkeypatch):
