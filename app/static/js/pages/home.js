@@ -3,6 +3,7 @@
 // Sommaire :
 //   partagé : pages.accueil (écran), folderLink, toggleFavorite, toolIcon, COMING_SOON
 //   interne : TILE_ICONS, loadQuickAccess
+import { applyArrangement, bindOrdering, loadArrangement } from "../components/card_order.js";
 import { toast } from "../components/dialogs.js";
 import { enableDrop } from "../components/drop_targets.js";
 import { api } from "../core/api.js";
@@ -19,16 +20,16 @@ pages.accueil = async () => {
   const ok = !data.soucis.length;
   content.innerHTML = t`
     <div class="entete">
-      <div><h1>${escapeHtml(state.me && state.me.serveur ? state.me.serveur[0].toUpperCase() + state.me.serveur.slice(1) : t("Le serveur"))}</h1><p class="sous-titre">Allumé depuis ${formatDuration(data.duree)} · ${data.outils_actifs} outil${data.outils_actifs > 1 ? "s" : ""} sur ${data.outils_total} actif${data.outils_actifs > 1 ? "s" : ""}</p></div>
+      <div><div class="titre-avec-action"><h1>${escapeHtml(state.me && state.me.serveur ? state.me.serveur[0].toUpperCase() + state.me.serveur.slice(1) : t("Le serveur"))}</h1><button class="btn btn-petit" type="button" id="ranger-accueil" aria-pressed="false">Ranger</button></div><p class="sous-titre">Allumé depuis ${formatDuration(data.duree)} · ${data.outils_actifs} outil${data.outils_actifs > 1 ? "s" : ""} sur ${data.outils_total} actif${data.outils_actifs > 1 ? "s" : ""}</p></div>
       <span class="pastille ${ok ? "p-ok" : "p-alerte"}">${ok ? t("Tout va bien") : t("À vérifier")}</span>
     </div>
     ${data.soucis.length ? t`<a class="bandeau" href="#/outils"><span><strong>Arrêté ou en panne :</strong> ${escapeHtml(data.soucis.join(", "))}</span><strong>Voir</strong></a>` : ""}
     ${data.redemarrage_requis ? t`<a class="bandeau" href="#/systeme"><span>Une mise à jour attend un <strong>redémarrage</strong> (${data.redemarrage_auto === false ? t("redémarre quand tu es devant") : t("il se fera seul à 4 h")}).</span><strong>Voir</strong></a>` : ""}
-    <div class="grille g4">
-      <div class="carte pad mesure"><div class="etiq">Processeur</div><div class="val">${data.cpu} %</div><div class="jauge"><span style="width:${data.cpu}%"></span></div></div>
-      <div class="carte pad mesure"><div class="etiq">Mémoire</div><div class="val">${formatBytes(data.memoire.utilise)}</div><div class="detail">sur ${formatBytes(data.memoire.total)}</div></div>
-      <div class="carte pad mesure"><div class="etiq">Température</div><div class="val">${data.temperature ?? "—"} °C</div><div class="detail">${data.temperature == null ? "" : data.temperature < 70 ? t("Normale") : data.temperature < 85 ? t("Chaude") : t("Trop chaude")}</div></div>
-      <div class="carte pad mesure"><div class="etiq">Disque de données</div><div class="val">${formatPercent(data.donnees)} %</div><div class="detail">${formatBytes(data.donnees?.utilise)} sur ${formatBytes(data.donnees?.total)}</div><div class="jauge"><span style="width:${formatPercent(data.donnees)}%"></span></div></div>
+    <div class="grille g4" id="mesures-accueil">
+      <div class="carte pad mesure" data-carte="processeur"><div class="etiq">Processeur</div><div class="val">${data.cpu} %</div><div class="jauge"><span style="width:${data.cpu}%"></span></div></div>
+      <div class="carte pad mesure" data-carte="memoire"><div class="etiq">Mémoire</div><div class="val">${formatBytes(data.memoire.utilise)}</div><div class="detail">sur ${formatBytes(data.memoire.total)}</div></div>
+      <div class="carte pad mesure" data-carte="temperature"><div class="etiq">Température</div><div class="val">${data.temperature ?? "—"} °C</div><div class="detail">${data.temperature == null ? "" : data.temperature < 70 ? t("Normale") : data.temperature < 85 ? t("Chaude") : t("Trop chaude")}</div></div>
+      <div class="carte pad mesure" data-carte="donnees"><div class="etiq">Disque de données</div><div class="val">${formatPercent(data.donnees)} %</div><div class="detail">${formatBytes(data.donnees?.utilise)} sur ${formatBytes(data.donnees?.total)}</div><div class="jauge"><span style="width:${formatPercent(data.donnees)}%"></span></div></div>
     </div>
     <section aria-label="Accès rapide">
       <h2 class="titre-section">Accès rapide</h2>
@@ -41,7 +42,13 @@ pages.accueil = async () => {
       <a href="#/disques"><span>Disques et espace</span><span>Disques</span></a>
       <a href="#/systeme"><span>Système et appareils</span><span>Système</span></a>
     </section>`;
-  loadQuickAccess().catch((error) => {
+  const [measures, tiles] = await Promise.all([loadArrangement("accueil-mesures"), loadArrangement("accueil-tuiles")]);
+  applyArrangement($("#mesures-accueil"), measures);
+  bindOrdering($("#ranger-accueil"), [
+    { grid: $("#mesures-accueil"), screen: "accueil-mesures" },
+    { grid: $("#tuiles"), screen: "accueil-tuiles" },
+  ]);
+  loadQuickAccess(tiles).catch((error) => {
     const element = $("#tuiles");
     if (element) element.innerHTML = `<p class="note">${escapeHtml(error.message)}</p>`;
   });
@@ -50,19 +57,20 @@ pages.accueil = async () => {
 export const folderLink = (item) => "#/fichiers?chemin=" + encodeURIComponent(item);
 const TILE_ICONS = { racine: "dossier", espace: t("dossier ext"), disque: "disque", favori: "favori" };
 
-async function loadQuickAccess() {
+async function loadQuickAccess(arrangement = { ordre: [], masques: [] }) {
   const data = await api("/api/accueil/dossiers");
   const tiles = $("#tuiles"),
     suggestions = $("#suggestions");
   if (!tiles) return;
   const tile = (item, type) =>
-    `<a class="carte tuile" href="${folderLink(item.chemin)}"><span class="ic-tuile ${TILE_ICONS[type]}" aria-hidden="true"></span><span class="nom-tuile">${escapeHtml(item.nom)}</span><span class="note">${{ racine: t("Nextcloud"), espace: t("Serveur"), disque: t("Disque branché"), favori: t("Favori") }[type]}</span></a>`;
+    `<a class="carte tuile" href="${folderLink(item.chemin)}" data-carte="${escapeHtml(item.chemin)}"><span class="ic-tuile ${TILE_ICONS[type]}" aria-hidden="true"></span><span class="nom-tuile">${escapeHtml(item.nom)}</span><span class="note">${{ racine: t("Nextcloud"), espace: t("Serveur"), disque: t("Disque branché"), favori: t("Favori") }[type]}</span></a>`;
   tiles.innerHTML =
     data.essentiels.map((item) => tile(item, item.type)).join("") +
     data.favoris.map((value) => tile(value, "favori")).join("") +
     (data.favoris.length
       ? ""
       : t`<div class="tuile vide-tuile note">Ajoute un dossier ici avec l'étoile ☆ de l'écran Fichiers.</div>`);
+  applyArrangement(tiles, arrangement);
   tiles
     .querySelectorAll("a.tuile")
     .forEach((item) =>

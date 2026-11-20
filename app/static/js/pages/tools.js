@@ -7,7 +7,7 @@ import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.js";
 import { bindDomain, domainCardHtml } from "../components/domain_card.js";
-import { applyOrder, bindOrdering } from "../components/card_order.js";
+import { applyArrangement, bindOrdering, loadArrangement } from "../components/card_order.js";
 import { bindCatalog, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
 import { bindToolMenus, toolMenuHtml } from "../components/tool_menu.js";
 import { formatBytes, formatWhen } from "../core/format.js";
@@ -22,7 +22,7 @@ pages.outils = async () => {
   const [tools, versions, savedOrder] = await Promise.all([
     api("/api/outils"),
     api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
-    api("/api/etabli/ordre").catch(() => ({ ordre: [] })),
+    loadArrangement("etabli"),
   ]);
   // Un outil en option est publié sur Tailscale au même nom que Jabba, sur son propre port.
   tools.forEach((item) => {
@@ -102,11 +102,11 @@ pages.outils = async () => {
   const reloadPage = () => pages.outils().catch(showError);
   bindToolMenus(content, tools, versions, reloadPage);
   const grid = $("#grille-etabli");
-  applyOrder(grid, savedOrder.ordre);
-  bindOrdering($("#ranger-etabli"), grid);
+  applyArrangement(grid, savedOrder);
+  bindOrdering($("#ranger-etabli"), [{ grid, screen: "etabli" }]);
   bindCatalog(grid, reloadPage, (catalogTools) => {
     bindToolMenus(content, catalogTools, versions, reloadPage);
-    applyOrder(grid, savedOrder.ordre); // les cartes à activer arrivent après : elles prennent leur place aussi
+    applyArrangement(grid, savedOrder); // les cartes à activer arrivent après : elles prennent leur place aussi
   });
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;

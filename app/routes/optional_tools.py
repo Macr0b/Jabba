@@ -5,8 +5,8 @@ Sommaire :
   POST /api/etabli/{outil}/installer    install_optional (super admin ; rien à taper)
   POST /api/etabli/{outil}/retirer      remove_optional (super admin ; données gardées)
   GET  /api/etabli/{outil}/identifiants tool_login (super admin ; le compte que Jabba a créé dans l'outil)
-  GET  /api/etabli/ordre                cards_order (admin) : l'ordre des cartes choisi avec « Ranger »
-  PUT  /api/etabli/ordre                save_cards_order (admin)
+  GET  /api/rangement/{ecran}           cards_order (admin) : l'ordre et les cartes masquées (« Ranger »)
+  PUT  /api/rangement/{ecran}           save_cards_order (admin)
 """
 
 import asyncio
@@ -62,16 +62,20 @@ def tool_login(outil: str, request: Request):
     return login
 
 
-@router.get("/api/etabli/ordre")
-def cards_order(request: Request):
-    guard.require_admin(request)
-    return {"ordre": card_order.read()}
-
-
-@router.put("/api/etabli/ordre")
-async def save_cards_order(request: Request):
+@router.get("/api/rangement/{ecran}")
+def cards_order(ecran: str, request: Request):
     guard.require_admin(request)
     try:
-        return {"ordre": card_order.save((await request.json()).get("ordre"))}
+        return card_order.read(ecran)
+    except ValueError as error:
+        raise HTTPException(404, str(error))
+
+
+@router.put("/api/rangement/{ecran}")
+async def save_cards_order(ecran: str, request: Request):
+    guard.require_admin(request)
+    body = await request.json()
+    try:
+        return card_order.save(ecran, body.get("ordre"), body.get("masques"))
     except ValueError as error:
         raise HTTPException(400, str(error))

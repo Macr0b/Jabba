@@ -1,8 +1,10 @@
-// « Ranger » l'Établi : déplacer les cartes (glisser, ou flèches ↑ ↓ au doigt et au clavier), ordre gardé sur le serveur.
+// « Ranger » un écran : déplacer les cartes (glisser, ou flèches ↑ ↓ au doigt et au clavier) et en masquer.
+// Le rangement est gardé sur le serveur, par écran, le même sur tous les appareils.
+// Une carte masquée disparaît ; pendant le rangement, elle reste visible (grisée) pour la remettre.
 //
 // Sommaire :
-//   partagé : applyOrder, bindOrdering
-//   interne : cardId, cards, moveControlsHtml, save
+//   partagé : loadArrangement, applyArrangement, bindOrdering
+//   interne : cardId, cards, controlsHtml, save
 import { toast } from "./dialogs.js";
 import { api } from "../core/api.js";
 import { escapeHtml } from "../core/dom.js";
@@ -15,72 +17,104 @@ function cardId(card) {
 }
 
 function cards(grid) {
-  return [...grid.querySelectorAll(`:scope > ${CARD.split(", ").join(", :scope > ")}`)];
+  return [...grid.children].filter((child) => child.matches(CARD));
 }
 
-/** Remet les cartes dans l'ordre enregistré ; celles qui n'y sont pas gardent leur place, à la suite. */
-export function applyOrder(grid, order) {
-  const rank = new Map(order.map((id, index) => [id, index]));
+/** Le rangement enregistré d'un écran (« etabli », « accueil-mesures », « accueil-tuiles »). */
+export function loadArrangement(screen) {
+  return api(`/api/rangement/${screen}`).catch(() => ({ ordre: [], masques: [] }));
+}
+
+/** Remet les cartes dans l'ordre enregistré et cache les masquées ; les autres gardent leur place, à la suite. */
+export function applyArrangement(grid, arrangement) {
+  const rank = new Map(arrangement.ordre.map((id, index) => [id, index]));
   cards(grid)
-    .map((card, index) => ({ card, key: rank.has(cardId(card)) ? rank.get(cardId(card)) : order.length + index }))
+    .map((card, index) => ({
+      card,
+      key: rank.has(cardId(card)) ? rank.get(cardId(card)) : arrangement.ordre.length + index,
+    }))
     .sort((a, b) => a.key - b.key)
-    .forEach(({ card }) => grid.appendChild(card));
+    .forEach(({ card }) => {
+      card.classList.toggle("carte-masquee", arrangement.masques.includes(cardId(card)));
+      grid.appendChild(card);
+    });
 }
 
-function moveControlsHtml(card) {
-  const name = card.querySelector("h2")?.textContent || "";
+function controlsHtml(card) {
+  const name = card.querySelector("h2, .etiq, .nom-tuile")?.textContent || "";
+  const hidden = card.classList.contains("carte-masquee");
   return `<div class="deplacer-carte">
       <button class="btn btn-petit" type="button" data-monter aria-label="${escapeHtml(t`Monter ${name}`)}">↑</button>
       <button class="btn btn-petit" type="button" data-descendre aria-label="${escapeHtml(t`Descendre ${name}`)}">↓</button>
+      <button class="btn btn-petit" type="button" data-masquer aria-pressed="${hidden}">${hidden ? escapeHtml(t("Afficher")) : escapeHtml(t("Masquer"))}</button>
     </div>`;
 }
 
-async function save(grid) {
+async function save(screen, grid) {
+  const all = cards(grid);
+  const body = {
+    ordre: all.map(cardId),
+    masques: all.filter((card) => card.classList.contains("carte-masquee")).map(cardId),
+  };
   try {
-    await api("/api/etabli/ordre", { method: "PUT", json: { ordre: cards(grid).map(cardId) } });
+    await api(`/api/rangement/${screen}`, { method: "PUT", json: body });
   } catch (error) {
     toast(error.message, true);
   }
 }
 
-/** Le bouton « Ranger » : passe la grille en mode rangement, « Terminé » enregistre. */
-export function bindOrdering(button, grid) {
+/**
+ * Le bouton « Ranger » d'un écran : passe ses grilles en mode rangement ; « Terminé » enregistre.
+ * `grids` : [{ grid, screen }] — une ou plusieurs grilles rangées ensemble (l'Accueil en a deux).
+ */
+export function bindOrdering(button, grids) {
   let dragged = null;
   button.onclick = async () => {
-    const active = grid.classList.toggle("rangement");
+    const active = button.getAttribute("aria-pressed") !== "true";
     button.textContent = active ? t("Terminé") : t("Ranger");
     button.setAttribute("aria-pressed", String(active));
-    cards(grid).forEach((card) => {
-      card.querySelector(".deplacer-carte")?.remove();
-      card.draggable = active;
-      if (active) card.insertAdjacentHTML("afterbegin", moveControlsHtml(card));
-    });
-    if (!active) await save(grid);
+    for (const { grid, screen } of grids) {
+      grid.classList.toggle("rangement", active);
+      cards(grid).forEach((card) => {
+        card.querySelector(".deplacer-carte")?.remove();
+        card.draggable = active;
+        if (active) card.insertAdjacentHTML("afterbegin", controlsHtml(card));
+      });
+      if (!active) await save(screen, grid);
+    }
   };
-  grid.addEventListener("click", (event) => {
-    const up = event.target.closest("[data-monter]");
-    const down = event.target.closest("[data-descendre]");
-    if (!up && !down) return;
-    const card = event.target.closest(CARD);
-    const sibling = up ? card.previousElementSibling : card.nextElementSibling;
-    if (!sibling) return;
-    if (up) grid.insertBefore(card, sibling);
-    else grid.insertBefore(sibling, card);
-    event.target.closest("button").focus();
-  });
-  grid.addEventListener("dragstart", (event) => {
-    if (!grid.classList.contains("rangement")) return;
-    dragged = event.target.closest(CARD);
-  });
-  grid.addEventListener("dragover", (event) => {
-    if (!dragged) return;
-    event.preventDefault();
-    const over = event.target.closest(CARD);
-    if (!over || over === dragged) return;
-    const after = [...grid.children].indexOf(over) > [...grid.children].indexOf(dragged);
-    grid.insertBefore(dragged, after ? over.nextElementSibling : over);
-  });
-  grid.addEventListener("dragend", () => {
-    dragged = null;
-  });
+  for (const { grid } of grids) {
+    grid.addEventListener("click", (event) => {
+      const control = event.target.closest("[data-monter], [data-descendre], [data-masquer]");
+      if (!control || !grid.classList.contains("rangement")) return;
+      event.preventDefault(); // une tuile est un lien : pas de navigation pendant le rangement
+      const card = control.closest(CARD);
+      if (control.hasAttribute("data-masquer")) {
+        const hidden = card.classList.toggle("carte-masquee");
+        control.setAttribute("aria-pressed", String(hidden));
+        control.textContent = hidden ? t("Afficher") : t("Masquer");
+        return;
+      }
+      const up = control.hasAttribute("data-monter");
+      const sibling = up ? card.previousElementSibling : card.nextElementSibling;
+      if (!sibling || !sibling.matches(CARD)) return;
+      if (up) grid.insertBefore(card, sibling);
+      else grid.insertBefore(sibling, card);
+      control.focus();
+    });
+    grid.addEventListener("dragstart", (event) => {
+      if (grid.classList.contains("rangement")) dragged = event.target.closest(CARD);
+    });
+    grid.addEventListener("dragover", (event) => {
+      if (!dragged || dragged.parentElement !== grid) return;
+      event.preventDefault();
+      const over = event.target.closest(CARD);
+      if (!over || over === dragged) return;
+      const after = [...grid.children].indexOf(over) > [...grid.children].indexOf(dragged);
+      grid.insertBefore(dragged, after ? over.nextElementSibling : over);
+    });
+    grid.addEventListener("dragend", () => {
+      dragged = null;
+    });
+  }
 }

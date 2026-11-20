@@ -280,20 +280,3 @@ body.plein-ecran main {
   margin: 0;
   overflow-wrap: anywhere;
 }
-
-/* Rangement de l'Établi : les cartes se déplacent, une poignée ↑ ↓ en haut de chacune. */
-.rangement > .carte {
-  outline: 2px dashed var(--bord-doux);
-  cursor: grab;
-}
-.deplacer-carte {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-.titre-avec-action {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}

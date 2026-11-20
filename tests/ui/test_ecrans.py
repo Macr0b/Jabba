@@ -389,3 +389,35 @@ def test_ranger_les_cartes_de_l_etabli(page):
     grille.locator(":scope > article").nth(1).locator("[data-monter]").click()
     page.get_by_role("button", name="Terminé").click()
     expect(page.get_by_role("button", name="Ranger")).to_be_visible()
+
+
+def test_masquer_une_carte_et_ranger_l_accueil(page):
+    """« Masquer » cache la carte hors rangement ; « Afficher » la remet. L'Accueil se range aussi."""
+    aller(page, "outils")
+    grille = page.locator("#grille-etabli")
+    carte = grille.locator('[data-offre="immich"]')
+    expect(carte).to_be_visible()
+    page.get_by_role("button", name="Ranger").click()
+    carte.get_by_role("button", name="Masquer").click()
+    page.get_by_role("button", name="Terminé").click()
+    expect(carte).to_be_hidden()
+    page.reload()
+    expect(grille.locator("[data-offre]").first).to_be_visible()
+    expect(grille.locator('[data-offre="immich"]')).to_be_hidden()  # gardé sur le serveur
+    page.get_by_role("button", name="Ranger").click()
+    grille.locator('[data-offre="immich"]').get_by_role("button", name="Afficher").click()
+    page.get_by_role("button", name="Terminé").click()
+    expect(grille.locator('[data-offre="immich"]')).to_be_visible()
+
+    aller(page, "accueil")
+    mesures = page.locator("#mesures-accueil")
+    expect(mesures.locator(":scope > [data-carte]").first).to_have_attribute("data-carte", "processeur")
+    page.get_by_role("button", name="Ranger").click()
+    mesures.locator('[data-carte="processeur"]').get_by_role("button", name="Descendre Processeur").click()
+    page.get_by_role("button", name="Terminé").click()
+    page.reload()
+    expect(mesures.locator(":scope > [data-carte]").nth(1)).to_have_attribute("data-carte", "processeur")
+    page.get_by_role("button", name="Ranger").click()
+    mesures.locator('[data-carte="processeur"]').get_by_role("button", name="Monter Processeur").click()
+    page.get_by_role("button", name="Terminé").click()
+    expect(mesures.locator(":scope > [data-carte]").first).to_have_attribute("data-carte", "processeur")
