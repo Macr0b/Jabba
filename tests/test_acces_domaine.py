@@ -63,6 +63,9 @@ def serveur(tmp_path, monkeypatch):
 
     def occ(args, **k):
         commande, cle = args[0], args[1]
+        if commande.startswith("app:"):
+            nextcloud.setdefault("applis", []).append((commande, cle))
+            return 0, "", ""
         if commande == "config:system:get":
             return 0, "\n".join(nextcloud[cle]) + "\n", ""
         if commande == "config:system:delete":
@@ -88,6 +91,7 @@ def test_ouvrir_puis_fermer(serveur):
     assert serveur["demandes"] == [("acces_domaine", {"adresse": "cloud.exemple.fr", "port": 8081})]
     assert serveur["nextcloud"]["trusted_domains"] == ["localhost", "serveur-test.ts.net", "cloud.exemple.fr"]
     assert serveur["nextcloud"]["trusted_proxies"] == domain_access.LOCAL_PROXIES
+    assert serveur["nextcloud"]["applis"] == [("app:install", "twofactor_totp")]  # double vérification
     domain_access.enable("exemple.fr", "cloud")  # une 2e fois : rien en double
     assert serveur["nextcloud"]["trusted_domains"].count("cloud.exemple.fr") == 1
     assert len(serveur["nextcloud"]["trusted_proxies"]) == 2
@@ -98,6 +102,21 @@ def test_ouvrir_puis_fermer(serveur):
     ]  # les autres adresses restent
     assert serveur["demandes"][-1] == ("retirer_acces_domaine", {})
     assert domain_access.read()["actif"] is False
+
+
+def test_double_verification_deja_la(serveur, monkeypatch):
+    """Déjà installée (ou boutique injoignable) : app:install échoue, Jabba l'active simplement."""
+    appels = []
+
+    def occ(args, **k):
+        if args[0].startswith("app:"):
+            appels.append(tuple(args))
+            return (1 if args[0] == "app:install" else 0), "", ""
+        return 0, "", ""
+
+    monkeypatch.setattr(domain_access.commands, "occ", occ)
+    domain_access.enable("exemple.fr", "cloud")
+    assert appels == [("app:install", "twofactor_totp"), ("app:enable", "twofactor_totp")]
 
 
 def test_prefixe_refuse(serveur):

@@ -4,6 +4,7 @@
     "date": "2026-11-20",
     "changements": [
       "Établi et Accueil : bouton « Ranger » à côté du titre. Les cartes se déplacent en les glissant, ou avec les flèches ↑ ↓ (au doigt et au clavier), et se masquent (« Masquer », puis « Afficher » pour les remettre). « Terminé » garde le rangement, le même sur tous les appareils. Sur l'Accueil : les mesures et les tuiles d'accès rapide.",
+      "Accès par le domaine : Jabba installe la double vérification dans Nextcloud (codes à 6 chiffres, à activer par chacun dans Paramètres personnels → Sécurité). L'étape « la box laisse passer HTTPS » dit maintenant qu'elle se vérifie avec le certificat, au lieu d'un « À faire » trompeur.",
       "Accès par le domaine : Jabba peut régler lui-même l'entrée DNS chez OVH. On crée une fois une clé chez OVH (lien préparé par Jabba, droits limités à la zone DNS du domaine, sans droit d'effacer), on colle les trois codes, et Jabba crée l'entrée puis la corrige toute seule si l'adresse de la box change (vérifié chaque heure, avec une alerte).",
       "AdGuard Home : si l'assistant a été fait à la main, Jabba coupe quand même le filtrage général une fois, pour qu'aucun appareil ne soit filtré sans être choisi.",
       "AdGuard Home installé avant la 0.16.2 : Jabba crée son mot de passe au moment de terminer l'installation, au lieu d'afficher « Mot de passe d'AdGuard inconnu ».",

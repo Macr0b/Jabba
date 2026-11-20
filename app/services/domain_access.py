@@ -8,7 +8,8 @@ vers lequel la box redirige son port 443, et obtient tout seul le certificat HTT
 Sommaire :
   read() / save(settings)  : les réglages (domaine, préfixe, actif) dans domaine.json
   address(settings)        : l'adresse publique de Nextcloud (cloud.exemple.fr)
-  enable(domain, prefix)   : installe Caddy et prévient Nextcloud de sa nouvelle adresse
+  enable(domain, prefix)   : installe Caddy, prévient Nextcloud de sa nouvelle adresse et y installe
+                             la double vérification (codes à 6 chiffres, à activer par chacun)
   disable()                : retire Caddy et l'adresse de Nextcloud
   status(settings)         : la liste de vérification (adresse de la box, DNS, certificat, DNS réglé par
                              Jabba chez OVH : services/ovh_dns.py)
@@ -33,6 +34,8 @@ PUBLIC_IP_SERVICE = "https://api.ipify.org"
 # Les demandes arrivent de Caddy (sur le serveur) ou d'un pont Docker : Nextcloud peut alors lire
 # la vraie adresse de chaque visiteur (sa protection contre les essais en rafale en dépend).
 LOCAL_PROXIES = ["127.0.0.1", "172.16.0.0/12"]
+# Nextcloud ouvert sur Internet : l'appli officielle des codes à 6 chiffres (Authenticator, Mots de passe d'Apple…).
+TWO_FACTOR_APP = "twofactor_totp"
 
 
 def read():
@@ -79,6 +82,13 @@ def _forget_in_nextcloud(public_address):
         commands.occ(["config:system:set", "trusted_domains", str(index), "--value=" + domain])
 
 
+def _offer_two_factor():
+    """Installe (ou réactive) la double vérification dans Nextcloud. Chacun l'active ensuite pour son compte."""
+    code, _, _ = commands.occ(["app:install", TWO_FACTOR_APP], timeout=180)
+    if code != 0:  # déjà installée, ou boutique d'applis injoignable : on l'active si elle est là
+        commands.occ(["app:enable", TWO_FACTOR_APP])
+
+
 def enable(domain, prefix="cloud"):
     """Vérifie l'adresse, installe Caddy, prévient Nextcloud. Lève ValueError si l'adresse est refusée."""
     domain = actions.host_name(domain)
@@ -95,6 +105,7 @@ def enable(domain, prefix="cloud"):
         if code != 0:
             raise RuntimeError(error_output.strip()[-300:] or "Caddy n'a pas pu démarrer.")
         _tell_nextcloud(public_address)
+        _offer_two_factor()
     settings["actif"] = True
     save(settings)
     return settings

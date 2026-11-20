@@ -20,9 +20,9 @@ export function domainCardHtml() {
 }
 
 /** Une étape de la liste : faite ou à faire, avec ce qu'il faut faire. */
-function stepHtml(done, title, text) {
+function stepHtml(done, title, text, waiting = t("À faire")) {
   return `<li class="etape-domaine${done ? " faite" : ""}">
-    <span class="pastille ${done ? "p-ok" : "p-gris"}">${done ? t("Fait") : t("À faire")}</span>
+    <span class="pastille ${done ? "p-ok" : "p-gris"}">${done ? t("Fait") : waiting}</span>
     <div><strong>${title}</strong><p class="note">${text}</p></div></li>`;
 }
 
@@ -58,7 +58,8 @@ function checklistHtml(settings, isSuper) {
       ${stepHtml(
         settings.certificat_ok,
         t("La box laisse passer HTTPS vers le serveur"),
-        t`Dans l'interface de la box (Freebox OS : Paramètres → Gestion des ports) : port externe <strong>443</strong>, TCP, vers <strong>${escapeHtml(settings.ip_serveur || t("le serveur"))}</strong>, port <strong>${settings.port_serveur}</strong>. Rien d'autre à ouvrir.`,
+        t`Dans l'interface de la box (Freebox OS : Paramètres → Gestion des ports) : port externe <strong>443</strong>, TCP, vers <strong>${escapeHtml(settings.ip_serveur || t("le serveur"))}</strong>, port <strong>${settings.port_serveur}</strong>. Rien d'autre à ouvrir. Jabba ne voit pas dans la box : cette étape se valide avec le certificat.`,
+        t("Se vérifie avec le certificat"),
       )}
       ${stepHtml(
         settings.certificat_ok,
@@ -68,6 +69,7 @@ function checklistHtml(settings, isSuper) {
         ),
       )}
     </ol>
+    <p class="note">${t("Double vérification : Jabba l'a installée dans Nextcloud. Chacun l'active pour son compte (Paramètres personnels → Sécurité → TOTP), avec une appli de codes comme Authenticator, et garde ses codes de secours.")}</p>
     ${isSuper ? ovhHtml(settings) : ""}
     <div class="actions">
       <button class="btn" type="button" id="domaine-verifier">Revérifier</button>
