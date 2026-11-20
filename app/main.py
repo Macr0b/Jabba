@@ -41,6 +41,7 @@ from routes import (
     second_factor,
     shares,
     system,
+    tool_addresses,
     tools,
     trash,
     workshop,
@@ -90,6 +91,7 @@ app.include_router(guests.router)
 for module in (
     antivirus,
     domain_access,
+    tool_addresses,
     admin_session,
     accounts,
     system,

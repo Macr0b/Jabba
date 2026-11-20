@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 import config
 from host import catalog, commands
-from services import frame_check, tool_credentials
+from services import frame_check, tool_addresses, tool_credentials
 
 # ---------------------------------------------------------------- outils (Docker)
 NAMES = {
@@ -30,11 +30,12 @@ NAMES = {
 }
 # Outils du système : toujours actifs, sans interrupteur.
 SYSTEM_TOOLS = {"jabba-app", "adresses"}
-# Conteneur « adresse » (Tailscale) qui suit l'interrupteur de chaque outil.
+# Conteneur « adresse » (Tailscale) qui suit l'interrupteur de chaque outil (adresse à part :
+# services/tool_addresses.py).
 ADRESSES = {
     "nextcloud": "adresse-nextcloud",
     "jellyfin": "adresse-jellyfin",
-    "dockge": "adresse-dockge",
+    **{tool_id: f"adresse-{tool_id}" for tool_id in tool_addresses.TARGETS},
 }
 # Où chaque outil range son icône : l'appli affiche le logo servi par l'outil lui-même.
 # Port local de chaque outil : l'appli y va chercher le logo que l'outil fournit lui-même.
@@ -74,6 +75,7 @@ def list_tools():
         return [
             {
                 **tool,
+                "lien": tool_addresses.address(tool["id"]) or tool.get("lien"),
                 "identifiants": tool["id"] in tool_credentials.STORABLE,
                 "identifiants_jabba": tool_credentials.created_by_jabba(tool["id"]),
             }
@@ -94,6 +96,8 @@ def list_tools():
         )
     result = []
     for pid, project in sorted(projects.items()):
+        if pid.startswith("adresse-"):  # l'adresse à part d'un outil : fait partie de l'outil
+            continue
         name, role = NAMES.get(pid, (pid, ""))
         states = {container["etat"] for container in project["conteneurs"]}
         if states == {"running"}:
@@ -110,7 +114,7 @@ def list_tools():
                 "nom": name,
                 "role": role,
                 "etat": state,
-                "lien": config.LINKS.get(pid),
+                "lien": tool_addresses.address(pid) or config.LINKS.get(pid),
                 "dossier": project["dossier"],
                 "conteneurs": project["conteneurs"],
                 "modifiable": pid != "jabba-app" and bool(project["dossier"]),

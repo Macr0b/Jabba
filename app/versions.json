@@ -3,6 +3,7 @@
     "version": "0.16.4",
     "date": "2026-11-20",
     "changements": [
+      "Une adresse à part pour chaque outil qui a un compte (paperless.tailxxxx.ts.net, homebox.…, dockge.…) : le trousseau du navigateur ne mélange plus les mots de passe. Établi → Système → « Adresses des outils » : on colle une fois une clé d'accès Tailscale, Jabba crée les adresses (sans expiration), puis oublie la clé. Les boutons « Ouvrir » prennent les nouvelles adresses ; les anciennes marchent encore.",
       "Identifiants : Jabba garde aussi les comptes que tu as créés toi-même dans un outil (Jellyfin, Immich, Homebox, Dockge, Vaultwarden…). Menu … → Identifiants : tu notes une fois l'identifiant et le mot de passe, puis tu les revois, les copies, les modifies ou les fais oublier, dans la carte. Réservé au super admin, gardé dans un fichier lisible par l'appli seule. Les champs ne déclenchent pas le trousseau du navigateur, qui ne peut donc plus écraser un autre mot de passe."
     ]
   },

@@ -323,6 +323,9 @@ OPTIONAL_TOOLS = {
         ),
         "mot_de_passe": True,
         "identifiant": "admin",
+        # Avec une adresse à part (services/tool_addresses.py), Paperless doit la connaître : sinon il
+        # refuse les formulaires venus d'une autre adresse que celle-ci.
+        "variable_adresse": "PAPERLESS_URL",
     },
     "ntfy": {
         "nom": "ntfy",

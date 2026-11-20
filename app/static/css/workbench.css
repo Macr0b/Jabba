@@ -294,6 +294,18 @@ body.plein-ecran main {
   text-security: disc;
 }
 
+/* Adresses des outils : une ligne par outil, son nom puis son adresse (ou ce qui se passe). */
+.liste-adresses {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+  display: grid;
+  gap: 6px;
+}
+.liste-adresses a {
+  overflow-wrap: anywhere;
+}
+
 /* Domaine : le bloc « DNS réglé par Jabba (OVH) », sous la liste de vérification. */
 .bloc-ovh {
   margin-top: 14px;

@@ -6,6 +6,7 @@ import { confirmAction, toast } from "../components/dialogs.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.js";
+import { addressCardHtml, bindAddresses } from "../components/address_card.js";
 import { bindDomain, domainCardHtml } from "../components/domain_card.js";
 import { applyArrangement, bindOrdering, loadArrangement } from "../components/card_order.js";
 import { bindCatalog, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
@@ -84,7 +85,7 @@ pages.outils = async () => {
     <h2 class="titre-section">Bientôt dans l'établi</h2>
     <div class="grille g2">${COMING_SOON.map((item) => t`<article class="carte pad outil eteint"><div class="haut"><div class="titre-outil">${toolIcon({ nom: item.nom })}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div><span class="pastille p-gris">Bientôt</span></div></article>`).join("")}</div>
     <h2 class="titre-section">Système</h2>
-    <div class="grille g2">${system.map(card).join("")}</div>
+    <div class="grille g2">${system.map(card).join("")}${addressCardHtml()}</div>
     <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
       Jabba regarde chaque jour si une version plus récente existe${versions.lu ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})` : ""} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>`;
   // Consommation de chaque outil : arrive un peu après (docker stats prend 1 à 2 secondes).
@@ -100,6 +101,7 @@ pages.outils = async () => {
   bindAntivirus(() => pages.outils().catch(showError));
   bindDomain();
   const reloadPage = () => pages.outils().catch(showError);
+  bindAddresses(reloadPage);
   bindToolMenus(content, tools, versions, reloadPage);
   const grid = $("#grille-etabli");
   applyArrangement(grid, savedOrder);

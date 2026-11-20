@@ -277,7 +277,10 @@ fi
 docker compose up -d
 [ -z "$4" ] || tailscale serve --bg --https="$4" "http://127.0.0.1:$5" || echo "Adresse https : active HTTPS Certificates dans la console Tailscale." >&2
 """
-OPTIONAL_REMOVE = 'cd "$0" && docker compose down; [ -z "$1" ] || tailscale serve --https="$1" off || true'
+OPTIONAL_REMOVE = (
+    'cd "$0" && docker compose down; [ -z "$1" ] || tailscale serve --https="$1" off || true; '
+    'docker stop "adresse-$(basename "$0")" 2>/dev/null || true'
+)
 # Écrit entre apostrophes dans le .env : tout caractère visible ou espace, sauf l'apostrophe elle-même.
 ADMIN_PASSWORD = re.compile(r"[^\x00-\x1f\x7f']{15,128}")
 
@@ -303,6 +306,74 @@ def _install_optional(args):
 def _remove_optional(args):
     name, tool = _optional_tool(args)
     return ["sh", "-c", OPTIONAL_REMOVE, f"/opt/stacks/{name}", str(tool["port_https"] or "")], 300
+
+
+# ---------------------------------------------------------------- adresse à part d'un outil (services/tool_addresses.py)
+# Un conteneur Tailscale par outil, sur le réseau du serveur (les outils n'écoutent que 127.0.0.1) :
+# https://<outil>.tailxxxx.ts.net renvoie vers 127.0.0.1:<port>. Mode « userspace », sans toucher au
+# Tailscale du serveur ; inscription une seule fois (TS_AUTH_ONCE), l'état est gardé dans ./etat.
+# $0 l'outil, $1 son port ; la clé d'inscription (usage unique, 1 heure) arrive sur l'entrée standard.
+TOOL_ADDRESS = """set -e
+umask 077
+mkdir -p "/opt/stacks/adresse-$0/etat"
+cd "/opt/stacks/adresse-$0"
+printf 'TS_AUTHKEY=%s\\n' "$(cat)" > .env
+printf '{"TCP":{"443":{"HTTPS":true}},"Web":{"${TS_CERT_DOMAIN}:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:%s"}}}}}\\n' "$1" > serve.json
+cat > compose.yaml <<FIN
+services:
+  adresse:
+    image: tailscale/tailscale:latest
+    container_name: adresse-$0
+    network_mode: host
+    env_file: .env
+    environment:
+      - TS_HOSTNAME=$0
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+      - TS_USERSPACE=true
+      - TS_AUTH_ONCE=true
+      - TS_TAILSCALED_EXTRA_ARGS=--port=0
+    volumes:
+      - ./etat:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+    restart: unless-stopped
+FIN
+docker compose up -d
+"""
+# L'outil apprend sa nouvelle adresse (liens, protection des formulaires) : une ligne de son .env, puis relance.
+# $0 l'outil, $1 le nom de la variable (fixé dans host/catalog.py), $2 l'adresse (nom vérifié).
+ADDRESS_IN_TOOL = (
+    'cd "/opt/stacks/$0" && [ -f .env ] && grep -q "^$1=" .env && '
+    'sed -i "s#^$1=.*#$1=https://$2#" .env && docker compose up -d'
+)
+AUTH_KEY = re.compile(r"tskey-auth-[A-Za-z0-9-]{10,200}")
+
+
+def _address_target(args):
+    from services.tool_addresses import TARGETS
+
+    name = args.get("outil")
+    if name not in TARGETS:
+        raise ActionError(f"Outil refusé : {name!r}")
+    return name, TARGETS[name]
+
+
+def _tool_address(args):
+    name, port = _address_target(args)
+    return ["sh", "-c", TOOL_ADDRESS, name, str(port)], 300
+
+
+def _address_in_tool(args):
+    from host import catalog
+
+    name, _ = _address_target(args)
+    variable = (catalog.OPTIONAL_TOOLS.get(name) or {}).get("variable_adresse")
+    if not variable:
+        raise ActionError(f"Pas d'adresse à régler dans {name!r}")
+    host = host_name(args.get("adresse"))
+    if not host.endswith(".ts.net"):
+        raise ActionError(f"Adresse refusée : {host!r}")
+    return ["sh", "-c", ADDRESS_IN_TOOL, name, variable, host], 300
 
 
 def optional_password(name, text):
@@ -421,7 +492,13 @@ OCC_BASE = ["-u", "www-data", "nextcloud", "php", "occ", "--no-warnings"]
 # il n'apparaît jamais dans la liste des processus du serveur.
 WITH_PASSWORD = 'export OC_PASS="$(cat)"; exec "$@"'
 INPUT_ACTIONS = frozenset(
-    {"nextcloud", "verifier_mot_de_passe_serveur", "changer_mot_de_passe_serveur", "installer_outil_option"}
+    {
+        "nextcloud",
+        "verifier_mot_de_passe_serveur",
+        "changer_mot_de_passe_serveur",
+        "installer_outil_option",
+        "adresse_outil",
+    }
 )
 
 
@@ -472,6 +549,10 @@ def host_input(name, args, text):
         return None
     if name == "installer_outil_option":
         return optional_password(_optional_tool(args)[0], text)
+    if name == "adresse_outil":
+        if not AUTH_KEY.fullmatch(text or ""):
+            raise ActionError("Clé d'inscription Tailscale refusée.")
+        return text
     if name == "changer_mot_de_passe_serveur":
         if not text or ":" in text or "\n" in text:
             raise ActionError("Mot de passe refusé (ni « : » ni retour à la ligne).")
@@ -974,6 +1055,8 @@ ACTIONS = {
     "acces_domaine": _domain_access,
     "installer_outil_option": _install_optional,
     "retirer_outil_option": _remove_optional,
+    "adresse_outil": _tool_address,
+    "adresse_dans_outil": _address_in_tool,
     "retirer_acces_domaine": _remove_domain_access,
     "nextcloud": _nextcloud,
     "version_systeme": _os_release,

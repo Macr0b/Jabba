@@ -456,3 +456,28 @@ def test_masquer_une_carte_et_ranger_l_accueil(page):
     mesures.locator('[data-carte="processeur"]').get_by_role("button", name="Monter Processeur").click()
     page.get_by_role("button", name="Terminé").click()
     expect(mesures.locator(":scope > [data-carte]").first).to_have_attribute("data-carte", "processeur")
+
+
+def test_adresses_des_outils(page):
+    """Une adresse à part par outil : on colle une clé Tailscale, Jabba crée les adresses puis l'oublie.
+    (En dernier : les liens des outils changent ensuite pour la suite de la démo.)"""
+    aller(page, "outils")
+    carte = page.locator("#carte-adresses")
+    expect(carte).to_contain_text("AdGuard Home")
+    if page.viewport_size["width"] < 700:  # même serveur de démo pour les deux écrans : déjà créées au 1er passage
+        expect(carte).to_contain_text("adguard-home.exemple.ts.net")
+        return
+    expect(carte).to_contain_text("À créer")
+    lien = carte.get_by_role("link", name="Ouvrir la page des clés Tailscale")
+    expect(lien).to_have_attribute("href", "https://login.tailscale.com/admin/settings/keys")
+    cle = carte.locator("#adresses-cle")
+    assert cle.get_attribute("type") == "text"  # pas un champ « mot de passe » : le trousseau ne s'en mêle pas
+    cle.fill("pas-une-cle")
+    carte.get_by_role("button", name="Créer les adresses").click()
+    expect(page.get_by_text("commence par « tskey-api- »")).to_be_visible()
+    cle.fill("tskey-api-kDemo123456-AbCdEfGhIjKl")
+    carte.get_by_role("button", name="Créer les adresses").click()
+    expect(page.locator("#carte-adresses")).to_contain_text("adguard-home.exemple.ts.net", timeout=15000)
+    expect(page.locator("#carte-adresses #adresses-cle")).to_have_count(0)  # tout est créé : plus rien à coller
+    outil = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
+    expect(outil.get_by_role("link", name="Ouvrir")).to_have_attribute("href", "https://adguard-home.exemple.ts.net")
