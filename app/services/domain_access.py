@@ -10,7 +10,8 @@ Sommaire :
   address(settings)        : l'adresse publique de Nextcloud (cloud.exemple.fr)
   enable(domain, prefix)   : installe Caddy et prévient Nextcloud de sa nouvelle adresse
   disable()                : retire Caddy et l'adresse de Nextcloud
-  status(settings)         : la liste de vérification (adresse de la box, DNS, certificat)
+  status(settings)         : la liste de vérification (adresse de la box, DNS, certificat, DNS réglé par
+                             Jabba chez OVH : services/ovh_dns.py)
   public_link(url)         : un lien de partage Nextcloud, réécrit sur l'adresse publique
 """
 
@@ -23,7 +24,7 @@ import httpx
 
 import config
 from host import actions, commands
-from services import guest_network, json_files, tools
+from services import guest_network, json_files, ovh_dns, tools
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "domaine.json")
@@ -162,6 +163,8 @@ def status(settings=None):
         "dns": pointing,
         "dns_ok": bool(box_address) and box_address in pointing,
         "certificat_ok": certificate,
+        "ovh_pret": ovh_dns.is_ready(),
+        "ovh_lien": ovh_dns.token_link(settings["domaine"]) if settings.get("domaine") else "",
     }
 
 

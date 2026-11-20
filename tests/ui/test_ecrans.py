@@ -162,8 +162,19 @@ def test_acces_par_le_domaine_dans_l_etabli(page):
     carte.locator("#domaine-nom").fill("exemple.fr")
     carte.locator("#domaine-activer").click()
     expect(carte).to_contain_text("En ligne")
-    expect(carte.locator("a")).to_have_attribute("href", "https://cloud.exemple.fr")
+    expect(carte.get_by_role("link", name="https://cloud.exemple.fr")).to_have_attribute(
+        "href", "https://cloud.exemple.fr"
+    )
     expect(carte).to_contain_text("port externe 443, TCP, vers 192.168.1.20, port 8443")
+    # DNS réglé par Jabba : un lien vers OVH, droits limités à la zone du domaine, et les trois codes à coller.
+    lien = carte.get_by_role("link", name="Créer la clé chez OVH")
+    expect(lien).to_have_attribute(
+        "href", re.compile(r"^https://eu\.api\.ovh\.com/createToken/\?GET=%2Fdomain%2Fzone%2Fexemple\.fr%2F%2A")
+    )
+    expect(carte.locator("#ovh-as")).to_have_attribute("type", "password")
+    carte.locator("#ovh-ak").fill("court")
+    carte.get_by_role("button", name="Enregistrer et régler le DNS").click()
+    expect(page.get_by_text("recopie-les en entier")).to_be_visible()  # refusé avant d'appeler OVH
     carte.locator("#domaine-retirer").click()
     page.locator("dialog[open]").get_by_role("button", name="Fermer l'accès").click()
     expect(carte.locator("#domaine-activer")).to_be_visible()

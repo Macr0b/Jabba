@@ -3,7 +3,7 @@
 //
 // Sommaire :
 //   partagé : domainCardHtml, bindDomain
-//   interne : formHtml, checklistHtml, stepHtml
+//   interne : formHtml, checklistHtml, stepHtml, ovhHtml
 import { api } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
 import { t } from "../core/i18n.js";
@@ -68,10 +68,29 @@ function checklistHtml(settings, isSuper) {
         ),
       )}
     </ol>
+    ${isSuper ? ovhHtml(settings) : ""}
     <div class="actions">
       <button class="btn" type="button" id="domaine-verifier">Revérifier</button>
       ${isSuper ? t`<button class="btn" type="button" id="domaine-retirer">Fermer l'accès</button>` : ""}
     </div>`;
+}
+
+/** L'entrée DNS réglée par Jabba chez OVH : une clé créée une fois, puis plus rien à faire. */
+function ovhHtml(settings) {
+  if (settings.ovh_pret)
+    return t`<div class="bloc-ovh"><h3>DNS réglé par Jabba (OVH)</h3>
+      <p class="note">Jabba crée l'entrée ${escapeHtml(settings.prefixe || "cloud")} chez OVH et la corrige toute seule si l'adresse de ta box change (vérifié chaque heure).</p>
+      <div class="actions"><button class="btn" type="button" id="ovh-regler">Régler maintenant</button><button class="lien" type="button" id="ovh-oublier">Oublier la clé</button></div></div>`;
+  return t`<div class="bloc-ovh"><h3>Laisser Jabba régler le DNS (domaine chez OVH)</h3>
+    <ol class="note">
+      <li>Ouvre la page d'OVH ci-dessous et connecte-toi : les droits sont déjà remplis, limités à la zone DNS de ${escapeHtml(settings.domaine)}. Dans « Validity », choisis <strong>Unlimited</strong>, puis <strong>Create keys</strong>.</li>
+      <li>Recopie ici les trois codes affichés par OVH.</li>
+    </ol>
+    <p><a class="btn" href="${escapeHtml(settings.ovh_lien)}" target="_blank" rel="noopener">Créer la clé chez OVH</a></p>
+    <label class="champ"><span>Application key</span><input type="text" id="ovh-ak" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label class="champ"><span>Application secret</span><input type="password" id="ovh-as" autocomplete="off"></label>
+    <label class="champ"><span>Consumer key</span><input type="password" id="ovh-ck" autocomplete="off"></label>
+    <div class="actions"><button class="btn btn-p" type="button" id="ovh-enregistrer">Enregistrer et régler le DNS</button></div></div>`;
 }
 
 export function bindDomain() {
@@ -98,6 +117,34 @@ export function bindDomain() {
       };
     const check = $("#domaine-verifier");
     if (check) check.onclick = () => load();
+    const ovhCall = async (button, path, json, done) => {
+      button.disabled = true;
+      try {
+        render(await api(path, { method: "POST", json }));
+        toast(done);
+      } catch (error) {
+        toast(error.message, true);
+        button.disabled = false;
+      }
+    };
+    const saveKeys = $("#ovh-enregistrer");
+    if (saveKeys)
+      saveKeys.onclick = () =>
+        ovhCall(
+          saveKeys,
+          "/api/domaine/ovh",
+          {
+            application_key: $("#ovh-ak").value,
+            application_secret: $("#ovh-as").value,
+            consumer_key: $("#ovh-ck").value,
+          },
+          t("Clé enregistrée : l'entrée DNS est réglée chez OVH."),
+        );
+    const syncNow = $("#ovh-regler");
+    if (syncNow)
+      syncNow.onclick = () => ovhCall(syncNow, "/api/domaine/ovh/regler", {}, t("Entrée DNS vérifiée chez OVH."));
+    const forgetKey = $("#ovh-oublier");
+    if (forgetKey) forgetKey.onclick = () => ovhCall(forgetKey, "/api/domaine/ovh/oublier", {}, t("Clé OVH oubliée."));
     const remove = $("#domaine-retirer");
     if (remove)
       remove.onclick = async () => {

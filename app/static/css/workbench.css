@@ -280,3 +280,10 @@ body.plein-ecran main {
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* Domaine : le bloc « DNS réglé par Jabba (OVH) », sous la liste de vérification. */
+.bloc-ovh {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bord-doux);
+}
