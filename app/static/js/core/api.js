@@ -42,7 +42,8 @@ export async function api(path, options = {}, secondAttempt = false) {
   }
   if (!result.ok) {
     const data = body && (body.detail || body.erreur);
-    throw new Error((data && (data.message || (typeof data === "string" ? data : null))) || t`Erreur ${result.status}`);
+    const message = (data && (data.message || (typeof data === "string" ? data : null))) || t`Erreur ${result.status}`;
+    throw Object.assign(new Error(message), { status: result.status });
   }
   return body;
 }

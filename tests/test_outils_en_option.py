@@ -107,7 +107,11 @@ def test_installation_en_tache_longue(monkeypatch, tmp_path):
     assert len(mot) == 24 and actions.host_input("installer_outil_option", {"outil": "time-machine"}, mot) == mot
     optional_tools.install("time-machine", "rob")
     assert lance[2][-1] == mot
-    assert tool_credentials.read("time-machine") == {"identifiant": "timemachine", "mot_de_passe": mot}
+    assert tool_credentials.read("time-machine") == {
+        "identifiant": "timemachine",
+        "mot_de_passe": mot,
+        "cree_par_jabba": True,
+    }
     assert (tmp_path / "identifiants.json").stat().st_mode & 0o077 == 0  # lisible par l'appli seule
     with pytest.raises(actions.ActionError):
         optional_tools.install("inconnu", "rob")
@@ -236,3 +240,75 @@ def test_adguard_sans_tailscale_ni_route(tmp_path):
     )
     assert sortie.returncode == 0, sortie.stderr
     assert (tmp_path / "pile" / ".env").read_text().split() == ["IP_LOCALE=127.0.0.1", "IP_TAILSCALE=127.0.0.2"]
+
+
+@pytest.fixture
+def coffre(tmp_path, monkeypatch):
+    monkeypatch.setattr(tool_credentials, "CREDENTIALS_FILE", str(tmp_path / "identifiants.json"))
+    monkeypatch.setattr(tool_credentials.config, "DEMO", False)
+    return tmp_path / "identifiants.json"
+
+
+def test_identifiants_notes_par_toi(coffre):
+    """Pour un outil où tu as créé ton compte : noté une fois, relu, modifié, oublié."""
+    assert tool_credentials.read("homebox") is None
+    tool_credentials.save("homebox", "  rob  ", "phrase avec espaces et accents é€ '\"")
+    assert tool_credentials.read("homebox") == {
+        "identifiant": "rob",
+        "mot_de_passe": "phrase avec espaces et accents é€ '\"",
+        "cree_par_jabba": False,
+    }
+    assert coffre.stat().st_mode & 0o077 == 0  # lisible par l'appli seule
+    tool_credentials.save("homebox", "rob", "autre")
+    assert tool_credentials.read("homebox")["mot_de_passe"] == "autre"
+    tool_credentials.save("jellyfin", "rob", "jelly")
+    tool_credentials.forget("homebox")
+    assert tool_credentials.read("homebox") is None
+    assert tool_credentials.read("jellyfin")["mot_de_passe"] == "jelly"  # les autres restent
+
+
+def test_compte_cree_par_jabba_intouchable(coffre):
+    mot_de_passe = tool_credentials.password_for("paperless")
+    for action in (
+        lambda: tool_credentials.save("paperless", "admin", "x"),
+        lambda: tool_credentials.forget("paperless"),
+    ):
+        with pytest.raises(ValueError, match="créé par Jabba"):
+            action()
+    assert tool_credentials.read("paperless") == {
+        "identifiant": "admin",
+        "mot_de_passe": mot_de_passe,
+        "cree_par_jabba": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "outil, identifiant, mot_de_passe",
+    [
+        ("jabba-app", "rob", "x"),  # pas un outil où l'on se connecte
+        ("adresses", "rob", "x"),
+        ("../etc", "rob", "x"),
+        ("homebox", "", "x"),
+        ("homebox", "   ", "x"),
+        ("homebox", None, "x"),
+        ("homebox", "a" * 201, "x"),
+        ("homebox", "rob\n", "x\nsuite"),
+        ("homebox", "rob", ""),
+        ("homebox", "rob", None),
+        ("homebox", "rob", 1234),
+        ("homebox", "rob", "x" * 501),
+        ("homebox", "rob", "avec\x00nul"),
+    ],
+)
+def test_identifiants_refuses(coffre, outil, identifiant, mot_de_passe):
+    with pytest.raises(ValueError):
+        tool_credentials.save(outil, identifiant, mot_de_passe)
+    assert tool_credentials.read(outil) is None
+
+
+def test_un_compte_note_ne_devient_pas_un_mot_de_passe_tire(coffre):
+    """Fichier abîmé ou ancien : une entrée qui n'est pas du bon type est ignorée, jamais renvoyée de travers."""
+    coffre.write_text('{"paperless": {"identifiant": "x", "mot_de_passe": "y"}, "homebox": "chaine"}')
+    assert tool_credentials.read("homebox") is None
+    assert tool_credentials.read("paperless") is None
+    assert isinstance(tool_credentials.password_for("paperless"), str)

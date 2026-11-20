@@ -281,6 +281,19 @@ body.plein-ecran main {
   overflow-wrap: anywhere;
 }
 
+/* Identifiants notés par toi : deux champs côte à côte (l'un sous l'autre sur téléphone).
+   Le mot de passe se tape masqué, sans être un champ « mot de passe » : le trousseau ne s'en mêle pas. */
+.formulaire-identifiants {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+}
+.saisie-secrete {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
 /* Domaine : le bloc « DNS réglé par Jabba (OVH) », sous la liste de vérification. */
 .bloc-ovh {
   margin-top: 14px;

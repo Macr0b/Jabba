@@ -264,7 +264,7 @@ def test_menu_des_cartes_de_l_etabli(page):
     menu = jellyfin.get_by_role("menu")
     expect(menu).to_be_visible()
     expect(menu.get_by_role("menuitem")).to_have_text(
-        ["Installer sur cet appareil", "Aide", "Informations"]
+        ["Identifiants", "Installer sur cet appareil", "Aide", "Informations"]
     )  # installé hors de Jabba
     menu.get_by_role("menuitem", name="Aide").click()
     expect(menu).to_be_hidden()
@@ -352,6 +352,30 @@ def test_identifiants_d_un_outil(page):
     panneau.get_by_role("button", name="Afficher").click()
     expect(panneau).to_contain_text("demo-adguard-home")
     expect(panneau.get_by_role("button", name="Copier")).to_have_count(2)
+
+
+def test_identifiants_notes_dans_jabba(page):
+    """Un outil où l'on a créé son compte soi-même : on note l'identifiant et le mot de passe, Jabba les garde."""
+    aller(page, "outils")
+    carte = page.locator("article.outil", has=page.locator('[data-menu="dockge"]'))
+    carte.locator('[data-menu="dockge"]').click()
+    carte.get_by_role("menuitem", name="Identifiants").click()
+    panneau = carte.locator(".panneau-outil")
+    expect(panneau).to_contain_text("Jabba les garde pour toi")
+    secret = panneau.locator('[data-champ="mot_de_passe"]')
+    assert secret.get_attribute("type") == "text"  # pas un champ « mot de passe » : le trousseau ne s'en mêle pas
+    panneau.locator('[data-champ="identifiant"]').fill("rob")
+    secret.fill("mon secret")
+    panneau.get_by_role("button", name="Enregistrer").click()
+    expect(panneau).to_contain_text("Le compte que tu as noté pour Dockge")
+    expect(panneau).not_to_contain_text("mon secret")
+    panneau.get_by_role("button", name="Afficher").click()
+    expect(panneau).to_contain_text("mon secret")
+    panneau.get_by_role("button", name="Modifier").click()
+    expect(panneau.locator('[data-champ="identifiant"]')).to_have_value("rob")
+    panneau.get_by_role("button", name="Annuler").click()
+    panneau.get_by_role("button", name="Oublier").click()
+    expect(panneau.locator('[data-champ="identifiant"]')).to_have_value("")
 
 
 def test_installer_un_outil_comme_appli(page):

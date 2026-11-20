@@ -16,7 +16,7 @@ from fastapi import HTTPException
 
 import config
 from host import catalog, commands
-from services import frame_check
+from services import frame_check, tool_credentials
 
 # ---------------------------------------------------------------- outils (Docker)
 NAMES = {
@@ -71,7 +71,14 @@ def list_tools():
     if config.DEMO:
         from services.demo_data import TOOLS
 
-        return TOOLS
+        return [
+            {
+                **tool,
+                "identifiants": tool["id"] in tool_credentials.STORABLE,
+                "identifiants_jabba": tool_credentials.created_by_jabba(tool["id"]),
+            }
+            for tool in TOOLS
+        ]
     code, output, error_output = commands.run_action("liste_conteneurs")
     if code != 0:
         raise HTTPException(500, "Docker ne répond pas : " + error_output[:200])
@@ -113,7 +120,9 @@ def list_tools():
                 # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
                 "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
                 "en_option": pid in catalog.OPTIONAL_TOOLS,
-                "identifiants": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("mot_de_passe", False),
+                # Menu « Identifiants » : le compte créé par Jabba, ou celui que tu y notes (tool_credentials.py).
+                "identifiants": pid in tool_credentials.STORABLE,
+                "identifiants_jabba": tool_credentials.created_by_jabba(pid),
             }
         )
     return result

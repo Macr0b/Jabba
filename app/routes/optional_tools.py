@@ -4,7 +4,9 @@ Sommaire :
   GET  /api/etabli/catalogue            optional_catalog (outils en option + mémoire)
   POST /api/etabli/{outil}/installer    install_optional (super admin ; rien à taper)
   POST /api/etabli/{outil}/retirer      remove_optional (super admin ; données gardées)
-  GET  /api/etabli/{outil}/identifiants tool_login (super admin ; le compte que Jabba a créé dans l'outil)
+  GET  /api/etabli/{outil}/identifiants tool_login (super admin ; le compte créé par Jabba, ou noté par toi)
+  PUT  /api/etabli/{outil}/identifiants save_tool_login (super admin ; noter l'identifiant et le mot de passe)
+  DELETE /api/etabli/{outil}/identifiants forget_tool_login (super admin)
   GET  /api/rangement/{ecran}           cards_order (admin) : l'ordre et les cartes masquées (« Ranger »)
   PUT  /api/rangement/{ecran}           save_cards_order (admin)
 """
@@ -54,12 +56,37 @@ def tool_login(outil: str, request: Request):
     guard.require_super_admin(request)
     login = tool_credentials.read(outil)
     if not login:
-        raise HTTPException(
-            404,
-            "Pas de compte créé par Jabba : l'outil a été installé avant la 0.16.2, avec le mot de passe tapé à l'activation.",
-        )
+        if tool_credentials.created_by_jabba(outil):
+            raise HTTPException(
+                404,
+                "Pas de compte créé par Jabba : l'outil a été installé avant la 0.16.2, avec le mot de passe tapé à l'activation.",
+            )
+        raise HTTPException(404, "Rien de noté pour l'instant.")
     activity_log.record("outil", f"Identifiants de {outil} affichés", request.state.nom)
     return login
+
+
+@router.put("/api/etabli/{outil}/identifiants")
+async def save_tool_login(outil: str, request: Request):
+    guard.require_super_admin(request)
+    body = await request.json()
+    try:
+        tool_credentials.save(outil, body.get("identifiant"), body.get("mot_de_passe"))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    activity_log.record("outil", f"Identifiants de {outil} notés dans Jabba", request.state.nom)
+    return tool_credentials.read(outil)
+
+
+@router.delete("/api/etabli/{outil}/identifiants")
+def forget_tool_login(outil: str, request: Request):
+    guard.require_super_admin(request)
+    try:
+        tool_credentials.forget(outil)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    activity_log.record("outil", f"Identifiants de {outil} oubliés par Jabba", request.state.nom)
+    return {"ok": True}
 
 
 @router.get("/api/rangement/{ecran}")
