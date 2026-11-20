@@ -355,3 +355,37 @@ def test_installer_un_outil_comme_appli(page):
     lien = panneau.get_by_role("link", name="Ouvrir AdGuard Home dans le navigateur")
     expect(lien).to_have_attribute("target", "_blank")
     expect(lien).to_have_attribute("href", "https://jabba.exemple.ts.net:3000")
+
+
+def test_ranger_les_cartes_de_l_etabli(page):
+    """« Ranger » : une carte descend avec ↓, « Terminé » enregistre, l'ordre revient au rechargement."""
+    aller(page, "outils")
+    grille = page.locator("#grille-etabli")
+    expect(grille.locator("[data-offre]").first).to_be_visible()  # les cartes à activer sont arrivées
+    premiere = grille.locator(":scope > article").first.evaluate(
+        "e => e.dataset.carte || e.dataset.offre || e.dataset.integre"
+    )
+    page.get_by_role("button", name="Ranger").click()
+    expect(grille).to_have_class(re.compile("rangement"))
+    grille.locator(":scope > article").first.locator("[data-descendre]").click()
+    deuxieme = (
+        grille.locator(":scope > article")
+        .nth(1)
+        .evaluate("e => e.dataset.carte || e.dataset.offre || e.dataset.integre")
+    )
+    assert deuxieme == premiere
+    page.get_by_role("button", name="Terminé").click()
+    expect(page.get_by_role("button", name="Ranger")).to_be_visible()
+    page.reload()
+    expect(grille.locator("[data-offre]").first).to_be_visible()
+    rang = (
+        grille.locator(":scope > article")
+        .nth(1)
+        .evaluate("e => e.dataset.carte || e.dataset.offre || e.dataset.integre")
+    )
+    assert rang == premiere  # gardé sur le serveur
+    # Remise en place pour les autres tests : la carte remonte.
+    page.get_by_role("button", name="Ranger").click()
+    grille.locator(":scope > article").nth(1).locator("[data-monter]").click()
+    page.get_by_role("button", name="Terminé").click()
+    expect(page.get_by_role("button", name="Ranger")).to_be_visible()

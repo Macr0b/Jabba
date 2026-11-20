@@ -5,6 +5,8 @@ Sommaire :
   POST /api/etabli/{outil}/installer    install_optional (super admin ; rien à taper)
   POST /api/etabli/{outil}/retirer      remove_optional (super admin ; données gardées)
   GET  /api/etabli/{outil}/identifiants tool_login (super admin ; le compte que Jabba a créé dans l'outil)
+  GET  /api/etabli/ordre                cards_order (admin) : l'ordre des cartes choisi avec « Ranger »
+  PUT  /api/etabli/ordre                save_cards_order (admin)
 """
 
 import asyncio
@@ -13,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from host import actions
 from security import guard
-from services import activity_log, optional_tools, tool_credentials, tool_usage, tools
+from services import activity_log, card_order, optional_tools, tool_credentials, tool_usage, tools
 
 router = APIRouter()
 
@@ -52,6 +54,24 @@ def tool_login(outil: str, request: Request):
     guard.require_super_admin(request)
     login = tool_credentials.read(outil)
     if not login:
-        raise HTTPException(404, "Cet outil n'a pas de compte créé par Jabba.")
+        raise HTTPException(
+            404,
+            "Pas de compte créé par Jabba : l'outil a été installé avant la 0.16.2, avec le mot de passe tapé à l'activation.",
+        )
     activity_log.record("outil", f"Identifiants de {outil} affichés", request.state.nom)
     return login
+
+
+@router.get("/api/etabli/ordre")
+def cards_order(request: Request):
+    guard.require_admin(request)
+    return {"ordre": card_order.read()}
+
+
+@router.put("/api/etabli/ordre")
+async def save_cards_order(request: Request):
+    guard.require_admin(request)
+    try:
+        return {"ordre": card_order.save((await request.json()).get("ordre"))}
+    except ValueError as error:
+        raise HTTPException(400, str(error))

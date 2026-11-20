@@ -7,6 +7,7 @@ import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.js";
 import { bindDomain, domainCardHtml } from "../components/domain_card.js";
+import { applyOrder, bindOrdering } from "../components/card_order.js";
 import { bindCatalog, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
 import { bindToolMenus, toolMenuHtml } from "../components/tool_menu.js";
 import { formatBytes, formatWhen } from "../core/format.js";
@@ -18,9 +19,10 @@ import { t } from "../core/i18n.js";
 
 pages.outils = async () => {
   content.innerHTML = t`<div class="entete"><div><h1>Établi</h1></div></div>${loadingHtml()}`;
-  const [tools, versions] = await Promise.all([
+  const [tools, versions, savedOrder] = await Promise.all([
     api("/api/outils"),
     api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
+    api("/api/etabli/ordre").catch(() => ({ ordre: [] })),
   ]);
   // Un outil en option est publié sur Tailscale au même nom que Jabba, sur son propre port.
   tools.forEach((item) => {
@@ -37,7 +39,7 @@ pages.outils = async () => {
   const card = (item) => {
     const active = item.etat !== "arrêté";
     return `
-      <article class="carte pad outil${active ? "" : " eteint"}">
+      <article class="carte pad outil${active ? "" : " eteint"}" data-carte="${escapeHtml(item.id)}">
         <div class="haut">
           <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}${versionText(item.id)}</div>${active ? `<div class="conso note" data-conso="${escapeHtml(item.id)}"></div>` : ""}</div></div>
           <div class="haut-droite">${
@@ -75,7 +77,7 @@ pages.outils = async () => {
       </article>`;
   };
   content.innerHTML = t`
-    <div class="entete"><div><h1>Établi</h1><p class="sous-titre">Active les outils dont tu as besoin. Un outil désactivé ne consomme rien et garde ses données.</p>${memoryBannerHtml()}</div></div>
+    <div class="entete"><div><div class="titre-avec-action"><h1>Établi</h1><button class="btn btn-petit" type="button" id="ranger-etabli" aria-pressed="false">Ranger</button></div><p class="sous-titre">Active les outils dont tu as besoin. Un outil désactivé ne consomme rien et garde ses données.</p>${memoryBannerHtml()}</div></div>
     <div class="grille g2" id="grille-etabli">${workbenchTools.map(card).join("")}</div>
     ${workbenchTools.some((item) => item.id === "antivirus") ? "" : antivirusOfferHtml()}
     ${domainCardHtml()}
@@ -99,9 +101,13 @@ pages.outils = async () => {
   bindDomain();
   const reloadPage = () => pages.outils().catch(showError);
   bindToolMenus(content, tools, versions, reloadPage);
-  bindCatalog($("#grille-etabli"), reloadPage, (catalogTools) =>
-    bindToolMenus(content, catalogTools, versions, reloadPage),
-  );
+  const grid = $("#grille-etabli");
+  applyOrder(grid, savedOrder.ordre);
+  bindOrdering($("#ranger-etabli"), grid);
+  bindCatalog(grid, reloadPage, (catalogTools) => {
+    bindToolMenus(content, catalogTools, versions, reloadPage);
+    applyOrder(grid, savedOrder.ordre); // les cartes à activer arrivent après : elles prennent leur place aussi
+  });
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;
     try {

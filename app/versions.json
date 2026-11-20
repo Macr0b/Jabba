@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.16.3",
+    "date": "2026-11-20",
+    "changements": [
+      "Établi : bouton « Ranger » à côté du titre. Les cartes se déplacent en les glissant, ou avec les flèches ↑ ↓ (au doigt et au clavier) ; « Terminé » garde l'ordre, le même sur tous les appareils.",
+      "AdGuard Home installé avant la 0.16.2 : Jabba crée son mot de passe au moment de terminer l'installation, au lieu d'afficher « Mot de passe d'AdGuard inconnu ».",
+      "Identifiants : pour un outil installé avant la 0.16.2 (Paperless, Time Machine), le panneau explique que le mot de passe est celui tapé à l'activation."
+    ]
+  },
+  {
     "version": "0.16.2",
     "date": "2026-11-19",
     "changements": [
