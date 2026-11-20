@@ -8,6 +8,7 @@ Le même mot de passe est repris si l'outil est retiré puis rallumé (ses donn�
 Sommaire :
   password_for(tool)  : le mot de passe de l'outil, tiré au sort la première fois
   read(tool)          : {"identifiant", "mot_de_passe"} ou None
+  flag / set_flag     : ce que Jabba a déjà réglé une fois dans un outil (ex. le filtrage général d'AdGuard)
 """
 
 import os
@@ -39,3 +40,14 @@ def read(tool):
     if not password:
         return None
     return {"identifiant": catalog.OPTIONAL_TOOLS.get(tool, {}).get("identifiant", "admin"), "mot_de_passe": password}
+
+
+def flag(tool, name):
+    return bool(json_files.load(CREDENTIALS_FILE, {}).get(f"{tool}:{name}"))
+
+
+def set_flag(tool, name):
+    with _LOCK:
+        saved = json_files.load(CREDENTIALS_FILE, {})
+        saved[f"{tool}:{name}"] = True
+        json_files.save(CREDENTIALS_FILE, saved, private=True)

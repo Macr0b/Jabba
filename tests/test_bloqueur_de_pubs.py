@@ -77,9 +77,14 @@ def test_premier_lancement_fait_l_installation_et_coupe_le_filtrage_general(adgu
     assert dict(adguard.appels)["/control/filtering/config"]["enabled"] is False  # aucun appareil filtré de base
 
 
-def test_deja_installe_on_ne_touche_pas_au_reglage_general(adguard):
+def test_assistant_fait_a_la_main_filtrage_general_coupe_une_seule_fois(adguard):
+    """Assistant d'AdGuard fait à la main : Jabba coupe quand même le filtrage général, une fois, puis n'y touche plus."""
     ad_blocker.devices()
-    assert "/control/install/configure" not in [chemin for chemin, _ in adguard.appels]
+    chemins = [chemin for chemin, _ in adguard.appels]
+    assert "/control/install/configure" not in chemins
+    assert dict(adguard.appels)["/control/filtering/config"]["enabled"] is False
+    adguard.appels.clear()
+    ad_blocker.devices()  # si l'admin le rallume ensuite dans AdGuard, c'est son choix
     assert "/control/filtering/config" not in [chemin for chemin, _ in adguard.appels]
 
 

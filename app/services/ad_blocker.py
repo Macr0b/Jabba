@@ -66,12 +66,15 @@ def _ensure_ready(client):
             except httpx.HTTPError:
                 pass
             time.sleep(0.5)
-        client.post("/control/filtering/config", json={"enabled": False, "interval": 24})
     status = client.get("/control/status")
     if status.status_code in (401, 403):
         raise AdBlockerError("Mot de passe d'AdGuard refusé : retire puis rallume AdGuard dans l'Établi.")
     if status.status_code != 200:
         raise AdBlockerError("AdGuard Home ne répond pas comme prévu.")
+    if not tool_credentials.flag("adguard-home", "filtrage-general-coupe"):
+        # Une seule fois, même si l'assistant a été fait à la main : aucun appareil filtré de base.
+        if client.post("/control/filtering/config", json={"enabled": False, "interval": 24}).status_code == 200:
+            tool_credentials.set_flag("adguard-home", "filtrage-general-coupe")
 
 
 def _tailscale_names():
