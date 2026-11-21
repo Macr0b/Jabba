@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.16.5",
+    "date": "2026-11-21",
+    "changements": [
+      "Après une mise à jour, chaque fenêtre de Jabba restée ouverte (Mac, iPhone…) se recharge toute seule, une fois, au lieu de garder l'ancienne interface (où, par exemple, le menu Identifiants ne montrait pas encore le formulaire)."
+    ]
+  },
+  {
     "version": "0.16.4",
     "date": "2026-11-20",
     "changements": [

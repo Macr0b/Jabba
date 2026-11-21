@@ -2,12 +2,31 @@
 //
 // Sommaire :
 //   partagé : api, formBody
+//   interne : reloadIfOutdated
 import { dialogForm, dialogElement } from "../components/dialogs.js";
 import { chooseMyPassword, confirmPassword, adminLogin } from "./admin_session.js";
 import { escapeHtml } from "./dom.js";
 import { t } from "./i18n.js";
 
 // ------------------------------------------------------------ outils
+// La version de l'interface chargée dans cette fenêtre (dans l'adresse des scripts : /static/v0.16.4/js/…).
+const LOADED_VERSION = (import.meta.url.match(/\/static\/v([^/]+)\//) || [])[1] || null;
+
+// Après une mise à jour, une fenêtre restée ouverte parle à un serveur plus récent que son interface :
+// elle se recharge, une fois, à la lecture suivante (jamais au milieu d'un envoi : rien de tapé ne se perd).
+function reloadIfOutdated(result, method) {
+  const serverVersion = result.headers.get("X-Jabba-Version");
+  if (!LOADED_VERSION || !serverVersion || serverVersion === LOADED_VERSION || method !== "GET") return false;
+  try {
+    if (sessionStorage.getItem("jabba-recharge") === serverVersion) return false; // déjà tenté
+    sessionStorage.setItem("jabba-recharge", serverVersion);
+  } catch {
+    return false;
+  }
+  location.reload();
+  return true;
+}
+
 // La connexion admin est un cookie protégé, posé par le serveur et gardé 30 jours sur l'appareil.
 export async function api(path, options = {}, secondAttempt = false) {
   const item = { credentials: "same-origin", ...options, headers: { "X-Jabba": "1", ...(options.headers || {}) } };
@@ -22,6 +41,7 @@ export async function api(path, options = {}, secondAttempt = false) {
   } catch (_) {
     throw Object.assign(new Error(t("Le serveur ne répond pas.")), { injoignable: "reseau" });
   }
+  if (reloadIfOutdated(result, (item.method || "GET").toUpperCase())) return new Promise(() => {});
   if (result.status >= 502 && result.status <= 504)
     throw Object.assign(new Error(t("L'appli Jabba ne répond pas sur le serveur.")), { injoignable: "appli" });
   let body = null;

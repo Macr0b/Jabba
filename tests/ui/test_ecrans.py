@@ -354,6 +354,24 @@ def test_identifiants_d_un_outil(page):
     expect(panneau.get_by_role("button", name="Copier")).to_have_count(2)
 
 
+def test_fenetre_ancienne_se_recharge_apres_mise_a_jour(page):
+    """Une fenêtre ouverte avant une mise à jour se recharge seule, une fois, quand le serveur est plus récent."""
+    aller(page, "outils")
+    chargements = []
+    page.on("load", lambda: chargements.append(1))
+
+    def serveur_plus_recent(route):
+        reponse = route.fetch()
+        route.fulfill(response=reponse, headers={**reponse.headers, "x-jabba-version": "99.0.0"})
+
+    page.route("**/api/**", serveur_plus_recent)
+    aller(page, "systeme")
+    page.wait_for_timeout(1500)
+    assert len(chargements) == 1  # rechargée une fois, pas en boucle
+    expect(page.locator("main")).to_be_visible()
+    page.unroute("**/api/**")
+
+
 def test_identifiants_notes_dans_jabba(page):
     """Un outil où l'on a créé son compte soi-même : on note l'identifiant et le mot de passe, Jabba les garde."""
     aller(page, "outils")

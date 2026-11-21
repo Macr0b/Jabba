@@ -27,6 +27,7 @@ import config
 from host import commands
 from security import accounts, password_rules, server_password, sessions
 from services import activity_log, notifications
+from version import VERSION
 
 
 # ---------------------------------------------------------------- sécurité
@@ -68,6 +69,8 @@ async def guard(request: Request, call_next):
     response.headers.setdefault("Content-Security-Policy", PAGE_POLICY)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
+    # La version du serveur : une fenêtre ouverte avant une mise à jour se recharge toute seule (core/api.js).
+    response.headers["X-Jabba-Version"] = VERSION
     return response
 
 

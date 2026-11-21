@@ -170,3 +170,11 @@ def test_memoire_d_atelier_par_l_api(client, tmp_path, monkeypatch):
     )
     assert client.get("/api/atelier/machines/inconnue", headers=H).status_code == 404
     assert client.get("/api/atelier", headers=H).json()["machines"][0]["entrees"] == 1
+
+
+def test_version_du_serveur_dans_chaque_reponse(client):
+    """Sert aux fenêtres restées ouvertes pendant une mise à jour : elles se rechargent seules (core/api.js)."""
+    from version import VERSION
+
+    assert client.get("/api/moi", headers=H).headers["X-Jabba-Version"] == VERSION
+    assert client.get("/", headers=H).headers["X-Jabba-Version"] == VERSION
