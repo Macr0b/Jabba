@@ -148,6 +148,8 @@ def test_activer_sans_rien_taper(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_credentials, "CREDENTIALS_FILE", str(tmp_path / "identifiants.json"))
     monkeypatch.setattr(tool_credentials.config, "DEMO", False)
     lance = []
-    monkeypatch.setattr(optional_tools.background_tasks, "start_task", lambda *args: lance.append(args) or {"id": "t"})
+    monkeypatch.setattr(
+        optional_tools.background_tasks, "start_task", lambda *args, **k: lance.append(args) or {"id": "t"}
+    )
     optional_tools.install("adguard-home", "rob")
     assert ad_blocker._password() == lance[0][-1] and len(lance[0][-1]) == 24
