@@ -181,7 +181,7 @@ def test_acces_par_le_domaine_dans_l_etabli(page):
 
 
 def test_outils_a_activer_et_memoire(page):
-    """Les nouveaux outils sont dans la grille de l'Établi, interrupteur éteint, avec la mémoire qu'ils prendraient."""
+    """« Ajouter un outil » : rangés par usage, un bouton « Installer » et la mémoire qu'ils prendraient."""
     aller(page, "outils")
     expect(page.locator("#etabli-memoire")).to_contain_text("Mémoire du serveur")
     expect(page.locator("#etabli-memoire")).to_contain_text("Libre")
@@ -199,12 +199,19 @@ def test_outils_a_activer_et_memoire(page):
         "homebox",
         "changedetection",
     ):
-        interrupteur = page.locator(f'#grille-etabli [data-activer="{outil}"]')
-        expect(interrupteur).to_have_attribute("role", "switch")
-        expect(interrupteur).to_have_attribute("aria-checked", "false")
+        expect(page.locator(f'#ajouter-outils [data-activer="{outil}"]')).to_have_text("Installer")
+    expect(page.locator("#ajouter-outils [role=switch]")).to_have_count(0)  # installer n'est pas un curseur
+    groupes = page.locator("#ajouter-outils .titre-groupe")
+    expect(groupes).to_have_text(["Fichiers et souvenirs", "Atelier et maison", "Sécurité", "Sauvegarde", "Veille"])
     immich = page.locator('[data-offre="immich"]')
     expect(immich).to_contain_text("Prend environ 3,0 Go de mémoire")
-    expect(page.locator('#grille-etabli [data-offre] input[type="password"]')).to_have_count(0)  # rien à taper
+    expect(page.locator("#ajouter-outils #offre-antivirus")).to_be_visible()  # rangé dans « Sécurité »
+    expect(page.locator('#ajouter-outils input[type="password"]')).to_have_count(0)  # rien à taper
+    # Mes outils : le curseur met en pause, et dit ce qu'il fait.
+    jellyfin = page.locator('#grille-etabli [data-bascule="jellyfin"]')
+    expect(jellyfin).to_have_attribute("aria-label", "Mettre Jellyfin en pause")
+    expect(page.locator('#grille-etabli [data-carte="jellyfin"]')).to_contain_text("En marche")
+    expect(page.locator("#reglages-serveur [role=switch]")).to_have_count(0)  # pas de curseur sur le système
 
 
 def test_memoire_d_atelier(page):
@@ -213,10 +220,10 @@ def test_memoire_d_atelier(page):
 
     machine = "Laser " + uuid.uuid4().hex[:6]  # la démo garde ses données d'un essai à l'autre
     aller(page, "outils")
-    carte = page.locator('[data-integre="atelier"]')
-    page.locator('[data-activer="atelier"], [data-integre="atelier"]').first.wait_for()
+    carte = page.locator('[data-carte="atelier"]')
+    page.locator('[data-activer="atelier"], [data-carte="atelier"]').first.wait_for()
     if page.locator('[data-activer="atelier"]').count():
-        page.locator('[data-activer="atelier"]').click()  # l'interrupteur, comme pour les autres outils
+        page.locator('[data-activer="atelier"]').click()  # « Ajouter », dans « Ajouter un outil »
     expect(carte).to_be_visible()
     carte.get_by_role("link", name="Ouvrir").click()
     page.get_by_role("button", name="Ajouter une machine").click()
@@ -249,9 +256,9 @@ def test_memoire_d_atelier(page):
     page.locator('[data-menu="atelier"]').click()
     page.get_by_role("menuitem", name="Désinstaller").click()
     page.locator("dialog[open]").get_by_role("button", name="Désinstaller").click()
-    expect(page.locator('[data-activer="atelier"]')).to_have_attribute("aria-checked", "false")
+    expect(page.locator('[data-activer="atelier"]')).to_have_text("Ajouter")
     page.locator('[data-activer="atelier"]').click()
-    page.locator('[data-integre="atelier"]').get_by_role("link", name="Ouvrir").click()
+    page.locator('[data-carte="atelier"]').get_by_role("link", name="Ouvrir").click()
     expect(page.locator(".machine-atelier", has_text=machine)).to_be_visible()
 
 
@@ -263,8 +270,8 @@ def test_menu_des_cartes_de_l_etabli(page):
     menu = jellyfin.get_by_role("menu")
     expect(menu).to_be_visible()
     expect(menu.get_by_role("menuitem")).to_have_text(
-        ["Identifiants", "Installer sur cet appareil", "Aide", "Informations"]
-    )  # installé hors de Jabba
+        ["Identifiants", "Installer sur cet appareil", "Redémarrer", "Mettre à jour", "Aide", "Informations"]
+    )  # installé hors de Jabba : pas de « Désinstaller »
     menu.get_by_role("menuitem", name="Aide").click()
     expect(menu).to_be_hidden()
     expect(jellyfin.locator(".panneau-outil")).to_contain_text("films et séries")
@@ -322,7 +329,16 @@ def test_bloqueur_de_pubs_appareil_par_appareil(page):
     carte = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
     carte.locator('[data-menu="adguard-home"]').click()
     expect(carte.get_by_role("menuitem")).to_have_text(
-        ["Appareils", "Identifiants", "Installer sur cet appareil", "Aide", "Informations", "Désinstaller"]
+        [
+            "Appareils",
+            "Identifiants",
+            "Installer sur cet appareil",
+            "Redémarrer",
+            "Mettre à jour",
+            "Aide",
+            "Informations",
+            "Désinstaller",
+        ]
     )
     carte.get_by_role("menuitem", name="Appareils").click()
     panneau = carte.locator(".panneau-outil")
@@ -413,7 +429,7 @@ def test_ranger_les_cartes_de_l_etabli(page):
     """« Ranger » : une carte descend avec ↓, « Terminé » enregistre, l'ordre revient au rechargement."""
     aller(page, "outils")
     grille = page.locator("#grille-etabli")
-    expect(grille.locator("[data-offre]").first).to_be_visible()  # les cartes à activer sont arrivées
+    expect(grille.locator(":scope > article").first).to_be_visible()
     premiere = grille.locator(":scope > article").first.evaluate(
         "e => e.dataset.carte || e.dataset.offre || e.dataset.integre"
     )
@@ -429,7 +445,7 @@ def test_ranger_les_cartes_de_l_etabli(page):
     page.get_by_role("button", name="Terminé").click()
     expect(page.get_by_role("button", name="Ranger")).to_be_visible()
     page.reload()
-    expect(grille.locator("[data-offre]").first).to_be_visible()
+    expect(grille.locator(":scope > article").first).to_be_visible()
     rang = (
         grille.locator(":scope > article")
         .nth(1)
@@ -447,19 +463,19 @@ def test_masquer_une_carte_et_ranger_l_accueil(page):
     """« Masquer » cache la carte hors rangement ; « Afficher » la remet. L'Accueil se range aussi."""
     aller(page, "outils")
     grille = page.locator("#grille-etabli")
-    carte = grille.locator('[data-offre="immich"]')
+    carte = grille.locator('[data-carte="dockge"]')
     expect(carte).to_be_visible()
     page.get_by_role("button", name="Ranger").click()
     carte.get_by_role("button", name="Masquer").click()
     page.get_by_role("button", name="Terminé").click()
     expect(carte).to_be_hidden()
     page.reload()
-    expect(grille.locator("[data-offre]").first).to_be_visible()
-    expect(grille.locator('[data-offre="immich"]')).to_be_hidden()  # gardé sur le serveur
+    expect(grille.locator(":scope > article").first).to_be_visible()
+    expect(grille.locator('[data-carte="dockge"]')).to_be_hidden()  # gardé sur le serveur
     page.get_by_role("button", name="Ranger").click()
-    grille.locator('[data-offre="immich"]').get_by_role("button", name="Afficher").click()
+    grille.locator('[data-carte="dockge"]').get_by_role("button", name="Afficher").click()
     page.get_by_role("button", name="Terminé").click()
-    expect(grille.locator('[data-offre="immich"]')).to_be_visible()
+    expect(grille.locator('[data-carte="dockge"]')).to_be_visible()
 
     aller(page, "accueil")
     mesures = page.locator("#mesures-accueil")

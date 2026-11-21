@@ -13,12 +13,11 @@ import { toolIcon } from "../pages/home.js";
 
 export function antivirusOfferHtml() {
   const isSuper = state.admin && state.admin.rang === "super";
-  return t`<h2 class="titre-section">À installer</h2>
-    <div class="grille g2"><article class="carte pad outil" id="offre-antivirus">
+  return t`<article class="carte pad outil" id="offre-antivirus">
       <div class="haut"><div class="titre-outil">${toolIcon({ nom: t("Antivirus") })}<div><h2>Antivirus</h2><div class="role">Analyse les fichiers qui arrivent et les disques choisis (ClamAV)</div></div></div></div>
       <p class="note">Les dépôts des invités sont analysés dans la minute, les nouveaux fichiers du disque de données chaque heure, et les disques que tu coches chaque semaine, la nuit. Un fichier infecté est mis à l'écart (jamais supprimé) et tu reçois une alerte. Il utilise environ 1 Go de mémoire et télécharge environ 300 Mo à l'installation.</p>
       ${isSuper ? '<div class="actions"><button class="btn btn-p" type="button" id="installer-antivirus">' + t("Installer") + "</button></div>" : ""}
-    </article></div>`;
+    </article>`;
 }
 
 /** Les disques : cochés pour l'analyse de la semaine, dernière analyse, « Analyser maintenant ». */

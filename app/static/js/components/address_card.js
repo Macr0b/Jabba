@@ -50,8 +50,9 @@ function detailHtml(status) {
     <div class="actions"><button class="btn btn-p" type="button" id="adresses-enregistrer">Créer les adresses</button></div>`;
 }
 
-/** `whenDone` : rappelé quand la création se termine (les boutons « Ouvrir » prennent les nouvelles adresses). */
-export function bindAddresses(whenDone) {
+/** `whenDone` : rappelé quand la création se termine (les boutons « Ouvrir » prennent les nouvelles adresses) ;
+ * `whenNeeded` : rappelé quand la carte s'affiche, parce qu'une adresse manque. */
+export function bindAddresses(whenDone, whenNeeded) {
   const detail = $("#adresses-detail");
   if (!detail) return;
   let timer = null;
@@ -61,6 +62,7 @@ export function bindAddresses(whenDone) {
     const card = $("#carte-adresses");
     // Tout est en place : rien à réparer, la carte ne s'affiche pas.
     card.hidden = status.outils.every((tool) => tool.adresse);
+    if (!card.hidden && whenNeeded) whenNeeded();
     detail.innerHTML = detailHtml(status);
     clearTimeout(timer);
     // Pendant la création, la carte se met à jour toute seule.

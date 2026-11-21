@@ -1,11 +1,11 @@
-// Établi : la mémoire du serveur, et les outils qu'on active d'un geste (Vaultwarden, Immich, Time Machine,
-// Mémoire d'atelier). Ils apparaissent avec les autres outils, interrupteur éteint : l'allumer installe
-// l'outil (fichiers fixés côté serveur, host/catalog.py). Une fois installé, l'interrupteur habituel
-// l'arrête ou le relance, sans jamais toucher à ses données.
+// Établi : la mémoire du serveur, et « Ajouter un outil » : ceux qu'on installe d'un bouton (Vaultwarden,
+// Immich, Time Machine, Mémoire d'atelier…), rangés par usage (fichiers fixés côté serveur, host/catalog.py).
+// Une fois installé, l'outil rejoint « Mes outils » (tool_card.js) : son curseur le met en pause ou le
+// relance, sans jamais toucher à ses données ; « Désinstaller » est dans son menu « ••• ».
 //
 // Sommaire :
-//   partagé : memoryBannerHtml, bindCatalog, toolHint
-//   interne : offCardHtml, builtInCardHtml, enable, disableBuiltIn
+//   partagé : memoryBarHtml, memoryBannerHtml, bindCatalog
+//   interne : GROUPS, offerCardHtml, offersHtml, enable
 import { toast } from "./dialogs.js";
 import { api } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
@@ -13,6 +13,7 @@ import { formatBytes } from "../core/format.js";
 import { t } from "../core/i18n.js";
 import { followTask } from "../core/tasks.js";
 import { toolIcon } from "../pages/home.js";
+import { toolCardHtml } from "./tool_card.js";
 import { toolMenuHtml } from "./tool_menu.js";
 
 const LOW_MEMORY = 0.5 * 1024 ** 3; // en dessous, le serveur risque de ramer
@@ -31,72 +32,71 @@ export function memoryBannerHtml() {
   return '<div id="etabli-memoire" class="note memoire-etabli"></div>';
 }
 
-/** Comment se servir d'un outil qui n'a pas de page à ouvrir. */
-export function toolHint(item) {
-  if (item.id !== "time-machine") return "";
-  return t`<p class="note">Sur le Mac : Réglages Système → Général → Time Machine → Ajouter un disque de sauvegarde → <strong>TimeMachine</strong>, compte <strong>timemachine</strong> et le mot de passe choisi à l'activation. Les sauvegardes vont dans le dossier TimeMachine du disque de données.</p>`;
-}
+// « Ajouter un outil » : les outils pas encore installés, rangés par usage.
+const GROUPS = [
+  [t("Fichiers et souvenirs"), ["immich", "paperless"]],
+  [t("Atelier et maison"), ["atelier", "homebox"]],
+  [t("Sécurité"), ["vaultwarden", "adguard-home", "antivirus"]],
+  [t("Sauvegarde"), ["time-machine"]],
+  [t("Veille"), ["changedetection"]],
+];
 
-/** Un outil pas encore installé : éteint, avec ce qu'il prendrait en mémoire. */
-function offCardHtml(tool, memory) {
+/** Un outil pas encore installé : ce qu'il fait, ce qu'il prendrait en mémoire, et « Installer ». */
+function offerCardHtml(tool, memory) {
   const remaining = memory.libre - tool.memoire;
-  const tooMuch = remaining < LOW_MEMORY;
-  return `<article class="carte pad outil eteint" data-offre="${escapeHtml(tool.id)}">
+  const tooMuch = !tool.integre && remaining < LOW_MEMORY;
+  const cost = tool.integre
+    ? t("Fait partie de Jabba : ne prend rien de plus.")
+    : tooMuch
+      ? t`Prend environ ${formatBytes(tool.memoire)} : il n'en resterait que ${formatBytes(Math.max(remaining, 0))}. Mets d'abord un autre outil en pause.`
+      : t`Prend environ ${formatBytes(tool.memoire)} de mémoire : il en resterait ${formatBytes(remaining)}.`;
+  return `<article class="carte pad outil offre" data-offre="${escapeHtml(tool.id)}">
       <div class="haut"><div class="titre-outil">${toolIcon({ nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
-      <div class="haut-droite"><button class="interrupteur" role="switch" aria-checked="false" aria-label="${escapeHtml(t("Activer") + " " + tool.nom)}" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}><span></span></button>${toolMenuHtml(tool)}</div></div>
-      ${
-        tool.integre
-          ? ""
-          : `<p class="note${tooMuch ? " alerte-memoire" : ""}">${
-              tooMuch
-                ? t`Prend environ ${formatBytes(tool.memoire)} de mémoire : il n'en resterait que ${formatBytes(Math.max(remaining, 0))}. Désactive d'abord un autre outil.`
-                : t`Prend environ ${formatBytes(tool.memoire)} de mémoire : il en resterait ${formatBytes(remaining)}.`
-            }</p>`
-      }
+      <div class="haut-droite">${toolMenuHtml(tool)}</div></div>
+      <div class="pied-offre"><p class="note${tooMuch ? " alerte-memoire" : ""}">${cost}</p>
+      <button class="btn btn-p" type="button" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}>${escapeHtml(tool.integre ? t("Ajouter") : t("Installer"))}</button></div>
       <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
     </article>`;
 }
 
-/** Un outil de l'appli activé (Mémoire d'atelier) : on l'ouvre comme un écran ; l'éteindre garde ses données. */
-function builtInCardHtml(tool) {
-  return `<article class="carte pad outil" data-integre="${escapeHtml(tool.id)}">
-      <div class="haut"><div class="titre-outil">${toolIcon({ nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
-      <div class="haut-droite"><button class="interrupteur" role="switch" aria-checked="true" aria-label="${escapeHtml(t("Désactiver") + " " + tool.nom)}" data-eteindre="${escapeHtml(tool.id)}"><span></span></button>${toolMenuHtml(tool)}</div></div>
-      <div class="actions"><a class="btn btn-p" href="${escapeHtml(tool.page)}">${t("Ouvrir")}</a></div>
-      <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
-    </article>`;
+/** Les offres rangées par usage ; `extras` : des cartes déjà prêtes, par identifiant (l'antivirus). */
+function offersHtml(off, memory, extras) {
+  const cards = { ...extras };
+  off.forEach((tool) => (cards[tool.id] = offerCardHtml(tool, memory)));
+  const placed = new Set(GROUPS.flatMap(([, ids]) => ids));
+  const others = Object.keys(cards).filter((id) => !placed.has(id));
+  return [...GROUPS, [t("Autres"), others]]
+    .map(([title, ids]) => {
+      const html = ids.filter((id) => cards[id]).map((id) => cards[id]);
+      return html.length
+        ? `<h3 class="titre-groupe">${escapeHtml(title)}</h3><div class="grille g2">${html.join("")}</div>`
+        : "";
+    })
+    .join("");
 }
 
-async function enable(tool, grid, reload) {
-  const toggle = grid.querySelector(`[data-activer="${tool.id}"]`);
-  toggle.setAttribute("aria-checked", "true");
-  toggle.disabled = true;
+async function enable(tool, scope, reload) {
+  const button = scope.querySelector(`[data-activer="${tool.id}"]`);
+  button.disabled = true;
+  button.textContent = t("Installation…");
   try {
     const task = await api(`/api/etabli/${encodeURIComponent(tool.id)}/installer`, {
       method: "POST",
       json: {},
     });
-    if (task) await followTask(task); // un outil de l'appli s'active tout de suite
-    toast(t`${tool.nom} est activé`);
+    if (task) await followTask(task); // un outil de l'appli s'ajoute tout de suite
+    toast(t`${tool.nom} est installé`);
     reload();
   } catch (error) {
     toast(error.message, true);
-    toggle.setAttribute("aria-checked", "false");
-    toggle.disabled = false;
+    button.disabled = false;
+    button.textContent = tool.integre ? t("Ajouter") : t("Installer");
   }
 }
 
-async function disableBuiltIn(toolId, reload) {
-  try {
-    await api(`/api/etabli/${encodeURIComponent(toolId)}/retirer`, { method: "POST" });
-    reload();
-  } catch (error) {
-    toast(error.message, true);
-  }
-}
-
-/** Ajoute les outils à activer dans la grille de l'Établi (`grid`), et la ligne de mémoire. */
-export function bindCatalog(grid, reload, onCards) {
+/** Remplit l'Établi : les outils de l'appli ajoutés vont dans « Mes outils » (`grid`), les autres dans
+ * « Ajouter un outil » (`offers`, avec les cartes déjà prêtes de `extras`) ; puis la ligne de mémoire. */
+export function bindCatalog({ grid, offers, extras = {} }, reload, onCards) {
   api("/api/etabli/catalogue")
     .then((result) => {
       const memory = result.memoire;
@@ -105,23 +105,20 @@ export function bindCatalog(grid, reload, onCards) {
         banner.innerHTML =
           t`Mémoire du serveur : <strong>${formatBytes(memory.utilise)}</strong> utilisés sur ${formatBytes(memory.total)}, dont ${formatBytes(memory.outils)} pour les outils. Libre : <strong>${formatBytes(memory.libre)}</strong>.` +
           memoryBarHtml(memory);
-      if (!grid) return;
-      const builtInOn = result.outils.filter((tool) => tool.integre && tool.installe);
+      if (!grid || !offers) return;
+      const builtInOn = result.outils
+        .filter((tool) => tool.integre && tool.installe)
+        .map((tool) => ({ ...tool, etat: "actif", modifiable: false }));
       const off = result.outils.filter((tool) => !tool.installe);
-      grid.insertAdjacentHTML(
-        "beforeend",
-        builtInOn.map(builtInCardHtml).join("") + off.map((tool) => offCardHtml(tool, memory)).join(""),
-      );
-      grid.querySelectorAll("[data-activer]").forEach((toggle) => {
-        toggle.onclick = () =>
+      grid.insertAdjacentHTML("beforeend", builtInOn.map((tool) => toolCardHtml(tool)).join(""));
+      offers.innerHTML = offersHtml(off, memory, extras);
+      offers.querySelectorAll("[data-activer]").forEach((button) => {
+        button.onclick = () =>
           enable(
-            off.find((tool) => tool.id === toggle.dataset.activer),
-            grid,
+            off.find((tool) => tool.id === button.dataset.activer),
+            offers,
             reload,
           );
-      });
-      grid.querySelectorAll("[data-eteindre]").forEach((toggle) => {
-        toggle.onclick = () => disableBuiltIn(toggle.dataset.eteindre, reload);
       });
       if (onCards) onCards([...builtInOn, ...off]);
     })

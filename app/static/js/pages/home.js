@@ -1,7 +1,7 @@
 // Écran Accueil : accès rapide, favoris, dossiers suggérés, outils.
 //
 // Sommaire :
-//   partagé : pages.accueil (écran), folderLink, toggleFavorite, toolIcon, COMING_SOON
+//   partagé : pages.accueil (écran), folderLink, toggleFavorite, toolIcon
 //   interne : TILE_ICONS, loadQuickAccess
 import { applyArrangement, bindOrdering, loadArrangement } from "../components/card_order.js";
 import { toast } from "../components/dialogs.js";
@@ -124,11 +124,3 @@ document.addEventListener(
   },
   true,
 );
-
-export const COMING_SOON = [
-  { nom: t("Sauvegarde croisée"), role: t("Une copie chiffrée sur un autre serveur Jabba") },
-  {
-    nom: t("Réservations Fab-manager"),
-    role: t("Le calendrier des machines du fablab, et un écran qui affiche les réservations en direct"),
-  },
-];

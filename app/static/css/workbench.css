@@ -312,3 +312,63 @@ body.plein-ecran main {
   padding-top: 12px;
   border-top: 1px solid var(--bord-doux);
 }
+
+/* Établi : l'état d'un outil (en marche, en pause, mise à jour), sous son nom. */
+.etat-outil {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+}
+
+/* « Ajouter un outil » : un petit titre par usage. */
+.titre-groupe {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--texte-2);
+  margin: 14px 0 8px;
+}
+
+/* « Réglages du serveur » : replié, ouvert seulement quand on en a besoin. */
+.reglages-serveur {
+  margin-top: 24px;
+}
+.reglages-serveur > summary {
+  cursor: pointer;
+  min-height: 32px;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.reglages-serveur > summary::-webkit-details-marker {
+  display: none;
+}
+.reglages-serveur > summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--texte-2);
+}
+.reglages-serveur[open] > summary::after {
+  content: "▴";
+}
+.reglages-serveur[open] > summary {
+  margin-bottom: 14px;
+}
+
+/* Une offre : ce qu'elle coûte en mémoire, et « Installer » sur la même ligne. */
+.pied-offre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+.pied-offre .note {
+  margin: 0;
+}
+.pied-offre .btn {
+  flex: none;
+}

@@ -1,7 +1,10 @@
-// Écran Établi : les outils du serveur (démarrer, arrêter, mettre à jour) et leur ouverture dans l'appli.
+// Écran Établi : « Mes outils » (installés : en marche ou en pause, cartes de tool_card.js), « Ajouter un
+// outil » (tool_catalog.js), et « Réglages du serveur », replié (accès depuis Internet, adresses, Jabba).
+// Puis l'ouverture d'un outil dans l'appli.
 //
 // Sommaire :
 //   partagé : pages.outils (écran), pages.ouvrir (écran)
+//   interne : toggleTool
 import { confirmAction, toast } from "../components/dialogs.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
@@ -9,13 +12,14 @@ import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.
 import { addressCardHtml, bindAddresses } from "../components/address_card.js";
 import { bindDomain, domainCardHtml } from "../components/domain_card.js";
 import { applyArrangement, bindOrdering, loadArrangement } from "../components/card_order.js";
-import { bindCatalog, memoryBannerHtml, toolHint } from "../components/tool_catalog.js";
-import { bindToolMenus, toolMenuHtml } from "../components/tool_menu.js";
+import { bindCatalog, memoryBannerHtml } from "../components/tool_catalog.js";
+import { toolCardHtml } from "../components/tool_card.js";
+import { bindToolMenus, runToolAction } from "../components/tool_menu.js";
 import { formatBytes, formatWhen } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { showError } from "../core/router.js";
 import { loadingHtml, followTask } from "../core/tasks.js";
-import { COMING_SOON, toolIcon } from "./home.js";
+import { toolIcon } from "./home.js";
 import { t } from "../core/i18n.js";
 
 pages.outils = async () => {
@@ -25,69 +29,29 @@ pages.outils = async () => {
     api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
     loadArrangement("etabli"),
   ]);
-  // Un outil en option est publié sur Tailscale au même nom que Jabba, sur son propre port.
+  // Un outil sans adresse à lui est publié sur Tailscale au même nom que Jabba, sur son propre port.
   tools.forEach((item) => {
     if (!item.lien && item.port_https) item.lien = `https://${location.hostname}:${item.port_https}`;
   });
-  const badge = { actif: "p-ok", partiel: "p-alerte", "en panne": "p-rouge", arrêté: "p-gris" };
-  const workbenchTools = tools.filter((item) => !item.systeme),
-    system = tools.filter((item) => item.systeme);
-  const versionText = (pid) => {
-    const known = versions.outils[pid];
-    return known && known.version ? ` · version ${escapeHtml(known.version)}` : "";
-  };
+  const mine = tools.filter((item) => !item.systeme);
+  const system = tools.filter((item) => item.systeme);
   const updateAvailable = (pid) => Boolean(versions.outils[pid] && !versions.outils[pid].a_jour);
-  const card = (item) => {
-    const active = item.etat !== "arrêté";
-    return `
-      <article class="carte pad outil${active ? "" : " eteint"}" data-carte="${escapeHtml(item.id)}">
-        <div class="haut">
-          <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}${versionText(item.id)}</div>${active ? `<div class="conso note" data-conso="${escapeHtml(item.id)}"></div>` : ""}</div></div>
-          <div class="haut-droite">${
-            item.systeme || !item.modifiable
-              ? `<span class="pastille ${badge[item.etat] || "p-gris"}">${escapeHtml(item.etat[0].toUpperCase() + item.etat.slice(1))}</span>`
-              : `<button class="interrupteur" role="switch" aria-checked="${active}" aria-label="${active ? t("Désactiver") : t("Activer")} ${escapeHtml(item.nom)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
-          }${toolMenuHtml(item)}</div>
-        </div>
-        ${updateAvailable(item.id) ? t`<div class="bandeau"><span>Une version plus récente est disponible.</span></div>` : ""}
-        ${item.etat === "en panne" || item.etat === "partiel" ? `<div class="note" style="color:var(--rouge)">${item.etat === "en panne" ? t("En panne : essaie Redémarrer.") : t("Une partie de l'outil ne tourne pas : essaie Redémarrer.")}</div>` : ""}
-        ${
-          active && !item.systeme
-            ? `<div class="actions">
-          ${
-            item.lien
-              ? item.dans_appli
-                ? t`<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(item.id)}">Ouvrir</a>`
-                : item.id === "nextcloud"
-                  ? t`<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Gérer<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Nextcloud complet</a>`
-                  : t`<a class="btn btn-p" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Ouvrir</a>`
-              : ""
-          }
-          ${
-            item.modifiable
-              ? t`<button class="btn" data-action="redemarrer" data-id="${escapeHtml(item.id)}">Redémarrer</button>
-          <button class="btn${updateAvailable(item.id) ? " btn-p" : ""}" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button>`
-              : ""
-          }
-        </div>${toolHint(item)}`
-            : ""
-        }
-        ${item.id === "antivirus" && active ? '<div id="antivirus-detail"></div>' : ""}
-        <div class="panneau-outil" data-panneau="${escapeHtml(item.id)}" hidden></div>
-        ${item.systeme && item.modifiable ? t`<div class="actions"><button class="btn" data-action="mettre-a-jour" data-id="${escapeHtml(item.id)}">Mettre à jour</button></div>` : ""}
-      </article>`;
-  };
+  const lastCheck = versions.lu
+    ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})`
+    : "";
   content.innerHTML = t`
-    <div class="entete"><div><div class="titre-avec-action"><h1>Établi</h1><button class="btn btn-petit" type="button" id="ranger-etabli" aria-pressed="false">Ranger</button></div><p class="sous-titre">Active les outils dont tu as besoin. Un outil désactivé ne consomme rien et garde ses données.</p>${memoryBannerHtml()}</div></div>
-    <div class="grille g2" id="grille-etabli">${workbenchTools.map(card).join("")}</div>
-    ${workbenchTools.some((item) => item.id === "antivirus") ? "" : antivirusOfferHtml()}
-    ${domainCardHtml()}
-    <h2 class="titre-section">Bientôt dans l'établi</h2>
-    <div class="grille g2">${COMING_SOON.map((item) => t`<article class="carte pad outil eteint"><div class="haut"><div class="titre-outil">${toolIcon({ nom: item.nom })}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div><span class="pastille p-gris">Bientôt</span></div></article>`).join("")}</div>
-    <h2 class="titre-section">Système</h2>
-    <div class="grille g2">${system.map(card).join("")}${addressCardHtml()}</div>
-    <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
-      Jabba regarde chaque jour si une version plus récente existe${versions.lu ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})` : ""} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>`;
+    <div class="entete"><div><div class="titre-avec-action"><h1>Établi</h1><button class="btn btn-petit" type="button" id="ranger-etabli" aria-pressed="false">Ranger</button></div><p class="sous-titre">Tes outils. Le curseur les met en pause : en pause, un outil ne consomme rien et garde tout.</p>${memoryBannerHtml()}</div></div>
+    <h2 class="titre-section">Mes outils</h2>
+    <div class="grille g2" id="grille-etabli">${mine.map((item) => toolCardHtml(item, updateAvailable(item.id))).join("")}</div>
+    <h2 class="titre-section">Ajouter un outil</h2>
+    <div id="ajouter-outils"></div>
+    <details class="carte pad reglages-serveur" id="reglages-serveur">
+      <summary><strong>Réglages du serveur</strong> <span class="note">Accès depuis Internet, adresses des outils, Jabba lui-même</span></summary>
+      ${domainCardHtml()}
+      <div class="grille g2">${system.map((item) => toolCardHtml(item, updateAvailable(item.id))).join("")}${addressCardHtml()}</div>
+      <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
+        Jabba regarde chaque jour si une version plus récente existe${lastCheck} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>
+    </details>`;
   // Consommation de chaque outil : arrive un peu après (docker stats prend 1 à 2 secondes).
   api("/api/outils-conso")
     .then((usage) => {
@@ -98,17 +62,20 @@ pages.outils = async () => {
       });
     })
     .catch(() => {});
-  bindAntivirus(() => pages.outils().catch(showError));
-  bindDomain();
   const reloadPage = () => pages.outils().catch(showError);
-  bindAddresses(reloadPage);
+  bindAntivirus(reloadPage);
+  bindDomain();
+  // Une adresse manque : la carte de réparation s'affiche, et les réglages s'ouvrent pour qu'on la voie.
+  bindAddresses(reloadPage, () => ($("#reglages-serveur").open = true));
   bindToolMenus(content, tools, versions, reloadPage);
   const grid = $("#grille-etabli");
   applyArrangement(grid, savedOrder);
   bindOrdering($("#ranger-etabli"), [{ grid, screen: "etabli" }]);
-  bindCatalog(grid, reloadPage, (catalogTools) => {
+  const extras = mine.some((item) => item.id === "antivirus") ? {} : { antivirus: antivirusOfferHtml() };
+  bindCatalog({ grid, offers: $("#ajouter-outils"), extras }, reloadPage, (catalogTools) => {
     bindToolMenus(content, catalogTools, versions, reloadPage);
-    applyArrangement(grid, savedOrder); // les cartes à activer arrivent après : elles prennent leur place aussi
+    bindAntivirus(reloadPage); // l'offre de l'antivirus arrive avec les autres
+    applyArrangement(grid, savedOrder); // les outils de l'appli arrivent après : ils prennent leur place aussi
   });
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;
@@ -117,13 +84,9 @@ pages.outils = async () => {
     } catch (error) {
       toast(error.message, true);
     }
-    pages.outils().catch(showError);
+    reloadPage();
   };
-
-  const reload = () => {
-    if (location.hash.startsWith("#/outils")) pages.outils().catch(showError);
-  };
-  // Inscriptions Nextcloud en attente : une pastille sur « Gérer ».
+  // Inscriptions Nextcloud en attente : une pastille sur « Comptes ».
   if ($("#attente-nuage"))
     api("/api/nuage/attente")
       .then((result) => {
@@ -134,60 +97,46 @@ pages.outils = async () => {
         }
       })
       .catch(() => {});
-  content.querySelectorAll("[data-bascule]").forEach((element) =>
-    element.addEventListener("click", async () => {
-      const item = tools.find((item) => item.id === element.dataset.bascule);
-      const enable = element.getAttribute("aria-checked") !== "true";
-      if (
-        !enable &&
-        !(await confirmAction({
-          titre: t`Désactiver ${item.nom} ?`,
-          texte: t(
-            "Il ne sera plus accessible, sur aucun appareil, jusqu'à ce que tu le réactives. Ses réglages et ses données sont conservés.",
-          ),
-          valider: t("Désactiver"),
-          danger: true,
-        }))
-      )
-        return;
-      element.setAttribute("aria-checked", String(enable));
-      content.querySelectorAll("[data-bascule],[data-action]").forEach((item) => (item.disabled = true));
-      try {
-        await followTask(
-          await api(`/api/outils/${encodeURIComponent(item.id)}/${enable ? "demarrer" : "arreter"}`, {
-            method: "POST",
-          }),
-        );
-      } catch (error) {
-        toast(error.message, true);
-      }
-      reload();
-    }),
-  );
+  content
+    .querySelectorAll("[data-bascule]")
+    .forEach((element) =>
+      element.addEventListener("click", () => toggleTool(tools.find((item) => item.id === element.dataset.bascule))),
+    );
   content.querySelectorAll("[data-action]").forEach((element) =>
-    element.addEventListener("click", async () => {
-      const item = tools.find((item) => item.id === element.dataset.id);
-      const texts = {
-        redemarrer: [t("Redémarrer ") + item.nom + " ?", t("Il sera indisponible quelques secondes."), t("Redémarrer")],
-        "mettre-a-jour": [
-          t("Mettre à jour ") + item.nom + " ?",
-          t("Il sera indisponible pendant la mise à jour (1 à 5 minutes)."),
-          t("Mettre à jour"),
-        ],
-      }[element.dataset.action];
-      if (!(await confirmAction({ titre: texts[0], texte: texts[1], valider: texts[2] }))) return;
-      content.querySelectorAll("[data-bascule],[data-action]").forEach((item) => (item.disabled = true));
-      try {
-        await followTask(
-          await api(`/api/outils/${encodeURIComponent(item.id)}/${element.dataset.action}`, { method: "POST" }),
-        );
-      } catch (error) {
-        toast(error.message, true);
-      }
-      reload();
-    }),
+    element.addEventListener("click", () =>
+      runToolAction(
+        tools.find((item) => item.id === element.dataset.id),
+        element.dataset.action,
+        reloadPage,
+      ),
+    ),
   );
 };
+
+/** Le curseur : en pause (après confirmation) ou de nouveau en marche. */
+async function toggleTool(item) {
+  const resume = item.etat === "arrêté";
+  if (
+    !resume &&
+    !(await confirmAction({
+      titre: t`Mettre ${item.nom} en pause ?`,
+      texte: t(
+        "Il ne sera plus accessible, sur aucun appareil, jusqu'à ce que tu le remettes en marche. Il ne consomme plus rien, et ses réglages et ses données sont gardés.",
+      ),
+      valider: t("Mettre en pause"),
+    }))
+  )
+    return;
+  content.querySelectorAll("[data-bascule],[data-action]").forEach((element) => (element.disabled = true));
+  try {
+    await followTask(
+      await api(`/api/outils/${encodeURIComponent(item.id)}/${resume ? "demarrer" : "arreter"}`, { method: "POST" }),
+    );
+  } catch (error) {
+    toast(error.message, true);
+  }
+  if (location.hash.startsWith("#/outils")) pages.outils().catch(showError);
+}
 
 // Ouvrir un outil dans l'appli, sans passer par le navigateur.
 pages.ouvrir = async (params) => {

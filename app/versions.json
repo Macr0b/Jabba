@@ -3,6 +3,7 @@
     "version": "0.16.5",
     "date": "2026-11-21",
     "changements": [
+      "Établi réorganisé : « Mes outils » (installés ; le curseur les met en pause ou en marche, un seul bouton « Ouvrir », « Mettre à jour » seulement quand une version plus récente existe ; Redémarrer et Désinstaller dans le menu •••), « Ajouter un outil » (rangés par usage, avec un bouton « Installer »), et « Réglages du serveur », replié (accès depuis Internet, adresses, Jabba lui-même).",
       "Adresses des outils, comme sur un serveur neuf : chaque outil qui a un compte reçoit son adresse à part pendant son activation, sans rien demander. La clé Tailscale se donne une fois, au script d'installation (qui s'en sert aussi pour que le serveur n'expire plus), et Jabba la garde jusqu'à son expiration. La carte « Adresses des outils » ne s'affiche plus que s'il manque une adresse. Un outil qui avait déjà une adresse d'une ancienne installation (Dockge) la garde, au lieu de buter sur un conflit de nom.",
       "Système → Mes codes (super admin) : tous les codes autour du serveur, à quoi ils servent et où ils sont rangés, en trois groupes : à garder dans ton trousseau, gardés par Jabba, à supprimer de ton trousseau. Jabba n'y affiche jamais un code.",
       "ntfy retiré de l'Établi : les alertes arrivent par les notifications de Jabba (Système → Alertes), sans autre appli.",
