@@ -312,8 +312,16 @@ def _remove_optional(args):
 # Un conteneur Tailscale par outil, sur le réseau du serveur (les outils n'écoutent que 127.0.0.1) :
 # https://<outil>.tailxxxx.ts.net renvoie vers 127.0.0.1:<port>. Mode « userspace », sans toucher au
 # Tailscale du serveur ; inscription une seule fois (TS_AUTH_ONCE), l'état est gardé dans ./etat.
+# Si un conteneur « adresse-<outil> » existe déjà dans une autre pile, il est gardé (réponse « DEJA »).
 # $0 l'outil, $1 son port ; la clé d'inscription (usage unique, 1 heure) arrive sur l'entrée standard.
 TOOL_ADDRESS = """set -e
+# Déjà une adresse d'une autre installation (ancienne pile « adresses » du guide) : on la garde et on la rallume.
+projet=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "adresse-$0" 2>/dev/null || true)
+if [ -n "$projet" ] && [ "$projet" != "adresse-$0" ]; then
+  docker start "adresse-$0" >/dev/null
+  echo DEJA
+  exit 0
+fi
 umask 077
 mkdir -p "/opt/stacks/adresse-$0/etat"
 cd "/opt/stacks/adresse-$0"

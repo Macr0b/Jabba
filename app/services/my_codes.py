@@ -121,9 +121,10 @@ def inventory(installed, identifier):
         codes.append(
             _entry(
                 "Clé d'accès Tailscale (tskey-api-…)",
-                "Créer les adresses des outils.",
+                "Donner une adresse à part à chaque outil que tu actives.",
                 "jabba",
-                note="Oubliée toute seule une fois les adresses créées.",
+                note="Gardée jusqu'à son expiration (90 jours au plus), lisible par l'appli seule. Révocable : "
+                "console Tailscale → Settings → Keys.",
             )
         )
     codes += [

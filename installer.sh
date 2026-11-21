@@ -47,7 +47,7 @@ echo "Installation Jabba du $(date '+%F %T'), serveur $SERVEUR, compte $MOI" >> 
 
 echo "${gras}Installation de Jabba sur « $SERVEUR »${fin}"
 echo "Compte du serveur : ${gras}$MOI${fin} (c'est aussi le super admin de l'appli)."
-echo "Compte 15 à 30 minutes. Deux moments te demanderont quelque chose : le disque de données, et la connexion à Tailscale."
+echo "Compte 15 à 30 minutes. Trois moments te demanderont quelque chose : le disque de données, la connexion à Tailscale, puis une clé Tailscale."
 
 ping -c 1 -W 3 deb.debian.org >/dev/null 2>&1 || echec "Pas d'accès à Internet. Vérifie le câble réseau, puis relance."
 
@@ -329,8 +329,34 @@ TS_LOGIN=$(tailscale status --json | jq -r '.User[(.Self.UserID|tostring)].Login
 TS_NOM=$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//')
 [ -n "$TS_LOGIN" ] || echec "Compte Tailscale introuvable."
 ok "Connecté : $TS_NOM (compte $TS_LOGIN)"
+# Clé d'accès à l'API Tailscale, donnée une fois : le serveur n'expire plus, et Jabba donne une adresse
+# à part à chaque outil activé (paperless.tailxxxx.ts.net…), pour que le trousseau ne mélange pas les
+# mots de passe. Gardée par l'appli jusqu'à son expiration (services/tool_addresses.py). Facultative.
+CLE_API_FICHIER=/opt/stacks/jabba-app/donnees/tailscale-api.json
+CLE_API=""
+if [ ! -s "$CLE_API_FICHIER" ] || ! grep -q tskey-api "$CLE_API_FICHIER"; then
+  echo "  Une clé Tailscale pour que le serveur n'expire pas et que chaque outil ait son adresse."
+  echo "  Sur ton ordinateur : login.tailscale.com/admin/settings/keys → Generate access token…"
+  echo "  (description : Jabba) → Generate access token → Copy."
+  read -rsp "  Colle-la puis Entrée (Entrée seule pour passer) : " CLE_API </dev/tty
+  echo
+  if [ -n "$CLE_API" ] && { ! [[ "$CLE_API" =~ ^tskey-api-[A-Za-z0-9-]{10,200}$ ]] ||
+    ! printf 'Authorization: Bearer %s\n' "$CLE_API" |
+      curl -fsS -o /dev/null -H @- https://api.tailscale.com/api/v2/tailnet/-/devices; }; then
+    note "Clé Tailscale refusée : tu pourras la coller plus tard dans Jabba (Établi → Adresses des outils)."
+    CLE_API=""
+  fi
+fi
 if [ -n "$(tailscale status --json | jq -r '.Self.KeyExpiry // empty')" ]; then
-  note "Dans la console Tailscale (login.tailscale.com/admin/machines) : sur la ligne $SERVEUR, … → Disable key expiry. Sinon le serveur se déconnecte dans quelques mois."
+  ID_SERVEUR=$(tailscale status --json | jq -r '.Self.ID')
+  # La clé passe par l'entrée standard (-H @-), jamais dans la liste des processus.
+  if [ -n "$CLE_API" ] && printf 'Authorization: Bearer %s\nContent-Type: application/json\n' "$CLE_API" |
+    curl -fsS -o /dev/null -X POST -H @- -d '{"keyExpiryDisabled":true}' \
+      "https://api.tailscale.com/api/v2/device/$ID_SERVEUR/key"; then
+    ok "Clé Tailscale du serveur sans date d'expiration"
+  else
+    note "Dans la console Tailscale (login.tailscale.com/admin/machines) : sur la ligne $SERVEUR, … → Disable key expiry. Sinon le serveur se déconnecte dans quelques mois."
+  fi
 else
   ok "Clé Tailscale sans date d'expiration"
 fi
@@ -411,6 +437,12 @@ LIENS=dockge=https://$TS_NOM:5001
 SEUIL_BATTERIE=15
 EOF
   chown "$MOI:$MOI" .env; chmod 600 .env
+fi
+# La clé Tailscale donnée à l'étape 7, pour l'appli (lisible par elle seule).
+if [ -n "$CLE_API" ]; then
+  mkdir -p donnees
+  (umask 077 && printf '{"cle": "%s"}\n' "$CLE_API" > "$CLE_API_FICHIER")
+  unset CLE_API
 fi
 # Anciennes installations : le lien de Dockge passait par le Wi-Fi.
 sed -i "s#dockge=http://[^,]*:5001#dockge=https://$TS_NOM:5001#" .env

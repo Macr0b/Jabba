@@ -15,7 +15,7 @@ Sommaire :
 
 from host import actions
 from host import catalog as host_catalog
-from services import background_tasks, measurements, tool_credentials, workshop
+from services import background_tasks, measurements, tool_addresses, tool_credentials, workshop
 
 GIGA = 1024**3
 # Outils de l'appli elle-même : rien à installer sur le serveur, juste un écran de plus.
@@ -77,7 +77,13 @@ def install(name, who=None):
     password = tool_credentials.password_for(name) if tool["mot_de_passe"] else ""
     actions.optional_password(name, password)
     return background_tasks.start_task(
-        f"Installation de {tool['nom']}", "installer_outil_option", {"outil": name}, who, name, password
+        f"Installation de {tool['nom']}",
+        "installer_outil_option",
+        {"outil": name},
+        who,
+        name,
+        password,
+        then=lambda: tool_addresses.after_install(name, who),  # son adresse à part, dans la foulée
     )
 
 

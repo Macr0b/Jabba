@@ -1,7 +1,7 @@
-// Adresses des outils, dans l'Établi : une adresse à part pour chaque outil qui a un compte
-// (paperless.tailxxxx.ts.net…), pour que le trousseau du navigateur ne mélange plus les mots de passe.
-// Jabba fait tout ; il faut juste, une fois, lui coller une clé d'accès Tailscale, qu'il oublie
-// dès que les adresses sont créées (services/tool_addresses.py). Réservé au super admin.
+// Adresses des outils, dans l'Établi : la carte de réparation. Normalement, chaque outil qui a un compte
+// reçoit son adresse à part (paperless.tailxxxx.ts.net…) pendant son activation, avec la clé Tailscale
+// donnée au script d'installation (services/tool_addresses.py). La carte ne s'affiche que s'il en manque
+// une : serveur installé avant la 0.16.4, clé expirée, ou création ratée. Réservé au super admin.
 //
 // Sommaire :
 //   partagé : addressCardHtml, bindAddresses
@@ -15,7 +15,7 @@ import { toolIcon } from "../pages/home.js";
 
 export function addressCardHtml() {
   if (!(state.admin && state.admin.rang === "super")) return "";
-  return t`<article class="carte pad outil" id="carte-adresses">
+  return t`<article class="carte pad outil" id="carte-adresses" hidden>
       <div class="haut"><div class="titre-outil">${toolIcon({ nom: t("Adresses") })}<div><h2>Adresses des outils</h2><div class="role">Une adresse à part pour chaque outil : le trousseau ne mélange plus les mots de passe</div></div></div></div>
       <div id="adresses-detail"><p class="note">Chargement…</p></div>
     </article>`;
@@ -43,7 +43,7 @@ function detailHtml(status) {
   return t`${list}
     <ol class="note">
       <li>Ouvre la page des clés de Tailscale, puis <strong>Generate access token…</strong> Description : Jabba ; expiration : laisse la valeur proposée. <strong>Generate access token</strong>, puis <strong>Copy</strong>.</li>
-      <li>Colle-la ici. Jabba crée les adresses (une minute environ par outil), puis oublie la clé : elle donne la main sur tout ton réseau Tailscale, elle ne reste donc pas sur le serveur.</li>
+      <li>Colle-la ici. Jabba crée les adresses (une minute environ par outil), puis garde la clé jusqu'à son expiration : les outils que tu activeras ensuite auront leur adresse sans rien te demander.</li>
     </ol>
     <p><a class="btn" href="${escapeHtml(status.page_cles)}" target="_blank" rel="noopener">Ouvrir la page des clés Tailscale</a></p>
     <label class="champ"><span>Clé d'accès (tskey-api-…)</span><input type="text" class="saisie-secrete" id="adresses-cle" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
@@ -58,6 +58,9 @@ export function bindAddresses(whenDone) {
   let wasBusy = false;
   const render = (status) => {
     if (!document.body.contains(detail)) return;
+    const card = $("#carte-adresses");
+    // Tout est en place : rien à réparer, la carte ne s'affiche pas.
+    card.hidden = status.outils.every((tool) => tool.adresse);
     detail.innerHTML = detailHtml(status);
     clearTimeout(timer);
     // Pendant la création, la carte se met à jour toute seule.

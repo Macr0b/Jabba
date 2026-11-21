@@ -124,3 +124,13 @@ def test_workflows_github_lisibles():
         w = yaml.safe_load(open(os.path.join(dossier, nom)))
         assert w.get("jobs"), nom
         assert w.get("name"), nom
+
+
+def test_cle_tailscale_a_l_installation():
+    """Une clé donnée une fois : le serveur n'expire plus, et l'appli la reçoit pour les adresses des outils."""
+    script = SCRIPT
+    assert 'read -rsp "  Colle-la puis Entrée (Entrée seule pour passer) : " CLE_API </dev/tty' in script  # masquée
+    assert "^tskey-api-[A-Za-z0-9-]{10,200}$" in script
+    assert "curl -fsS -o /dev/null -H @-" in script and 'Bearer $CLE_API" https' not in script  # jamais en argument
+    assert '"keyExpiryDisabled":true' in script
+    assert "(umask 077 && printf" in script and "unset CLE_API" in script

@@ -111,7 +111,7 @@ def test_creation_des_adresses_puis_cle_oubliee(ts):
     # Paperless apprend sa nouvelle adresse ; Homebox n'en a pas besoin.
     reglages = [a for a in ts.actions if a[0] == "adresse_dans_outil"]
     assert reglages == [("adresse_dans_outil", None, {"outil": "paperless", "adresse": "paperless.tail1234.ts.net"})]
-    assert not tool_addresses.status(set())["cle_prete"]  # tout est fait : la clé est oubliée
+    assert tool_addresses.status(set())["cle_prete"]  # gardée : les prochains outils auront leur adresse seuls
     assert tool_addresses.create_missing({"paperless"}, "rob") == []  # déjà là : rien à refaire
 
 
@@ -174,3 +174,91 @@ def test_le_lien_de_l_outil_prend_son_adresse(ts, monkeypatch):
     apres = {t["id"]: t["lien"] for t in tools.list_tools()}
     assert apres["adguard-home"] == "https://adguard-home.tail1234.ts.net" != avant["adguard-home"]
     assert apres["jellyfin"] == avant["jellyfin"]
+
+
+def test_adresse_creee_pendant_l_activation(ts):
+    """Un outil qu'on allume reçoit son adresse dans la foulée, sans rien demander (clé gardée)."""
+    tool_addresses.save_token(TOKEN)
+    assert tool_addresses.after_install("homebox", "rob") == "Adresse : https://homebox.tail1234.ts.net"
+    assert tool_addresses.after_install("homebox", "rob") == ""  # déjà là
+    assert tool_addresses.after_install("changedetection", "rob") == ""  # pas de compte : pas d'adresse
+    assert tool_addresses.after_install("time-machine", "rob") == ""  # pas de page
+
+
+def test_activation_sans_cle_rien_n_echoue(ts):
+    assert tool_addresses.after_install("homebox", "rob") == ""
+    assert not ts.appels and tool_addresses.address("homebox") is None  # la carte de réparation le dira
+
+
+def test_cle_expiree_oubliee_et_dite(ts):
+    tool_addresses.save_token(TOKEN)
+    ts.refuse = True
+    message = tool_addresses.after_install("homebox", "rob")
+    assert message.startswith("Adresse à part non créée") and "expirée" in message
+    assert not tool_addresses.status(set())["cle_prete"]  # inutile de garder une clé morte
+    assert tool_addresses.status({"homebox"})["outils"][0]["etat"].startswith("Tailscale refuse la clé")
+
+
+def test_installation_puis_adresse_dans_la_meme_tache(ts, monkeypatch):
+    from services import background_tasks, optional_tools
+
+    tool_addresses.save_token(TOKEN)
+    monkeypatch.setattr(background_tasks.config, "DEMO", False)
+    monkeypatch.setattr(optional_tools.actions, "optional_password", lambda *a: None)
+    monkeypatch.setattr(
+        background_tasks.threading, "Thread", lambda target, daemon: type("T", (), {"start": staticmethod(target)})()
+    )
+    monkeypatch.setattr(background_tasks.activity_log, "record", lambda *a, **k: None)
+    lancees = []
+
+    def action(nom, input_text=None, **args):
+        lancees.append(nom)
+        if nom == "adresse_outil":
+            ts.machines.append(
+                {
+                    "id": "n-h",
+                    "hostname": "homebox",
+                    "name": "homebox.tail1234.ts.net",
+                    "created": "2099-01-01T00:00:00Z",
+                }
+            )
+        return 0, "installé\n", ""
+
+    monkeypatch.setattr(background_tasks.commands, "run_action", action)
+    monkeypatch.setattr(tool_addresses.commands, "run_action", action)
+    tache = optional_tools.install("homebox", "rob")
+    assert lancees == ["installer_outil_option", "adresse_outil"]
+    assert tache["etat"] == "terminé" and "Adresse : https://homebox.tail1234.ts.net" in tache["journal"]
+
+
+def test_adresse_deja_la_d_une_ancienne_installation(ts, monkeypatch):
+    """Un conteneur « adresse-dockge » d'une ancienne pile : gardé, et sa machine (ancienne) reprise."""
+    tool_addresses.save_token(TOKEN)
+    ts.machines.append(
+        {"id": "n-ancien", "hostname": "dockge", "name": "dockge.tail1234.ts.net", "created": "2026-01-01T00:00:00Z"}
+    )
+    monkeypatch.setattr(tool_addresses.commands, "run_action", lambda *a, **k: (0, "DEJA\n", ""))
+    assert tool_addresses.after_install("dockge") == "Adresse : https://dockge.tail1234.ts.net"
+    assert ("POST", "/device/n-ancien/key", {"keyExpiryDisabled": True}, f"Bearer {TOKEN}") in ts.appels
+
+
+def test_script_garde_le_conteneur_d_une_autre_pile(tmp_path):
+    """Essai à blanc du script : docker répond qu'adresse-dockge appartient à la pile « adresses »."""
+    import os
+    import subprocess
+
+    faux = tmp_path / "docker"
+    faux.write_text(
+        '#!/bin/sh\n[ "$1" = inspect ] && { echo adresses; exit 0; }\necho "$@" >> "$(dirname "$0")/appels"\n'
+    )
+    faux.chmod(0o755)
+    commande, _ = actions.build("adresse_outil", {"outil": "dockge"})
+    sortie = subprocess.run(
+        commande,
+        input=AUTH,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+    )
+    assert sortie.returncode == 0 and sortie.stdout.strip() == "DEJA"
+    assert (tmp_path / "appels").read_text().strip() == "start adresse-dockge"  # rien d'écrit, rien de recréé

@@ -97,7 +97,7 @@ def test_installation_en_tache_longue(monkeypatch, tmp_path):
     monkeypatch.setattr(tool_credentials, "CREDENTIALS_FILE", str(tmp_path / "identifiants.json"))
     monkeypatch.setattr(tool_credentials.config, "DEMO", False)
     lance = []
-    monkeypatch.setattr(optional_tools.background_tasks, "start_task", lambda *a: lance.append(a) or {"id": "t1"})
+    monkeypatch.setattr(optional_tools.background_tasks, "start_task", lambda *a, **k: lance.append(a) or {"id": "t1"})
     assert optional_tools.install("vaultwarden", "rob") == {"id": "t1"}
     assert lance[0][1:] == ("installer_outil_option", {"outil": "vaultwarden"}, "rob", "vaultwarden", "")
     assert tool_credentials.read("vaultwarden") is None  # son compte se crée dans Vaultwarden lui-même

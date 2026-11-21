@@ -6,18 +6,20 @@ Chaque outil reçoit donc son propre nom dans Tailscale : un petit conteneur « 
 (Tailscale, sur le réseau du serveur) qui renvoie https://<outil>.tailxxxx.ts.net vers le port de
 l'outil sur le serveur. L'ancienne adresse (avec le port) continue de marcher.
 
-Pour inscrire ces noms, Jabba a besoin une fois d'une clé d'accès à l'API Tailscale (créée par toi
-dans la console). Avec elle, il crée pour chaque outil une clé d'inscription à usage unique (1 heure),
-lance le conteneur, et désactive l'expiration de la nouvelle machine (sinon l'adresse tomberait au
-bout de 6 mois). La clé d'accès donne la main sur tout ton réseau Tailscale : Jabba l'oublie dès
-que les adresses sont créées ; il la redemandera seulement pour un nouvel outil.
+Pour inscrire ces noms, Jabba a besoin d'une clé d'accès à l'API Tailscale, donnée une fois au script
+d'installation (ou collée dans la carte « Adresses des outils »). Avec elle, il crée pour chaque outil une
+clé d'inscription à usage unique (1 heure), lance le conteneur, et désactive l'expiration de la nouvelle
+machine (sinon l'adresse tomberait au bout de 6 mois). L'adresse se crée pendant l'activation de l'outil.
+La clé est gardée jusqu'à son expiration (90 jours au plus), dans un fichier lisible par l'appli seule ;
+Tailscale la refuse ensuite, Jabba l'oublie et la carte en redemande une s'il manque une adresse.
 
 Sommaire :
   TARGETS                  : les outils qui ont une page, et leur port sur le serveur
   status(installed)        : clé présente ?, l'adresse de chaque outil installé (ou ce qui se passe)
   save_token(token)        : vérifie la clé d'accès auprès de Tailscale, puis la garde (privée)
   forget_token()           : l'oublie
-  create_missing(installed, who) : crée, dans un fil à part, les adresses qui manquent, puis oublie la clé
+  create_missing(installed, who) : crée, dans un fil à part, les adresses qui manquent (carte de réparation)
+  after_install(tool, who) : crée l'adresse d'un outil qu'on vient d'activer (si la clé est là)
   address(tool)            : l'adresse https de l'outil, ou None
   interne : _api, _new_auth_key, _wait_for_device, _create
 """
@@ -77,6 +79,8 @@ def _api(method, path, payload=None, token=None):
     except httpx.HTTPError:
         raise AddressError("Tailscale ne répond pas : réessaie dans un moment.")
     if response.status_code in (401, 403):
+        if token == _token():
+            forget_token()  # expirée ou révoquée : inutile de la garder
         raise AddressError("Tailscale refuse la clé (expirée ou révoquée) : crées-en une nouvelle.")
     if response.status_code >= 400:
         raise AddressError(f"Tailscale a refusé la demande ({response.status_code}).")
@@ -156,10 +160,11 @@ def _create(tool, who):
         url = f"https://{tool}.exemple.ts.net"
     else:
         key = _new_auth_key(tool)
-        code, _, error_output = commands.run_action("adresse_outil", input_text=key, outil=tool)
+        code, output, error_output = commands.run_action("adresse_outil", input_text=key, outil=tool)
         if code != 0:
             raise AddressError(error_output.strip()[-300:] or "Le conteneur d'adresse n'a pas démarré.")
-        device = _wait_for_device(tool, started)
+        # « DEJA » : l'outil avait déjà son adresse (ancienne installation) ; on reprend sa machine.
+        device = _wait_for_device(tool, 0 if "DEJA" in output else started)
         _api("POST", f"/device/{device['id']}/key", {"keyExpiryDisabled": True})
         url = "https://" + device["name"].rstrip(".")
         if catalog.OPTIONAL_TOOLS.get(tool, {}).get("variable_adresse"):
@@ -190,8 +195,19 @@ def create_missing(installed, who=None):
                 _STATE.pop(tool, None)
             except (AddressError, KeyError, TypeError) as error:
                 _STATE[tool] = str(error) if isinstance(error, AddressError) else "Réponse inattendue de Tailscale."
-        if all(tool not in _STATE for tool in todo):
-            forget_token()  # tout est créé : la clé, qui ouvre tout le réseau Tailscale, ne reste pas ici
 
     threading.Thread(target=work, daemon=True).start()
     return todo
+
+
+def after_install(tool, who=None):
+    """Juste après l'activation d'un outil : son adresse à part. Renvoie une ligne pour le compte rendu."""
+    if tool not in TARGETS or address(tool) or not _token():
+        return ""
+    try:
+        _create(tool, who)
+    except (AddressError, KeyError, TypeError) as error:
+        _STATE[tool] = str(error) if isinstance(error, AddressError) else "Réponse inattendue de Tailscale."
+        return "Adresse à part non créée : " + _STATE[tool]
+    _STATE.pop(tool, None)
+    return "Adresse : " + address(tool)

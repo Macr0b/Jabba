@@ -17,7 +17,9 @@ from services import activity_log
 TASKS = {}
 
 
-def start_task(title, action, args, who=None, tool=None, input_text=None):
+def start_task(title, action, args, who=None, tool=None, input_text=None, then=None):
+    """Lance l'action dans un fil à part. `then` : appelé si elle réussit, avant de dire « terminé »
+    (ex. créer l'adresse de l'outil installé) ; le texte qu'il renvoie s'ajoute au compte rendu."""
     task_id = uuid.uuid4().hex[:8]
     TASKS[task_id] = {
         "id": task_id,
@@ -36,6 +38,8 @@ def start_task(title, action, args, who=None, tool=None, input_text=None):
             else:
                 code, output, error_output = commands.run_action(action, input_text=input_text, **args)
             TASKS[task_id]["journal"] = (output + error_output)[-4000:]
+            if code == 0 and then:
+                TASKS[task_id]["journal"] += "\n" + (then() or "")
             TASKS[task_id]["etat"] = "terminé" if code == 0 else "erreur"
         except Exception as error:  # noqa: BLE001
             TASKS[task_id]["journal"] = str(error)
