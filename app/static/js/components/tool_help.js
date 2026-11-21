@@ -67,15 +67,9 @@ const HELP = {
     ),
     "https://homebox.software/",
   ],
-  ntfy: [
-    t(
-      "Installe l'appli ntfy sur le téléphone, ajoute ce serveur (adresse de la carte), puis abonne-toi au sujet indiqué dans Système → Alertes : les alertes de Jabba et les rappels d'entretien y arrivent. Les types d'alertes se règlent au même endroit.",
-    ),
-    "https://docs.ntfy.sh/subscribe/phone/",
-  ],
   changedetection: [
     t(
-      "Colle l'adresse d'une page (un prix, un produit en rupture, une notice) : il la relit régulièrement et te montre ce qui a changé. Pour être prévenu sur le téléphone avec ntfy, mets comme notification : ntfy://127.0.0.1:2586/ton-sujet.",
+      "Colle l'adresse d'une page (un prix, un produit en rupture, une notice) : il la relit régulièrement et te montre ce qui a changé.",
     ),
     "https://changedetection.io/tutorials",
   ],
@@ -96,7 +90,6 @@ const UNINSTALL = {
   "adguard-home": "/api/etabli/adguard-home/retirer",
   paperless: "/api/etabli/paperless/retirer",
   homebox: "/api/etabli/homebox/retirer",
-  ntfy: "/api/etabli/ntfy/retirer",
   changedetection: "/api/etabli/changedetection/retirer",
   atelier: "/api/etabli/atelier/retirer",
 };

@@ -67,9 +67,8 @@ export async function alertsCard() {
     ${reason ? `<div class="bandeau" style="margin-bottom:12px"><span>${escapeHtml(reason)}</span></div>` : ""}
     <div class="actions" style="margin-bottom:14px">
       ${reason ? "" : here ? t`<button class="btn" id="alertes-off">Ne plus les recevoir ici</button>` : t`<button class="btn btn-p" id="alertes-on">Recevoir les alertes sur cet appareil</button>`}
-      ${data.appareils || data.ntfy ? t`<button class="btn" id="alertes-essai">Envoyer une alerte d'essai</button>` : ""}
+      ${data.appareils ? t`<button class="btn" id="alertes-essai">Envoyer une alerte d'essai</button>` : ""}
     </div>
-    ${data.ntfy ? t`<p class="note" id="alertes-ntfy" style="margin:0 0 12px">Aussi sur l'appli ntfy : abonne-toi au sujet <code>${escapeHtml(data.ntfy)}</code> sur le serveur <code>https://${escapeHtml(location.hostname)}:2586</code>.</p>` : ""}
     <div class="types-alertes">${data.types
       .map(
         (

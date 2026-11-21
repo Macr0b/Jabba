@@ -221,31 +221,8 @@ HBOX_OPTIONS_ALLOW_REGISTRATION=true
 HBOX_AUTH_API_KEY_PEPPER={SECRET_MARK}
 """
 
-# Les alertes du serveur sur le téléphone (appli ntfy). L'appli Jabba y publie dans un sujet tiré au sort.
-# upstream : pour l'iPhone, ntfy.sh ne reçoit qu'un signal de réveil, jamais le texte de l'alerte.
-NTFY_COMPOSE = """services:
-  ntfy:
-    image: binwiederhier/ntfy:latest
-    container_name: ntfy
-    restart: unless-stopped
-    command: serve
-    ports:
-      - "127.0.0.1:2586:80"
-    env_file: .env
-    environment:
-      NTFY_BEHIND_PROXY: "true"
-      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
-      NTFY_CACHE_DURATION: 72h
-      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
-    volumes:
-      - ./donnees:/var/lib/ntfy
-"""
-
-NTFY_ENV = f"""NTFY_BASE_URL=https://{TAILSCALE_MARK}:2586
-"""
-
 # Surveille des pages web (prix, retour en stock, notice mise à jour) et prévient quand elles changent.
-# Sur le réseau de l'hôte, mais n'écoute que 127.0.0.1 : il joint ainsi ntfy (127.0.0.1:2586) pour prévenir.
+# Sur le réseau de l'hôte, mais n'écoute que 127.0.0.1 : seul le serveur lui-même le joint.
 CHANGEDETECTION_COMPOSE = """services:
   changedetection:
     image: ghcr.io/dgtlmoon/changedetection.io:latest
@@ -326,16 +303,6 @@ OPTIONAL_TOOLS = {
         # Avec une adresse à part (services/tool_addresses.py), Paperless doit la connaître : sinon il
         # refuse les formulaires venus d'une autre adresse que celle-ci.
         "variable_adresse": "PAPERLESS_URL",
-    },
-    "ntfy": {
-        "nom": "ntfy",
-        "role": "Les alertes du serveur et les rappels d'entretien sur ton téléphone",
-        "memoire_go": 0.05,
-        "port_https": 2586,
-        "port_local": 2586,
-        "fichiers": {"compose.yaml": NTFY_COMPOSE, ".env": NTFY_ENV},
-        "preparer": "",
-        "mot_de_passe": False,
     },
     "changedetection": {
         "nom": "changedetection.io",

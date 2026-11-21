@@ -42,9 +42,9 @@ KEYS_PAGE = "https://login.tailscale.com/admin/settings/keys"
 TOKEN = re.compile(r"tskey-api-[A-Za-z0-9-]{10,200}")
 DEVICE_NAME = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 # Les outils qui ont une page où l'on se connecte, et le port où ils répondent sur le serveur.
-# Nextcloud et Jellyfin ont déjà leur adresse (posée à l'installation : guide, étape 8) ; ntfy et
-# changedetection n'ont pas de compte : rien que le trousseau puisse confondre, ils gardent la leur.
-WITHOUT_LOGIN = {"ntfy", "changedetection"}
+# Nextcloud et Jellyfin ont déjà leur adresse (posée à l'installation : guide, étape 8) ;
+# changedetection n'a pas de compte : rien que le trousseau puisse confondre, il garde la sienne.
+WITHOUT_LOGIN = {"changedetection"}
 TARGETS = {
     "dockge": 5001,
     **{

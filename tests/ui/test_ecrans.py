@@ -197,7 +197,6 @@ def test_outils_a_activer_et_memoire(page):
         "time-machine",
         "paperless",
         "homebox",
-        "ntfy",
         "changedetection",
     ):
         interrupteur = page.locator(f'#grille-etabli [data-activer="{outil}"]')
@@ -499,3 +498,15 @@ def test_adresses_des_outils(page):
     expect(page.locator("#carte-adresses #adresses-cle")).to_have_count(0)  # tout est créé : plus rien à coller
     outil = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
     expect(outil.get_by_role("link", name="Ouvrir")).to_have_attribute("href", "https://adguard-home.exemple.ts.net")
+
+
+def test_mes_codes(page):
+    """Système → Mes codes : trois groupes, ce que fait chaque code, jamais sa valeur."""
+    aller(page, "systeme")
+    carte = page.locator("#mes-codes")
+    expect(carte).to_contain_text("À garder dans ton trousseau")
+    expect(carte).to_contain_text("Gardés par Jabba")
+    expect(carte).to_contain_text("Tu peux les supprimer de ton trousseau")
+    expect(carte).to_contain_text("Mot de passe du serveur")
+    expect(carte).to_contain_text("Compte AdGuard Home")
+    expect(carte).not_to_contain_text("demo-adguard-home")  # le mot de passe de la démo n'apparaît jamais

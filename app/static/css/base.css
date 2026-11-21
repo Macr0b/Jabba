@@ -700,3 +700,16 @@ html {
   align-items: center;
   gap: 12px;
 }
+
+/* Mes codes (Système) : trois groupes, un code par ligne avec ce qu'il ouvre. */
+.titre-codes {
+  font-size: 0.95rem;
+  margin: 14px 0 6px;
+}
+.liste-codes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}

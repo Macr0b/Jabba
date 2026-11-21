@@ -2,11 +2,12 @@
 //
 // Sommaire :
 //   partagé : pages.systeme (écran), pages.plus (écran)
-//   interne : restartPolicyCard, appUpdateCard (cartes Double vérification et Serveur ouvert au public : components/)
+//   interne : restartPolicyCard, appUpdateCard (cartes Mes codes, Double vérification et Serveur ouvert au public : components/)
 import { alertsCard } from "../components/alerts.js";
 import { confirmAction, toast } from "../components/dialogs.js";
 import { appearanceCard } from "../components/appearance_card.js";
 import { publicModeCard } from "../components/public_mode_card.js";
+import { myCodesCard } from "../components/my_codes.js";
 import { secondFactorCard } from "../components/second_factor.js";
 import { chooseMyPassword, logOut, showRecoveryCode } from "../core/admin_session.js";
 import { api, formBody } from "../core/api.js";
@@ -57,6 +58,7 @@ pages.systeme = async () => {
         <div class="actions"><button class="btn" id="changer-mdp">${entry.connecte && entry.connecte.identifiant !== entry.serveur ? t("Changer mon mot de passe") : t("Changer le mot de passe du serveur")}</button>
         <button class="btn" id="code-secours">${entry.code_existe ? t("Nouveau code de secours") : t("Créer le code de secours")}</button></div>
       </section>
+      ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="mes-codes"><h2>Mes codes</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
       <section class="carte pad" id="apparence"><h2>Apparence</h2></section>
       <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="public"><h2>Serveur ouvert au public</h2><div class="squelette" style="margin-top:10px"></div></section>
@@ -78,6 +80,10 @@ pages.systeme = async () => {
       </section>
     </div>`;
   appearanceCard();
+  myCodesCard().catch((entry) => {
+    const element = $("#mes-codes");
+    if (element) element.innerHTML = t`<h2>Mes codes</h2><p class="note">${escapeHtml(entry.message)}</p>`;
+  });
   secondFactorCard().catch((entry) => {
     const element = $("#double");
     if (element) element.innerHTML = t`<h2>Double vérification</h2><p class="note">${escapeHtml(entry.message)}</p>`;

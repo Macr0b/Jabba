@@ -3,6 +3,8 @@
     "version": "0.16.5",
     "date": "2026-11-21",
     "changements": [
+      "Système → Mes codes (super admin) : tous les codes autour du serveur, à quoi ils servent et où ils sont rangés, en trois groupes : à garder dans ton trousseau, gardés par Jabba, à supprimer de ton trousseau. Jabba n'y affiche jamais un code.",
+      "ntfy retiré de l'Établi : les alertes arrivent par les notifications de Jabba (Système → Alertes), sans autre appli.",
       "Après une mise à jour, chaque fenêtre de Jabba restée ouverte (Mac, iPhone…) se recharge toute seule, une fois, au lieu de garder l'ancienne interface (où, par exemple, le menu Identifiants ne montrait pas encore le formulaire)."
     ]
   },

@@ -160,13 +160,9 @@ def test_nouveaux_outils_du_catalogue():
     )  # aucun port déjà pris
 
 
-def test_ntfy_et_changedetection():
-    assert (
-        '"127.0.0.1:2586:80"' in catalog.NTFY_COMPOSE
-        and "NTFY_UPSTREAM_BASE_URL: https://ntfy.sh" in catalog.NTFY_COMPOSE
-    )
-    assert catalog.NTFY_ENV == f"NTFY_BASE_URL=https://{catalog.TAILSCALE_MARK}:2586\n"
-    # réseau de l'hôte pour joindre ntfy, mais il n'écoute que le serveur lui-même
+def test_changedetection_n_ecoute_que_le_serveur():
+    assert "ntfy" not in catalog.OPTIONAL_TOOLS  # retiré de l'Établi (0.16.5)
+    # réseau de l'hôte, mais il n'écoute que le serveur lui-même
     assert (
         "network_mode: host" in catalog.CHANGEDETECTION_COMPOSE
         and "LISTEN_HOST: 127.0.0.1" in catalog.CHANGEDETECTION_COMPOSE

@@ -96,8 +96,8 @@ def test_cle_que_tailscale_refuse_n_est_pas_gardee(ts):
 
 def test_creation_des_adresses_puis_cle_oubliee(ts):
     tool_addresses.save_token(TOKEN)
-    lances = tool_addresses.create_missing({"paperless", "homebox", "ntfy", "nextcloud", "jabba-app"}, "rob")
-    assert lances == ["homebox", "paperless"]  # ntfy (sans compte), Nextcloud (a déjà la sienne) : rien
+    lances = tool_addresses.create_missing({"paperless", "homebox", "changedetection", "nextcloud", "jabba-app"}, "rob")
+    assert lances == ["homebox", "paperless"]  # changedetection (sans compte), Nextcloud (a déjà la sienne) : rien
     assert tool_addresses.address("paperless") == "https://paperless.tail1234.ts.net"
     assert tool_addresses.address("homebox") == "https://homebox.tail1234.ts.net"
     # Une clé d'inscription à usage unique par outil ; la clé d'accès ne quitte jamais l'appli.
@@ -148,7 +148,7 @@ def test_sans_cle_on_ne_lance_rien(ts):
 
 
 def test_action_d_adresse_refuse_le_reste():
-    for args in ({"outil": "nextcloud"}, {"outil": "../x"}, {"outil": "ntfy"}, {}):
+    for args in ({"outil": "nextcloud"}, {"outil": "../x"}, {"outil": "changedetection"}, {}):
         with pytest.raises(actions.ActionError):
             actions.build("adresse_outil", args)
     commande, _ = actions.build("adresse_outil", {"outil": "paperless"})

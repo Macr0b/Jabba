@@ -11,7 +11,7 @@ Sommaire :
 
 from fastapi import APIRouter, HTTPException, Request
 
-from services import activity_log, measurements, notifications, ntfy_relay
+from services import activity_log, measurements, notifications
 
 router = APIRouter()
 
@@ -21,7 +21,6 @@ router = APIRouter()
 def alert_settings():
     current_settings = notifications.settings()
     current_settings.pop("endpoints")
-    current_settings["ntfy"] = ntfy_relay.topic() if ntfy_relay.is_running() else ""
     return current_settings
 
 
