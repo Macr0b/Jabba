@@ -51,7 +51,7 @@ function offerCardHtml(tool, memory) {
       ? t`Prend environ ${formatBytes(tool.memoire)} : il n'en resterait que ${formatBytes(Math.max(remaining, 0))}. Mets d'abord un autre outil en pause.`
       : t`Prend environ ${formatBytes(tool.memoire)} de mémoire : il en resterait ${formatBytes(remaining)}.`;
   return `<article class="carte pad outil offre" data-offre="${escapeHtml(tool.id)}">
-      <div class="haut"><div class="titre-outil">${toolIcon({ nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
+      <div class="haut"><div class="titre-outil">${toolIcon({ id: tool.id, nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
       <div class="haut-droite">${toolMenuHtml(tool)}</div></div>
       <div class="pied-offre"><p class="note${tooMuch ? " alerte-memoire" : ""}">${cost}</p>
       <button class="btn btn-p" type="button" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}>${escapeHtml(tool.integre ? t("Ajouter") : t("Installer"))}</button></div>

@@ -1,21 +1,41 @@
-/* Couleurs et réglages communs.
+/* Couleurs et réglages communs : le style « Cube » (nuit vert d'eau, formes rondes, icônes en losange ;
+ * ses formes sont dans style_cube.css).
  * Chaque couleur a sa valeur claire et sa valeur sombre : light-dark(clair, sombre).
  * Le thème suit l'appareil, sauf si l'admin a choisi Clair ou Sombre (Système → Apparence),
  * ce qui pose data-theme sur <html> (voir js/theme_boot.js). */
+@font-face {
+  font-family: "Sora";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../vendor/fonts/sora-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Sora";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../vendor/fonts/sora-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Sora";
+  font-weight: 600;
+  font-display: swap;
+  src: url("../vendor/fonts/sora-600.woff2") format("woff2");
+}
 :root {
   color-scheme: light dark;
-  --fond: light-dark(#f4f5f7, #121418);
-  --carte: light-dark(#ffffff, #1b1e24);
-  --bord: light-dark(#e3e5ea, #2c3038);
-  --bord-doux: light-dark(#eef0f3, #252931);
-  --texte: light-dark(#15181e, #eceef2);
-  --texte-2: light-dark(#3a404c, #c9cdd6);
-  --texte-3: light-dark(#5b6270, #9aa0ac);
-  --texte-4: light-dark(#646a76, #8a909c); /* contraste ≥ 4,5:1 sur les deux fonds (WCAG AA) */
-  --accent: light-dark(#2457c5, #6e9bff);
-  --accent-fonce: light-dark(#1a3f8f, #9bbbff);
-  --accent-doux: light-dark(#e9effc, #1f2b47);
-  --survol: light-dark(#f5f8fe, #222837);
+  --police: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --fond: light-dark(#eef4f2, #0b1514);
+  --carte: light-dark(#ffffff, #11201e);
+  --bord: light-dark(#d3e4df, #1e3633);
+  --bord-doux: light-dark(#e3eeeb, #172b28);
+  --texte: light-dark(#0f2421, #e3f1ee);
+  --texte-2: light-dark(#2c4a45, #b9d3cd);
+  --texte-3: light-dark(#48655f, #8fb1aa);
+  --texte-4: light-dark(#4f6c66, #86a8a1); /* contraste ≥ 4,5:1 sur les deux fonds (WCAG AA) */
+  --accent: light-dark(#09715f, #3fd1b1);
+  --accent-fonce: light-dark(#075e4f, #7de3cb);
+  --accent-doux: light-dark(#dcf1eb, #174039);
+  --survol: light-dark(#f1f8f6, #162a27);
   --vert: light-dark(#1e8e5a, #3dbf84);
   --vert-texte: light-dark(#146b43, #6fd6a5);
   --vert-doux: light-dark(#e3f4ea, #17352a);
@@ -24,8 +44,8 @@
   --alerte-texte: light-dark(#7a4a06, #f2c97a);
   --rouge: light-dark(#c23b32, #f07468);
   --rouge-doux: light-dark(#fdecea, #3d1c1a);
-  --dossier: light-dark(#7fa2e8, #5f86d6);
-  --sur-accent: light-dark(#fff, #0e1320); /* texte posé sur la couleur d'accent */
+  --dossier: light-dark(#4cb59f, #2f9d86);
+  --sur-accent: light-dark(#fff, #05201b); /* texte posé sur la couleur d'accent */
 }
 :root[data-theme="clair"] {
   color-scheme: light;
@@ -37,18 +57,18 @@
 /* Navigateurs trop anciens pour light-dark() (iOS avant 17.5) : couleurs claires, sans choix de thème. */
 @supports not (color: light-dark(#000, #fff)) {
   :root {
-    --fond: #f4f5f7;
+    --fond: #eef4f2;
     --carte: #ffffff;
-    --bord: #e3e5ea;
-    --bord-doux: #eef0f3;
-    --texte: #15181e;
-    --texte-2: #3a404c;
-    --texte-3: #5b6270;
-    --texte-4: #646a76;
-    --accent: #2457c5;
-    --accent-fonce: #1a3f8f;
-    --accent-doux: #e9effc;
-    --survol: #f5f8fe;
+    --bord: #d3e4df;
+    --bord-doux: #e3eeeb;
+    --texte: #0f2421;
+    --texte-2: #2c4a45;
+    --texte-3: #48655f;
+    --texte-4: #4f6c66;
+    --accent: #09715f;
+    --accent-fonce: #075e4f;
+    --accent-doux: #dcf1eb;
+    --survol: #f1f8f6;
     --vert: #1e8e5a;
     --vert-texte: #146b43;
     --vert-doux: #e3f4ea;
@@ -57,7 +77,7 @@
     --alerte-texte: #7a4a06;
     --rouge: #c23b32;
     --rouge-doux: #fdecea;
-    --dossier: #7fa2e8;
+    --dossier: #4cb59f;
     --sur-accent: #fff;
   }
 }

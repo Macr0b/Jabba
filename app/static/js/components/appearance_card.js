@@ -14,7 +14,7 @@ const THEMES = [
   ["clair", t("Clair")],
   ["sombre", t("Sombre")],
 ];
-const THEME_COLORS = { clair: "#F4F5F7", sombre: "#121418" };
+const THEME_COLORS = { clair: "#EEF4F2", sombre: "#0B1514" };
 
 function savedTheme() {
   try {

@@ -16,7 +16,7 @@ import { toolIcon } from "../pages/home.js";
 export function addressCardHtml() {
   if (!(state.admin && state.admin.rang === "super")) return "";
   return t`<article class="carte pad outil" id="carte-adresses" hidden>
-      <div class="haut"><div class="titre-outil">${toolIcon({ nom: t("Adresses") })}<div><h2>Adresses des outils</h2><div class="role">Une adresse à part pour chaque outil : le trousseau ne mélange plus les mots de passe</div></div></div></div>
+      <div class="haut"><div class="titre-outil">${toolIcon({ id: "adresses", nom: t("Adresses") })}<div><h2>Adresses des outils</h2><div class="role">Une adresse à part pour chaque outil : le trousseau ne mélange plus les mots de passe</div></div></div></div>
       <div id="adresses-detail"><p class="note">Chargement…</p></div>
     </article>`;
 }

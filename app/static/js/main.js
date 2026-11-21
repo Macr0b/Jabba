@@ -23,12 +23,14 @@ import { showPasswordReset, chooseMyPassword, logOut } from "./core/admin_sessio
 import { api } from "./core/api.js";
 import { $, escapeHtml } from "./core/dom.js";
 import { pages } from "./core/pages.js";
+import { decorateNavigation } from "./core/icons.js";
 import { showError, router } from "./core/router.js";
 import { state } from "./core/state.js";
 import { rememberedServer } from "./pages/help.js";
 import { t } from "./core/i18n.js";
 
 window.addEventListener("hashchange", router);
+decorateNavigation();
 
 (async () => {
   try {

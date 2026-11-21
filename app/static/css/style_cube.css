@@ -1,0 +1,93 @@
+/* Style « Cube », celui de Jabba : formes rondes, icônes en losange, police Sora, une lueur vert d'eau
+ * à peine visible en haut de l'écran. Les couleurs sont dans tokens.css. Un autre style (thème alternatif)
+ * se poserait par-dessus avec :root[data-style="…"]. */
+
+body {
+  font-family: var(--police);
+  background: radial-gradient(
+      900px 420px at 85% -8%,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 70%
+    ),
+    var(--fond);
+  background-attachment: fixed;
+}
+h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-weight: 500;
+}
+
+/* Cartes plus rondes, boutons en pilule. */
+.carte {
+  border-radius: 18px;
+}
+.btn {
+  border-radius: 999px;
+}
+.btn-p {
+  font-weight: 500;
+}
+
+/* La marque : un cube vu en losange, au trait. */
+.logo {
+  background: var(--accent-doux);
+  color: var(--accent);
+  border-radius: 10px;
+}
+
+/* Navigation : une icône devant chaque écran ; l'écran ouvert est marqué d'un trait à gauche. */
+.barre-laterale a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.barre-laterale a .ico {
+  flex: none;
+  opacity: 0.85;
+}
+.barre-laterale a.actif {
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--accent-fonce);
+}
+.onglets a .ico {
+  display: block;
+  margin: 0 auto 3px;
+}
+
+/* Icône d'outil : un carré arrondi tourné en losange, derrière le dessin (qui reste droit). */
+.icone {
+  position: relative;
+  isolation: isolate;
+  background: none;
+  overflow: visible;
+  color: var(--accent);
+  font-weight: 600;
+}
+.icone::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  z-index: -1;
+  border-radius: 28%;
+  background: var(--accent-doux);
+  transform: rotate(45deg);
+}
+.outil.eteint .icone {
+  color: var(--texte-3);
+}
+
+/* Curseur allumé, pastilles : la couleur de Jabba. */
+.interrupteur[aria-checked="true"] {
+  background: var(--accent);
+}
+.pastille {
+  border-radius: 999px;
+}
+
+/* Titres de section : un peu d'air avant le contenu qu'ils annoncent. */
+section > .titre-section {
+  margin-bottom: 12px;
+}

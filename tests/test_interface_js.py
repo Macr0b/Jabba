@@ -40,6 +40,26 @@ def test_catalogue_des_textes_a_jour():
     assert resultat.returncode == 0, resultat.stderr
 
 
+def test_icones_a_jour():
+    """app/static/vendor/icons.js contient exactement les icônes Tabler listées dans tests/outils_js/icones.cjs."""
+    resultat = subprocess.run(
+        ["node", os.path.join(OUTILS, "icones.cjs"), "--verifier"], capture_output=True, text=True
+    )
+    assert resultat.returncode == 0, resultat.stderr
+
+
+def test_chaque_icone_demandee_existe():
+    """Chaque outil et chaque écran de core/icons.js pointe vers une icône présente dans vendor/icons.js."""
+    icones = open(os.path.join(APP, "static", "vendor", "icons.js")).read()
+    demandees = open(os.path.join(APP, "static", "js", "core", "icons.js")).read()
+    import re
+
+    noms = re.findall(r'^\s+"?[\w-]+"?: "([\w-]+)",$', demandees, re.M)
+    assert len(noms) > 20
+    for nom in noms:
+        assert f'"{nom}":' in icones, nom
+
+
 def test_tous_les_textes_passent_par_la_traduction():
     resultat = subprocess.run(
         ["node", os.path.join(OUTILS, "baliser_textes.cjs"), os.path.join(APP, "static", "js"), "--verifier"],

@@ -3,8 +3,8 @@
 from playwright.sync_api import expect
 
 FOND = "getComputedStyle(document.body).backgroundColor"
-CLAIR = "rgb(244, 245, 247)"
-SOMBRE = "rgb(18, 20, 24)"
+CLAIR = "rgb(238, 244, 242)"
+SOMBRE = "rgb(11, 21, 20)"
 
 
 def choisir(page, theme):
@@ -20,7 +20,7 @@ def test_choix_du_theme(page):
 
     choisir(page, "sombre")
     assert page.evaluate(FOND) == SOMBRE
-    assert page.evaluate("document.querySelector('meta[name=theme-color]').content") == "#121418"
+    assert page.evaluate("document.querySelector('meta[name=theme-color]').content") == "#0B1514"
     page.reload()
     expect(page.locator('#apparence input[value="sombre"]')).to_be_checked()
     assert page.evaluate("document.documentElement.dataset.theme") == "sombre"  # posé avant l'affichage

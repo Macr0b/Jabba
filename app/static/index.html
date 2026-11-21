@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Jabba</title>
-    <meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#121418" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#EEF4F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0B1514" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Jabba" />
@@ -15,6 +15,7 @@
     <link rel="apple-touch-icon" href="/static/icone-180.png" />
     <script src="/static/js/theme_boot.js"></script>
     <!-- Styles, dans cet ordre (les derniers complètent les premiers). -->
+    <link rel="preload" href="/static/vendor/fonts/sora-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/static/css/tokens.css" />
     <link rel="stylesheet" href="/static/css/base.css" />
     <link rel="stylesheet" href="/static/css/workbench.css" />
@@ -33,11 +34,12 @@
     <link rel="stylesheet" href="/static/css/public_mode.css" />
     <link rel="stylesheet" href="/static/css/second_factor.css" />
     <link rel="stylesheet" href="/static/css/workshop.css" />
+    <link rel="stylesheet" href="/static/css/style_cube.css" />
   </head>
   <body>
     <div class="appli">
       <nav class="barre-laterale" aria-label="Navigation">
-        <div class="marque"><span class="logo">J</span><span>Jabba</span></div>
+        <div class="marque"><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.5 21 7.5v9L12 21.5 3 16.5v-9z" /><path d="M3 7.5 12 12.5l9-5M12 12.5v9" /></svg></span><span>Jabba</span></div>
         <a href="#/accueil" data-page="accueil">Accueil</a>
         <a href="#/outils" data-page="outils">Établi</a>
         <a href="#/fichiers" data-page="fichiers">Fichiers</a>

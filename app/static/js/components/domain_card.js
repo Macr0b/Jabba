@@ -14,7 +14,7 @@ import { toolIcon } from "../pages/home.js";
 export function domainCardHtml() {
   return t`<h2 class="titre-section">Accès depuis Internet</h2>
     <div class="grille g2"><article class="carte pad outil" id="carte-domaine">
-      <div class="haut"><div class="titre-outil">${toolIcon({ nom: t("Domaine") })}<div><h2>Accès par le domaine</h2><div class="role">Nextcloud joignable de partout, en HTTPS (Jabba reste privé)</div></div></div></div>
+      <div class="haut"><div class="titre-outil">${toolIcon({ id: "domaine", nom: t("Domaine") })}<div><h2>Accès par le domaine</h2><div class="role">Nextcloud joignable de partout, en HTTPS (Jabba reste privé)</div></div></div></div>
       <div id="domaine-detail"><p class="note">Chargement…</p></div>
     </article></div>`;
 }

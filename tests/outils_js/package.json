@@ -3,6 +3,7 @@
   "private": true,
   "description": "Outils des tests : lecture du code de l'interface (noms inconnus, imports) et contrôle d'accessibilité (axe).",
   "devDependencies": {
+    "@tabler/icons": "^3.52.0",
     "acorn": "8.12.1",
     "axe-core": "4.14.1",
     "eslint-scope": "8.0.2"

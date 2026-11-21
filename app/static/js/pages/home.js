@@ -12,6 +12,7 @@ import { formatDuration, formatBytes, formatPercent } from "../core/format.js";
 import { pages } from "../core/pages.js";
 import { state } from "../core/state.js";
 import { loadingHtml } from "../core/tasks.js";
+import { icon, toolIconName } from "../core/icons.js";
 import { t } from "../core/i18n.js";
 
 pages.accueil = async () => {
@@ -108,9 +109,13 @@ export async function toggleFavorite(path, favorite) {
 
 // Icône d'un outil : le logo servi par l'outil lui-même, sinon son initiale.
 export function toolIcon(item, size = 40) {
+  // Une icône dessinée pour les outils connus ; sinon le logo de l'outil, ou son initiale.
+  const drawn = toolIconName(item.id);
+  const box = `class="icone" style="width:${size}px;height:${size}px"`;
+  if (drawn) return `<span ${box}>${icon(drawn, Math.round(size * 0.5))}</span>`;
   const initial = escapeHtml((item.nom || "?")[0].toUpperCase());
-  if (!item.icone) return `<span class="icone" style="width:${size}px;height:${size}px">${initial}</span>`;
-  return `<span class="icone" style="width:${size}px;height:${size}px"><img alt="" src="/api/icone/${encodeURIComponent(item.id)}" data-initiale="${initial}"></span>`;
+  if (!item.icone) return `<span ${box}>${initial}</span>`;
+  return `<span ${box}><img alt="" src="/api/icone/${encodeURIComponent(item.id)}" data-initiale="${initial}"></span>`;
 }
 
 // Logo introuvable : on remet l'initiale. Écouté ici plutôt qu'avec onerror="…",
