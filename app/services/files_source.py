@@ -9,6 +9,8 @@ Sommaire :
   disk_params, run_disk_action : appeler disk_browser avec les bons réglages
   configured_disks, known_disks, disk_uuid, disk_is_present, plugged_disks, disk_path :
       quels disques existent et où ils sont montés
+  is_mounted  : vrai si un disque est monté sur `path` (action « est_monte » de la liste fermée)
+  interne : _mount
 """
 
 import json

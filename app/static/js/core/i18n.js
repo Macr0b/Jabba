@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : t, LANGUAGE, LANGUAGES, chooseLanguage
-//   interne : catalog, load, fill
+//   interne : catalog, load, fill, savedLanguage, normalize
 //
 // Principe (comme gettext) : le texte français reste dans le code, et sert de clé.
 //   t`Bonjour ${nom}`   → cherche « Bonjour {0} » dans le catalogue de la langue choisie

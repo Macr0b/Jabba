@@ -12,6 +12,7 @@ Sommaire :
   POST   /api/atelier/machines/{id}/rappels            add_reminder
   POST   /api/atelier/rappels/{rappel}/fait            reminder_done
   DELETE /api/atelier/rappels/{rappel}                 remove_reminder
+  interne : _ready, _run
 """
 
 from fastapi import APIRouter, HTTPException, Request

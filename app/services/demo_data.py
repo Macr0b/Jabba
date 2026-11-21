@@ -1,4 +1,9 @@
-"""Données fictives, utilisées seulement avec JABBA_DEMO=1 (tests hors de Jabba)."""
+"""Données fictives, utilisées seulement avec JABBA_DEMO=1 (tests hors de Jabba).
+
+Sommaire :
+  folder_listing
+  search_results
+"""
 
 G = 1024**3
 

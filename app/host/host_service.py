@@ -14,6 +14,7 @@ Sommaire
 - main()                : écoute.
 
 Lancement : python -m host.host_service
+  interne : _client
 """
 
 import asyncio

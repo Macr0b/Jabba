@@ -80,8 +80,8 @@ export async function openViewer(list, index) {
     openViewer(list, list.indexOf(visible[session]));
   };
   viewerElement.querySelector('[data-v="fermer"]').onclick = () => viewerElement.close();
-  const previousButton = viewerElement.querySelector('[data-v="prec"]'),
-    nextButton = viewerElement.querySelector('[data-v="suiv"]');
+  const previousButton = viewerElement.querySelector('[data-v="prec"]');
+  const nextButton = viewerElement.querySelector('[data-v="suiv"]');
   if (previousButton) previousButton.onclick = () => goTo(-1);
   if (nextButton) nextButton.onclick = () => goTo(1);
   viewerElement.onkeydown = (event) => {

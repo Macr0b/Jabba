@@ -48,8 +48,8 @@ export async function alertsCard() {
   const element = $("#alertes");
   if (!element) return;
   const data = await api("/api/alertes");
-  let here = false,
-    reason = "";
+  let here = false;
+  let reason = "";
   if (!pushSupported())
     reason = isIOS()
       ? t(
@@ -78,9 +78,9 @@ export async function alertsCard() {
       )
       .join("")}</div>
     <p class="note">Ces réglages valent pour tous tes appareils. Tout est aussi noté dans le journal, même ce qui ne t'est pas envoyé.</p>`;
-  const on = $("#alertes-on"),
-    off = $("#alertes-off"),
-    attempt = $("#alertes-essai");
+  const on = $("#alertes-on");
+  const off = $("#alertes-off");
+  const attempt = $("#alertes-essai");
   if (on)
     on.onclick = async () => {
       on.disabled = true;

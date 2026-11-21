@@ -13,6 +13,8 @@ Sommaire :
   add_reminder / reminder_done / delete_reminder : les rappels d'entretien
   due_reminders(today)                   : les rappels arrivés à échéance
   watch_reminders()                      : chaque jour, une alerte par rappel arrivé à échéance
+  next_due
+  interne : _read, _write, _new_id, _text, _date, _find, _reminder_view
 """
 
 import datetime

@@ -24,8 +24,8 @@ export const PLAYER_ICONS = {
 
 // Son : bouton muet, réglette de volume (gardée d'une vidéo à l'autre).
 export function setupSound(video) {
-  const soundButton = $("#lect-son"),
-    volume = $("#lect-volume");
+  const soundButton = $("#lect-son");
+  const volume = $("#lect-volume");
   const updateSound = () => {
     soundButton.innerHTML = video.muted || video.volume === 0 ? PLAYER_ICONS.muet : PLAYER_ICONS.son;
     soundButton.setAttribute("aria-label", video.muted ? t("Remettre le son") : t("Couper le son"));

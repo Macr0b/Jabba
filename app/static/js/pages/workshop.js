@@ -4,7 +4,7 @@
 // Sommaire :
 //   partagé : pages.atelier (écran : liste, ou une machine avec ?machine=…)
 //   interne : listHtml, machineCardHtml, bindList, showMachine, remindersHtml, journalHtml, entryHtml,
-//             entryFieldsHtml, entryEditHtml, bindMachine
+//             entryFieldsHtml, entryEditHtml, bindMachine, today
 import { confirmAction, toast } from "../components/dialogs.js";
 import { pickFolder } from "../components/folder_picker.js";
 import { api } from "../core/api.js";

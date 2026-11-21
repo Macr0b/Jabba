@@ -14,6 +14,10 @@ Sommaire :
   status(settings)         : la liste de vérification (adresse de la box, DNS, certificat, DNS réglé par
                              Jabba chez OVH : services/ovh_dns.py)
   public_link(url)         : un lien de partage Nextcloud, réécrit sur l'adresse publique
+  public_ip       : l'adresse de la box sur Internet (celle que le domaine doit indiquer)
+  resolve         : les adresses IPv4 vers lesquelles pointe un nom (ce qu'on a mis dans la zone DNS)
+  certificate_ok  : caddy a-t-il obtenu un vrai certificat pour cette adresse ? (connexion locale, certificat vérifié)
+  interne : _system_list, _add_to_system_list, _tell_nextcloud, _forget_in_nextcloud, _offer_two_factor
 """
 
 import os
@@ -24,7 +28,7 @@ import urllib.parse
 import httpx
 
 import config
-from host import actions, commands
+from host import action_common, actions_tools, commands
 from services import guest_network, json_files, ovh_dns, tools
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
@@ -91,13 +95,13 @@ def _offer_two_factor():
 
 def enable(domain, prefix="cloud"):
     """Vérifie l'adresse, installe Caddy, prévient Nextcloud. Lève ValueError si l'adresse est refusée."""
-    domain = actions.host_name(domain)
+    domain = action_common.host_name(domain)
     prefix = str(prefix or "").strip().lower()
-    if prefix and not actions.HOST_NAME.fullmatch(prefix + ".exemple.fr"):
+    if prefix and not action_common.HOST_NAME.fullmatch(prefix + ".exemple.fr"):
         raise ValueError(f"Préfixe refusé : {prefix!r}")
     settings = {**read(), "domaine": domain, "prefixe": prefix}
     public_address = address(settings)
-    actions.host_name(public_address)
+    action_common.host_name(public_address)
     if not config.DEMO:
         code, _, error_output = commands.run_action(
             "acces_domaine", adresse=public_address, port=tools.PORTS["nextcloud"]
@@ -146,7 +150,7 @@ def certificate_ok(name):
     """Caddy a-t-il obtenu un vrai certificat pour cette adresse ? (connexion locale, certificat vérifié)"""
     context = ssl.create_default_context()
     try:
-        with socket.create_connection(("127.0.0.1", actions.DOMAIN_PORT), timeout=5) as raw:
+        with socket.create_connection(("127.0.0.1", actions_tools.DOMAIN_PORT), timeout=5) as raw:
             with context.wrap_socket(raw, server_hostname=name):
                 return True
     except (OSError, ssl.SSLError):
@@ -170,7 +174,7 @@ def status(settings=None):
         "adresse": public_address,
         "ip_box": box_address,
         "ip_serveur": lan_address or "",
-        "port_serveur": actions.DOMAIN_PORT,
+        "port_serveur": actions_tools.DOMAIN_PORT,
         "dns": pointing,
         "dns_ok": bool(box_address) and box_address in pointing,
         "certificat_ok": certificate,

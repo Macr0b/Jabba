@@ -7,6 +7,7 @@ Sommaire :
   4. Nextcloud
   5. dépôt GitHub (mises à jour)
   6. divers (batterie, liens)
+  read_links  : liens supplémentaires de l'accueil : LIENS="Nom=https://…,Autre=https://…"
 """
 
 import os

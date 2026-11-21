@@ -4,6 +4,22 @@ Un disque USB jamais vu est déclaré sur le serveur en lecture seule
 (/srv/disques/<nom>, ouverture automatique), puis ajouté à Nextcloud s'il est
 activé. Jellyfin le voit dans /disques ; les médiathèques restent à créer à la main.
 Les disques « oubliés » ne sont plus jamais ajoutés tout seuls.
+
+Sommaire :
+  read
+  write
+  known_disks              : nom -> chemin pour les disques ajoutés automatiquement
+  fstab_uuids
+  clean_name
+  candidates               : partitions USB lisibles, avec un identifiant, absentes de /etc/fstab
+  add                      : déclare le disque sur le serveur (action « declarer_disque »). Renvoie l'entrée créée
+  link_to_nextcloud        : ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté
+  forget                   : retire le disque du serveur et de Nextcloud. Il ne sera plus ajouté tout seul
+  resume                   : un disque oublié redevient un disque à ajouter automatiquement
+  is_present               : le disque est-il branché ? (sans réveiller l'ouverture automatique)
+  scan                     : un passage : ajoute les nouveaux disques. Appelé toutes les 15 secondes
+  scan_disks
+  link_disks_to_nextcloud
 """
 
 import json
@@ -12,7 +28,7 @@ import re
 import threading
 import time
 
-from host import actions, commands
+from host import actions, actions_disks, commands
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 DISKS_FILE = os.path.join(DATA_DIR, "disques.json")
@@ -20,7 +36,7 @@ MOUNT_ROOT = "/srv/disques"
 _LOCK = threading.Lock()
 
 # Formats lisibles sans rien installer (options de montage : host/actions.py).
-FORMATS = actions.DISK_FORMATS
+FORMATS = actions_disks.DISK_FORMATS
 # Partitions techniques à ignorer (démarrage, récupération Windows) et taille minimale.
 TECHNICAL_TYPES = {"c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "de94bba4-06d1-4d40-a16a-bfd50179d6ac", "0xef", "0x27"}
 MIN_SIZE = 300 * 1024 * 1024

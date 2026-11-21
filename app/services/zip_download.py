@@ -7,6 +7,7 @@ Le .zip est « stocké » (sans compression) : photos et vidéos sont déjà
 compressées, et le serveur reste rapide. On vérifie la taille avant de commencer :
 au plus JABBA_ZIP_MAX_GO (20 Go par défaut), et jamais au point de remplir le disque.
 Sur les disques, les liens symboliques sont ignorés : un lien ne fait pas sortir du dossier choisi.
+  interne : _zip_name, _check_limits, _disk_files, _write_disk_zip, _nextcloud_files, _write_nextcloud_zip
 """
 
 import asyncio

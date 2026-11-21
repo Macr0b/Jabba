@@ -8,6 +8,7 @@ n'interdit rien ; sinon, l'outil s'ouvre à part. Réponse gardée 10 minutes.
 Sommaire :
   allows_framing(port)    : True si l'outil (sur 127.0.0.1:port) accepte d'être affiché dans Jabba
   frameable(headers)      : la règle, sur les en-têtes d'une réponse
+  interne : _probe
 """
 
 import threading

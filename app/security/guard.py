@@ -14,6 +14,8 @@ Sommaire :
   hostname, server_user, server_identifiers, check_server_password : le compte du serveur
   check_login, open_session, session_info, log_failed_login : connexion admin
   translate_account_refusal : erreurs de comptes -> réponses HTTP
+  super_admin_logins  : comptes Tailscale des super admins (et appareils abonnés avant la v0.6)
+  interne : _no_breach_lookup, _change_server_password
 """
 
 import json

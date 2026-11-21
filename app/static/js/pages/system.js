@@ -293,8 +293,8 @@ async function appUpdateCard(check = false) {
       $("#versions").innerHTML = `<p class="note">${escapeHtml(error.message)}</p>`;
     }
   });
-  const button = $("#verifier"),
-    installButton = $("#installer");
+  const button = $("#verifier");
+  const installButton = $("#installer");
   if (button)
     button.onclick = () => {
       button.disabled = true;

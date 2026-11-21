@@ -13,6 +13,7 @@ Sommaire :
   POST /api/double/effacer              clear_for_account (super admin : téléphone perdu)
   POST /api/admin/cle/options           key_login_options (connexion, étape 2)
   POST /api/admin/verification          verify_second_step (connexion, étape 2)
+  interne : _translate, _relying_party, _log
 """
 
 import io

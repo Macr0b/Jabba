@@ -270,8 +270,8 @@ async function browseSnapshot(item, path) {
   );
   element.querySelectorAll("[data-restaurer]").forEach((element) =>
     element.addEventListener("click", async () => {
-      const value = element.dataset.restaurer,
-        name = value.split("/").pop();
+      const value = element.dataset.restaurer;
+      const name = value.split("/").pop();
       if (
         !(await confirmAction({
           titre: t`Récupérer « ${name} » ?`,

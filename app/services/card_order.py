@@ -7,6 +7,7 @@ Sommaire :
   SCREENS             : les écrans qu'on peut ranger
   read(screen)        : {"ordre": [...], "masques": [...]}
   save(screen, order, hidden) : enregistre ; refuse ce qui n'est pas une liste d'identifiants de cartes
+  interne : _clean
 """
 
 import os

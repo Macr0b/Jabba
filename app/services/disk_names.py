@@ -9,11 +9,11 @@ Sommaire :
   title(device)        : le nom à afficher pour un disque de lsblk (avec ses partitions)
   kind(device)         : « Disque externe USB » ou « Disque interne »
   is_technical(part)   : partition qu'on ne touche jamais (démarrage, swap), repliée à l'écran
+  is_external
 """
 
 TECHNICAL_MOUNTS = ("/boot/efi", "/boot", "[SWAP]")
 TECHNICAL_LABELS = {"EFI", "SYSTEM", "RECOVERY", "MSR", "BOOT"}
-SMALL_PARTITION = 2 * 1024**3  # moins de 2 Go sans nom choisi : une partition technique
 
 
 def is_external(device):

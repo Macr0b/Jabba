@@ -5,6 +5,7 @@ Sommaire :
   POST /api/adresses/cle          save_token : garde la clé d'accès Tailscale, puis crée les adresses qui manquent
   POST /api/adresses/creer        create_addresses : crée les adresses qui manquent (clé déjà là)
   POST /api/adresses/oublier-cle  forget_token
+  interne : _installed
 """
 
 import asyncio

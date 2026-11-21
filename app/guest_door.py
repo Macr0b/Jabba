@@ -2,6 +2,14 @@
 
 Ce petit serveur tourne dans son propre conteneur, sans aucun pouvoir (voir compose.yaml).
 Il ne connaît QUE les pages invités : la connexion admin y est impossible.
+
+Sommaire :
+  guard_policy          : même politique de sécurité que l'appli, sans cadres : la page invités n'ouvre rien dedans
+  use_disk_for_uploads  : les envois en cours de réception vont sur le disque des invités, pas en mémoire
+  wifi_guard
+  who_am_i_on_wifi
+  forbidden
+  wifi_page
 """
 
 import ipaddress
@@ -12,6 +20,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from interface_files import InterfaceFiles, index_page
 
+from routes import guests as guest_pages
 from services import guests
 
 
@@ -70,7 +79,7 @@ async def wifi_guard(request: Request, call_next):
     return response
 
 
-app.include_router(guests.router)
+app.include_router(guest_pages.router)
 
 
 @app.get("/api/moi")

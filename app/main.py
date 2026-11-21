@@ -7,6 +7,12 @@ Tailscale (tailscale serve). Ce fichier ne fait que brancher les morceaux :
   2. les routes de l'API, une partie par fichier dans routes/ ;
   3. le démarrage (journal de version, invités, surveillance en fond : watchers.py) ;
   4. l'interface (fichiers de static/), servie en dernier.
+
+Sommaire :
+  note_installed_version  : note au Journal chaque nouvelle version installée (une fois)
+  lifespan                : au démarrage : version, état des invités, puis la surveillance en fond
+  service_worker
+  page
 """
 
 import os
@@ -47,6 +53,7 @@ from routes import (
     trash,
     workshop,
 )
+from routes import guests as guest_pages
 from security import guard
 from services import activity_log, guests
 from version import VERSION
@@ -88,7 +95,7 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 app.middleware("http")(guard.guard)
 
 # Pages invités : ouvertes tant qu'on n'est pas connecté en admin.
-app.include_router(guests.router)
+app.include_router(guest_pages.router)
 for module in (
     antivirus,
     domain_access,

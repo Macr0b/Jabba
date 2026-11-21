@@ -7,6 +7,7 @@ Sommaire :
   POST /api/domaine/ovh      ovh_keys (super admin) : enregistre la clé OVH puis règle l'entrée DNS
   POST /api/domaine/ovh/regler   ovh_sync (super admin) : règle l'entrée DNS maintenant
   POST /api/domaine/ovh/oublier  ovh_forget (super admin)
+  interne : _sync_now
 """
 
 import asyncio

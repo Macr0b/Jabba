@@ -9,7 +9,7 @@ import time
 import pytest
 from service_factice import faux_service
 
-from host import actions, commands, host_service
+from host import action_common, actions, actions_system, commands, host_service
 
 
 def test_actions_connues():
@@ -280,7 +280,7 @@ def test_mise_a_jour_de_l_appli_cle_lue_par_le_service(monkeypatch):
     commande, _ = actions.build(
         "installer_appli", {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "jabba-maj-1700000000"}
     )
-    assert commande[:2] == ["sh", "-c"] and commande[3:6] == ["tache", actions.TASKS_DIR, "jabba-maj-1700000000"]
+    assert commande[:2] == ["sh", "-c"] and commande[3:6] == ["tache", action_common.TASKS_DIR, "jabba-maj-1700000000"]
     script = commande[6]
     assert cle in script and "${LIGNE% *}" in script  # le script arrive intact, ${…} compris
     assert "$3" in commande[2] and "/opt/jabba" not in commande[2]  # jamais collé dans le texte du shell
@@ -299,7 +299,7 @@ def test_mise_a_jour_de_l_appli_cle_lue_par_le_service(monkeypatch):
 def test_tache_de_fond_ecrit_puis_lance_le_script(tmp_path):
     import subprocess
 
-    commande, _ = actions._background("jabba-test-1", 'echo "${HOME:+ok}"')
+    commande, _ = action_common.background("jabba-test-1", 'echo "${HOME:+ok}"')
     texte = commande[2].replace(' --unit="$U" --collect "$@"', "").replace("exec systemd-run", "cat")
     sortie = subprocess.run(
         ["sh", "-c", texte, "tache", str(tmp_path), "jabba-test-1", commande[6]], capture_output=True, text=True
@@ -500,13 +500,13 @@ def test_restic_restaure_toujours_a_cote():
             "horodatage": "2026-11-17 01h30",
         },
     )
-    assert commande[4:7] == ["sh", "-c", actions.RESTORE] and commande[7] == actions.RESTORE_ROOT
+    assert commande[4:7] == ["sh", "-c", actions_system.RESTORE] and commande[7] == actions_system.RESTORE_ROOT
     assert commande[8:] == [
         "--no-lock",
         "restore",
         "abcd1234:/srv/data/Photos",
         "--target",
-        actions.RESTORE_ROOT + "/2026-11-17 01h30 (abcd1234)",
+        actions_system.RESTORE_ROOT + "/2026-11-17 01h30 (abcd1234)",
         "--include",
         "/2024",
     ]

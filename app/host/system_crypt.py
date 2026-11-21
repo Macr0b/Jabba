@@ -3,6 +3,10 @@
 Le module Python « crypt » disparaît avec Python 3.13. On appelle directement la
 bibliothèque du système (libcrypt, présente sur toute Debian), qui connaît tous les
 formats d'empreinte : yescrypt ($y$, Debian 11 et après), SHA-512 ($6$), etc.
+
+Sommaire :
+  hash_with_setting  : empreinte de `password` avec le même sel et le même format que `setting` ; None si impossible
+  interne : _crypt_function
 """
 
 import ctypes

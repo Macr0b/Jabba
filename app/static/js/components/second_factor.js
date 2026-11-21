@@ -3,7 +3,7 @@
 // Sommaire :
 //   partagé : secondLoginStep, secondFactorCard
 //   interne : toBuffer, toBase64url, creationOptions, requestOptions, credentialJson,
-//             deviceName, showRecoveryCodes, addPasskey, addAuthenticatorApp, clearForOtherAccount
+//             deviceName, showRecoveryCodes, addPasskey, addAuthenticatorApp, clearForOtherAccount, passkeysAvailable
 import { api, formBody } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
 import { state } from "../core/state.js";

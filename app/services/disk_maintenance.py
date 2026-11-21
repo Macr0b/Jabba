@@ -15,6 +15,9 @@ Sommaire
 - measure_all() / defragment(path)    : mesure et défragmentation (longues : lancées à part).
 - summary()                           : pour la carte Santé des disques.
 - watch_fragmentation()               : une mesure par mois, par la surveillance.
+  start_measure
+  start_defragment
+  interne : _read, _write, _partitions, _has_ssd, _start
 """
 
 import json

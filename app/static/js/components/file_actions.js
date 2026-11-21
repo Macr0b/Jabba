@@ -3,7 +3,7 @@
 //
 // Sommaire :
 //   partagé : downloadEntries, renameEntry, moveEntries, deleteEntries, itemChoices, selectionChoices
-//   interne : countLabel, undoMoves
+//   interne : countLabel, undoMoves, parentOf
 import { api } from "../core/api.js";
 import { state } from "../core/state.js";
 import { confirmAction, toast } from "./dialogs.js";

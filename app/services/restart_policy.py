@@ -7,6 +7,12 @@ Deux façons de faire :
     (conseillé si elle a déjà bloqué au démarrage).
 Le choix est rangé dans /etc/jabba/redemarrage. Le minuteur de 4 h ne redémarre que
 si ce fichier dit « auto » (ExecCondition) : changer d'avis ne demande que ce fichier.
+
+Sommaire :
+  interpret     : le mode en vigueur. Sans choix enregistré (installation d'avant 0.13), le minuteur décide
+  apply_script  : script root : enregistre le choix et remet le minuteur à jour (il ne redémarre que si « auto »)
+  message       : texte de la notification quand une mise à jour attend un redémarrage
+  current_mode  : {"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main
 """
 
 CHOICE_FILE = "/etc/jabba/redemarrage"

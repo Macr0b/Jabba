@@ -10,6 +10,30 @@
   acceptée, un mot de passe provisoire (24 h, à changer) s'affiche une seule
   fois sur l'appareil de la personne qui a fait la demande. Il n'est jamais écrit
   sur le disque.
+
+Sommaire :
+  Refusal
+  check_password_strength  : applique les règles de security.password_rules (15 caractères, pas de mot courant…)
+  temporary_password       : mot de passe provisoire lisible : 3 mots et 2 chiffres
+  list_accounts
+  find
+  allowed_logins           : comptes Tailscale reliés à un compte de l'appli : ils peuvent ouvrir l'appli
+  super_admin_logins
+  admin_space_open
+  check_credentials        : le compte (dict public) si le mot de passe est bon, sinon None
+  create
+  update
+  delete
+  change_own_password
+  set_settings
+  request_reset            : enregistre la demande. Renvoie le compte concerné, ou None (sans le dire à l'appelant)
+  answer_reset
+  pending_reset
+  collect_reset            : le mot de passe provisoire, une seule fois, pour la personne qui l'attend
+  record_visit
+  record_refusal           : garde les 50 dernières tentatives refusées. True si c'est la première depuis 1 h pour ce compte
+  recent_logins
+  interne : _read, _write, _password_hash, _public_view, _check_identifier, _check_login, _account
 """
 
 import hashlib

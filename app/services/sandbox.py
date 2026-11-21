@@ -11,6 +11,19 @@ ffmpeg ou de Pillow ne doit rien pouvoir faire. Ces programmes tournent donc :
 
 L'appli vérifie le chemin avant d'ouvrir (comme pour tout fichier), puis le
 programme sans droits ne voit que ce qu'on lui a passé.
+
+Sommaire :
+  is_active             : le bac à sable s'applique quand l'appli tourne en root (le cas normal) ; désactivable pour le développement
+  gpu_group
+  prefix                : ce qu'on met devant une commande pour la lancer sans droits
+  local_command
+  open_input            : arguments d'entrée pour ffmpeg/ffprobe, et les descripteurs à leur passer
+  without_input_option  : ffprobe prend l'entrée sans « -i » devant
+  run
+  popen
+  writable_dir          : dossier où le programme sans droits écrit (morceaux vidéo)
+  thumbnail             : JPEG de l'image `reel` réduite à `taille` px, calculé par Pillow sans droits. Renvoie les octets
+  interne : _limit_memory
 """
 
 import os

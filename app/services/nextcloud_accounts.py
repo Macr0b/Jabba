@@ -10,6 +10,49 @@
 
 Tout passe par `occ`, la commande d'administration de Nextcloud. Ce module ne
 connaît que la fonction `occ(args, input_text=None, timeout=60) -> (code, sortie, erreur)`.
+
+Sommaire :
+  CloudError
+  read
+  write
+  to_bytes                     : « 5 GB », « 500 MB », « none » (illimité) → octets, ou None si illimité
+  quota_text                   : nombre de Go → texte pour Nextcloud (« 5 GB »), ou « none » si illimité
+  overview                     : nextcloud joignable ? Applis installées ? Réglages en place ?
+  accounts                     : tous les comptes, avec leur état (actif, en attente, suspendu), groupes et espace
+  refresh_usage                : l'espace utilisé par chaque compte (une commande par compte : fait à part, en fond)
+  groups
+  team_folders
+  occ_or_fail
+  set_up                       : installe les deux applis Nextcloud et pose les réglages : inscription validée par un admin, membres, 5 Go
+  charter
+  set_charter
+  set_default_quota
+  reserve_disks_for_admins     : les disques branchés au serveur (stockages externes de Nextcloud) sont réservés aux admins
+  approve
+  suspend
+  delete
+  set_quota
+  add                          : compte créé par un admin (pas d'inscription) : actif tout de suite, membre de « Tous »
+  set_password
+  occ_with_password
+  set_group_member
+  create_group
+  delete_group
+  create_team_folder
+  set_team_folder_access       : mode : lecture, depot, complet ; ou None pour retirer l'accès au groupe
+  set_team_folder_quota
+  rename_team_folder
+  delete_team_folder
+  ranks_of                     : les rangs, du plus bas au plus haut : [{id, nom}]
+  rank_name
+  wanted_groups                : groupes de rang dont `uid` doit faire partie (son rang et ceux en dessous)
+  sync_ranks                   : met les groupes Nextcloud en accord avec les rangs (après un changement de rang, d'ordre, ou l'option)
+  create_rank
+  delete_rank
+  refresh_usage_in_background
+  watch_signups                : nouvelle inscription en attente : alerte aux super admins (une fois par compte)
+  describe_group               : nom lisible d'un groupe pour le Journal : « tous les membres », « rang Gérant et au-dessus »…
+  interne : _occ_json
 """
 
 import json

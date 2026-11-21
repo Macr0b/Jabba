@@ -4,6 +4,16 @@
 - une fois saisi, valable 10 minutes (jeton en mémoire) ;
 - 5 essais ratés = blocage 10 minutes ;
 - changement du mot de passe, et code de secours en cas d'oubli.
+
+Sommaire :
+  is_locked               : true si la personne qui demande s'est trompée 5 fois en 10 minutes
+  check_password          : true si le mot de passe est celui du compte `user` sur le serveur
+  record_failure
+  change_password
+  generate_recovery_code
+  recovery_code_exists
+  check_recovery_code
+  interne : _read, _write, _record_failure, _code_hash
 """
 
 import contextvars
@@ -18,7 +28,6 @@ from host import actions, commands
 from security import password_rules
 from services import json_files
 
-TOKEN_LIFETIME = 10 * 60
 MAX_ATTEMPTS = 5
 LOCKOUT = 10 * 60
 STATE_FILE = os.environ.get("JABBA_ADMIN", "/data/admin.json")
@@ -47,7 +56,6 @@ sorbet tartine tilleul toucan vigne""".split()
 assert len(set(WORDS)) >= 256
 
 _lock = threading.Lock()
-_tokens = {}  # jeton -> expiration
 # Essais ratés, comptés par personne (compte Tailscale d'où vient la demande) : quelqu'un qui
 # se trompe, ou qui essaie de deviner, ne bloque que lui-même, jamais les autres admins.
 _failures = {}  # compte Tailscale -> horodatages des essais ratés
@@ -94,42 +102,6 @@ def check_password(user, password):
     return code == 0
 
 
-def new_token(identifier="serveur", rank="super", temporary=False):
-    """Jeton valable 10 minutes, qui dit qui est connecté en admin et avec quel rang."""
-    token_value = secrets.token_urlsafe(32)
-    with _lock:
-        now = time.time()
-        for token in [token for token, token_data in _tokens.items() if token_data["exp"] < now]:
-            del _tokens[token]
-        _tokens[token_value] = {
-            "exp": now + TOKEN_LIFETIME,
-            "identifiant": identifier,
-            "rang": rank,
-            "provisoire": temporary,
-        }
-    return token_value
-
-
-def token_info(token):
-    """Les infos du jeton (identifiant, rang, provisoire) s'il est valable, sinon None."""
-    if not token:
-        return None
-    with _lock:
-        token_data = _tokens.get(token)
-        return dict(token_data) if token_data and token_data["exp"] > time.time() else None
-
-
-def forget_tokens(identifier=None):
-    """Déconnecte un compte (ou tout le monde)."""
-    with _lock:
-        for token in [
-            token
-            for token, token_data in _tokens.items()
-            if identifier is None or token_data["identifiant"] == identifier
-        ]:
-            del _tokens[token]
-
-
 def record_failure():
     _record_failure()
 
@@ -146,7 +118,6 @@ def change_password(user, new_value):
         raise ValueError(str(error))
     if code != 0:
         raise RuntimeError("Le serveur a refusé le changement : " + error_output[:200])
-    forget_tokens()  # on redemande le mot de passe partout
 
 
 # ---------------------------------------------------------------- code de secours

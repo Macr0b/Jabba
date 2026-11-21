@@ -26,8 +26,8 @@ export const rememberedServer = {
     }
   },
 };
-export let retryTimer = null,
-  lastFailure = "reseau";
+export let retryTimer = null;
+export let lastFailure = "reseau";
 
 export function showUnreachable(type) {
   lastFailure = type;

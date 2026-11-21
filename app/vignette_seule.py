@@ -2,6 +2,9 @@
 
 Lancé par bac_a_sable.vignette, sans aucun droit : ce programme ne voit que l'image
 qu'on lui passe, n'ouvre aucun fichier et n'écrit que sur sa sortie.
+
+Sommaire :
+  main
 """
 
 import io

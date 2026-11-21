@@ -10,6 +10,7 @@ Sommaire :
   GET  /api/outils-conso                 usage_per_tool (mémoire et processeur de chaque outil)
   GET  /api/outils-versions              tool_versions (mise à jour disponible ?)
   POST /api/outils-versions/verifier     check_tool_versions
+  interne : _tool_task
 """
 
 import asyncio

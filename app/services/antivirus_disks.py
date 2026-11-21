@@ -14,6 +14,9 @@ Sommaire :
   new_files(folder, since): les fichiers arrivés depuis `since` (date de changement), hors dossiers cachés
   watch()                 : appelé chaque minute : suit l'analyse en cours, lance celle de la semaine,
                             et chaque heure les nouveaux fichiers
+  available_disks  : {chemin: nom} : le disque de données et les disques branchés connus de Jabba
+  scan_new_files   : les nouveaux fichiers du disque de données (les dépôts des invités ont leur propre suivi)
+  interne : _settings, _running, _follow, _weekly_due, _new_files_in_background
 """
 
 import os

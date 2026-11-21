@@ -87,8 +87,8 @@ pages.disques = async () => {
   });
   content.querySelectorAll("[data-mode]").forEach((element) =>
     element.addEventListener("click", async () => {
-      const name = element.dataset.mode,
-        writable = element.getAttribute("aria-checked") !== "true";
+      const name = element.dataset.mode;
+      const writable = element.getAttribute("aria-checked") !== "true";
       if (
         writable &&
         !(await confirmAction({

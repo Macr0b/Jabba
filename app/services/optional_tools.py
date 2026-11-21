@@ -13,7 +13,7 @@ Sommaire :
   remove(name, who)      : retrait (données gardées)
 """
 
-from host import actions
+from host import actions, actions_tools
 from host import catalog as host_catalog
 from services import background_tasks, measurements, tool_addresses, tool_credentials, workshop
 
@@ -75,7 +75,7 @@ def install(name, who=None):
         raise actions.ActionError(f"Outil refusé : {name!r}")
     tool = host_catalog.OPTIONAL_TOOLS[name]
     password = tool_credentials.password_for(name) if tool["mot_de_passe"] else ""
-    actions.optional_password(name, password)
+    actions_tools.optional_password(name, password)
     return background_tasks.start_task(
         f"Installation de {tool['nom']}",
         "installer_outil_option",

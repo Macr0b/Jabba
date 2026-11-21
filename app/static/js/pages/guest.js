@@ -117,8 +117,8 @@ async function showGuestFolder(folderId, path) {
   const choices = $("#choix");
   $("#envoyer").onclick = () => choices.click();
   choices.onchange = () => send([...choices.files]);
-  const area = $(".tableau"),
-    dropButton = $("#depot");
+  const area = $(".tableau");
+  const dropButton = $("#depot");
   ["dragenter", "dragover"].forEach((value) =>
     area.addEventListener(value, (event) => {
       event.preventDefault();

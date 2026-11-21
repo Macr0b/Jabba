@@ -7,7 +7,7 @@
 //
 // Sommaire :
 //   partagé : renderToolLogin
-//   interne : copy, showLogin, showForm
+//   interne : copy, showLogin, showForm, loginUrl
 import { toast } from "./dialogs.js";
 import { api } from "../core/api.js";
 import { escapeHtml } from "../core/dom.js";

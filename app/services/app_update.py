@@ -11,6 +11,17 @@ suivie de la signature SSH faite avec une clé qui ne quitte pas l'ordinateur du
 serveur vérifie cette signature avec la clé publique de la version DÉJÀ installée
 (cle_publication.pub, figée dans l'appli qui tourne) : un compte GitHub piraté ne
 suffit pas à faire installer du code. Sans signature valable, rien ne s'installe.
+
+Sommaire :
+  publication_key  : la clé publique qui signe les versions (celle de la version installée), ou None
+  signed_text
+  version_tuple
+  latest_release   : {'version': '0.5.1', 'tag': 'v0.5.1', 'notes': '...', 'date': '...'} ou None
+  is_newer
+  install_script   : commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli)
+  app_folder
+  update_state     : où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine
+  update_progress  : étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure
 """
 
 import os

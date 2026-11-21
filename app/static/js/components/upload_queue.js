@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : uploadFiles
-//   interne : panel, renderItem, sendOne, next, finishIfIdle
+//   interne : panel, renderItem, sendOne, next, finishIfIdle, render
 //
 // Chaque fichier part seul (2 à la fois) : un échec ne fait pas renvoyer les autres.
 // Le panneau reste en bas à droite tant qu'un envoi est en cours ou a échoué.

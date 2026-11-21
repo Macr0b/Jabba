@@ -16,6 +16,7 @@ Sommaire :
   created_by_jabba(t) : le compte de l'outil est-il créé (et utilisé) par Jabba ?
   save(tool, identifiant, mot_de_passe) / forget(tool) : les identifiants notés par toi
   flag / set_flag     : ce que Jabba a déjà réglé une fois dans un outil (ex. le filtrage général d'AdGuard)
+  interne : _check_storable
 """
 
 import os

@@ -11,6 +11,8 @@ Principe : une image téléchargée garde l'empreinte (sha256) de ce que le regi
 publiait ce jour-là. Si le registre publie aujourd'hui une autre empreinte pour la
 même étiquette (« latest », « 32 »…), une version plus récente existe. On ne télécharge
 rien : le bouton « Mettre à jour » de l'Établi reste un clic de l'admin.
+  forget  : après « Mettre à jour » : l'outil est à jour (on revérifiera au prochain passage)
+  interne : _read_state, _write_state, _anonymous_token, _http_get, _local_images
 """
 
 import json

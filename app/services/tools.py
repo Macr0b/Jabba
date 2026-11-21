@@ -5,6 +5,7 @@ Sommaire :
   list_tools : les outils installés, avec leur état
   find_tool : un outil par son identifiant
   find_icon : l'icône d'un outil (site de l'outil, sinon icône de secours)
+  interne : _in_app
 """
 
 import json

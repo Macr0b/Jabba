@@ -6,6 +6,7 @@ L'appli n'a aucun droit sur le serveur : elle demande une action de la liste fer
 Sommaire :
   run_action : une action de la liste fermée, vérifiée ici puis par le service -> (code, sortie, erreur)
   occ : une commande d'administration de Nextcloud (action « nextcloud »)
+  interne : _ask_service
 """
 
 import json

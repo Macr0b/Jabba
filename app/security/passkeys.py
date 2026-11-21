@@ -9,6 +9,7 @@ Le serveur ne garde que la clé publique : l'empreinte du visage ou du doigt ne
 quitte jamais le téléphone. Une clé est liée à l'adresse de l'appli (par exemple
 le nom Tailscale du serveur) : si l'adresse change, on se connecte avec l'appli
 d'authentification ou un code de secours, puis on ajoute une nouvelle clé.
+  interne : _descriptors
 """
 
 import json

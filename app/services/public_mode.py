@@ -11,6 +11,7 @@ Sommaire
 
 Rien ne s'ouvre tout seul sur Internet : cette option règle Jabba et Nextcloud pour un
 usage public. Brancher le domaine reste une étape à part, faite par l'admin.
+  interne : _last_seen
 """
 
 import datetime

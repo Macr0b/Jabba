@@ -6,6 +6,7 @@ Sommaire :
   POST /api/antivirus/retirer    remove_antivirus (super admin)
   POST /api/antivirus/disques    weekly_disk_scan (cocher un disque pour l'analyse de la semaine)
   POST /api/antivirus/analyser   scan_disk_now (analyse complète d'un disque, tout de suite)
+  interne : _disk_path
 """
 
 import asyncio

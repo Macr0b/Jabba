@@ -2,6 +2,27 @@
 
 La racine est virtuelle : chaque entrée est un dossier du serveur, monté dans le
 conteneur sous /srv. Rien n'est jamais lu ni écrit en dehors de ces dossiers.
+
+Sommaire :
+  roots            : nom affiché -> chemin sur le serveur. Réglable par DOSSIERS_DISQUE (« nom=chemin,… »)
+  Refusal
+  resolve          : chemin virtuel « /Films et séries/xx » -> (chemin réel, écriture autorisée)
+  list_folder
+  create_folder
+  upload_path
+  finish_upload
+  read_path
+  move
+  delete           : pas de suppression définitive : l'élément part dans la corbeille du disque de données (30 jours)
+  list_trash
+  restore
+  erase
+  empty_trash
+  purge_old_trash  : efface ce qui est dans la corbeille depuis plus de 30 jours
+  search           : cherche par nom dans les dossiers du serveur. `noms` limite aux racines voulues
+  thumbnail        : petite image JPEG pour la liste des fichiers (gardée en cache)
+  is_folder
+  interne : _entry, _give_to_server_user, _writable_path, _trash_dirs, _trash_dir
 """
 
 import hashlib

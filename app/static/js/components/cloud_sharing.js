@@ -190,8 +190,8 @@ export function bindSharing(context) {
     };
   content.querySelectorAll("[data-rang]").forEach((element) =>
     element.addEventListener("click", async () => {
-      const rank = cloud.rangs.find((item) => item.id === element.dataset.rang),
-        index = cloud.rangs.indexOf(rank);
+      const rank = cloud.rangs.find((item) => item.id === element.dataset.rang);
+      const index = cloud.rangs.indexOf(rank);
       const choices = [{ texte: t("Renommer"), f: "renommer" }];
       if (index < cloud.rangs.length - 1) choices.push({ texte: t("Monter d'un cran"), f: "haut" });
       if (index > 0) choices.push({ texte: t("Descendre d'un cran"), f: "bas" });

@@ -16,9 +16,9 @@ import { t } from "../core/i18n.js";
 export let activePlayer = null;
 const readableTime = (value) => {
   value = Math.max(0, Math.floor(value || 0));
-  const hours = Math.floor(value / 3600),
-    minutes = Math.floor((value % 3600) / 60),
-    amount = value % 60;
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const amount = value % 60;
   return (hours ? hours + ":" + String(minutes).padStart(2, "0") : minutes) + ":" + String(amount).padStart(2, "0");
 };
 function loadHls() {
@@ -83,11 +83,11 @@ async function openPlayer(entry, info, directPlay) {
       </div>
     </div>
     <p class="note lect-info">${directPlay ? t("Lu directement") : t`Lu par le serveur (format ${escapeHtml((info.video.codec || "?").toUpperCase())})`}${info.soustitres.length > texts.length ? t(" · certains sous-titres sont des images : non affichés") : ""} · touche deux fois à gauche ou à droite de l'image : 10 s</p>`;
-  const video = area.querySelector("video"),
-    bar = $("#lect-barre"),
-    timeLabel = $("#lect-temps"),
-    playButton = $("#lect-jouer"),
-    state = $("#etat-lecteur");
+  const video = area.querySelector("video");
+  const bar = $("#lect-barre");
+  const timeLabel = $("#lect-temps");
+  const playButton = $("#lect-jouer");
+  const state = $("#etat-lecteur");
   const show = (message) => {
     state.textContent = message;
     state.hidden = !message;
@@ -298,10 +298,10 @@ async function openPlayer(entry, info, directPlay) {
   };
   video.onclick = null;
   video.addEventListener("click", (event) => {
-    const rect = video.getBoundingClientRect(),
-      value = (event.clientX - rect.left) / rect.width;
-    const side = value < 0.35 ? -1 : value > 0.65 ? 1 : 0,
-      now = Date.now();
+    const rect = video.getBoundingClientRect();
+    const value = (event.clientX - rect.left) / rect.width;
+    const side = value < 0.35 ? -1 : value > 0.65 ? 1 : 0;
+    const now = Date.now();
     const hidden = area.classList.contains("repos");
     if (!playerMenu.hidden) {
       playerMenu.hidden = true;
@@ -376,8 +376,8 @@ async function openPlayer(entry, info, directPlay) {
   const isFullscreen = setupFullscreen(area, wakeControls);
   setupPictureInPicture(video, isFullscreen);
   // Son et sous-titres : un petit menu, comme les lecteurs habituels.
-  const playerMenu = $("#lect-menu"),
-    settingsButton = $("#lect-reglages");
+  const playerMenu = $("#lect-menu");
+  const settingsButton = $("#lect-reglages");
   if (settingsButton)
     settingsButton.onclick = (event) => {
       event.stopPropagation();

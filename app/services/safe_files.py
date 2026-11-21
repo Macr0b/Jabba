@@ -4,6 +4,8 @@ Sommaire :
   open_new_file : crée le fichier, ou échoue s'il existe déjà (même un raccourci)
   free_space : place libre sur le disque d'un dossier
   copy_with_limit : recopie un envoi en s'arrêtant au-delà d'une taille ou d'une place libre minimale
+  TooLarge  : l'envoi dépasse la taille permise
+  DiskFull  : l'envoi entamerait la place libre qu'on garde toujours sur le disque
 """
 
 import os

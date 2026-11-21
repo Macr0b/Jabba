@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : pages.fichiers (écran)
-//   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml
+//   interne : openEntry, readViewPreferences, saveViewPreferences, sortEntries, rowHtml, tileHtml, searchBarHtml, wireSearch, showSearchResults, filesHistory, rememberFolder, goInHistory, navigationBarHtml, locationsCache, readLocations, locationPickerHtml, checkboxHtml, nameLinkHtml, dropTarget
 import { confirmAction, dialogElement, toast } from "../components/dialogs.js";
 import { attachSelection, toggleAll, SHORTCUTS } from "../components/file_selection.js";
 import { publicModeOpen } from "../components/public_mode_card.js";
@@ -94,15 +94,15 @@ function rememberFolder(path) {
   history.saut = null;
 }
 function goInHistory(direction) {
-  const history = filesHistory,
-    target = history.pos + direction;
+  const history = filesHistory;
+  const target = history.pos + direction;
   if (target < 0 || target >= history.pile.length) return;
   history.saut = target;
   location.hash = "#/fichiers?chemin=" + encodeURIComponent(history.pile[target]);
 }
 function navigationBarHtml(path, link, root) {
-  const history = filesHistory,
-    parent = "/" + path.split("/").filter(Boolean).slice(0, -1).join("/");
+  const history = filesHistory;
+  const parent = "/" + path.split("/").filter(Boolean).slice(0, -1).join("/");
   return t`<div class="nav-fichiers" role="group" aria-label="Navigation">
     <button class="btn btn-petit" id="nav-prec" title="Précédent (⌘[)" aria-label="Précédent"${history.pos > 0 ? "" : " disabled"}>‹</button>
     <button class="btn btn-petit" id="nav-suiv" title="Suivant (⌘])" aria-label="Suivant"${history.pos < history.pile.length - 1 ? "" : " disabled"}>›</button>
@@ -384,8 +384,8 @@ pages.fichiers = async (params) => {
         input.value = "";
       };
     });
-    const dropZone = $("#depot"),
-      area = $(".tableau");
+    const dropZone = $("#depot");
+    const area = $(".tableau");
     const fromFinder = (event) => event.dataTransfer.types.includes("Files");
     ["dragenter", "dragover"].forEach((value) =>
       area.addEventListener(value, (event) => {

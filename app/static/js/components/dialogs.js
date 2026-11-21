@@ -28,8 +28,8 @@ export function toast(text, isError = false, action = null) {
   setTimeout(() => element.remove(), isError ? 7000 : action ? 10000 : 3500);
 }
 
-export const dialogElement = $("#dialogue"),
-  dialogForm = $("#dialogue-form");
+export const dialogElement = $("#dialogue");
+export const dialogForm = $("#dialogue-form");
 export function confirmAction({
   titre: title,
   texte: text = "",

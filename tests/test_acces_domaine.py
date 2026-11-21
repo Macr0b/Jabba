@@ -5,13 +5,13 @@ import subprocess
 
 import pytest
 
-from host import actions
+from host import actions, actions_tools
 from services import domain_access
 
 
 def test_caddy_ne_sert_que_l_adresse_de_nextcloud():
     commande, _ = actions.build("acces_domaine", {"adresse": "Cloud.Exemple.fr", "port": 8081})
-    assert commande[:3] == ["sh", "-c", actions.DOMAIN_INSTALL] and commande[3] == actions.DOMAIN_FOLDER
+    assert commande[:3] == ["sh", "-c", actions_tools.DOMAIN_INSTALL] and commande[3] == actions_tools.DOMAIN_FOLDER
     caddyfile = commande[5]
     assert "cloud.exemple.fr {" in caddyfile and "reverse_proxy 127.0.0.1:8081" in caddyfile
     assert caddyfile.count(" {\n") == 1 + 1 + 1  # réglages généraux, l'adresse, son certificat : un seul site
@@ -38,7 +38,7 @@ def test_port_refuse(port):
 @pytest.mark.skipif(not shutil.which("caddy"), reason="caddy absent (vérifié à la main)")
 def test_le_fichier_de_caddy_est_valide(tmp_path):
     fichier = tmp_path / "Caddyfile"
-    fichier.write_text(actions.caddyfile("cloud.exemple.fr", 8081))
+    fichier.write_text(actions_tools.caddyfile("cloud.exemple.fr", 8081))
     sortie = subprocess.run(
         ["caddy", "validate", "--config", str(fichier), "--adapter", "caddyfile"], capture_output=True, text=True
     )

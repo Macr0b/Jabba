@@ -6,6 +6,7 @@ Sommaire :
   require_nextcloud, clean_path, dav_url, client : préparer une demande
   dav_entry, read_folder, is_nextcloud_folder, check_response : lire les réponses
   trash_url, nextcloud_trash : corbeille de Nextcloud
+  parse_xml  : lit une réponse XML de Nextcloud avec le lecteur protégé (entités piégées refusées)
 """
 
 from email.utils import parsedate_to_datetime

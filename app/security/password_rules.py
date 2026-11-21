@@ -14,6 +14,7 @@ Ce qu'on demande :
 
 Les mots de passe déjà enregistrés continuent de marcher : seules les créations
 et les changements passent par ces règles.
+  interne : _letters_only, _is_repetition, _is_sequence, _is_built_on_words, _fetch_breach_range
 """
 
 import hashlib

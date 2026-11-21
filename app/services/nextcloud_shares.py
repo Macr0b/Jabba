@@ -16,6 +16,7 @@ Sommaire :
   stop_sharing : retirer un partage
   list_shares : les partages notés
   nextcloud_ocs : l'API de partage de Nextcloud (partages ordinaires)
+  interne : _clean_parts, _check_group, _free_mount_point
 """
 
 import json

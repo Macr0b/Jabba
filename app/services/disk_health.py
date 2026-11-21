@@ -12,6 +12,7 @@ On lit avec « -n standby » : un disque endormi n'est jamais réveillé pour l'
 - « bon »          : rien à signaler ;
 - « a_surveiller » : quelques secteurs remplacés, usure avancée, chaleur ;
 - « critique »     : le disque annonce lui-même sa panne prochaine, ou des secteurs illisibles.
+  interne : _read_state, _write_state, _ata_counts, _physical_disks, _smart_report
 """
 
 import json

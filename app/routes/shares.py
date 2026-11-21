@@ -4,6 +4,7 @@ Sommaire :
   GET  /api/partages                 list_shared_folders
   POST /api/partages                 share_folder (mot de passe redemandé)
   POST /api/partages/{sid}/arreter   stop_sharing
+  interne : _ocs
 """
 
 from fastapi import APIRouter, HTTPException, Request

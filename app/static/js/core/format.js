@@ -20,8 +20,8 @@ export function formatPercent(user) {
   return user && user.total ? Math.round((100 * user.utilise) / user.total) : 0;
 }
 export function formatDuration(value) {
-  const session = Math.floor(value / 86400),
-    hours = Math.floor((value % 86400) / 3600);
+  const session = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
   if (session) return `${session} j ${hours} h`;
   return `${hours} h ${Math.floor((value % 3600) / 60)} min`;
 }
@@ -33,8 +33,8 @@ export function formatDay(isoDay) {
 
 export function formatWhen(isoDate) {
   if (!isoDate) return "—";
-  const data = new Date(isoDate),
-    now = new Date();
+  const data = new Date(isoDate);
+  const now = new Date();
   const days = Math.floor((new Date(now.toDateString()) - new Date(data.toDateString())) / 86400000);
   if (days === 0) return t("Aujourd'hui ") + data.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   if (days === 1) return t("Hier");

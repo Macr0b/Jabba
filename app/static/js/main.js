@@ -4,6 +4,8 @@
 //   core/        les outils communs (appels au serveur, navigation, session admin, mise en forme)
 //   components/  les morceaux d'écran réutilisés (fenêtres de dialogue, visionneuse, lecteur vidéo, alertes)
 //   pages/       un fichier par écran (Accueil, Établi, Fichiers, Disques, Invités, Comptes, Système…)
+//
+// Sommaire : la session (qui est connecté, mode invité, code d'entrée d'un QR code invité), puis le premier écran.
 import "./pages/activity.js";
 import "./pages/admins.js";
 import "./pages/backups.js";

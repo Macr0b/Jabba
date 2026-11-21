@@ -11,7 +11,8 @@ AdGuard écoute sur le serveur (127.0.0.1:3000) ; l'appli tourne sur le réseau 
 Sommaire :
   devices()                      : {"pret", "message", "appareils": [{ip, nom, protege, tailscale}]}
   set_protected(ip, protected)   : allume / éteint le filtrage d'un appareil
-  interne : _client, _ensure_ready, _tailscale_names, _client_name, _demo
+  interne : _client, _ensure_ready, _tailscale_names, _client_name, _demo, _password
+  AdBlockerError
 """
 
 import ipaddress

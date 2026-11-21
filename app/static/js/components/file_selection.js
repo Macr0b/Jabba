@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : attachSelection, selectAll, toggleAll, SHORTCUTS
-//   interne : current, items, setSelected, refresh, renderBar, openMenu, moveFocus, columnCount, onKey
+//   interne : current, items, setSelected, refresh, renderBar, openMenu, moveFocus, columnCount, onKey, selectedEntries, allSelected, runOnSelection
 //
 // Souris : case à cocher, ⌘/Ctrl + clic pour ajouter, Maj + clic pour une plage, clic droit = menu,
 // glisser sur un dossier (de la liste ou du fil d'Ariane) pour déplacer.

@@ -9,6 +9,7 @@ Sommaire
 Un code change toutes les 30 secondes. On accepte le créneau précédent et le
 suivant (horloge du téléphone un peu décalée), mais jamais deux fois le même
 créneau : un code vu par-dessus l'épaule ne resservira pas.
+  interne : _secret_bytes, _code_for_step
 """
 
 import base64

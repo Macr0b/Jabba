@@ -15,6 +15,11 @@ Sommaire
 Un fichier infecté est déplacé dans /srv/data/.quarantaine-antivirus (invisible des invités),
 jamais supprimé : l'admin décide. Les fichiers de plus de 100 Mo ne sont pas analysés
 (limite par défaut de clamd) ; ce sont presque toujours des vidéos.
+  read_state
+  write_state
+  scan_files    : analyse par lots. -> (infectés {chemin: menace}, chemins analysés) ; s'arrête si l'antivirus n'est pas prêt
+  update_state  : lire, modifier, écrire l'état, sans perdre ce qu'une autre analyse écrit en même temps
+  interne : _read, _write, _quarantine, _scan_in_background
 """
 
 import os
@@ -24,7 +29,7 @@ import threading
 import time
 
 import config
-from host import actions, commands
+from host import actions_tools, commands
 from services import activity_log, guests, json_files, measurements, notifications
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
@@ -193,8 +198,8 @@ def record_threat(state, path, threat_name, origin, now):
 def scan_files(paths):
     """Analyse par lots. -> (infectés {chemin: menace}, chemins analysés) ; s'arrête si l'antivirus n'est pas prêt."""
     infected, done = {}, []
-    for start in range(0, len(paths), actions.MAX_SCAN_FILES):
-        batch = paths[start : start + actions.MAX_SCAN_FILES]
+    for start in range(0, len(paths), actions_tools.MAX_SCAN_FILES):
+        batch = paths[start : start + actions_tools.MAX_SCAN_FILES]
         code, output, _ = commands.run_action("analyser_fichiers", chemins=batch)
         if code not in (0, 1):
             break  # antivirus pas prêt (signatures en cours de chargement) : on réessaiera

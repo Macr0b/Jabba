@@ -12,6 +12,19 @@ navigateurs savent lire : Safari directement, les autres avec hls.js.
 - les sous-titres texte (SRT, ASS…) sont envoyés à part, en WebVTT.
 
 Aller à un autre moment du film relance la conversion à partir de ce moment.
+
+Sommaire :
+  probe
+  plays_directly  : le navigateur sait-il lire le fichier tel quel ?
+  keyframe        : quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`
+  start           : lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)
+  session_file    : chemin d'un morceau ou de la liste de lecture, une fois prêt
+  session_error
+  stop
+  clean_up        : arrête les lectures abandonnées (onglet fermé, téléphone en veille…)
+  shift_vtt       : recale les sous-titres sur le moment où la lecture a commencé (la vidéo, elle, repart de 0)
+  subtitles       : une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé
+  interne : _hardware_options, _video, _seconds, _timestamp
 """
 
 import json

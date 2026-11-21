@@ -7,6 +7,7 @@ Sommaire :
   POST /api/public/ouvrir         open_or_close (super admin, mot de passe récent)
   POST /api/public/mentions       add_privacy_notice (ajoute les mentions RGPD à la charte d'inscription)
   POST /api/demandes-fichiers     file_request (lien « déposer seulement » sur un dossier Nextcloud)
+  interne : _visible
 """
 
 import asyncio

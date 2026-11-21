@@ -8,7 +8,7 @@ Trois rangements :
 
 Sommaire :
   inventory(installed, identifier) : la liste, dans l'ordre d'affichage
-  interne : _tool_entries
+  interne : _tool_entries, _entry
 """
 
 import config

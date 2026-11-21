@@ -4,6 +4,17 @@ Le jeton vit dans un cookie protégé (HttpOnly, Secure, SameSite=Strict). Le
 serveur n'en garde que l'empreinte. Une session peut être fermée à distance.
 Les actions les plus sensibles redemandent le mot de passe si sa dernière
 saisie date de plus de 10 minutes (« confirmation »).
+
+Sommaire :
+  create
+  read                : la session (copie) si le jeton est valable, sinon None
+  confirm
+  confirmed_recently
+  close
+  close_by_id
+  close_account       : ferme toutes les sessions d'un compte (ou de tout le monde)
+  list_sessions
+  interne : _token_hash, _read, _write, _drop_expired
 """
 
 import hashlib

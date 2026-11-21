@@ -16,6 +16,33 @@ propre des bases de données) et ceux du serveur (/etc).
 
 La copie tourne sur le serveur lui-même (systemd-run) : elle va au bout même si
 l'appli redémarre. Elle écrit son résultat dans donnees/sauvegarde-etat.json.
+
+Sommaire :
+  read
+  write
+  new_passphrase    : six groupes de quatre caractères faciles à recopier (sans 0/O ni 1/I/L)
+  passphrase
+  set_passphrase
+  repository
+  backup_script     : le script shell qui fait une sauvegarde complète, sur le serveur
+  read_state
+  result            : le dernier résultat, en clair
+  is_due            : faut-il lancer la sauvegarde de cette nuit ? (manquée : dès que possible)
+  next_run
+  restic_command    : en démo seulement : restic lancé dans le conteneur (sur le serveur, c'est l'action « restic »)
+  run_restic        : une lecture ou une restauration restic : par la liste fermée sur le serveur, ou dans le conteneur en démo
+  restore_root
+  snapshots
+  browse
+  restore           : remet `chemin` tel qu'il était dans la copie `ident`, dans Restaurations/<date>/ (jamais par-dessus)
+  host_data_dir     : le dossier des données de l'appli, vu depuis le serveur (la clé et l'état y sont)
+  is_running
+  disk_is_present
+  start_backup
+  follow_backup     : quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté
+  watch_backups
+  require_readable
+  interne : _database_dump_script
 """
 
 import json

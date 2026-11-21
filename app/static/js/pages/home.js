@@ -60,8 +60,8 @@ const TILE_ICONS = { racine: "dossier", espace: t("dossier ext"), disque: "disqu
 
 async function loadQuickAccess(arrangement = { ordre: [], masques: [] }) {
   const data = await api("/api/accueil/dossiers");
-  const tiles = $("#tuiles"),
-    suggestions = $("#suggestions");
+  const tiles = $("#tuiles");
+  const suggestions = $("#suggestions");
   if (!tiles) return;
   const tile = (item, type) =>
     `<a class="carte tuile" href="${folderLink(item.chemin)}" data-carte="${escapeHtml(item.chemin)}"><span class="ic-tuile ${TILE_ICONS[type]}" aria-hidden="true"></span><span class="nom-tuile">${escapeHtml(item.nom)}</span><span class="note">${{ racine: t("Nextcloud"), espace: t("Serveur"), disque: t("Disque branché"), favori: t("Favori") }[type]}</span></a>`;

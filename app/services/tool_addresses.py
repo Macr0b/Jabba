@@ -21,7 +21,8 @@ Sommaire :
   create_missing(installed, who) : crée, dans un fil à part, les adresses qui manquent (carte de réparation)
   after_install(tool, who) : crée l'adresse d'un outil qu'on vient d'activer (si la clé est là)
   address(tool)            : l'adresse https de l'outil, ou None
-  interne : _api, _new_auth_key, _wait_for_device, _create
+  interne : _api, _new_auth_key, _wait_for_device, _create, _timestamp
+  AddressError  : ce que Tailscale ou le serveur a refusé, en clair
 """
 
 import calendar

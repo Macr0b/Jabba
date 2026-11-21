@@ -14,14 +14,14 @@ import uuid
 import pytest
 from conftest import EN_ROOT
 
-from host import actions
+from host import action_common, actions
 
 
 def test_le_script_passe_par_un_fichier():
     script = 'L="a b"; echo "${L% *}"'
-    commande, _ = actions._background("jabba-test-1", script, "bash", ("Nice=10",))
+    commande, _ = action_common.background("jabba-test-1", script, "bash", ("Nice=10",))
     assert commande[:2] == ["sh", "-c"] and "${" not in commande[2]  # rien que systemd puisse remplacer
-    assert commande[3:6] == ["tache", actions.TASKS_DIR, "jabba-test-1"]
+    assert commande[3:6] == ["tache", action_common.TASKS_DIR, "jabba-test-1"]
     assert commande[6] == 'rm -f "$0"\n' + script  # le script arrive en argument, intact
     assert commande[7:] == ["-p", "Nice=10", "bash"]
     assert 'systemd-run --unit="$U" --collect "$@" "$D/$U.sh"' in commande[2]
@@ -30,7 +30,7 @@ def test_le_script_passe_par_un_fichier():
 def test_nom_de_tache_verifie():
     for unite in ("x; reboot", "jabba-maj-", "../jabba-maj-1"):
         with pytest.raises(actions.ActionError):
-            actions._task_unit(unite)
+            action_common.task_unit(unite)
 
 
 systemd_present = shutil.which("systemd-run") and os.path.isdir("/run/systemd/system")
@@ -42,8 +42,8 @@ def test_vrai_systemd_run(tmp_path):
     os.chmod(tmp_path, 0o755)
     sortie = tmp_path / "sortie"
     unite = "jabba-test-" + str(uuid.uuid4().int)[:8]
-    commande, _ = actions._background(unite, f'L="jabba v1.2.3 abc"\necho "${{L% *}}|${{L##* }}" > {sortie}\n')
+    commande, _ = action_common.background(unite, f'L="jabba v1.2.3 abc"\necho "${{L% *}}|${{L##* }}" > {sortie}\n')
     texte = commande[2].replace("--collect", "--wait --collect")
     subprocess.run(["sh", "-c", texte, *commande[3:]], check=True, capture_output=True)
     assert sortie.read_text().strip() == "jabba v1.2.3|abc"
-    assert not os.path.exists(f"{actions.TASKS_DIR}/{unite}.sh")
+    assert not os.path.exists(f"{action_common.TASKS_DIR}/{unite}.sh")

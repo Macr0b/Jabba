@@ -1,6 +1,10 @@
 """Journal d'activité : ce qui s'est passé sur le serveur, gardé dans /data/journal.jsonl.
 
 Une ligne JSON par événement. On ne garde que les 2000 derniers.
+
+Sommaire :
+  record
+  read
 """
 
 import json
