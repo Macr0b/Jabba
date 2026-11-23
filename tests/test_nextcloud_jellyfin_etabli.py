@@ -234,3 +234,25 @@ def test_retrait_de_nextcloud_retire_sa_tache_de_fond():
     assert commande[-1] == catalog.NEXTCLOUD_CRON_REMOVE and "rm " not in " ".join(commande)
     commande, _ = actions.build("retirer_outil_option", {"outil": "jellyfin"})
     assert commande[-1] == ""
+
+
+def test_corbeille_gardee_30_jours_sauf_choix_de_l_admin(monkeypatch):
+    from services import nextcloud_settings
+
+    reglage = {}
+
+    def occ(args, **k):
+        if args[0] == "config:system:get":
+            return (0, reglage["v"] + "\n", "") if "v" in reglage else (1, "", "")
+        if args[0] == "config:system:set":
+            reglage["v"] = args[2].removeprefix("--value=")
+        return 0, "", ""
+
+    monkeypatch.setattr(nextcloud_settings.commands, "occ", occ)
+    assert nextcloud_settings.keep_deleted_files() and reglage["v"] == "30, 60"  # réglage d'origine : remplacé
+    reglage["v"] = "auto"
+    assert nextcloud_settings.keep_deleted_files() and reglage["v"] == "30, 60"
+    reglage["v"] = "7, auto"  # choisi par l'admin : jamais écrasé
+    assert not nextcloud_settings.keep_deleted_files() and reglage["v"] == "7, auto"
+    monkeypatch.setattr(nextcloud_settings.commands, "occ", lambda args, **k: (1, "Nextcloud ne répond pas", ""))
+    assert not nextcloud_settings.keep_deleted_files()  # Nextcloud arrêté : rien tenté

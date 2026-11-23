@@ -20,6 +20,7 @@ Sommaire :
   watch_tools : outil en panne
   watch_system_updates : mises à jour du système, redémarrage en attente
   domain_access.watch_protection : Nextcloud ouvert sur Internet freine bien les essais en rafale (chaque heure)
+  nextcloud_settings.keep_deleted_files : corbeille de Nextcloud gardée 30 jours au moins (chaque heure, sauf choix de l'admin)
   tool_addresses.watch : adresses à part qui manquent, créées si la clé Tailscale est là (chaque heure)
   watch_forever : la boucle (voir le détail des fréquences dedans)
 """
@@ -47,6 +48,7 @@ from services import (
     mass_deletion,
     measurements,
     nextcloud_accounts,
+    nextcloud_settings,
     notifications,
     power,
     public_mode,
@@ -229,7 +231,12 @@ def watch_forever():
                 lambda: public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts),
             ]
         if tick % 240 == 0:  # toutes les heures
-            steps += [watch_system_updates, tool_addresses.watch, domain_access.watch_protection]
+            steps += [
+                watch_system_updates,
+                tool_addresses.watch,
+                domain_access.watch_protection,
+                nextcloud_settings.keep_deleted_files,
+            ]
         if time.time() - WATCH_STATE["derniere_purge"] > 86400:
             WATCH_STATE["derniere_purge"] = time.time()
             steps += [disk_browser.purge_old_trash]

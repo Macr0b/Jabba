@@ -6,8 +6,10 @@
 //   interne : uninstall
 // AdGuard Home a en plus « Appareils » : le bloqueur de pubs, appareil par appareil (adblock_devices.js).
 // Les outils dont Jabba a créé le compte ont « Identifiants » (tool_login.js).
-// Ceux qui ont une page ont « Installer sur cet appareil » (install_as_app.js).
+// Ceux qui ont une page ont « Installer sur cet appareil » (install_as_app.js) ; Nextcloud a
+// « Connecter un ordinateur ou un téléphone » (connect_device.js), son dossier synchronisé façon Dropbox.
 import { renderAdblockDevices } from "./adblock_devices.js";
+import { renderConnectDevice } from "./connect_device.js";
 import { bindMenus, menuHtml } from "./card_menu.js";
 import { renderInstallAsApp } from "./install_as_app.js";
 import { renderToolLogin } from "./tool_login.js";
@@ -23,6 +25,8 @@ export function toolMenuHtml(item) {
   if (item.id === "adguard-home" && item.installe !== false && item.etat)
     entries.push({ action: "appareils", texte: t("Appareils") });
   if (item.identifiants && item.etat) entries.push({ action: "identifiants", texte: t("Identifiants") });
+  if (item.id === "nextcloud" && item.etat && item.lien)
+    entries.push({ action: "connecter", texte: t("Connecter un ordinateur ou un téléphone") });
   if (item.lien && item.etat && !item.systeme && item.id !== "nextcloud")
     entries.push({ action: "installer-appli", texte: t("Installer sur cet appareil") });
   if (item.modifiable && item.etat && item.etat !== "arrêté" && !item.systeme)
@@ -95,6 +99,11 @@ export function bindToolMenus(scope, items, versions, reload) {
       panel.dataset.contenu = action;
       panel.hidden = false;
       return renderInstallAsApp(panel, item);
+    }
+    if (action === "connecter") {
+      panel.dataset.contenu = action;
+      panel.hidden = false;
+      return renderConnectDevice(panel, item);
     }
     if (action === "identifiants") {
       panel.dataset.contenu = action;

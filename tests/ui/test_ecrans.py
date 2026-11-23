@@ -560,3 +560,21 @@ def test_outils_en_pause_apres_ceux_en_marche(page):
         }"""
     )
     assert ordre == ["dbca", "cadb"]  # ailleurs (Accueil) : l'ordre rangé seul
+
+
+def test_connecter_un_appareil_a_nextcloud(page):
+    """Nextcloud → « Connecter un ordinateur ou un téléphone » : les étapes de cet appareil, l'adresse à coller."""
+    aller(page, "outils")
+    carte = page.locator("article.outil", has=page.locator('[data-menu="nextcloud"]'))
+    carte.locator('[data-menu="nextcloud"]').click()
+    carte.get_by_role("menuitem", name="Connecter un ordinateur ou un téléphone").click()
+    panneau = carte.locator(".panneau-outil")
+    expect(panneau).to_contain_text("Sur cet appareil")
+    expect(panneau).to_contain_text("Tout synchroniser")  # ordinateur de test : le dossier façon Dropbox
+    adresse = panneau.locator("[data-adresse]")
+    expect(adresse).to_have_value(re.compile(r"^https://"))
+    expect(panneau).to_contain_text("qu'avec Tailscale allumé")  # démo : pas de domaine ouvert
+    panneau.get_by_text("iPhone / iPad").click()
+    expect(panneau.get_by_role("link", name="Nextcloud sur l'App Store")).to_have_attribute(
+        "href", "https://apps.apple.com/app/id1125420102"
+    )

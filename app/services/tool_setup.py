@@ -3,8 +3,9 @@
 Jellyfin : l'assistant de démarrage est fait par Jabba (langue, compte admin au nom du compte du serveur,
 avec le mot de passe tiré par Jabba, accès à distance sans UPnP), puis les médiathèques Films et Séries.
 Nextcloud : attendre la fin de son installation, reconnaître le relais https, lancer ses tâches de fond
-par cron, montrer les films et les téléchargements, et relier Jabba (écran Fichiers) avec un mot de
-passe d'application, gardé dans un fichier lisible par l'appli seule (config.NC_LINK_FILE).
+par cron, garder la corbeille 30 jours au moins, montrer les films et les téléchargements, et relier
+Jabba (écran Fichiers) avec un mot de passe d'application, gardé dans un fichier lisible par l'appli
+seule (config.NC_LINK_FILE).
 
 Sommaire :
   after_install(tool, who)  : la configuration de l'outil qu'on vient d'installer ; une ligne de compte rendu
@@ -137,6 +138,7 @@ def _nextcloud(who):
         return "Nextcloud s'installe encore : rouvre l'Établi dans quelques minutes."
     nextcloud_settings.add_to_system_list("trusted_proxies", "172.16.0.0/12")  # le https des adresses Tailscale
     commands.occ(["background:cron"])
+    nextcloud_settings.keep_deleted_files()  # un fichier supprimé depuis un ordinateur se récupère 30 jours
     _external_folders()
     login = tool_credentials.read("nextcloud")
     if login and not config.NC_APP_PASSWORD:
