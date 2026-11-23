@@ -14,6 +14,7 @@ Sommaire :
   password_for(tool)  : le mot de passe d'un compte créé par Jabba, tiré au sort la première fois
   read(tool)          : {"identifiant", "mot_de_passe", "cree_par_jabba"} ou None
   created_by_jabba(t) : le compte de l'outil est-il créé (et utilisé) par Jabba ?
+  interne : _login_name (le compte du serveur pour Nextcloud et Jellyfin)
   save(tool, identifiant, mot_de_passe) / forget(tool) : les identifiants notés par toi
   flag / set_flag     : ce que Jabba a déjà réglé une fois dans un outil (ex. le filtrage général d'AdGuard)
   interne : _check_storable
@@ -25,7 +26,7 @@ import secrets
 import threading
 
 import config
-from host import catalog
+from host import catalog, commands
 from services import json_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
@@ -36,6 +37,18 @@ STORABLE = frozenset({"jellyfin", "nextcloud", "dockge", *catalog.OPTIONAL_TOOLS
 # Pas de caractère de contrôle ; des longueurs raisonnables.
 LOGIN_TEXT = re.compile(r"[^\x00-\x1f\x7f]{1,200}")
 PASSWORD_TEXT = re.compile(r"[^\x00-\x1f\x7f]{1,500}")
+
+
+def _login_name(tool):
+    """L'identifiant du compte créé par Jabba : fixé dans le catalogue, ou le compte du serveur
+    (Nextcloud, Jellyfin : l'admin y porte le nom de ton compte sur le serveur)."""
+    name = catalog.OPTIONAL_TOOLS[tool].get("identifiant", "admin")
+    if name != catalog.SERVER_USER_MARK:
+        return name
+    if config.DEMO or config.ADMIN_USER:
+        return config.ADMIN_USER or "demo"
+    _, output, _ = commands.run_action("compte_serveur")
+    return output.split(":", 1)[0].strip() or "admin"
 
 
 def created_by_jabba(tool):
@@ -53,7 +66,7 @@ def password_for(tool):
 
 def read(tool):
     if created_by_jabba(tool):
-        identifiant = catalog.OPTIONAL_TOOLS[tool].get("identifiant", "admin")
+        identifiant = _login_name(tool)
         password = "demo-" + tool if config.DEMO else json_files.load(CREDENTIALS_FILE, {}).get(tool)
         if not isinstance(password, str) or not password:
             return None

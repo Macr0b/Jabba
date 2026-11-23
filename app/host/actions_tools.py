@@ -140,16 +140,28 @@ printf "%s" "$1" > compose.yaml
 pass=$(cat)
 if [ -n "$2" ] && [ ! -f .env ]; then
   secret=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  secret2=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
   name=$(tailscale status --json --peers=false 2>/dev/null | sed -n 's/^ *"DNSName": "\\(.*\\)\\.",*$/\\1/p' | head -1)
   lan=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \\([0-9.]*\\).*/\\1/p' | head -1)
   tsip=$(tailscale ip -4 2>/dev/null | head -1)
-  printf "%s\n" "$2" | S="$secret" P="$pass" T="$name" L="${lan:-127.0.0.1}" I="${tsip:-127.0.0.2}" awk 'BEGIN {
+  user=$(getent passwd 1000 | cut -d: -f1)
+  gid=$(getent passwd 1000 | cut -d: -f4)
+  render=$(getent group render | cut -d: -f3)
+  printf "%s\n" "$2" | S="$secret" S2="$secret2" P="$pass" T="$name" L="${lan:-127.0.0.1}" I="${tsip:-127.0.0.2}" \\
+    U="${user:-root}" G="${gid:-1000}" R="${render:-0}" H="$(hostname)" N="${name#*.}" awk 'BEGIN {
       marks[1] = "@SECRET_TIRE_AU_SORT@"; values[1] = ENVIRON["S"]
       marks[2] = "@MOT_DE_PASSE_ADMIN@"; values[2] = ENVIRON["P"]
       marks[3] = "@ADRESSE_TAILSCALE@"; values[3] = ENVIRON["T"]
       marks[4] = "@IP_LOCALE@"; values[4] = ENVIRON["L"]
-      marks[5] = "@IP_TAILSCALE@"; values[5] = ENVIRON["I"] }
-    { for (n = 1; n <= 5; n++) {
+      marks[5] = "@IP_TAILSCALE@"; values[5] = ENVIRON["I"]
+      marks[6] = "@AUTRE_SECRET@"; values[6] = ENVIRON["S2"]
+      marks[7] = "@COMPTE_SERVEUR@"; values[7] = ENVIRON["U"]
+      marks[8] = "@UID_SERVEUR@"; values[8] = "1000"
+      marks[9] = "@GID_SERVEUR@"; values[9] = ENVIRON["G"]
+      marks[10] = "@GID_RENDER@"; values[10] = ENVIRON["R"]
+      marks[11] = "@NOM_SERVEUR@"; values[11] = ENVIRON["H"]
+      marks[12] = "@SUFFIXE_TAILSCALE@"; values[12] = ENVIRON["N"] }
+    { for (n = 1; n <= 12; n++) {
         done = ""; rest = $0
         while ((i = index(rest, marks[n])) > 0) {
           done = done substr(rest, 1, i - 1) values[n]; rest = substr(rest, i + length(marks[n]))
@@ -341,6 +353,7 @@ def _tool(args):
 OCC_COMMANDS = frozenset(
     {
         "status",
+        "background:cron",
         "app:list",
         "app:install",
         "app:enable",

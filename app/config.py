@@ -8,8 +8,10 @@ Sommaire :
   5. dépôt GitHub (mises à jour)
   6. divers (batterie, liens)
   read_links  : liens supplémentaires de l'accueil : LIENS="Nom=https://…,Autre=https://…"
+  read_nextcloud_link : le compte et le mot de passe d'application de Jabba dans Nextcloud, s'il l'a installé
 """
 
+import json
 import os
 
 # ---------------------------------------------------------------- 1. dossiers du code
@@ -31,8 +33,23 @@ ADMIN_USER = os.environ.get("ADMIN_USER", "").strip()
 # ---------------------------------------------------------------- 4. Nextcloud
 NC_URL = os.environ.get("NC_URL", "http://127.0.0.1:8081").rstrip("/")
 NC_HOST = os.environ.get("NC_HOST", "")
-NC_USER = os.environ.get("NC_USER", "")
-NC_APP_PASSWORD = os.environ.get("NC_APP_PASSWORD", "")
+# Le lien de Jabba avec Nextcloud : dans le .env (installation à la main, avant la 0.16.6), ou dans ce
+# fichier, écrit par Jabba quand il installe Nextcloud lui-même (services/tool_setup.py).
+NC_LINK_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "nextcloud-jabba.json")
+
+
+def read_nextcloud_link():
+    """{"utilisateur", "mot_de_passe_appli"} gardés par Jabba, ou {} s'il n'a pas installé Nextcloud lui-même."""
+    try:
+        with open(NC_LINK_FILE) as file:
+            link = json.load(file)
+    except (OSError, ValueError):
+        return {}
+    return link if isinstance(link, dict) else {}
+
+
+NC_USER = os.environ.get("NC_USER", "") or read_nextcloud_link().get("utilisateur", "")
+NC_APP_PASSWORD = os.environ.get("NC_APP_PASSWORD", "") or read_nextcloud_link().get("mot_de_passe_appli", "")
 NC_PUBLIC = os.environ.get("NC_PUBLIC_URL", "").rstrip("/")
 
 # ---------------------------------------------------------------- 5. dépôt GitHub

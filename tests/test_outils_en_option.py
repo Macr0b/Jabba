@@ -68,7 +68,7 @@ def test_mot_de_passe_refuse(mot):
 
 
 def test_seulement_les_outils_du_catalogue():
-    for nom in ("nextcloud", "../x", "", None):
+    for nom in ("dockge", "jabba-app", "../x", "", None):
         with pytest.raises(actions.ActionError):
             actions.build("installer_outil_option", {"outil": nom})
     commande, _ = actions.build("retirer_outil_option", {"outil": "vaultwarden"})
@@ -155,9 +155,9 @@ def test_nouveaux_outils_du_catalogue():
     )
     assert '"127.0.0.1:8000:8000"' in catalog.PAPERLESS_COMPOSE and '"127.0.0.1:7745:7745"' in catalog.HOMEBOX_COMPOSE
     ports = [outil["port_local"] for outil in catalog.OPTIONAL_TOOLS.values() if outil["port_local"]]
-    assert len(ports) == len(set(ports)) and not {8090, 8081, 8096, 5001, 9000, 8443} & set(
-        ports
-    )  # aucun port déjà pris
+    assert len(ports) == len(set(ports)) and not {8090, 5001, 9000, 8443} & set(ports)  # aucun port déjà pris
+    assert catalog.OPTIONAL_TOOLS["nextcloud"]["port_local"] == 8081  # les ports de l'ancienne installation
+    assert catalog.OPTIONAL_TOOLS["jellyfin"]["port_local"] == 8096  # (guide), gardés tels quels
 
 
 def test_changedetection_n_ecoute_que_le_serveur():
@@ -257,10 +257,10 @@ def test_identifiants_notes_par_toi(coffre):
     assert coffre.stat().st_mode & 0o077 == 0  # lisible par l'appli seule
     tool_credentials.save("homebox", "rob", "autre")
     assert tool_credentials.read("homebox")["mot_de_passe"] == "autre"
-    tool_credentials.save("jellyfin", "rob", "jelly")
+    tool_credentials.save("dockge", "rob", "dock")
     tool_credentials.forget("homebox")
     assert tool_credentials.read("homebox") is None
-    assert tool_credentials.read("jellyfin")["mot_de_passe"] == "jelly"  # les autres restent
+    assert tool_credentials.read("dockge")["mot_de_passe"] == "dock"  # les autres restent
 
 
 def test_compte_cree_par_jabba_intouchable(coffre):

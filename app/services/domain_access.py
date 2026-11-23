@@ -17,7 +17,7 @@ Sommaire :
   public_ip       : l'adresse de la box sur Internet (celle que le domaine doit indiquer)
   resolve         : les adresses IPv4 vers lesquelles pointe un nom (ce qu'on a mis dans la zone DNS)
   certificate_ok  : caddy a-t-il obtenu un vrai certificat pour cette adresse ? (connexion locale, certificat vérifié)
-  interne : _system_list, _add_to_system_list, _tell_nextcloud, _forget_in_nextcloud, _offer_two_factor
+  interne : _tell_nextcloud, _forget_in_nextcloud, _offer_two_factor
 """
 
 import os
@@ -29,7 +29,7 @@ import httpx
 
 import config
 from host import action_common, actions_tools, commands
-from services import guest_network, json_files, ovh_dns, tools
+from services import guest_network, json_files, nextcloud_settings, ovh_dns, tools
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "domaine.json")
@@ -57,27 +57,15 @@ def address(settings):
     return f"{prefix}.{settings['domaine']}" if prefix else settings["domaine"]
 
 
-def _system_list(key):
-    """Une liste des réglages de Nextcloud (une valeur par ligne), vide si absente."""
-    code, output, _ = commands.occ(["config:system:get", key])
-    return [line.strip() for line in output.splitlines() if line.strip()] if code == 0 else []
-
-
-def _add_to_system_list(key, value):
-    values = _system_list(key)
-    if value not in values:
-        commands.occ(["config:system:set", key, str(len(values)), "--value=" + value])
-
-
 def _tell_nextcloud(public_address):
     """Ajoute l'adresse publique aux adresses acceptées par Nextcloud, et Caddy à ses relais de confiance."""
-    _add_to_system_list("trusted_domains", public_address)
+    nextcloud_settings.add_to_system_list("trusted_domains", public_address)
     for proxy in LOCAL_PROXIES:
-        _add_to_system_list("trusted_proxies", proxy)
+        nextcloud_settings.add_to_system_list("trusted_proxies", proxy)
 
 
 def _forget_in_nextcloud(public_address):
-    domains = _system_list("trusted_domains")
+    domains = nextcloud_settings.system_list("trusted_domains")
     if public_address not in domains:
         return
     remaining = [domain for domain in domains if domain != public_address]

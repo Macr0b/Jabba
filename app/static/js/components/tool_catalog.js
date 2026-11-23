@@ -34,7 +34,8 @@ export function memoryBannerHtml() {
 
 // « Ajouter un outil » : les outils pas encore installés, rangés par usage.
 const GROUPS = [
-  [t("Fichiers et souvenirs"), ["immich", "paperless"]],
+  [t("Fichiers et souvenirs"), ["nextcloud", "immich", "paperless"]],
+  [t("Films et séries"), ["jellyfin"]],
   [t("Atelier et maison"), ["atelier", "homebox"]],
   [t("Sécurité"), ["vaultwarden", "adguard-home", "antivirus"]],
   [t("Sauvegarde"), ["time-machine"]],

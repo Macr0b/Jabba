@@ -59,7 +59,7 @@ def tool_login(outil: str, request: Request):
         if tool_credentials.created_by_jabba(outil):
             raise HTTPException(
                 404,
-                "Pas de compte créé par Jabba : l'outil a été installé avant la 0.16.2, avec le mot de passe tapé à l'activation.",
+                "Pas de compte créé par Jabba : l'outil a été installé avant que Jabba s'en charge, avec le mot de passe choisi à ce moment-là.",
             )
         raise HTTPException(404, "Rien de noté pour l'instant.")
     activity_log.record("outil", f"Identifiants de {outil} affichés", request.state.nom)

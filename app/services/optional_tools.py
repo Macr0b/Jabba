@@ -15,7 +15,7 @@ Sommaire :
 
 from host import actions, actions_tools
 from host import catalog as host_catalog
-from services import background_tasks, measurements, tool_addresses, tool_credentials, workshop
+from services import background_tasks, measurements, tool_addresses, tool_credentials, tool_setup, workshop
 
 GIGA = 1024**3
 # Outils de l'appli elle-même : rien à installer sur le serveur, juste un écran de plus.
@@ -83,7 +83,10 @@ def install(name, who=None):
         who,
         name,
         password,
-        then=lambda: tool_addresses.after_install(name, who),  # son adresse à part, dans la foulée
+        # Dans la foulée : son réglage (Nextcloud, Jellyfin), puis son adresse à part.
+        then=lambda: "\n".join(
+            line for line in (tool_setup.after_install(name, who), tool_addresses.after_install(name, who)) if line
+        ),
     )
 
 

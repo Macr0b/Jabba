@@ -60,13 +60,19 @@ FALLBACK_ICONS = [
 # Ouverts dans un onglet à part (Nextcloud ; les outils en option refusent souvent d'être affichés dans une autre page).
 # Jamais dans un cadre : Nextcloud a son propre écran (Fichiers). Ceux de l'Établi : voir frame_check.
 OUTSIDE_APP = {"nextcloud"}
+# Connus pour s'ouvrir dans un cadre de Jabba, sans avoir à le vérifier.
+ALWAYS_IN_APP = {"jellyfin", "dockge"}
 
 
 def _in_app(pid):
     """Dans un cadre de Jabba : les outils connus pour l'accepter, et ceux de l'Établi qui n'interdisent rien."""
+    if pid in OUTSIDE_APP:
+        return False
+    if pid in ALWAYS_IN_APP:
+        return True
     if pid in catalog.OPTIONAL_TOOLS:
         return frame_check.allows_framing(catalog.OPTIONAL_TOOLS[pid]["port_local"])
-    return pid not in OUTSIDE_APP
+    return True
 
 
 def list_tools():

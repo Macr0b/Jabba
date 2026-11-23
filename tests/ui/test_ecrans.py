@@ -203,6 +203,7 @@ def test_outils_a_activer_et_memoire(page):
     expect(page.locator("#ajouter-outils [role=switch]")).to_have_count(0)  # installer n'est pas un curseur
     groupes = page.locator("#ajouter-outils .titre-groupe")
     expect(groupes).to_have_text(["Fichiers et souvenirs", "Atelier et maison", "Sécurité", "Sauvegarde", "Veille"])
+    expect(page.locator('#ajouter-outils [data-activer="nextcloud"]')).to_have_count(0)  # déjà installé (démo)
     immich = page.locator('[data-offre="immich"]')
     expect(immich).to_contain_text("Prend environ 3,0 Go de mémoire")
     expect(page.locator("#ajouter-outils #offre-antivirus")).to_be_visible()  # rangé dans « Sécurité »

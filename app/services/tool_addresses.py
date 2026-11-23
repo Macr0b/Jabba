@@ -45,8 +45,8 @@ KEYS_PAGE = "https://login.tailscale.com/admin/settings/keys"
 TOKEN = re.compile(r"tskey-api-[A-Za-z0-9-]{10,200}")
 DEVICE_NAME = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 # Les outils qui ont une page où l'on se connecte, et le port où ils répondent sur le serveur.
-# Nextcloud et Jellyfin ont déjà leur adresse (posée à l'installation : guide, étape 8) ;
-# changedetection n'a pas de compte : rien que le trousseau puisse confondre, il garde la sienne.
+# Nextcloud et Jellyfin aussi (installés à la main avant la 0.16.6, ils gardent l'adresse qu'ils avaient :
+# réponse « DEJA ») ; changedetection n'a pas de compte : rien que le trousseau puisse confondre.
 WITHOUT_LOGIN = {"changedetection"}
 TARGETS = {
     "dockge": 5001,
@@ -168,6 +168,9 @@ def _create(tool, who):
         device = _wait_for_device(tool, 0 if "DEJA" in output else started)
         _api("POST", f"/device/{device['id']}/key", {"keyExpiryDisabled": True})
         url = "https://" + device["name"].rstrip(".")
+        from services import tool_setup  # Nextcloud doit accepter sa nouvelle adresse
+
+        tool_setup.after_address(tool, url)
         if catalog.OPTIONAL_TOOLS.get(tool, {}).get("variable_adresse"):
             commands.run_action("adresse_dans_outil", outil=tool, adresse=url.removeprefix("https://"))
     with _LOCK:

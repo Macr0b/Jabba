@@ -3,6 +3,7 @@
     "version": "0.16.6",
     "date": "2026-11-23",
     "changements": [
+      "Nextcloud et Jellyfin s'installent depuis l'Établi, d'un bouton, comme les autres outils : plus aucune commande après le script d'installation. Jabba prépare les dossiers, crée le compte admin (au nom de ton compte du serveur, mot de passe dans … → Identifiants) et leur adresse à part ; pour Jellyfin, il fait l'assistant (français, accès à distance sans UPnP) et crée les médiathèques Films et Séries ; pour Nextcloud, il lance ses tâches de fond, y montre les films et les téléchargements, et relie l'écran Fichiers de Jabba. Un Nextcloud ou un Jellyfin installé à la main avant reste tel quel.",
       "Deux styles en plus, au choix dans Système → Apparence (pour chaque appareil) : « Salle des machines » (sombre et chaud, voyants ambre, chiffres en police technique) et « Atelier clair » (papier, traits d'encre, une seule couleur vive). Chacun existe en clair et en sombre ; « Cube » reste celui de base. Polices servies par Jabba (licence OFL).",
       "Alerte de température : quand le processeur du serveur reste au-dessus de 85 °C pendant 10 minutes (un pic court ne prévient pas), puis quand il est redescendu sous 75 °C. Interrupteur dans Système → Alertes → Température."
     ]

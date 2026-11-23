@@ -35,6 +35,10 @@ def ts(tmp_path, monkeypatch):
     monkeypatch.setattr(tool_addresses, "ADDRESSES_FILE", str(tmp_path / "adresses.json"))
     monkeypatch.setattr(tool_addresses.config, "DEMO", False)
     monkeypatch.setattr(tool_addresses.activity_log, "record", lambda *a, **k: None)
+    from services import tool_setup
+
+    adresses_dites = []
+    monkeypatch.setattr(tool_setup, "after_address", lambda outil, url: adresses_dites.append((outil, url)))
     tool_addresses._STATE.clear()
     faux = FauxTailscale()
     monkeypatch.setattr(tool_addresses.httpx, "request", faux)
@@ -97,15 +101,15 @@ def test_cle_que_tailscale_refuse_n_est_pas_gardee(ts):
 def test_creation_des_adresses_puis_cle_oubliee(ts):
     tool_addresses.save_token(TOKEN)
     lances = tool_addresses.create_missing({"paperless", "homebox", "changedetection", "nextcloud", "jabba-app"}, "rob")
-    assert lances == ["homebox", "paperless"]  # changedetection (sans compte), Nextcloud (a déjà la sienne) : rien
+    assert lances == ["homebox", "nextcloud", "paperless"]  # changedetection (sans compte), Jabba : rien
     assert tool_addresses.address("paperless") == "https://paperless.tail1234.ts.net"
     assert tool_addresses.address("homebox") == "https://homebox.tail1234.ts.net"
     # Une clé d'inscription à usage unique par outil ; la clé d'accès ne quitte jamais l'appli.
     cles = [a for a in ts.appels if a[1] == "/tailnet/-/keys"]
-    assert len(cles) == 2 and all(a[2]["capabilities"]["devices"]["create"]["reusable"] is False for a in cles)
+    assert len(cles) == 3 and all(a[2]["capabilities"]["devices"]["create"]["reusable"] is False for a in cles)
     assert all(a[2]["expirySeconds"] == 3600 for a in cles)
     lancement = [a for a in ts.actions if a[0] == "adresse_outil"]
-    assert [a[1] for a in lancement] == [AUTH, AUTH] and all(TOKEN not in str(a) for a in ts.actions)
+    assert [a[1] for a in lancement] == [AUTH, AUTH, AUTH] and all(TOKEN not in str(a) for a in ts.actions)
     # La machine ne doit pas expirer au bout de 6 mois.
     assert ("POST", "/device/n-paperless/key", {"keyExpiryDisabled": True}, f"Bearer {TOKEN}") in ts.appels
     # Paperless apprend sa nouvelle adresse ; Homebox n'en a pas besoin.
@@ -148,7 +152,7 @@ def test_sans_cle_on_ne_lance_rien(ts):
 
 
 def test_action_d_adresse_refuse_le_reste():
-    for args in ({"outil": "nextcloud"}, {"outil": "../x"}, {"outil": "changedetection"}, {}):
+    for args in ({"outil": "jabba-app"}, {"outil": "../x"}, {"outil": "changedetection"}, {}):
         with pytest.raises(actions.ActionError):
             actions.build("adresse_outil", args)
     commande, _ = actions.build("adresse_outil", {"outil": "paperless"})

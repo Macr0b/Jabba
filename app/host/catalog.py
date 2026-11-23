@@ -7,8 +7,8 @@ Les données (photos, mots de passe, sauvegardes) restent quand on retire un out
 
 Sommaire :
   OPTIONAL_TOOLS : pour chaque outil, son nom, son rôle, la mémoire qu'il prend, ses ports et ses fichiers
-  SECRET_MARK / PASSWORD_MARK / TAILSCALE_MARK : remplacés à l'installation (secret tiré au sort,
-                  mot de passe de l'admin, adresse Tailscale du serveur)
+  SECRET_MARK / PASSWORD_MARK / TAILSCALE_MARK… : remplacés à l'installation (secrets tirés au sort,
+                  mot de passe tiré par Jabba, adresse Tailscale du serveur, compte du serveur…)
 """
 
 SECRET_MARK = "@SECRET_TIRE_AU_SORT@"
@@ -16,6 +16,13 @@ PASSWORD_MARK = "@MOT_DE_PASSE_ADMIN@"
 TAILSCALE_MARK = "@ADRESSE_TAILSCALE@"
 LAN_IP_MARK = "@IP_LOCALE@"
 TAILSCALE_IP_MARK = "@IP_TAILSCALE@"
+SECOND_SECRET_MARK = "@AUTRE_SECRET@"
+SERVER_USER_MARK = "@COMPTE_SERVEUR@"  # le premier compte humain du serveur (uid 1000)
+SERVER_UID_MARK = "@UID_SERVEUR@"
+SERVER_GID_MARK = "@GID_SERVEUR@"
+RENDER_GID_MARK = "@GID_RENDER@"  # le groupe qui donne accès à la puce graphique
+HOSTNAME_MARK = "@NOM_SERVEUR@"
+TAILNET_MARK = "@SUFFIXE_TAILSCALE@"  # tailxxxx.ts.net
 
 VAULTWARDEN_COMPOSE = """services:
   vaultwarden:
@@ -241,7 +248,131 @@ CHANGEDETECTION_COMPOSE = """services:
 CHANGEDETECTION_ENV = f"""BASE_URL=https://{TAILSCALE_MARK}:5005
 """
 
+# Les dossiers de données communs à Nextcloud et Jellyfin (guide, ancienne étape 8.1) : films, séries,
+# téléchargements ; Nextcloud (www-data, 33) écrit dans les films et les téléchargements.
+DATA_FOLDERS = (
+    "mkdir -p /srv/data/media/films /srv/data/media/series /srv/data/downloads /srv/data/nextcloud /srv/data/dossiers"
+    " && chown 1000:1000 /srv/data /srv/data/media /srv/data/media/films /srv/data/media/series"
+    " /srv/data/downloads /srv/data/dossiers"
+    " && chown 33:33 /srv/data/nextcloud"
+    " && chgrp -R 33 /srv/data/media /srv/data/downloads"
+    " && chmod -R g+rwX /srv/data/media /srv/data/downloads"
+    " && find /srv/data/media /srv/data/downloads -type d -exec chmod g+s {} +"
+)
+
+JELLYFIN_COMPOSE = """services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    user: "${PUID}:${PGID}"
+    group_add: ["${RENDER_GID}"]
+    devices: ["/dev/dri:/dev/dri"]
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      - /srv/data:/data:ro
+      # Tous les disques externes, branchés ou non
+      - type: bind
+        source: /srv/disques
+        target: /disques
+        read_only: true
+        bind:
+          propagation: rslave
+    ports:
+      - "8096:8096"
+    restart: unless-stopped
+"""
+JELLYFIN_ENV = f"""TZ=Europe/Paris
+PUID={SERVER_UID_MARK}
+PGID={SERVER_GID_MARK}
+RENDER_GID={RENDER_GID_MARK}
+"""
+
+NEXTCLOUD_COMPOSE = """services:
+  nextcloud-db:
+    image: mariadb:11
+    container_name: nextcloud-db
+    command: --transaction-isolation=READ-COMMITTED
+    environment:
+      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=nextcloud
+      - MARIADB_USER=nextcloud
+      - MARIADB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./db:/var/lib/mysql
+    restart: unless-stopped
+
+  nextcloud-redis:
+    image: redis:alpine
+    container_name: nextcloud-redis
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud:stable
+    container_name: nextcloud
+    depends_on: [nextcloud-db, nextcloud-redis]
+    environment:
+      - MYSQL_HOST=nextcloud-db
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=nextcloud-redis
+      - NEXTCLOUD_ADMIN_USER=${NC_ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NC_ADMIN_PASSWORD}
+      - NEXTCLOUD_TRUSTED_DOMAINS=${NC_DOMAINS}
+    volumes:
+      - ./html:/var/www/html
+      - /srv/data/nextcloud:/var/www/html/data
+      # Films et téléchargements, visibles dans Nextcloud
+      - /srv/data/media:/mnt/media
+      - /srv/data/downloads:/mnt/downloads
+      # Tous les disques externes, branchés ou non
+      - type: bind
+        source: /srv/disques
+        target: /mnt/disques
+        bind:
+          propagation: rslave
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+"""
+NEXTCLOUD_ENV = f"""DB_ROOT_PASSWORD={SECRET_MARK}
+DB_PASSWORD={SECOND_SECRET_MARK}
+NC_ADMIN_USER={SERVER_USER_MARK}
+NC_ADMIN_PASSWORD='{PASSWORD_MARK}'
+NC_DOMAINS="{HOSTNAME_MARK} {TAILSCALE_MARK} nextcloud.{TAILNET_MARK} {LAN_IP_MARK} {TAILSCALE_IP_MARK}"
+"""
+# Les tâches de fond de Nextcloud, toutes les 5 minutes (une seule fois dans la table de root).
+NEXTCLOUD_CRON = (
+    "(crontab -l 2>/dev/null | grep -v 'nextcloud php -f /var/www/html/cron.php';"
+    " echo '*/5 * * * * docker exec -u www-data nextcloud php -f /var/www/html/cron.php') | crontab -"
+)
+
 OPTIONAL_TOOLS = {
+    "nextcloud": {
+        "nom": "Nextcloud",
+        "role": "Fichiers, photos, agenda : ton iCloud à toi, sur Mac, iPhone et navigateur",
+        "memoire_go": 1.0,
+        "port_https": None,  # son adresse à part : nextcloud.tailxxxx.ts.net (services/tool_addresses.py)
+        "port_local": 8081,
+        "fichiers": {"compose.yaml": NEXTCLOUD_COMPOSE, ".env": NEXTCLOUD_ENV},
+        "preparer": DATA_FOLDERS + " && " + NEXTCLOUD_CRON,
+        # Le compte de l'admin : celui du serveur, avec un mot de passe tiré par Jabba (Identifiants).
+        "mot_de_passe": True,
+        "identifiant": SERVER_USER_MARK,
+    },
+    "jellyfin": {
+        "nom": "Jellyfin",
+        "role": "Films et séries, sur la télé, l'iPhone et le Mac",
+        "memoire_go": 0.5,
+        "port_https": None,  # son adresse à part : jellyfin.tailxxxx.ts.net
+        "port_local": 8096,
+        "fichiers": {"compose.yaml": JELLYFIN_COMPOSE, ".env": JELLYFIN_ENV},
+        "preparer": DATA_FOLDERS + " && mkdir -p /opt/stacks/jellyfin/config /opt/stacks/jellyfin/cache"
+        " && chown 1000:1000 /opt/stacks/jellyfin/config /opt/stacks/jellyfin/cache",
+        "mot_de_passe": True,
+        "identifiant": SERVER_USER_MARK,
+    },
     "vaultwarden": {
         "nom": "Vaultwarden",
         "role": "Mots de passe (applis Bitwarden sur Mac, iPhone et navigateur)",
