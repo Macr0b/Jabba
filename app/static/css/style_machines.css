@@ -1,0 +1,91 @@
+/* Style « Salle des machines » (Système → Apparence) : sombre et chaud, voyants ambre, chiffres et
+ * étiquettes dans une police technique. Se pose par-dessus le style Cube (style_cube.css), seulement
+ * quand <html data-style="machines">. Polices Space Grotesk et JetBrains Mono (licence OFL). */
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../vendor/fonts/space-grotesk-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../vendor/fonts/space-grotesk-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 600;
+  font-display: swap;
+  src: url("../vendor/fonts/space-grotesk-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../vendor/fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../vendor/fonts/jetbrains-mono-500.woff2") format("woff2");
+}
+
+:root[data-style="machines"] {
+  --police: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --police-technique: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --fond: light-dark(#f4efe6, #17140f);
+  --carte: light-dark(#fffaf2, #221d16);
+  --bord: light-dark(#e2d6c2, #3a3226);
+  --bord-doux: light-dark(#ece3d4, #2c261d);
+  --texte: light-dark(#241c10, #efe6d6);
+  --texte-2: light-dark(#4a3d28, #cbbba0);
+  --texte-3: light-dark(#6a5a40, #b09e82);
+  --texte-4: light-dark(#6f5e43, #a8957a);
+  --accent: light-dark(#8f5300, #f2a33a);
+  --accent-fonce: light-dark(#6e4000, #ffc06b);
+  --accent-doux: light-dark(#fbe9cc, #3a2c17);
+  --survol: light-dark(#f8f1e4, #2a241b);
+  --dossier: light-dark(#d9a14a, #c98a2e);
+  --sur-accent: light-dark(#fff, #17140f);
+}
+/* Pas de lueur : un fond uni, comme une baie de serveurs. */
+[data-style="machines"] body {
+  background: var(--fond);
+}
+[data-style="machines"] .carte {
+  border-radius: 10px;
+}
+[data-style="machines"] .btn {
+  border-radius: 8px;
+}
+
+/* Étiquettes, pastilles et chiffres : police technique, en capitales espacées pour les étiquettes. */
+[data-style="machines"] .titre-section,
+[data-style="machines"] .mesure .etiq,
+[data-style="machines"] .titre-groupe {
+  font-family: var(--police-technique);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+}
+[data-style="machines"] .mesure .val,
+[data-style="machines"] .pastille,
+[data-style="machines"] [data-conso] {
+  font-family: var(--police-technique);
+}
+[data-style="machines"] .pastille {
+  border-radius: 6px;
+}
+
+/* Icône d'outil : un carré, comme un voyant de façade, sans losange. */
+[data-style="machines"] .icone::before {
+  inset: 8%;
+  border-radius: 8px;
+  transform: none;
+}
+[data-style="machines"] .logo {
+  border-radius: 8px;
+}

@@ -35,3 +35,29 @@ def test_choix_du_theme(page):
     assert page.evaluate("localStorage.getItem('jabba-theme')") is None
     page.emulate_media(color_scheme="light")
     assert page.evaluate(FOND) == CLAIR
+
+
+def test_choix_du_style(page):
+    """Trois styles : Cube (de base), Salle des machines, Atelier clair ; gardé sur l'appareil, posé avant l'affichage."""
+    page.emulate_media(color_scheme="dark")
+    page.goto(page.racine + "/#/systeme")
+    expect(page.locator('#apparence input[name="style"][value="cube"]')).to_be_checked()
+    assert page.evaluate("document.documentElement.dataset.style") is None
+
+    page.locator('#apparence input[name="style"][value="machines"]').check()
+    assert page.evaluate("document.documentElement.dataset.style") == "machines"
+    assert page.evaluate(FOND) == "rgb(23, 20, 15)"
+    assert page.evaluate("document.querySelector('meta[name=theme-color][media*=dark]').content") == "#17140F"
+    page.reload()
+    expect(page.locator('#apparence input[name="style"][value="machines"]')).to_be_checked()
+    assert page.evaluate("document.documentElement.dataset.style") == "machines"
+    assert "Space Grotesk" in page.evaluate("getComputedStyle(document.body).fontFamily")
+
+    page.locator('#apparence input[name="style"][value="atelier"]').check()
+    choisir(page, "clair")
+    assert page.evaluate(FOND) == "rgb(243, 241, 236)"  # le style et le thème se combinent
+
+    page.locator('#apparence input[name="style"][value="cube"]').check()
+    assert page.evaluate("localStorage.getItem('jabba-style')") is None
+    assert page.evaluate(FOND) == CLAIR
+    choisir(page, "auto")

@@ -57,6 +57,21 @@ PETITES_CIBLES = """() => [...document.querySelectorAll('a, button, input, selec
   .map(({e, r}) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${[...e.classList].join('.')} « ${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 20)} » ${Math.round(r.width)}×${Math.round(r.height)}`)"""
 
 
+@pytest.mark.skipif(not os.path.exists(AXE), reason="axe absent : npm ci --prefix tests/outils_js")
+@pytest.mark.parametrize("style", ["machines", "atelier"])
+@pytest.mark.parametrize("theme", ["clair", "sombre"])
+def test_contrastes_des_styles_alternatifs(page, style, theme):
+    """Les styles alternatifs gardent des contrastes suffisants, en clair comme en sombre."""
+    page.add_init_script(
+        f"localStorage.setItem('jabba-style', '{style}'); localStorage.setItem('jabba-theme', '{theme}')"
+    )
+    for ecran in ("accueil", "outils", "systeme"):
+        page.goto(page.racine + "/#/" + ecran)
+        page.wait_for_timeout(800)
+        violations = [v for v in analyser(page) if v["id"] == "color-contrast"]
+        assert not violations, f"{style}/{theme}/{ecran} : {violations}"
+
+
 def test_cibles_d_au_moins_24_px(page):
     """WCAG 2.5.8 : tout ce qui se touche fait au moins 24 × 24 px (les liens dans une phrase sont exemptés)."""
     trop_petites = []

@@ -28,3 +28,74 @@
   margin: 0;
   accent-color: var(--accent);
 }
+
+/* Choix du style : une carte par style, avec trois pastilles de ses couleurs (fond, carte, accent). */
+.choix-style {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.option-style {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  background: var(--carte);
+  cursor: pointer;
+  font-size: 14px;
+}
+.option-style:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+.option-style input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.pastilles-style {
+  display: inline-flex;
+  flex: none;
+}
+.pastilles-style i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--bord);
+  margin-left: -5px;
+}
+.pastilles-style i:first-child {
+  margin-left: 0;
+}
+/* Les couleurs de chaque style, en dur : on montre le style lui-même, pas celui qui est affiché. */
+[data-apercu="cube"] .pastilles-style i:nth-child(1) {
+  background: #0b1514;
+}
+[data-apercu="cube"] .pastilles-style i:nth-child(2) {
+  background: #eef4f2;
+}
+[data-apercu="cube"] .pastilles-style i:nth-child(3) {
+  background: #3fd1b1;
+}
+[data-apercu="machines"] .pastilles-style i:nth-child(1) {
+  background: #17140f;
+}
+[data-apercu="machines"] .pastilles-style i:nth-child(2) {
+  background: #f4efe6;
+}
+[data-apercu="machines"] .pastilles-style i:nth-child(3) {
+  background: #f2a33a;
+}
+[data-apercu="atelier"] .pastilles-style i:nth-child(1) {
+  background: #1b1a17;
+}
+[data-apercu="atelier"] .pastilles-style i:nth-child(2) {
+  background: #f3f1ec;
+}
+[data-apercu="atelier"] .pastilles-style i:nth-child(3) {
+  background: #e8542b;
+}

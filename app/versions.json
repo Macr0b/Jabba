@@ -3,6 +3,7 @@
     "version": "0.16.6",
     "date": "2026-11-23",
     "changements": [
+      "Deux styles en plus, au choix dans Système → Apparence (pour chaque appareil) : « Salle des machines » (sombre et chaud, voyants ambre, chiffres en police technique) et « Atelier clair » (papier, traits d'encre, une seule couleur vive). Chacun existe en clair et en sombre ; « Cube » reste celui de base. Polices servies par Jabba (licence OFL).",
       "Alerte de température : quand le processeur du serveur reste au-dessus de 85 °C pendant 10 minutes (un pic court ne prévient pas), puis quand il est redescendu sous 75 °C. Interrupteur dans Système → Alertes → Température."
     ]
   },

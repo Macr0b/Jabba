@@ -1,0 +1,100 @@
+/* Style « Atelier clair » (Système → Apparence) : papier, traits d'encre nets, une seule couleur vive,
+ * façon appareil électronique bien dessiné. Se pose par-dessus le style Cube (style_cube.css), seulement
+ * quand <html data-style="atelier">. Polices Inter Tight et Space Mono (licence OFL). */
+
+@font-face {
+  font-family: "Inter Tight";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../vendor/fonts/inter-tight-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter Tight";
+  font-weight: 500;
+  font-display: swap;
+  src: url("../vendor/fonts/inter-tight-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter Tight";
+  font-weight: 600;
+  font-display: swap;
+  src: url("../vendor/fonts/inter-tight-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../vendor/fonts/space-mono-400.woff2") format("woff2");
+}
+
+:root[data-style="atelier"] {
+  --police: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --police-technique: "Space Mono", ui-monospace, Menlo, monospace;
+  --fond: light-dark(#f3f1ec, #151412);
+  --carte: light-dark(#ffffff, #1f1d1a);
+  --bord: light-dark(#c9c4b8, #4a4741);
+  --bord-doux: light-dark(#e4e0d6, #2e2b27);
+  --texte: light-dark(#1b1a17, #f3f1ec);
+  --texte-2: light-dark(#3d3a34, #d6d2c8);
+  --texte-3: light-dark(#5f5a50, #aaa497);
+  --texte-4: light-dark(#635e53, #a39d90);
+  --accent: light-dark(#c2410c, #ff7a4d);
+  --accent-fonce: light-dark(#9a3412, #ffa27f);
+  --accent-doux: light-dark(#fde7dc, #3a2117);
+  --survol: light-dark(#f7f5f0, #26231f);
+  --dossier: light-dark(#e8542b, #e8542b);
+  --sur-accent: light-dark(#fff, #1b1a17);
+}
+[data-style="atelier"] body {
+  background: var(--fond);
+}
+
+/* Cartes au trait d'encre, angles à peine arrondis ; boutons rectangulaires. */
+[data-style="atelier"] .carte {
+  border: 1.5px solid var(--texte);
+  border-radius: 6px;
+  box-shadow: none;
+}
+[data-style="atelier"] .btn {
+  border-radius: 4px;
+}
+[data-style="atelier"] .btn:not(.btn-p) {
+  border: 1.5px solid var(--texte);
+}
+
+/* Étiquettes et chiffres : police à chasse fixe, en minuscules, comme sur une façade d'appareil. */
+[data-style="atelier"] .titre-section,
+[data-style="atelier"] .mesure .etiq,
+[data-style="atelier"] .titre-groupe {
+  font-family: var(--police-technique);
+  text-transform: lowercase;
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+[data-style="atelier"] .mesure .val,
+[data-style="atelier"] .pastille,
+[data-style="atelier"] [data-conso] {
+  font-family: var(--police-technique);
+}
+[data-style="atelier"] .pastille {
+  border-radius: 4px;
+}
+
+/* Icône d'outil : un rond d'encre, le dessin en clair dedans. */
+[data-style="atelier"] .icone {
+  color: var(--fond);
+}
+[data-style="atelier"] .icone::before {
+  inset: 6%;
+  border-radius: 50%;
+  transform: none;
+  background: var(--texte);
+}
+[data-style="atelier"] .logo {
+  background: var(--texte);
+  color: var(--fond);
+  border-radius: 50%;
+}
+[data-style="atelier"] .barre-laterale a.actif {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
