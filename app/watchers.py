@@ -18,6 +18,7 @@ Sommaire :
   public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
   watch_tools : outil en panne
   watch_system_updates : mises à jour du système, redémarrage en attente
+  tool_addresses.watch : adresses à part qui manquent, créées si la clé Tailscale est là (chaque heure)
   watch_forever : la boucle (voir le détail des fréquences dedans)
 """
 
@@ -46,6 +47,7 @@ from services import (
     power,
     public_mode,
     restart_policy,
+    tool_addresses,
     tool_updates,
     tools,
     video_player,
@@ -222,7 +224,7 @@ def watch_forever():
                 lambda: public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts),
             ]
         if tick % 240 == 0:  # toutes les heures
-            steps += [watch_system_updates]
+            steps += [watch_system_updates, tool_addresses.watch]
         if time.time() - WATCH_STATE["derniere_purge"] > 86400:
             WATCH_STATE["derniere_purge"] = time.time()
             steps += [disk_browser.purge_old_trash]

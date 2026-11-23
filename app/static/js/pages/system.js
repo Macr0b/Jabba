@@ -8,6 +8,7 @@ import { confirmAction, toast } from "../components/dialogs.js";
 import { appearanceCard } from "../components/appearance_card.js";
 import { publicModeCard } from "../components/public_mode_card.js";
 import { myCodesCard } from "../components/my_codes.js";
+import { serverMoveCard } from "../components/server_move_card.js";
 import { secondFactorCard } from "../components/second_factor.js";
 import { chooseMyPassword, logOut, showRecoveryCode } from "../core/admin_session.js";
 import { api, formBody } from "../core/api.js";
@@ -46,6 +47,7 @@ pages.systeme = async () => {
         <button class="btn" id="code-secours">${entry.code_existe ? t("Nouveau code de secours") : t("Créer le code de secours")}</button></div>
       </section>
       ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="mes-codes"><h2>Mes codes</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
+      ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="demenagement"><h2>Déménager vers un nouvel ordinateur</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
       <section class="carte pad" id="apparence"><h2>Apparence</h2></section>
       <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="public"><h2>Serveur ouvert au public</h2><div class="squelette" style="margin-top:10px"></div></section>
@@ -70,6 +72,11 @@ pages.systeme = async () => {
   myCodesCard().catch((entry) => {
     const element = $("#mes-codes");
     if (element) element.innerHTML = t`<h2>Mes codes</h2><p class="note">${escapeHtml(entry.message)}</p>`;
+  });
+  serverMoveCard().catch((entry) => {
+    const element = $("#demenagement");
+    if (element)
+      element.innerHTML = t`<h2>Déménager vers un nouvel ordinateur</h2><p class="note">${escapeHtml(entry.message)}</p>`;
   });
   secondFactorCard().catch((entry) => {
     const element = $("#double");

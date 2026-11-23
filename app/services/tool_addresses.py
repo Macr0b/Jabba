@@ -20,6 +20,7 @@ Sommaire :
   forget_token()           : l'oublie
   create_missing(installed, who) : crée, dans un fil à part, les adresses qui manquent (carte de réparation)
   after_install(tool, who) : crée l'adresse d'un outil qu'on vient d'activer (si la clé est là)
+  watch()                  : au démarrage puis chaque heure, crée les adresses qui manquent (serveur déménagé…)
   address(tool)            : l'adresse https de l'outil, ou None
   interne : _api, _new_auth_key, _wait_for_device, _create, _timestamp
   AddressError  : ce que Tailscale ou le serveur a refusé, en clair
@@ -95,11 +96,11 @@ def address(tool):
 
 def status(installed):
     """Pour la carte : la clé est-elle là ? et, pour chaque outil installé qui a une page, son adresse."""
-    tools = []
+    entries = []
     for tool in sorted(set(installed) & set(TARGETS)):
         name = catalog.OPTIONAL_TOOLS.get(tool, {}).get("nom", "Dockge" if tool == "dockge" else tool)
-        tools.append({"id": tool, "nom": name, "adresse": address(tool), "etat": _STATE.get(tool)})
-    return {"cle_prete": bool(_token()), "page_cles": KEYS_PAGE, "outils": tools}
+        entries.append({"id": tool, "nom": name, "adresse": address(tool), "etat": _STATE.get(tool)})
+    return {"cle_prete": bool(_token()), "page_cles": KEYS_PAGE, "outils": entries}
 
 
 def save_token(token):
@@ -202,6 +203,19 @@ def create_missing(installed, who=None):
 
     threading.Thread(target=work, daemon=True).start()
     return todo
+
+
+def watch():
+    """Au démarrage puis chaque heure : si la clé est là, crée les adresses qui manquent (après un déménagement,
+    le nouveau serveur refait celles des outils repris ; une adresse ratée est réessayée l'heure suivante)."""
+    if not _token():
+        return
+    from services import tools
+
+    try:
+        create_missing({tool["id"] for tool in tools.list_tools()}, "Jabba")
+    except AddressError:
+        pass
 
 
 def after_install(tool, who=None):

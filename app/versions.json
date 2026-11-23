@@ -3,7 +3,8 @@
     "version": "0.16.7",
     "date": "2026-11-23",
     "changements": [
-      "Onduleur : un onduleur branché en USB (APC, Eaton, CyberPower…) remplace la batterie du portable. Jabba prévient de la coupure et du retour du courant, montre la charge et la consommation (mesurée en permanence), et éteint proprement le serveur avant que la batterie soit vide ; l'onduleur coupe ensuite sa prise et la rallume au retour du courant, ce qui rallume le serveur (BIOS : « After Power Loss → Power On »). Le script d'installation prépare tout ; un onduleur branché plus tard est reconnu tout seul."
+      "Onduleur : un onduleur branché en USB (APC, Eaton, CyberPower…) remplace la batterie du portable. Jabba prévient de la coupure et du retour du courant, montre la charge et la consommation (mesurée en permanence), et éteint proprement le serveur avant que la batterie soit vide ; l'onduleur coupe ensuite sa prise et la rallume au retour du courant, ce qui rallume le serveur (BIOS : « After Power Loss → Power On »). Le script d'installation prépare tout ; un onduleur branché plus tard est reconnu tout seul.",
+      "Déménager vers un nouvel ordinateur (Système, super admin) : Jabba arrête les outils et copie tout sur un disque (comptes, outils et leurs données, Nextcloud et sa base, Jellyfin, réglages de Jabba, compte de Dockge, tâches planifiées) ; sur le disque de données, que l'on met dans le nouvel ordinateur, seuls les réglages sont ajoutés, sinon les fichiers sont copiés aussi. « Éteindre l'ancien serveur » libère ses noms dans Tailscale. Sur le nouvel ordinateur, le script d'installation trouve le déménagement, demande s'il faut le reprendre et remet tout en place ; Jabba refait seul les adresses des outils. Changement d'avis : « Annuler » relance les outils et efface la copie."
     ]
   },
   {

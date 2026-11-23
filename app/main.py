@@ -47,6 +47,7 @@ from routes import (
     player,
     public_mode,
     second_factor,
+    server_move,
     shares,
     system,
     tool_addresses,
@@ -132,6 +133,7 @@ for module in (
     second_factor,
     public_mode,
     ad_blocker,
+    server_move,
 ):
     app.include_router(module.router)
 

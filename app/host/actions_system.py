@@ -4,10 +4,11 @@ du serveur.
 
 Chaque action : un nom, des paramètres vérifiés, une commande construite ici (host/actions.py
 les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
-  interne : _app_folder, _os_release, _kernel, _reboot_required, _updates_log, _tailscale_devices, _power, _reboot, _restart_policy_read, _restart_policy_timer, _restart_policy_apply, _app_folder_action, _app_update_ready, _app_update_install, _task_state, _task_log, _network_route, _wifi_firewall, _data_folder, _snapshot_path, _restic_env, _restic_installed, _install_restic, _start_backup, _server_user, _first_account, _check_server_password, _change_server_password
+  interne : _app_folder, _os_release, _kernel, _reboot_required, _updates_log, _tailscale_devices, _power, _reboot, _restart_policy_read, _restart_policy_timer, _restart_policy_apply, _app_folder_action, _app_update_ready, _app_update_install, _task_state, _task_log, _network_route, _wifi_firewall, _data_folder, _snapshot_path, _restic_env, _restic_installed, _install_restic, _start_backup, _move, _move_cancel, _move_end, _server_user, _first_account, _check_server_password, _change_server_password
 """
 
 import re
+import time
 
 from host.action_common import ActionError, background, folder_path, task_unit
 
@@ -227,6 +228,45 @@ def _start_backup(args):
     return background(task_unit(args.get("unite")), script, "bash", BACKUP_PROPERTIES)
 
 
+# ---------------------------------------------------------------- déménagement (services/server_move.py)
+# 30 secondes pour que l'appli réponde, puis les adresses des outils et le serveur quittent Tailscale
+# (le nouveau serveur reprend leurs noms), et le serveur s'éteint.
+MOVE_END = """sleep 30
+for c in $(docker ps --format '{{.Names}}' | grep '^adresse-'); do docker exec "$c" tailscale logout; done
+tailscale logout
+systemctl poweroff
+"""
+
+
+def _move(args):
+    """Le script est écrit ICI (services/server_move.py), à partir du disque choisi."""
+    from services import server_move
+
+    with_files = args.get("fichiers")
+    if not isinstance(with_files, bool):
+        raise ActionError(f"Choix refusé : {with_files!r}")
+    script = server_move.move_script(folder_path(args.get("disque")), with_files, _data_folder(args.get("donnees")))
+    return background(task_unit(args.get("unite")), script, "bash", BACKUP_PROPERTIES)
+
+
+# Changement d'avis : les outils arrêtés repartent, et la copie est effacée (le nouveau serveur ne
+# doit pas reprendre une copie dépassée). Le disque est rouvert en écriture le temps de l'effacer.
+MOVE_CANCEL = (
+    'D="$1/.demenagement-jabba"; [ -f "$D/outils-arretes" ] && while read -r d; do'
+    ' case "$d" in /opt/stacks/*) (cd "$d" && docker compose start >/dev/null 2>&1);; esac; done < "$D/outils-arretes";'
+    ' R=0; case ",$(findmnt -no OPTIONS "$1")," in *,ro,*) mount -o remount,rw "$1" && R=1;; esac;'
+    ' rm -rf "$D" "$D.tmp"; [ "$R" = 1 ] && mount -o remount,ro "$1"; true'
+)
+
+
+def _move_cancel(args):
+    return ["sh", "-c", MOVE_CANCEL, "annuler", folder_path(args.get("disque"))], 300
+
+
+def _move_end(args):
+    return background(f"jabba-demenagement-{int(time.time())}", MOVE_END)
+
+
 # ---------------------------------------------------------------- compte du serveur
 SERVER_USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 # Seulement un compte de personne (numéro 1000 à 59999) : jamais root ni un compte de service.
@@ -277,6 +317,9 @@ ACTIONS = {
     "etat_tache": _task_state,
     "journal_tache": _task_log,
     "route_reseau": _network_route,
+    "demenager": _move,
+    "fin_demenagement": _move_end,
+    "annuler_demenagement": _move_cancel,
     "pare_feu_wifi": _wifi_firewall,
     "restic_installe": _restic_installed,
     "installer_restic": _install_restic,

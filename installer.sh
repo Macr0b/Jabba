@@ -347,6 +347,54 @@ mkdir -p /srv/data/media /srv/data/downloads /srv/data/dossiers
 chown "$MOI:$MOI" /srv/data /srv/data/media /srv/data/downloads /srv/data/dossiers
 ok "Dossiers de données prêts (/srv/data), disques externes dans /srv/disques"
 
+# Déménagement d'un ancien serveur Jabba (Système → Déménager, sur l'ancien) : sur le disque de données
+# mis dans ce nouvel ordinateur, ou sur un disque USB branché. Comptes, outils, réglages et fichiers
+# reviennent tels quels ; Jabba refait ensuite les adresses à part des outils (services/server_move.py).
+REPRISE=""
+if [ ! -f /var/lib/jabba/reprise-faite ]; then
+  if [ -f /srv/data/.demenagement-jabba/manifeste.json ]; then
+    REPRISE=/srv/data/.demenagement-jabba
+  else
+    mkdir -p /mnt/jabba-reprise
+    while read -r PART_R FS_R MP_R; do
+      if [ -n "${MP_R:-}" ]; then
+        [ -f "$MP_R/.demenagement-jabba/manifeste.json" ] && { REPRISE="$MP_R/.demenagement-jabba"; break; }
+        continue
+      fi
+      case "$FS_R" in ext4|exfat|ntfs|ntfs3|xfs|btrfs) ;; *) continue ;; esac
+      mount -o ro "$PART_R" /mnt/jabba-reprise 2>/dev/null || continue
+      [ -f /mnt/jabba-reprise/.demenagement-jabba/manifeste.json ] && { REPRISE=/mnt/jabba-reprise/.demenagement-jabba; break; }
+      umount /mnt/jabba-reprise
+    done < <(lsblk -lnpo NAME,FSTYPE,MOUNTPOINT | awk 'NF >= 2')
+  fi
+fi
+if [ -n "$REPRISE" ]; then
+  ANCIEN=$(jq -r '.serveur' "$REPRISE/manifeste.json")
+  ANCIEN_COMPTE=$(jq -r '.compte' "$REPRISE/manifeste.json")
+  QUAND=$(date -d "@$(jq -r '.date' "$REPRISE/manifeste.json")" '+%d/%m/%Y à %H:%M')
+  echo "  Déménagement trouvé : le serveur « $ANCIEN », copié le $QUAND."
+  read -rp "  Reprendre ses comptes, ses outils et ses fichiers ici ? (o/n) " reprendre </dev/tty
+  if [ "${reprendre:-n}" = o ]; then
+    [ "$ANCIEN" = "$SERVEUR" ] || note "L'ancien serveur s'appelait $ANCIEN, celui-ci $SERVEUR : l'adresse de Jabba change."
+    [ "$ANCIEN_COMPTE" = "$MOI" ] || note "Le compte de l'ancien serveur était $ANCIEN_COMPTE, celui-ci est $MOI : refais l'installation de Debian avec le même compte."
+    info "Remise en place des outils et de leurs données : quelques minutes."
+    tar -C /opt --numeric-owner --xattrs --acls -xpf "$REPRISE/outils.tar" 2>>"$JOURNAL" || echec "Les outils de l'ancien serveur n'ont pas pu être remis en place."
+    if [ "$(jq -r '.fichiers' "$REPRISE/manifeste.json")" = true ]; then
+      info "Remise en place des fichiers : selon leur taille, de quelques minutes à quelques heures."
+      tar -C /srv --numeric-owner --xattrs --acls -xpf "$REPRISE/fichiers.tar" 2>>"$JOURNAL" || echec "Les fichiers de l'ancien serveur n'ont pas pu être remis en place."
+    fi
+    # Les adresses à part des outils sont refaites par Jabba sur ce serveur (même noms dans Tailscale).
+    rm -f /opt/stacks/jabba-app/donnees/adresses-outils.json
+    [ -s "$REPRISE/crontab" ] && crontab "$REPRISE/crontab"
+    mkdir -p /var/lib/jabba
+    cp "$REPRISE/outils-arretes" /var/lib/jabba/reprise-outils 2>/dev/null || : > /var/lib/jabba/reprise-outils
+    cp "$REPRISE/tailscale-serve.json" /var/lib/jabba/reprise-serve.json 2>/dev/null || true
+    date +%s > /var/lib/jabba/reprise-faite
+    ok "Ancien serveur « $ANCIEN » repris : comptes, outils, réglages et fichiers"
+  fi
+  mountpoint -q /mnt/jabba-reprise && umount /mnt/jabba-reprise
+fi
+
 # ------------------------------------------------------------ 7. Tailscale
 etape "Tailscale (l'accès au serveur de partout)"
 if ! command -v tailscale >/dev/null; then
@@ -442,6 +490,22 @@ services:
 FIN
 chown "$MOI:$MOI" /opt/dockge/compose.yaml
 (cd /opt/dockge && lancer docker compose up -d) || echec "Démarrage de Dockge impossible."
+# Outils repris d'un ancien serveur : relancés, avec leurs adresses https d'avant (port du serveur).
+if [ -f /var/lib/jabba/reprise-outils ]; then
+  while read -r d; do
+    case "$d" in /opt/stacks/*) ;; *) continue ;; esac
+    [ -f "$d/compose.yaml" ] || [ -f "$d/docker-compose.yml" ] || continue
+    (cd "$d" && lancer docker compose up -d) && ok "Repris : $(basename "$d")" || note "$(basename "$d") n'a pas redémarré : ouvre-le dans l'Établi."
+  done < /var/lib/jabba/reprise-outils
+  if [ -s /var/lib/jabba/reprise-serve.json ]; then
+    jq -r '(.Web // {}) | to_entries[] | "\(.key | split(":") | last) \(.value.Handlers["/"].Proxy // "")"' \
+      /var/lib/jabba/reprise-serve.json | while read -r PORT_R CIBLE_R; do
+      case "$PORT_R" in 5001|9000) continue ;; esac
+      [[ "$PORT_R" =~ ^[0-9]+$ ]] && [[ "$CIBLE_R" =~ ^http://127\.0\.0\.1:[0-9]+$ ]] && lancer tailscale serve --bg --https="$PORT_R" "$CIBLE_R"
+    done
+  fi
+  rm -f /var/lib/jabba/reprise-outils /var/lib/jabba/reprise-serve.json
+fi
 if lancer tailscale serve --bg --https=5001 http://127.0.0.1:5001; then
   ok "Dockge : https://$TS_NOM:5001, par Tailscale seulement (à ouvrir une fois pour créer ton compte)"
 else
