@@ -179,3 +179,58 @@ def test_nouvelle_adresse_acceptee_par_nextcloud(monkeypatch):
     tool_setup.after_address("nextcloud", "https://nextcloud-1.tail1234.ts.net")
     tool_setup.after_address("jellyfin", "https://jellyfin.tail1234.ts.net")
     assert ajouts == [("trusted_domains", "nextcloud-1.tail1234.ts.net")]
+
+
+def test_reinstallation_garde_les_reglages(tmp_path):
+    """Un .env déjà là (Nextcloud installé à la main, ou retiré puis réinstallé) : gardé, et le script le dit."""
+    dossier = tmp_path / "nextcloud"
+    dossier.mkdir()
+    (dossier / ".env").write_text("NC_ADMIN_USER=rob\nNC_ADMIN_PASSWORD='celui-d-avant'\n")
+    faux = tmp_path / "bin"
+    faux.mkdir()
+    (faux / "docker").write_text("#!/bin/sh\ntrue\n")
+    (faux / "docker").chmod(0o755)
+    commande, _ = actions.build("installer_outil_option", {"outil": "nextcloud"})
+    commande[3] = str(dossier)
+    commande[6] = ""
+    sortie = subprocess.run(
+        commande,
+        input="nouveau-mot-de-passe-123",
+        text=True,
+        capture_output=True,
+        env={**os.environ, "PATH": f"{faux}:{os.environ['PATH']}"},
+    )
+    assert sortie.returncode == 0 and "REGLAGES_GARDES" in sortie.stdout
+    assert "celui-d-avant" in (dossier / ".env").read_text()  # rien d'écrasé
+
+
+def test_mot_de_passe_tire_pour_rien_oublie(coffre, monkeypatch):
+    from services import background_tasks, optional_tools
+
+    monkeypatch.setattr(background_tasks.config, "DEMO", False)
+    monkeypatch.setattr(background_tasks.activity_log, "record", lambda *a, **k: None)
+    monkeypatch.setattr(
+        background_tasks.threading, "Thread", lambda target, daemon: type("T", (), {"start": staticmethod(target)})()
+    )
+    monkeypatch.setattr(background_tasks.commands, "run_action", lambda *a, **k: (0, "REGLAGES_GARDES\n", ""))
+    monkeypatch.setattr(tool_setup, "after_install", lambda *a: "")
+    monkeypatch.setattr(optional_tools.tool_addresses, "after_install", lambda *a: "")
+    optional_tools.install("jellyfin", "rob")
+    assert tool_credentials.read("jellyfin") is None  # Identifiants ne montre pas un mot de passe qui ne marche pas
+    # Première installation (rien de gardé) : le mot de passe reste.
+    monkeypatch.setattr(background_tasks.commands, "run_action", lambda *a, **k: (0, "installé\n", ""))
+    optional_tools.install("jellyfin", "rob")
+    assert tool_credentials.read("jellyfin")["identifiant"] == "rob"
+
+
+def test_sans_compte_de_jabba_rien_n_est_regle(coffre, monkeypatch):
+    """Jellyfin ou Nextcloud installé à la main avant : Jabba ne touche pas à leurs comptes."""
+    monkeypatch.setattr(tool_setup.httpx, "get", lambda *a, **k: pytest.fail("aucun appel attendu"))
+    assert tool_setup.after_install("jellyfin") == ""
+
+
+def test_retrait_de_nextcloud_retire_sa_tache_de_fond():
+    commande, _ = actions.build("retirer_outil_option", {"outil": "nextcloud"})
+    assert commande[-1] == catalog.NEXTCLOUD_CRON_REMOVE and "rm " not in " ".join(commande)
+    commande, _ = actions.build("retirer_outil_option", {"outil": "jellyfin"})
+    assert commande[-1] == ""

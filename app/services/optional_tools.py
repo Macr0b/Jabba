@@ -74,8 +74,18 @@ def install(name, who=None):
     if name not in host_catalog.OPTIONAL_TOOLS:
         raise actions.ActionError(f"Outil refusé : {name!r}")
     tool = host_catalog.OPTIONAL_TOOLS[name]
+    first_time = tool_credentials.read(name) is None
     password = tool_credentials.password_for(name) if tool["mot_de_passe"] else ""
     actions_tools.optional_password(name, password)
+
+    def then(output):
+        # Réinstallation d'un outil installé à la main : ses réglages sont gardés, le mot de passe tiré ne sert pas.
+        if "REGLAGES_GARDES" in output and first_time:
+            tool_credentials.drop_unused_password(name)
+        # Dans la foulée : son réglage (Nextcloud, Jellyfin), puis son adresse à part.
+        steps = (tool_setup.after_install(name, who), tool_addresses.after_install(name, who))
+        return "\n".join(line for line in steps if line)
+
     return background_tasks.start_task(
         f"Installation de {tool['nom']}",
         "installer_outil_option",
@@ -83,10 +93,7 @@ def install(name, who=None):
         who,
         name,
         password,
-        # Dans la foulée : son réglage (Nextcloud, Jellyfin), puis son adresse à part.
-        then=lambda: "\n".join(
-            line for line in (tool_setup.after_install(name, who), tool_addresses.after_install(name, who)) if line
-        ),
+        then=then,
     )
 
 

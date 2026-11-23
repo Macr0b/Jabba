@@ -16,6 +16,7 @@ Sommaire :
   created_by_jabba(t) : le compte de l'outil est-il créé (et utilisé) par Jabba ?
   interne : _login_name (le compte du serveur pour Nextcloud et Jellyfin)
   save(tool, identifiant, mot_de_passe) / forget(tool) : les identifiants notés par toi
+  drop_unused_password(tool) : oublie un mot de passe tiré pour rien (réinstallation d'un outil installé à la main)
   flag / set_flag     : ce que Jabba a déjà réglé une fois dans un outil (ex. le filtrage général d'AdGuard)
   interne : _check_storable
 """
@@ -96,6 +97,17 @@ def save(tool, identifiant, mot_de_passe):
         saved = json_files.load(CREDENTIALS_FILE, {})
         saved[tool] = {"identifiant": identifiant, "mot_de_passe": mot_de_passe}
         json_files.save(CREDENTIALS_FILE, saved, private=True)
+
+
+def drop_unused_password(tool):
+    """Le mot de passe tiré pour une installation qui a gardé les réglages de la fois d'avant (un outil
+    installé à la main avant que Jabba s'en charge) : il ne correspond à rien, on l'oublie."""
+    if not created_by_jabba(tool):
+        return
+    with _LOCK:
+        saved = json_files.load(CREDENTIALS_FILE, {})
+        if saved.pop(tool, None) is not None:
+            json_files.save(CREDENTIALS_FILE, saved, private=True)
 
 
 def forget(tool):

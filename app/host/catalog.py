@@ -347,6 +347,8 @@ NEXTCLOUD_CRON = (
     "(crontab -l 2>/dev/null | grep -v 'nextcloud php -f /var/www/html/cron.php';"
     " echo '*/5 * * * * docker exec -u www-data nextcloud php -f /var/www/html/cron.php') | crontab -"
 )
+# Au retrait : la ligne disparaît (ses données, elles, restent).
+NEXTCLOUD_CRON_REMOVE = "crontab -l 2>/dev/null | grep -v 'nextcloud php -f /var/www/html/cron.php' | crontab -"
 
 OPTIONAL_TOOLS = {
     "nextcloud": {
@@ -357,6 +359,7 @@ OPTIONAL_TOOLS = {
         "port_local": 8081,
         "fichiers": {"compose.yaml": NEXTCLOUD_COMPOSE, ".env": NEXTCLOUD_ENV},
         "preparer": DATA_FOLDERS + " && " + NEXTCLOUD_CRON,
+        "nettoyer": NEXTCLOUD_CRON_REMOVE,
         # Le compte de l'admin : celui du serveur, avec un mot de passe tiré par Jabba (Identifiants).
         "mot_de_passe": True,
         "identifiant": SERVER_USER_MARK,

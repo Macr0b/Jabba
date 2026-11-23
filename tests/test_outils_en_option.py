@@ -72,7 +72,7 @@ def test_seulement_les_outils_du_catalogue():
         with pytest.raises(actions.ActionError):
             actions.build("installer_outil_option", {"outil": nom})
     commande, _ = actions.build("retirer_outil_option", {"outil": "vaultwarden"})
-    assert commande[3:] == ["/opt/stacks/vaultwarden", "8222"]
+    assert commande[3:] == ["/opt/stacks/vaultwarden", "8222", ""]
     assert "rm " not in commande[2]  # retirer ne supprime jamais les données
 
 

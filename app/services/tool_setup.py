@@ -50,6 +50,8 @@ def _jellyfin_headers(token=None):
 
 def _jellyfin(who):
     login = tool_credentials.read("jellyfin")
+    if not login:  # installé à la main avant : son compte est celui que tu avais créé, rien à régler
+        return ""
     if not _wait(lambda: httpx.get(JELLYFIN + "/System/Info/Public", timeout=5).status_code == 200):
         return "Jellyfin ne répond pas encore : son assistant sera à faire à la première ouverture."
     info = httpx.get(JELLYFIN + "/System/Info/Public", timeout=5).json()
@@ -137,7 +139,7 @@ def _nextcloud(who):
     commands.occ(["background:cron"])
     _external_folders()
     login = tool_credentials.read("nextcloud")
-    if not config.NC_APP_PASSWORD:
+    if login and not config.NC_APP_PASSWORD:
         _link_jabba(login)
     activity_log.record("outil", "Nextcloud réglé : tâches de fond, films et téléchargements, lien avec Jabba", who)
     return "Nextcloud réglé : écran Fichiers relié, films et téléchargements visibles."

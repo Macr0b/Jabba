@@ -130,14 +130,18 @@ def _remove_domain_access(args):
 
 # ---------------------------------------------------------------- outils en option (host/catalog.py)
 # $0 dossier, $1 compose.yaml, $2 .env (modèle), $3 préparation, $4 port https, $5 port local ;
-# le mot de passe de l'admin arrive sur l'entrée standard. Un .env déjà là est gardé (ses secrets
-# aussi) : réinstaller un outil retrouve ses données.
+# le mot de passe de l'admin arrive sur l'entrée standard. Un .env déjà là est gardé (avec ses secrets
+# et ses comptes : réinstaller un outil retrouve ses données), et le script le dit (« REGLAGES_GARDES ») :
+# le mot de passe tiré pour cette fois ne sert alors pas.
 OPTIONAL_INSTALL = """set -e
 umask 077
 mkdir -p "$0"
 cd "$0"
 printf "%s" "$1" > compose.yaml
 pass=$(cat)
+if [ -n "$2" ] && [ -f .env ]; then
+  echo "REGLAGES_GARDES"  # réinstallation : comptes et secrets de la fois d'avant
+fi
 if [ -n "$2" ] && [ ! -f .env ]; then
   secret=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
   secret2=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -176,7 +180,7 @@ docker compose up -d
 """
 OPTIONAL_REMOVE = (
     'cd "$0" && docker compose down; [ -z "$1" ] || tailscale serve --https="$1" off || true; '
-    'docker stop "adresse-$(basename "$0")" 2>/dev/null || true'
+    'docker stop "adresse-$(basename "$0")" 2>/dev/null || true; [ -z "$2" ] || sh -c "$2"'
 )
 # Écrit entre apostrophes dans le .env : tout caractère visible ou espace, sauf l'apostrophe elle-même.
 ADMIN_PASSWORD = re.compile(r"[^\x00-\x1f\x7f']{15,128}")
@@ -202,7 +206,8 @@ def _install_optional(args):
 
 def _remove_optional(args):
     name, tool = optional_tool(args)
-    return ["sh", "-c", OPTIONAL_REMOVE, f"/opt/stacks/{name}", str(tool["port_https"] or "")], 300
+    cleanup = tool.get("nettoyer", "")
+    return ["sh", "-c", OPTIONAL_REMOVE, f"/opt/stacks/{name}", str(tool["port_https"] or ""), cleanup], 300
 
 
 # ---------------------------------------------------------------- adresse à part d'un outil (services/tool_addresses.py)
