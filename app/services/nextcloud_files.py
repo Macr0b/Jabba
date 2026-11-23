@@ -14,9 +14,9 @@ from urllib.parse import quote, unquote
 
 import httpx
 from defusedxml import ElementTree as SafeXML
-from fastapi import HTTPException
 
 import config
+from services.service_error import ServiceError
 
 
 # ---------------------------------------------------------------- fichiers (Nextcloud)
@@ -36,13 +36,13 @@ def require_nextcloud():
     if config.DEMO:
         return
     if not (config.NC_USER and config.NC_APP_PASSWORD):
-        raise HTTPException(503, "Le lien avec Nextcloud n'est pas encore réglé (fichier .env).")
+        raise ServiceError(503, "Le lien avec Nextcloud n'est pas encore réglé (fichier .env).")
 
 
 def clean_path(path: str) -> str:
     shares = [parts_list for parts_list in (path or "").split("/") if parts_list not in ("", ".")]
     if any(parts_list == ".." for parts_list in shares):
-        raise HTTPException(400, "Chemin invalide")
+        raise ServiceError(400, "Chemin invalide")
     return "/" + "/".join(shares)
 
 
@@ -90,11 +90,11 @@ async def read_folder(path):
             "PROPFIND", dav_url(path), content=PROPFIND, headers={"Depth": "1", "Content-Type": "application/xml"}
         )
     if response.status_code == 404:
-        raise HTTPException(404, "Dossier introuvable")
+        raise ServiceError(404, "Dossier introuvable")
     if response.status_code == 401:
-        raise HTTPException(502, "Nextcloud refuse le mot de passe d'application (fichier .env).")
+        raise ServiceError(502, "Nextcloud refuse le mot de passe d'application (fichier .env).")
     if response.status_code >= 400:
-        raise HTTPException(502, f"Nextcloud a répondu {response.status_code}")
+        raise ServiceError(502, f"Nextcloud a répondu {response.status_code}")
     root = parse_xml(response.content)
     entries, folder = [], None
     for rep in root.findall("d:response", DAV_NS):
@@ -126,13 +126,13 @@ async def is_nextcloud_folder(path):
 
 async def check_response(response, what):
     if response.status_code in (403, 405):
-        raise HTTPException(403, f"{what} impossible ici (dossier en lecture seule ?).")
+        raise ServiceError(403, f"{what} impossible ici (dossier en lecture seule ?).")
     if response.status_code == 409:
-        raise HTTPException(409, f"{what} impossible : le dossier parent n'existe pas.")
+        raise ServiceError(409, f"{what} impossible : le dossier parent n'existe pas.")
     if response.status_code == 412:
-        raise HTTPException(409, f"{what} impossible : un élément porte déjà ce nom.")
+        raise ServiceError(409, f"{what} impossible : un élément porte déjà ce nom.")
     if response.status_code >= 400:
-        raise HTTPException(502, f"{what} : Nextcloud a répondu {response.status_code}")
+        raise ServiceError(502, f"{what} : Nextcloud a répondu {response.status_code}")
 
 
 # ---------------------------------------------------------------- recherche

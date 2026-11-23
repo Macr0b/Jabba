@@ -19,11 +19,10 @@ import re
 import threading
 import time
 
-from fastapi import HTTPException
-
 import config
 from host import actions, commands
 from services import activity_log, auto_disks, disk_browser
+from services.service_error import ServiceError
 
 # ---------------------------------------------------------------- source de l'écran Fichiers
 _SOURCE_CACHE = {"t": 0, "v": None}
@@ -147,9 +146,9 @@ def run_disk_action(function):
     try:
         return function()
     except disk_browser.Refusal as error:
-        raise HTTPException(error.code, error.message)
+        raise ServiceError(error.code, error.message)
     except PermissionError:
-        raise HTTPException(403, "Le serveur refuse : droits insuffisants sur ce dossier.")
+        raise ServiceError(403, "Le serveur refuse : droits insuffisants sur ce dossier.")
 
 
 def configured_disks():
@@ -208,5 +207,5 @@ def plugged_disks():
 def disk_path(name):
     path = known_disks().get(name)
     if not path or not re.fullmatch(r"/[\w./-]+", path):
-        raise HTTPException(404, "Disque inconnu")
+        raise ServiceError(404, "Disque inconnu")
     return path

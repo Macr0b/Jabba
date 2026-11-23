@@ -15,8 +15,8 @@ Sommaire
 Un fichier infecté est déplacé dans /srv/data/.quarantaine-antivirus (invisible des invités),
 jamais supprimé : l'admin décide. Les fichiers de plus de 100 Mo ne sont pas analysés
 (limite par défaut de clamd) ; ce sont presque toujours des vidéos.
-  read_state
-  write_state
+  read_state    : l'état de l'antivirus (dernier passage, menaces)
+  write_state   : enregistre l'état de l'antivirus
   scan_files    : analyse par lots. -> (infectés {chemin: menace}, chemins analysés) ; s'arrête si l'antivirus n'est pas prêt
   update_state  : lire, modifier, écrire l'état, sans perdre ce qu'une autre analyse écrit en même temps
   interne : _read, _write, _quarantine, _scan_in_background

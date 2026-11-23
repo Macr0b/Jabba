@@ -15,7 +15,7 @@ Sommaire
 Seules les empreintes des codes de secours et les clés publiques sont gardées.
 Le secret de l'appli d'authentification est forcément gardé tel quel (c'est le
 principe du TOTP) : le fichier est lisible par l'appli seule (0600).
-  SecondFactorError
+  SecondFactorError : le refus d'un code, avec son code HTTP et sa phrase
   interne : _read, _write, _entry, _has_method, _code_hash, _new_code, _store_new_codes, _use_recovery_code, _first_method_codes, _drop_expired_steps, _check_key, _check_app
 """
 

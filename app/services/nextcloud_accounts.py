@@ -12,44 +12,44 @@ Tout passe par `occ`, la commande d'administration de Nextcloud. Ce module ne
 connaît que la fonction `occ(args, input_text=None, timeout=60) -> (code, sortie, erreur)`.
 
 Sommaire :
-  CloudError
-  read
-  write
+  CloudError                   : le refus de Nextcloud, avec sa phrase
+  read                         : ce que Jabba note sur les comptes (plafond, inscriptions déjà signalées, rangs)
+  write                        : enregistre ces notes
   to_bytes                     : « 5 GB », « 500 MB », « none » (illimité) → octets, ou None si illimité
   quota_text                   : nombre de Go → texte pour Nextcloud (« 5 GB »), ou « none » si illimité
   overview                     : nextcloud joignable ? Applis installées ? Réglages en place ?
   accounts                     : tous les comptes, avec leur état (actif, en attente, suspendu), groupes et espace
   refresh_usage                : l'espace utilisé par chaque compte (une commande par compte : fait à part, en fond)
-  groups
-  team_folders
-  occ_or_fail
+  groups                       : les groupes et leurs membres (sauf admin)
+  team_folders                 : les dossiers d'équipe, leurs groupes et leurs droits
+  occ_or_fail                  : une commande occ, ou CloudError si Nextcloud refuse
   set_up                       : installe les deux applis Nextcloud et pose les réglages : inscription validée par un admin, membres, 5 Go
-  charter
-  set_charter
-  set_default_quota
+  charter                      : la charte montrée à l'inscription
+  set_charter                  : change la charte (une ligne, longueur bornée), ou la retire
+  set_default_quota            : l'espace donné par défaut aux nouveaux comptes
   reserve_disks_for_admins     : les disques branchés au serveur (stockages externes de Nextcloud) sont réservés aux admins
-  approve
-  suspend
-  delete
-  set_quota
+  approve                      : accepte une inscription : compte ouvert et membre du groupe des membres
+  suspend                      : suspend ou rouvre un compte
+  delete                       : supprime un compte et ses fichiers
+  set_quota                    : l'espace d'un compte
   add                          : compte créé par un admin (pas d'inscription) : actif tout de suite, membre de « Tous »
-  set_password
-  occ_with_password
-  set_group_member
-  create_group
-  delete_group
-  create_team_folder
+  set_password                 : change le mot de passe d'un compte
+  occ_with_password            : une commande occ qui reçoit un mot de passe par l'entrée, jamais dans la ligne
+  set_group_member             : ajoute ou retire un compte d'un groupe
+  create_group                 : crée un groupe (nom vérifié)
+  delete_group                 : supprime un groupe (sauf admin, membres et rangs)
+  create_team_folder           : crée un dossier d'équipe et rend son numéro
   set_team_folder_access       : mode : lecture, depot, complet ; ou None pour retirer l'accès au groupe
-  set_team_folder_quota
-  rename_team_folder
-  delete_team_folder
+  set_team_folder_quota        : l'espace d'un dossier d'équipe (ou sans limite)
+  rename_team_folder           : renomme un dossier d'équipe
+  delete_team_folder           : supprime un dossier d'équipe et son contenu
   ranks_of                     : les rangs, du plus bas au plus haut : [{id, nom}]
-  rank_name
+  rank_name                    : le nom d'un rang
   wanted_groups                : groupes de rang dont `uid` doit faire partie (son rang et ceux en dessous)
   sync_ranks                   : met les groupes Nextcloud en accord avec les rangs (après un changement de rang, d'ordre, ou l'option)
-  create_rank
-  delete_rank
-  refresh_usage_in_background
+  create_rank                  : crée un rang (un groupe Nextcloud caché derrière un nom)
+  delete_rank                  : supprime un rang ; ses membres descendent d'un cran
+  refresh_usage_in_background  : remet à jour l'espace utilisé par chacun, en fond, au plus toutes les 10 minutes
   watch_signups                : nouvelle inscription en attente : alerte aux super admins (une fois par compte)
   describe_group               : nom lisible d'un groupe pour le Journal : « tous les membres », « rang Gérant et au-dessus »…
   interne : _occ_json

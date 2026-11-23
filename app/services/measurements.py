@@ -1,7 +1,12 @@
 """Mesures du serveur : processeur, mémoire, température, espace disque, durée de marche.
 
 Sommaire :
-  cpu_percent, memory, temperature, disk_space, uptime, server_name
+  cpu_percent  : la charge du processeur, en %
+  memory       : la mémoire utilisée et totale
+  temperature  : la température du processeur, en °C (ou None)
+  disk_space   : l'espace total et utilisé de chacun de ces dossiers
+  uptime       : depuis combien de temps le serveur tourne
+  server_name  : le nom du serveur
 """
 
 import os

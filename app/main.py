@@ -11,8 +11,9 @@ Tailscale (tailscale serve). Ce fichier ne fait que brancher les morceaux :
 Sommaire :
   note_installed_version  : note au Journal chaque nouvelle version installée (une fois)
   lifespan                : au démarrage : version, état des invités, puis la surveillance en fond
-  service_worker
-  page
+  service_error           : change une ServiceError des services en réponse {"detail": …} avec son code
+  service_worker          : le service worker, jamais gardé en cache (les mises à jour arrivent tout de suite)
+  page                    : la page de l'appli pour toute adresse hors API
 """
 
 import os
@@ -20,7 +21,7 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from interface_files import InterfaceFiles, index_page
 
 import config
@@ -56,6 +57,7 @@ from routes import (
 from routes import guests as guest_pages
 from security import guard
 from services import activity_log, guests
+from services.service_error import ServiceError
 from version import VERSION
 
 
@@ -93,6 +95,13 @@ async def lifespan(_app):
 # ---------------------------------------------------------------- application
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.middleware("http")(guard.guard)
+
+
+@app.exception_handler(ServiceError)
+async def service_error(_request, error):
+    """Change une ServiceError des services en réponse {"detail": …} avec son code."""
+    return JSONResponse({"detail": error.message}, status_code=error.status)
+
 
 # Pages invités : ouvertes tant qu'on n'est pas connecté en admin.
 app.include_router(guest_pages.router)

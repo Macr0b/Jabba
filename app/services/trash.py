@@ -11,10 +11,9 @@ import asyncio
 import time
 from urllib.parse import quote
 
-from fastapi import HTTPException
-
 import config
 from services import disk_browser, files_source, nextcloud_files
+from services.service_error import ServiceError
 
 UNDO_WINDOW_SECONDS = 10 * 60
 
@@ -39,7 +38,7 @@ async def restore_entry(identifier, source, origin):
         return files_source.run_disk_action(lambda: disk_browser.restore(identifier, *files_source.disk_params()))
     nextcloud_files.require_nextcloud()
     if "/" in identifier:
-        raise HTTPException(400, "Élément invalide")
+        raise ServiceError(400, "Élément invalide")
     async with nextcloud_files.client() as dav_client:
         response = await dav_client.request(
             "MOVE",

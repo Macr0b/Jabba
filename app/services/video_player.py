@@ -14,13 +14,13 @@ navigateurs savent lire : Safari directement, les autres avec hls.js.
 Aller à un autre moment du film relance la conversion à partir de ce moment.
 
 Sommaire :
-  probe
+  probe           : ce que contient une vidéo (durée, pistes), lu par ffprobe dans le bac à sable
   plays_directly  : le navigateur sait-il lire le fichier tel quel ?
   keyframe        : quand la vidéo est copiée, elle ne peut repartir que d'une image clé : celle juste avant `debut`
   start           : lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)
   session_file    : chemin d'un morceau ou de la liste de lecture, une fois prêt
-  session_error
-  stop
+  session_error   : pourquoi une lecture s'est arrêtée, en une phrase
+  stop            : arrête une lecture et efface ses morceaux
   clean_up        : arrête les lectures abandonnées (onglet fermé, téléphone en veille…)
   shift_vtt       : recale les sous-titres sur le moment où la lecture a commencé (la vidéo, elle, repart de 0)
   subtitles       : une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé

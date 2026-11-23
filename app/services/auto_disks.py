@@ -6,11 +6,11 @@ activé. Jellyfin le voit dans /disques ; les médiathèques restent à créer �
 Les disques « oubliés » ne sont plus jamais ajoutés tout seuls.
 
 Sommaire :
-  read
-  write
+  read                     : la liste des disques ajoutés, oubliés et signalés
+  write                    : enregistre cette liste
   known_disks              : nom -> chemin pour les disques ajoutés automatiquement
-  fstab_uuids
-  clean_name
+  fstab_uuids              : les UUID des disques déjà déclarés dans /etc/fstab
+  clean_name               : un nom de disque lisible et libre, et son nom de dossier
   candidates               : partitions USB lisibles, avec un identifiant, absentes de /etc/fstab
   add                      : déclare le disque sur le serveur (action « declarer_disque »). Renvoie l'entrée créée
   link_to_nextcloud        : ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté
@@ -18,8 +18,8 @@ Sommaire :
   resume                   : un disque oublié redevient un disque à ajouter automatiquement
   is_present               : le disque est-il branché ? (sans réveiller l'ouverture automatique)
   scan                     : un passage : ajoute les nouveaux disques. Appelé toutes les 15 secondes
-  scan_disks
-  link_disks_to_nextcloud
+  scan_disks               : cherche les disques branchés et ajoute les nouveaux (chaque minute)
+  link_disks_to_nextcloud  : relie à Nextcloud les disques qui ne le sont pas encore
 """
 
 import json

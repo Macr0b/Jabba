@@ -18,30 +18,30 @@ La copie tourne sur le serveur lui-même (systemd-run) : elle va au bout même s
 l'appli redémarre. Elle écrit son résultat dans donnees/sauvegarde-etat.json.
 
 Sommaire :
-  read
-  write
+  read              : les réglages des sauvegardes (disque, heure, sources, tâche en cours)
+  write             : enregistre ces réglages
   new_passphrase    : six groupes de quatre caractères faciles à recopier (sans 0/O ni 1/I/L)
-  passphrase
-  set_passphrase
-  repository
+  passphrase        : la clé de sauvegarde, ou None si elle n'est pas encore créée
+  set_passphrase    : enregistre la clé de sauvegarde (lisible par l'appli seule)
+  repository        : le dossier des copies sur le disque de sauvegarde
   backup_script     : le script shell qui fait une sauvegarde complète, sur le serveur
-  read_state
+  read_state        : le résultat de la dernière sauvegarde
   result            : le dernier résultat, en clair
   is_due            : faut-il lancer la sauvegarde de cette nuit ? (manquée : dès que possible)
-  next_run
+  next_run          : l'heure du prochain passage (aujourd'hui ou demain)
   restic_command    : en démo seulement : restic lancé dans le conteneur (sur le serveur, c'est l'action « restic »)
   run_restic        : une lecture ou une restauration restic : par la liste fermée sur le serveur, ou dans le conteneur en démo
-  restore_root
-  snapshots
-  browse
+  restore_root      : le dossier où arrivent les fichiers récupérés
+  snapshots         : les copies gardées, de la plus récente à la plus ancienne
+  browse            : le contenu d'un dossier dans une copie
   restore           : remet `chemin` tel qu'il était dans la copie `ident`, dans Restaurations/<date>/ (jamais par-dessus)
   host_data_dir     : le dossier des données de l'appli, vu depuis le serveur (la clé et l'état y sont)
-  is_running
-  disk_is_present
-  start_backup
+  is_running        : vrai si une sauvegarde tourne en ce moment
+  disk_is_present   : vrai si le disque de sauvegarde est branché
+  start_backup      : lance une sauvegarde maintenant (refus clair si impossible)
   follow_backup     : quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté
-  watch_backups
-  require_readable
+  watch_backups     : chaque minute : suit la copie en cours, lance celle de l'heure, prévient si le disque manque
+  require_readable  : refuse clairement si les copies ne peuvent pas être lues (pas en route, disque absent)
   interne : _database_dump_script
 """
 
@@ -54,11 +54,10 @@ import threading
 import time
 from datetime import datetime
 
-from fastapi import HTTPException
-
 import config
 from host import actions, commands
 from services import activity_log, app_update, files_source, json_files, notifications
+from services.service_error import ServiceError
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "sauvegardes.json")
@@ -359,7 +358,7 @@ def host_data_dir():
         return DATA_DIR
     settings = app_update.app_folder()
     if not settings:
-        raise HTTPException(500, "Dossier de l'appli introuvable.")
+        raise ServiceError(500, "Dossier de l'appli introuvable.")
     return os.path.join(settings, "donnees")
 
 
@@ -383,11 +382,11 @@ def disk_is_present(settings):
 def start_backup(who=None):
     settings = read()
     if not settings["chemin"] or not passphrase():
-        raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
+        raise ServiceError(409, "Les sauvegardes ne sont pas encore mises en route.")
     if is_running(settings):
-        raise HTTPException(409, "Une sauvegarde est déjà en cours.")
+        raise ServiceError(409, "Une sauvegarde est déjà en cours.")
     if not disk_is_present(settings):
-        raise HTTPException(409, f"Le disque {settings['disque']} n'est pas branché.")
+        raise ServiceError(409, f"Le disque {settings['disque']} n'est pas branché.")
     unit = f"jabba-sauvegarde-{int(time.time())}"
     if config.DEMO:
         DEMO_STATE[unit] = subprocess.Popen(["bash", "-c", backup_script(settings, host_data_dir(), demo=True)])
@@ -399,7 +398,7 @@ def start_backup(who=None):
             "lancer_sauvegarde", disque=settings["chemin"], donnees=host_data_dir(), sources=sources, unite=unit
         )
         if code != 0:
-            raise HTTPException(500, "Lancement impossible : " + error_output[:200])
+            raise ServiceError(500, "Lancement impossible : " + error_output[:200])
     settings.update(unite=unit, lancee=int(time.time()))
     write(settings)
     activity_log.record(
@@ -483,6 +482,6 @@ def watch_backups():
 
 def require_readable(settings):
     if not settings["chemin"] or not passphrase():
-        raise HTTPException(409, "Les sauvegardes ne sont pas encore mises en route.")
+        raise ServiceError(409, "Les sauvegardes ne sont pas encore mises en route.")
     if not disk_is_present(settings):
-        raise HTTPException(409, f"Branche le disque {settings['disque']} pour voir les sauvegardes.")
+        raise ServiceError(409, f"Branche le disque {settings['disque']} pour voir les sauvegardes.")

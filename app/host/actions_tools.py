@@ -3,8 +3,8 @@ adresse à part, conteneurs Docker, et l'administration de Nextcloud (occ).
 
 Chaque action : un nom, des paramètres vérifiés, une commande construite ici (host/actions.py
 les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
-  caddyfile
-  optional_tool
+  caddyfile : la configuration de Caddy pour publier un outil à une adresse
+  optional_tool : le nom et l'entrée du catalogue d'un outil en option, ou un refus
   optional_password  : le mot de passe demandé par un outil (Time Machine, Paperless) : 15 à 128 caractères, sans apostrophe
   interne : _install_antivirus, _remove_antivirus, _scan_files, _scan_disk, _domain_access, _remove_domain_access, _install_optional, _remove_optional, _address_target, _tool_address, _address_in_tool, _container, _list_containers, _containers_usage, _container_image, _image_details, _container_running, _tool, _nextcloud
 """

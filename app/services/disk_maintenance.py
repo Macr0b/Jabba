@@ -15,8 +15,8 @@ Sommaire
 - measure_all() / defragment(path)    : mesure et défragmentation (longues : lancées à part).
 - summary()                           : pour la carte Santé des disques.
 - watch_fragmentation()               : une mesure par mois, par la surveillance.
-  start_measure
-  start_defragment
+  start_measure : lance la mesure de tous les disques en tâche de fond
+  start_defragment : lance la défragmentation d'un disque en tâche de fond
   interne : _read, _write, _partitions, _has_ssd, _start
 """
 

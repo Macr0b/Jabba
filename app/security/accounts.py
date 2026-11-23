@@ -12,27 +12,27 @@
   sur le disque.
 
 Sommaire :
-  Refusal
+  Refusal                  : le refus d'un geste sur les comptes, avec son code et sa phrase
   check_password_strength  : applique les règles de security.password_rules (15 caractères, pas de mot courant…)
   temporary_password       : mot de passe provisoire lisible : 3 mots et 2 chiffres
-  list_accounts
-  find
+  list_accounts            : les comptes admin, les réglages et les demandes en attente
+  find                     : le compte de cet identifiant, ou None
   allowed_logins           : comptes Tailscale reliés à un compte de l'appli : ils peuvent ouvrir l'appli
-  super_admin_logins
-  admin_space_open
+  super_admin_logins       : les comptes Tailscale des super admins
+  admin_space_open         : vrai si l'espace admins est ouvert
   check_credentials        : le compte (dict public) si le mot de passe est bon, sinon None
-  create
-  update
-  delete
-  change_own_password
-  set_settings
+  create                   : crée un compte admin avec un mot de passe provisoire (rang vérifié)
+  update                   : change le rang, le nom ou le compte Tailscale d'un admin
+  delete                   : retire un compte admin
+  change_own_password      : change son propre mot de passe (règles vérifiées)
+  set_settings             : ouvre ou ferme l'espace admins
   request_reset            : enregistre la demande. Renvoie le compte concerné, ou None (sans le dire à l'appelant)
-  answer_reset
-  pending_reset
+  answer_reset             : accepte ou refuse une demande de mot de passe oublié
+  pending_reset            : vrai si ce compte Tailscale a une remise à zéro acceptée et encore valable
   collect_reset            : le mot de passe provisoire, une seule fois, pour la personne qui l'attend
-  record_visit
+  record_visit             : note une visite (nom, appareil, première et dernière fois)
   record_refusal           : garde les 50 dernières tentatives refusées. True si c'est la première depuis 1 h pour ce compte
-  recent_logins
+  recent_logins            : les dernières visites et les derniers refus
   interne : _read, _write, _password_hash, _public_view, _check_identifier, _check_login, _account
 """
 

@@ -15,6 +15,7 @@ from fastapi.responses import Response
 
 from security import guard
 from services import activity_log, disk_browser, files_source, guest_network, guests, nextcloud_files, tools
+from services.service_error import ServiceError
 
 router = APIRouter()
 
@@ -24,7 +25,7 @@ def guest_settings(request: Request):
     guard.require_admin(request)
     try:
         guest_network.sync_guest_tools()
-    except HTTPException:
+    except (HTTPException, ServiceError):
         pass
     state = guests.read()
     return {

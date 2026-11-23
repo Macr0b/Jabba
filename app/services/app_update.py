@@ -14,12 +14,12 @@ suffit pas à faire installer du code. Sans signature valable, rien ne s'install
 
 Sommaire :
   publication_key  : la clé publique qui signe les versions (celle de la version installée), ou None
-  signed_text
-  version_tuple
+  signed_text      : le texte signé pour une version (« jabba vX commit »)
+  version_tuple    : « 0.16.6 » → (0, 16, 6), ou None si illisible
   latest_release   : {'version': '0.5.1', 'tag': 'v0.5.1', 'notes': '...', 'date': '...'} ou None
-  is_newer
+  is_newer         : vrai si l'autre version est plus récente que l'actuelle
   install_script   : commande lancée sur le serveur, hors du conteneur (elle survit au redémarrage de l'appli)
-  app_folder
+  app_folder       : le dossier de l'appli sur le serveur, ou None
   update_state     : où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine
   update_progress  : étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure
 """

@@ -1,8 +1,8 @@
 """Données fictives, utilisées seulement avec JABBA_DEMO=1 (tests hors de Jabba).
 
 Sommaire :
-  folder_listing
-  search_results
+  folder_listing : le contenu d'un dossier de démonstration
+  search_results : la recherche dans les dossiers de démonstration
 """
 
 G = 1024**3

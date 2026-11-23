@@ -8,7 +8,7 @@ Sommaire :
   2. fichiers        upload_files, download_file, move_item, delete_item
   3. recherche       search
   (visionneuse : routes/files_viewer.py ; corbeille : routes/trash.py ; actions groupées : routes/files_batch.py)
-  log_upload
+  log_upload : note au Journal les fichiers envoyés
 """
 
 import asyncio

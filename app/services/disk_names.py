@@ -9,7 +9,7 @@ Sommaire :
   title(device)        : le nom à afficher pour un disque de lsblk (avec ses partitions)
   kind(device)         : « Disque externe USB » ou « Disque interne »
   is_technical(part)   : partition qu'on ne touche jamais (démarrage, swap), repliée à l'écran
-  is_external
+  is_external : vrai pour un disque amovible (USB, branché à chaud)
 """
 
 TECHNICAL_MOUNTS = ("/boot/efi", "/boot", "[SWAP]")

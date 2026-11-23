@@ -13,11 +13,11 @@ import re
 from urllib.parse import urljoin
 
 import httpx
-from fastapi import HTTPException
 
 import config
 from host import catalog, commands
 from services import frame_check, tool_addresses, tool_credentials
+from services.service_error import ServiceError
 
 # ---------------------------------------------------------------- outils (Docker)
 NAMES = {
@@ -90,7 +90,7 @@ def list_tools():
         ]
     code, output, error_output = commands.run_action("liste_conteneurs")
     if code != 0:
-        raise HTTPException(500, "Docker ne répond pas : " + error_output[:200])
+        raise ServiceError(500, "Docker ne répond pas : " + error_output[:200])
     projects = {}
     for line in output.splitlines():
         container = json.loads(line)
@@ -143,11 +143,11 @@ def find_tool(pid):
     for tool in list_tools():
         if tool["id"] == pid:
             if not tool["modifiable"]:
-                raise HTTPException(400, "Cet outil ne se gère pas depuis l'appli.")
+                raise ServiceError(400, "Cet outil ne se gère pas depuis l'appli.")
             if not re.fullmatch(r"/[\w./-]+", tool["dossier"]):
-                raise HTTPException(400, "Dossier inattendu.")
+                raise ServiceError(400, "Dossier inattendu.")
             return tool
-    raise HTTPException(404, "Outil inconnu")
+    raise ServiceError(404, "Outil inconnu")
 
 
 ICONS_CACHE = {}

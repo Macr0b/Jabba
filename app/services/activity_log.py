@@ -3,8 +3,8 @@
 Une ligne JSON par événement. On ne garde que les 2000 derniers.
 
 Sommaire :
-  record
-  read
+  record : ajoute un événement au Journal (famille, texte, qui), en raccourcissant le fichier s'il grossit trop
+  read : les derniers événements du Journal, d'une famille ou de toutes
 """
 
 import json

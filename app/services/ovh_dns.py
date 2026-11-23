@@ -14,7 +14,7 @@ Sommaire :
   sync(zone, prefix, ip)           : crée ou corrige l'entrée A ; "cree" | "corrige" | "deja"
   watch()                          : chaque heure, si l'accès par le domaine est actif
   interne : _call, _signature, _records
-  OvhError
+  OvhError : le refus d'OVH, avec sa phrase
 """
 
 import hashlib

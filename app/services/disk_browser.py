@@ -5,23 +5,23 @@ conteneur sous /srv. Rien n'est jamais lu ni écrit en dehors de ces dossiers.
 
 Sommaire :
   roots            : nom affiché -> chemin sur le serveur. Réglable par DOSSIERS_DISQUE (« nom=chemin,… »)
-  Refusal
+  Refusal          : le refus d'un geste sur les fichiers, avec son code et sa phrase
   resolve          : chemin virtuel « /Films et séries/xx » -> (chemin réel, écriture autorisée)
-  list_folder
-  create_folder
-  upload_path
-  finish_upload
-  read_path
-  move
+  list_folder      : le contenu d'un dossier (à la racine : Mes dossiers et les disques)
+  create_folder    : crée un dossier, au compte du serveur
+  upload_path      : le chemin réel où écrire un fichier envoyé
+  finish_upload    : donne le fichier envoyé au compte du serveur
+  read_path        : le chemin réel d'un fichier à lire, ou un refus
+  move             : déplace ou renomme un élément, sans jamais écraser
   delete           : pas de suppression définitive : l'élément part dans la corbeille du disque de données (30 jours)
-  list_trash
-  restore
-  erase
-  empty_trash
+  list_trash       : le contenu de la corbeille des disques
+  restore          : remet un élément de la corbeille à sa place d'origine
+  erase            : efface pour de bon un élément de la corbeille
+  empty_trash      : vide la corbeille des disques et dit combien d'éléments sont partis
   purge_old_trash  : efface ce qui est dans la corbeille depuis plus de 30 jours
   search           : cherche par nom dans les dossiers du serveur. `noms` limite aux racines voulues
   thumbnail        : petite image JPEG pour la liste des fichiers (gardée en cache)
-  is_folder
+  is_folder        : vrai si le chemin est un dossier
   interne : _entry, _give_to_server_user, _writable_path, _trash_dirs, _trash_dir
 """
 

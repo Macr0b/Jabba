@@ -6,14 +6,14 @@ Les actions les plus sensibles redemandent le mot de passe si sa dernière
 saisie date de plus de 10 minutes (« confirmation »).
 
 Sommaire :
-  create
+  create              : ouvre une session et rend son jeton
   read                : la session (copie) si le jeton est valable, sinon None
-  confirm
-  confirmed_recently
-  close
-  close_by_id
+  confirm             : note que la session vient de redonner son mot de passe
+  confirmed_recently  : vrai si le mot de passe a été redonné il y a peu
+  close               : ferme la session de ce jeton
+  close_by_id         : ferme une session depuis la liste des appareils
   close_account       : ferme toutes les sessions d'un compte (ou de tout le monde)
-  list_sessions
+  list_sessions       : les sessions ouvertes, de la plus récente à la plus ancienne
   interne : _token_hash, _read, _write, _drop_expired
 """
 

@@ -4,7 +4,7 @@ Lancé par bac_a_sable.vignette, sans aucun droit : ce programme ne voit que l'i
 qu'on lui passe, n'ouvre aucun fichier et n'écrit que sur sa sortie.
 
 Sommaire :
-  main
+  main : lit une image sur l'entrée, écrit sa vignette JPEG (taille donnée) sur la sortie
 """
 
 import io

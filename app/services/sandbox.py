@@ -14,13 +14,13 @@ programme sans droits ne voit que ce qu'on lui a passé.
 
 Sommaire :
   is_active             : le bac à sable s'applique quand l'appli tourne en root (le cas normal) ; désactivable pour le développement
-  gpu_group
+  gpu_group             : le groupe qui a droit à la puce graphique, ou None
   prefix                : ce qu'on met devant une commande pour la lancer sans droits
-  local_command
+  local_command         : vrai si la source est un fichier du serveur (pas une adresse web)
   open_input            : arguments d'entrée pour ffmpeg/ffprobe, et les descripteurs à leur passer
   without_input_option  : ffprobe prend l'entrée sans « -i » devant
-  run
-  popen
+  run                   : lance une commande dans le bac à sable et attend sa fin
+  popen                 : lance une commande dans le bac à sable sans attendre
   writable_dir          : dossier où le programme sans droits écrit (morceaux vidéo)
   thumbnail             : JPEG de l'image `reel` réduite à `taille` px, calculé par Pillow sans droits. Renvoie les octets
   interne : _limit_memory

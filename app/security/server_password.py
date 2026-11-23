@@ -8,11 +8,11 @@
 Sommaire :
   is_locked               : true si la personne qui demande s'est trompée 5 fois en 10 minutes
   check_password          : true si le mot de passe est celui du compte `user` sur le serveur
-  record_failure
-  change_password
-  generate_recovery_code
-  recovery_code_exists
-  check_recovery_code
+  record_failure          : compte un essai raté (trop d'essais bloquent un moment)
+  change_password         : change le mot de passe du serveur (règles vérifiées)
+  generate_recovery_code  : tire un code de secours de 6 mots ; seule son empreinte est gardée
+  recovery_code_exists    : vrai si un code de secours a été créé
+  check_recovery_code     : vrai si le code de secours est le bon (sinon, compte un essai raté)
   interne : _read, _write, _record_failure, _code_hash
 """
 

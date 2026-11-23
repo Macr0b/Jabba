@@ -4,7 +4,7 @@ des disques (fstab), leur mode (lecture ou écriture) et leur oubli.
 Chaque action : un nom, des paramètres vérifiés, une commande construite ici (host/actions.py
 les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
   comment_line  : le commentaire posé au-dessus de la ligne d'un disque ajouté par l'appli
-  fstab_line
+  fstab_line : la ligne /etc/fstab d'un disque (lecture seule, sans bloquer le démarrage s'il manque)
   interne : _server_name, _disk_space, _smartctl_installed, _disk_health, _is_mounted, _read_fstab, _eject, _partitions, _trim_state, _enable_trim, _measure_fragmentation, _defragment, _uuid, _disk_name, _auto_disk_path, _disk_tree, _disk_present, _wake_disk, _rearm_disk, _declare_disk, _disk_mode, _forget_disk, _install_smartmontools, _battery_shutdown, _cancel_battery_shutdown
 """
 

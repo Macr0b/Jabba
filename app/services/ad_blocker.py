@@ -12,7 +12,7 @@ Sommaire :
   devices()                      : {"pret", "message", "appareils": [{ip, nom, protege, tailscale}]}
   set_protected(ip, protected)   : allume / éteint le filtrage d'un appareil
   interne : _client, _ensure_ready, _tailscale_names, _client_name, _demo, _password
-  AdBlockerError
+  AdBlockerError : le refus du bloqueur de pubs, avec sa phrase
 """
 
 import ipaddress

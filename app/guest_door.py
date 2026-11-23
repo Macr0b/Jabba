@@ -6,10 +6,10 @@ Il ne connaît QUE les pages invités : la connexion admin y est impossible.
 Sommaire :
   guard_policy          : même politique de sécurité que l'appli, sans cadres : la page invités n'ouvre rien dedans
   use_disk_for_uploads  : les envois en cours de réception vont sur le disque des invités, pas en mémoire
-  wifi_guard
-  who_am_i_on_wifi
-  forbidden
-  wifi_page
+  wifi_guard            : porte du Wi-Fi : n'ouvre qu'au réseau local, et exige l'en-tête X-Jabba pour écrire
+  who_am_i_on_wifi      : ce que l'écran invité sait de lui-même (mode invité, nom du serveur, version)
+  forbidden             : refuse tout le reste : l'administration ne passe que par Tailscale
+  wifi_page             : la page des invités
 """
 
 import ipaddress

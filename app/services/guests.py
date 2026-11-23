@@ -14,16 +14,16 @@ L'appareil est ensuite reconnu 7 jours, sauf si l'admin change le code.
 Les invités ne voient que les dossiers et les outils choisis par l'admin.
 
 Sommaire :
-  read
-  write
+  read                  : l'état de l'accès invités (actif, code, dossiers, outils ouverts au Wi-Fi)
+  write                 : enregistre cet état, lisible par le compte des invités
   prepare_state         : au démarrage de l'appli : dossier d'état des invités (et reprise de l'ancien emplacement)
-  update
-  new_code
-  prepare_guest_folder
-  guest_cookie
-  cookie_is_valid
+  update                : change l'état d'un coup, sans qu'un autre geste s'intercale
+  new_code              : tire un nouveau code ; les invités déjà entrés doivent le retaper
+  prepare_guest_folder  : crée le dossier Invités au compte du serveur
+  guest_cookie          : le cookie signé d'un invité qui a donné le bon code
+  cookie_is_valid       : vrai si le cookie est signé, à jour (code inchangé) et pas expiré
   record_failure        : un code faux de plus pour cette adresse
-  is_blocked
+  is_blocked            : vrai après 8 mauvais codes en 10 minutes depuis cette adresse
   interne : _give_to_guest_account, _sign
 
 Les pages des invités (routes) sont dans routes/guests.py.

@@ -178,3 +178,21 @@ def test_version_du_serveur_dans_chaque_reponse(client):
 
     assert client.get("/api/moi", headers=H).headers["X-Jabba-Version"] == VERSION
     assert client.get("/", headers=H).headers["X-Jabba-Version"] == VERSION
+
+
+def test_erreur_d_un_service_devient_une_reponse_lisible(client):
+    """Les services lèvent ServiceError (sans dépendre du serveur web) ; l'appli en fait {"detail": …} et le code."""
+    connecter(client, "serveur-demo", "demo-mot-de-passe")
+    r = client.post("/api/outils/outil-qui-n-existe-pas/demarrer", headers=H)
+    assert r.status_code == 404
+    assert r.json() == {"detail": "Outil inconnu"}
+
+
+def test_les_services_ne_dependent_pas_du_serveur_web():
+    import os
+
+    dossier = os.path.join(os.path.dirname(main.__file__), "services")
+    fautifs = [
+        f for f in os.listdir(dossier) if f.endswith(".py") and "fastapi" in open(os.path.join(dossier, f)).read()
+    ]
+    assert not fautifs

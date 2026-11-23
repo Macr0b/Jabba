@@ -5,10 +5,10 @@ quittent jamais. Les appareils abonnés et les réglages restent dans /data.
 
 Sommaire :
   public_key     : clé publique à donner au navigateur. La clé privée est créée au premier appel
-  settings
-  subscribe
-  unsubscribe
-  set_types
+  settings       : l'état des alertes : clé publique, appareils abonnés, types activés
+  subscribe      : abonne un appareil aux alertes (abonnement vérifié)
+  unsubscribe    : désabonne un appareil
+  set_types      : active ou coupe un type d'alerte
   send           : note l'événement au journal, puis l'envoie aux appareils si ce type est activé
   valid_contact  : adresse de contact acceptée par la signature des alertes : https://hôte (sans port) ou mailto:
   interne : _read, _write, _b64, _push

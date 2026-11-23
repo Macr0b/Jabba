@@ -6,7 +6,7 @@ une mise à jour) ne prévient pas. Interrupteur : Système → Alertes → « T
 
 Sommaire :
   watch(now, degrees) : à appeler chaque minute ; renvoie "chaud", "revenu" ou None (rien à dire)
-  HOT, COOL, LASTING, STATE
+  HOT, COOL, LASTING  : les seuils (degrés) et la durée (secondes) ; STATE : depuis quand il chauffe, alerte partie ou non
 """
 
 import time
