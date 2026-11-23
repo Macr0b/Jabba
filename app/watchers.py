@@ -5,6 +5,7 @@ Chaque tour lance certaines vérifications ; les plus lourdes moins souvent.
 Sommaire :
   watch_power : secteur coupé, batterie faible
   watch_space : disques presque pleins
+  heat_watch.watch : processeur trop chaud pendant 10 minutes, puis refroidi (chaque minute)
   disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
   disk_maintenance.watch_fragmentation : fragmentation des disques à plateaux (une fois par mois)
   antivirus.watch_deposits : nouveaux dépôts des invités analysés (chaque minute)
@@ -36,6 +37,7 @@ from services import (
     disk_maintenance,
     files_source,
     guest_network,
+    heat_watch,
     mass_deletion,
     measurements,
     nextcloud_accounts,
@@ -192,6 +194,7 @@ def watch_forever():
                 watch_power,
                 watch_space,
                 watch_tools,
+                heat_watch.watch,
                 antivirus.watch_deposits,
                 antivirus_disks.watch,
                 guest_network.sync_guest_tools,

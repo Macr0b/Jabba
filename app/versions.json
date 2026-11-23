@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.16.6",
+    "date": "2026-11-23",
+    "changements": [
+      "Alerte de température : quand le processeur du serveur reste au-dessus de 85 °C pendant 10 minutes (un pic court ne prévient pas), puis quand il est redescendu sous 75 °C. Interrupteur dans Système → Alertes → Température."
+    ]
+  },
+  {
     "version": "0.16.5",
     "date": "2026-11-21",
     "changements": [

@@ -44,6 +44,10 @@ TYPES = {
     "sauvegardes": ("Sauvegardes", "Sauvegarde échouée, incomplète, ou en attente du disque."),
     "comptes": ("Comptes", "Demande de mot de passe oublié, compte ajouté ou retiré, rang changé."),
     "atelier": ("Entretien des machines", "Quand un rappel d'entretien de la mémoire d'atelier arrive à échéance."),
+    "temperature": (
+        "Température",
+        "Quand le processeur reste au-dessus de 85 °C pendant 10 minutes, puis quand il refroidit.",
+    ),
 }
 
 
