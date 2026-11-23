@@ -25,15 +25,19 @@ export function loadArrangement(screen) {
   return api(`/api/rangement/${screen}`).catch(() => ({ ordre: [], masques: [] }));
 }
 
-/** Remet les cartes dans l'ordre enregistré et cache les masquées ; les autres gardent leur place, à la suite. */
-export function applyArrangement(grid, arrangement) {
+/**
+ * Remet les cartes dans l'ordre enregistré et cache les masquées ; les autres gardent leur place, à la suite.
+ * `pausedLast` (Établi) : les outils en pause passent après ceux en marche, chacun dans l'ordre rangé.
+ */
+export function applyArrangement(grid, arrangement, { pausedLast = false } = {}) {
   const rank = new Map(arrangement.ordre.map((id, index) => [id, index]));
+  const paused = (card) => (pausedLast && card.classList.contains("eteint") ? 1 : 0);
   cards(grid)
     .map((card, index) => ({
       card,
       key: rank.has(cardId(card)) ? rank.get(cardId(card)) : arrangement.ordre.length + index,
     }))
-    .sort((a, b) => a.key - b.key)
+    .sort((a, b) => paused(a.card) - paused(b.card) || a.key - b.key)
     .forEach(({ card }) => {
       card.classList.toggle("carte-masquee", arrangement.masques.includes(cardId(card)));
       grid.appendChild(card);

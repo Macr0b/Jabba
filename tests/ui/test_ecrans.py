@@ -536,3 +536,27 @@ def test_mes_codes(page):
     expect(carte).to_contain_text("Mot de passe du serveur")
     expect(carte).to_contain_text("Compte AdGuard Home")
     expect(carte).not_to_contain_text("demo-adguard-home")  # le mot de passe de la démo n'apparaît jamais
+
+
+def test_outils_en_pause_apres_ceux_en_marche(page):
+    """Établi : un outil en pause passe après ceux qui tournent, chacun gardant l'ordre rangé."""
+    aller(page, "outils")
+    ordre = page.evaluate(
+        """async () => {
+          const base = document.querySelector('script[type=module][src*="main.js"]').src.replace(/main\\.js.*$/, "");
+          const { applyArrangement } = await import(base + "components/card_order.js");
+          const grille = document.createElement("div");
+          for (const [id, pause] of [["a", true], ["b", false], ["c", true], ["d", false]]) {
+            const carte = document.createElement("article");
+            carte.dataset.carte = id;
+            if (pause) carte.classList.add("eteint");
+            grille.appendChild(carte);
+          }
+          const rangement = { ordre: ["c", "a", "d", "b"], masques: [] };
+          applyArrangement(grille, rangement, { pausedLast: true });
+          const apres = [...grille.children].map((c) => c.dataset.carte).join("");
+          applyArrangement(grille, rangement);
+          return [apres, [...grille.children].map((c) => c.dataset.carte).join("")];
+        }"""
+    )
+    assert ordre == ["dbca", "cadb"]  # ailleurs (Accueil) : l'ordre rangé seul

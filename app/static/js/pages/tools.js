@@ -69,13 +69,13 @@ pages.outils = async () => {
   bindAddresses(reloadPage, () => ($("#reglages-serveur").open = true));
   bindToolMenus(content, tools, versions, reloadPage);
   const grid = $("#grille-etabli");
-  applyArrangement(grid, savedOrder);
+  applyArrangement(grid, savedOrder, { pausedLast: true }); // en pause : après ceux qui tournent
   bindOrdering($("#ranger-etabli"), [{ grid, screen: "etabli" }]);
   const extras = mine.some((item) => item.id === "antivirus") ? {} : { antivirus: antivirusOfferHtml() };
   bindCatalog({ grid, offers: $("#ajouter-outils"), extras }, reloadPage, (catalogTools) => {
     bindToolMenus(content, catalogTools, versions, reloadPage);
     bindAntivirus(reloadPage); // l'offre de l'antivirus arrive avec les autres
-    applyArrangement(grid, savedOrder); // les outils de l'appli arrivent après : ils prennent leur place aussi
+    applyArrangement(grid, savedOrder, { pausedLast: true }); // les outils de l'appli arrivent après : ils prennent leur place aussi
   });
   $("#verifier-versions").onclick = async (event) => {
     event.target.disabled = true;
