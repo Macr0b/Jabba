@@ -9,6 +9,7 @@ import { appearanceCard } from "../components/appearance_card.js";
 import { publicModeCard } from "../components/public_mode_card.js";
 import { myCodesCard } from "../components/my_codes.js";
 import { serverMoveCard } from "../components/server_move_card.js";
+import { heartbeatCard } from "../components/heartbeat_card.js";
 import { secondFactorCard } from "../components/second_factor.js";
 import { chooseMyPassword, logOut, showRecoveryCode } from "../core/admin_session.js";
 import { api, formBody } from "../core/api.js";
@@ -52,6 +53,7 @@ pages.systeme = async () => {
       <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="public"><h2>Serveur ouvert au public</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
+      ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="surveillance"><h2>Si le serveur ne répond plus</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
       <section class="carte pad" id="redem"><h2>Redémarrage après une mise à jour</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
         <div class="journal" id="journal-court"><div class="squelette"></div></div></section>
@@ -72,6 +74,11 @@ pages.systeme = async () => {
   myCodesCard().catch((entry) => {
     const element = $("#mes-codes");
     if (element) element.innerHTML = t`<h2>Mes codes</h2><p class="note">${escapeHtml(entry.message)}</p>`;
+  });
+  heartbeatCard().catch((entry) => {
+    const element = $("#surveillance");
+    if (element)
+      element.innerHTML = t`<h2>Si le serveur ne répond plus</h2><p class="note">${escapeHtml(entry.message)}</p>`;
   });
   serverMoveCard().catch((entry) => {
     const element = $("#demenagement");

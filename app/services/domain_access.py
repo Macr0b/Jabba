@@ -13,6 +13,9 @@ Sommaire :
   disable()                : retire Caddy et l'adresse de Nextcloud
   status(settings)         : la liste de vérification (adresse de la box, DNS, certificat, DNS réglé par
                              Jabba chez Cloudflare ou OVH : services/dns_update.py)
+  protection()             : Nextcloud voit-il la vraie adresse de chaque visiteur, et freine-t-il les essais en
+                             rafale ? Remet les relais de confiance s'ils manquent ; True | False | None (inconnu)
+  watch_protection()       : chaque heure, si l'accès est ouvert : protection() (une alerte si elle reste coupée)
   public_link(url)         : un lien de partage Nextcloud, réécrit sur l'adresse publique
   public_ip       : l'adresse de la box sur Internet (celle que le domaine doit indiquer)
   resolve         : les adresses IPv4 vers lesquelles pointe un nom (ce qu'on a mis dans la zone DNS)
@@ -29,7 +32,16 @@ import httpx
 
 import config
 from host import action_common, actions_tools, commands
-from services import cloudflare_dns, dns_update, guest_network, json_files, nextcloud_settings, ovh_dns, tools
+from services import (
+    cloudflare_dns,
+    dns_update,
+    guest_network,
+    json_files,
+    nextcloud_settings,
+    notifications,
+    ovh_dns,
+    tools,
+)
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "domaine.json")
@@ -114,6 +126,39 @@ def disable():
     return settings
 
 
+def protection():
+    """Derrière Caddy, Nextcloud ne voit que 127.0.0.1 si Caddy n'est pas un relai de confiance : il freinerait
+    alors tout le monde d'un coup (ou personne). Les relais manquants sont remis ; la protection coupée
+    (auth.bruteforce.protection.enabled = false) ou un en-tête d'adresse changé sont signalés, pas forcés."""
+    if config.DEMO:
+        return True
+    code, _, _ = commands.occ(["status"])
+    if code != 0:
+        return None  # Nextcloud arrêté ou injoignable : on ne sait pas
+    proxies = nextcloud_settings.system_list("trusted_proxies")
+    for proxy in LOCAL_PROXIES:
+        if proxy not in proxies:
+            nextcloud_settings.add_to_system_list("trusted_proxies", proxy)
+    _, enabled, _ = commands.occ(["config:system:get", "auth.bruteforce.protection.enabled"])
+    headers = nextcloud_settings.system_list("forwarded_for_headers")
+    return enabled.strip() != "false" and (not headers or "HTTP_X_FORWARDED_FOR" in headers)
+
+
+def watch_protection():
+    """Chaque heure, si l'accès par le domaine est ouvert : la protection de Nextcloud (alerte si coupée)."""
+    settings = read()
+    if not settings.get("actif") or protection() is not False:
+        return
+    notifications.send(
+        "securite",
+        "Nextcloud : protection contre les essais en rafale coupée",
+        "Nextcloud est ouvert sur Internet mais ne freine plus les essais de mots de passe : "
+        "Établi → Accès depuis Internet.",
+        "/#/outils",
+        family="systeme",
+    )
+
+
 def public_ip():
     """L'adresse de la box sur Internet (celle que le domaine doit indiquer)."""
     if config.DEMO:
@@ -166,6 +211,7 @@ def status(settings=None):
         "dns": pointing,
         "dns_ok": bool(box_address) and box_address in pointing,
         "certificat_ok": certificate,
+        "protection_ok": protection() if settings.get("actif") else None,
         "dns_auto": dns_update.provider(),
         "cloudflare_lien": cloudflare_dns.TOKEN_PAGE,
         "ovh_pret": ovh_dns.is_ready(),

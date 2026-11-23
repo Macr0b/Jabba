@@ -68,6 +68,19 @@ function checklistHtml(settings, isSuper) {
           "Obtenu et renouvelé tout seul (Let's Encrypt) dès que les deux étapes d'avant sont faites. Revérifie dans quelques minutes.",
         ),
       )}
+      ${stepHtml(
+        settings.protection_ok === true,
+        t("Nextcloud freine les essais de mots de passe"),
+        settings.protection_ok === false
+          ? t(
+              "Coupé dans les réglages de Nextcloud : remets « auth.bruteforce.protection.enabled » à true (ou retire-le) et laisse « forwarded_for_headers » par défaut. Jabba a déjà remis Caddy parmi ses relais de confiance.",
+            )
+          : settings.protection_ok === null
+            ? t("Nextcloud ne répond pas pour l'instant : revérifie dans un moment.")
+            : t(
+                "Nextcloud voit la vraie adresse de chaque visiteur (Caddy est un relai de confiance) et ralentit celui qui enchaîne les mauvais mots de passe, sans gêner les autres. Vérifié chaque heure.",
+              ),
+      )}
     </ol>
     <p class="note">${t("Double vérification : Jabba l'a installée dans Nextcloud. Chacun l'active pour son compte (Paramètres personnels → Sécurité → TOTP), avec une appli de codes comme Authenticator, et garde ses codes de secours.")}</p>
     ${isSuper ? dnsHtml(settings) : ""}

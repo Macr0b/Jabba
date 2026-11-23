@@ -42,6 +42,7 @@ from routes import (
     files_batch,
     files_viewer,
     guests_admin,
+    heartbeat,
     my_codes,
     optional_tools,
     player,
@@ -134,6 +135,7 @@ for module in (
     public_mode,
     ad_blocker,
     server_move,
+    heartbeat,
 ):
     app.include_router(module.router)
 

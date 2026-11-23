@@ -5,6 +5,7 @@ Chaque tour lance certaines vérifications ; les plus lourdes moins souvent.
 Sommaire :
   watch_power : secteur coupé, batterie (du portable ou de l'onduleur) faible
   watch_space : disques presque pleins
+  heartbeat.watch : signal de vie au service extérieur qui prévient si le serveur se tait (toutes les 5 minutes)
   heat_watch.watch : processeur trop chaud pendant 10 minutes, puis refroidi (chaque minute)
   disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
   disk_maintenance.watch_fragmentation : fragmentation des disques à plateaux (une fois par mois)
@@ -18,6 +19,7 @@ Sommaire :
   public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
   watch_tools : outil en panne
   watch_system_updates : mises à jour du système, redémarrage en attente
+  domain_access.watch_protection : Nextcloud ouvert sur Internet freine bien les essais en rafale (chaque heure)
   tool_addresses.watch : adresses à part qui manquent, créées si la clé Tailscale est là (chaque heure)
   watch_forever : la boucle (voir le détail des fréquences dedans)
 """
@@ -37,8 +39,10 @@ from services import (
     disk_health,
     disk_maintenance,
     dns_update,
+    domain_access,
     files_source,
     guest_network,
+    heartbeat,
     heat_watch,
     mass_deletion,
     measurements,
@@ -204,6 +208,7 @@ def watch_forever():
                 watch_space,
                 watch_tools,
                 heat_watch.watch,
+                heartbeat.watch,
                 antivirus.watch_deposits,
                 antivirus_disks.watch,
                 guest_network.sync_guest_tools,
@@ -224,7 +229,7 @@ def watch_forever():
                 lambda: public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts),
             ]
         if tick % 240 == 0:  # toutes les heures
-            steps += [watch_system_updates, tool_addresses.watch]
+            steps += [watch_system_updates, tool_addresses.watch, domain_access.watch_protection]
         if time.time() - WATCH_STATE["derniere_purge"] > 86400:
             WATCH_STATE["derniere_purge"] = time.time()
             steps += [disk_browser.purge_old_trash]

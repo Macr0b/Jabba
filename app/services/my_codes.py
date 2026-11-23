@@ -14,7 +14,7 @@ Sommaire :
 import config
 from host import catalog
 from security import second_factor, server_password
-from services import backups, cloudflare_dns, ovh_dns, tool_addresses, tool_credentials
+from services import backups, cloudflare_dns, heartbeat, ovh_dns, tool_addresses, tool_credentials
 
 
 def _entry(name, purpose, place, present=True, note=""):
@@ -106,6 +106,15 @@ def inventory(installed, identifier):
                 "Permet à Jabba de montrer tes dossiers Nextcloud (écran Fichiers).",
                 "jabba",
                 note="Révocable dans Nextcloud → Paramètres personnels → Sécurité.",
+            )
+        )
+    if heartbeat.status()["pret"]:
+        codes.append(
+            _entry(
+                "Adresse de signal (healthchecks.io)",
+                "Le signal de vie que Jabba envoie toutes les 5 minutes ; c'est le service qui te prévient du silence.",
+                "jabba",
+                note="Garde surtout ton compte healthchecks.io dans ton trousseau.",
             )
         )
     if cloudflare_dns.is_ready():

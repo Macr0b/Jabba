@@ -62,12 +62,12 @@ def serveur(tmp_path, monkeypatch):
     demandes = []
 
     def occ(args, **k):
-        commande, cle = args[0], args[1]
+        commande, cle = args[0], (args[1] if len(args) > 1 else "")
         if commande.startswith("app:"):
             nextcloud.setdefault("applis", []).append((commande, cle))
             return 0, "", ""
         if commande == "config:system:get":
-            return 0, "\n".join(nextcloud[cle]) + "\n", ""
+            return (0, "\n".join(nextcloud[cle]) + "\n", "") if cle in nextcloud else (1, "", "")
         if commande == "config:system:delete":
             nextcloud[cle] = []
         if commande == "config:system:set":
@@ -140,7 +140,7 @@ def test_liste_de_verification(serveur, monkeypatch):
     monkeypatch.setattr(domain_access, "resolve", lambda name: ["203.0.113.7"])
     monkeypatch.setattr(domain_access, "certificate_ok", lambda name: True)
     etat = domain_access.status()
-    assert etat["dns_ok"] and etat["certificat_ok"]
+    assert etat["dns_ok"] and etat["certificat_ok"] and etat["protection_ok"] is True
 
 
 def test_liens_de_partage_sur_l_adresse_publique(serveur):
