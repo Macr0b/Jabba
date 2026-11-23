@@ -5,7 +5,7 @@ Chaque action : un nom, des paramètres vérifiés, une commande construite ici 
 les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
   comment_line  : le commentaire posé au-dessus de la ligne d'un disque ajouté par l'appli
   fstab_line : la ligne /etc/fstab d'un disque (lecture seule, sans bloquer le démarrage s'il manque)
-  interne : _server_name, _disk_space, _smartctl_installed, _disk_health, _is_mounted, _read_fstab, _eject, _partitions, _trim_state, _enable_trim, _measure_fragmentation, _defragment, _uuid, _disk_name, _auto_disk_path, _disk_tree, _disk_present, _wake_disk, _rearm_disk, _declare_disk, _disk_mode, _forget_disk, _install_smartmontools, _battery_shutdown, _cancel_battery_shutdown
+  interne : _server_name, _disk_space, _smartctl_installed, _disk_health, _is_mounted, _read_fstab, _eject, _partitions, _trim_state, _enable_trim, _measure_fragmentation, _defragment, _uuid, _disk_name, _auto_disk_path, _disk_tree, _disk_present, _wake_disk, _rearm_disk, _declare_disk, _disk_mode, _forget_disk, _install_smartmontools, _battery_shutdown, _ups_shutdown, _cancel_battery_shutdown
 """
 
 import re
@@ -256,6 +256,11 @@ def _battery_shutdown(args):
     return ["systemd-run", "--unit=jabba-arret", "--collect", "--on-active=60", "systemctl", "poweroff"], 10
 
 
+def _ups_shutdown(args):
+    # « upsmon -c fsd » : arrêt du serveur, puis l'onduleur coupe sa prise et la rallume au retour du courant.
+    return ["systemd-run", "--unit=jabba-arret", "--collect", "--on-active=60", "upsmon", "-c", "fsd"], 10
+
+
 def _cancel_battery_shutdown(args):
     return ["systemctl", "stop", "jabba-arret.timer"], 10
 
@@ -282,5 +287,6 @@ ACTIONS = {
     "oublier_disque": _forget_disk,
     "installer_smartmontools": _install_smartmontools,
     "arret_batterie": _battery_shutdown,
+    "arret_onduleur": _ups_shutdown,
     "annuler_arret_batterie": _cancel_battery_shutdown,
 }

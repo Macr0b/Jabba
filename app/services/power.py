@@ -1,8 +1,13 @@
 """Alimentation du serveur : secteur ou batterie, et consommation électrique.
 
+Deux sources de batterie : celle d'un portable, ou un onduleur branché en USB (lu par NUT, installé
+par le script d'installation). L'onduleur passe en premier : il protège aussi la box.
+
 Sommaire :
-  read_power : secteur / batterie, pourcentage
+  read_power : secteur ou non, pourcentage, état, et la source ("onduleur", "batterie" ou None)
+  low_battery : vrai quand il faut éteindre (sous le seuil, ou l'onduleur annonce sa batterie faible)
   measure_consumption, read_consumption : consommation mesurée (watts)
+  interne : _ups (la ligne de l'onduleur)
 """
 
 import json
@@ -15,12 +20,33 @@ CONSUMPTION_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "consomma
 
 
 # ---------------------------------------------------------------- surveillance (tourne en fond)
-POWER_STATE = {"secteur": None, "batterie": None, "etat": None, "arret_prevu": False}
+POWER_STATE = {"secteur": None, "batterie": None, "etat": None, "source": None, "arret_prevu": False}
+
+
+def _ups(status, charge, real_power, load, nominal):
+    """La ligne de l'onduleur : (secteur, pourcentage, état), ou None si elle est illisible."""
+    flags = status.split()
+    if "OL" not in flags and "OB" not in flags:
+        return None
+    battery = round(float(charge)) if charge.strip().replace(".", "", 1).isdigit() else None
+    # L'onduleur mesure ce que tire le serveur (et la box), sur secteur comme sur batterie.
+    try:
+        watts = float(real_power) if real_power.strip() else float(load) * float(nominal) / 100
+    except ValueError:
+        watts = None
+    if watts and 0.5 < watts < 200:
+        measure_consumption(round(watts, 1))
+    return "OL" in flags, battery, status.strip()
 
 
 def read_power():
     _, output, _ = commands.run_action("alimentation")
     on_mains, battery, state = None, None, None
+    for line in output.splitlines():
+        if line.startswith("UPS|"):
+            ups = _ups(*(line.split("|") + [""] * 6)[1:6])
+            if ups:
+                return (*ups, "onduleur")
     for line in output.splitlines():
         fields, online, capacity, status, power, intensite, voltage = (line.split("|") + [""] * 7)[:7]
         if fields == "Mains" and online.strip().isdigit():
@@ -36,7 +62,16 @@ def read_power():
                 measure_consumption(round(watts, 1))
     if on_mains is None and state:
         on_mains = state != "Discharging"
-    return on_mains, battery, state
+    return on_mains, battery, state, ("batterie" if battery is not None else None)
+
+
+def low_battery(on_mains, battery, state, source, threshold):
+    """Vrai quand il faut éteindre : sur batterie et sous le seuil, ou l'onduleur annonce « LB »."""
+    if on_mains is not False:
+        return False
+    if source == "onduleur" and "LB" in (state or "").split():
+        return True
+    return battery is not None and battery <= threshold
 
 
 def measure_consumption(watts):

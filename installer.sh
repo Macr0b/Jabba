@@ -8,7 +8,7 @@
 #
 # Il fait tout le socle de la méthode Jabba, puis installe l'appli :
 #   boîte noire, mises à jour automatiques, réseau qui se rétablit tout seul,
-#   capot et écran (portable), batterie, disque de données, Tailscale, Docker,
+#   capot et écran (portable), batterie ou onduleur, disque de données, Tailscale, Docker,
 #   SSH par clé seulement, Dockge, appli Jabba.
 # On peut le relancer sans risque : ce qui est déjà fait est laissé tel quel.
 # Tout ce qu'il fait est noté dans /var/log/jabba-installation.log.
@@ -181,7 +181,7 @@ else
   ok "Redémarrage à la main : Jabba te prévient quand une mise à jour le demande"
 fi
 
-# ------------------------------------------------------------ 5. portable : capot, écran, batterie
+# ------------------------------------------------------------ 5. portable : capot, écran, batterie ; onduleur
 etape "Réglages de la machine"
 if ls /proc/acpi/button/lid/* >/dev/null 2>&1 || [ -d /sys/class/power_supply/BAT0 ] || [ -d /sys/class/power_supply/BAT1 ]; then
   mkdir -p /etc/systemd/logind.conf.d
@@ -265,6 +265,37 @@ if [ -n "$CONSERVATION" ]; then
   echo 1 > "$CONSERVATION" 2>/dev/null || true
   echo "w $CONSERVATION - - - - 1" > /etc/tmpfiles.d/batterie.conf
   ok "Batterie protégée (charge limitée pour durer)"
+fi
+
+# Onduleur branché en USB (APC, Eaton, CyberPower…) : NUT le lit, Jabba prévient d'une coupure et éteint
+# proprement ; l'onduleur coupe ensuite sa prise et la rallume au retour du courant (le serveur se rallume
+# avec « After Power Loss → Power On » dans le BIOS). Sans onduleur, NUT attend sans rien faire.
+lancer apt-get install -y nut-server nut-client || note "NUT (onduleur) non installé : relance le script plus tard."
+if [ -d /etc/nut ]; then
+  echo "MODE=standalone" > /etc/nut/nut.conf
+  printf '%s\n' '# Jabba : l'"'"'onduleur branché en USB, quel qu'"'"'il soit.' 'maxretry = 3' '' '[onduleur]' \
+    '  driver = usbhid-ups' '  port = auto' '  desc = "Onduleur du serveur"' > /etc/nut/ups.conf
+  printf 'LISTEN 127.0.0.1 3493\n' > /etc/nut/upsd.conf
+  if ! grep -q '^\[jabba\]' /etc/nut/upsd.users 2>/dev/null; then
+    NUT_MDP=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 24)
+    printf '[jabba]\n  password = %s\n  upsmon primary\n' "$NUT_MDP" > /etc/nut/upsd.users
+    printf '%s\n' "MONITOR onduleur@localhost 1 jabba $NUT_MDP primary" 'MINSUPPLIES 1' \
+      'SHUTDOWNCMD "/sbin/shutdown -h +0"' 'POWERDOWNFLAG /etc/killpower' 'FINALDELAY 5' > /etc/nut/upsmon.conf
+    unset NUT_MDP
+  fi
+  chown root:nut /etc/nut/*.conf /etc/nut/upsd.users && chmod 640 /etc/nut/*.conf /etc/nut/upsd.users
+  # Un onduleur branché plus tard est pris en compte sans rien faire : le pilote réessaie chaque minute.
+  mkdir -p /etc/systemd/system/nut-driver@.service.d
+  printf '[Unit]\nStartLimitIntervalSec=0\n\n[Service]\nRestart=always\nRestartSec=60\n' \
+    > /etc/systemd/system/nut-driver@.service.d/jabba.conf
+  lancer systemctl daemon-reload
+  lancer systemctl enable nut.target nut-driver.target nut-server nut-monitor
+  lancer systemctl restart nut-driver-enumerator nut-server nut-monitor
+  if upsc onduleur@localhost ups.status >/dev/null 2>&1; then
+    ok "Onduleur reconnu : Jabba préviendra d'une coupure et éteindra proprement le serveur"
+  else
+    ok "Onduleur : pas encore branché ; branché en USB, il sera reconnu tout seul"
+  fi
 fi
 
 # ------------------------------------------------------------ 6. disque de données

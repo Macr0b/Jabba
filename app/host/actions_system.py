@@ -16,7 +16,11 @@ APP_FOLDER = re.compile(r"/[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}")
 POWER_SCRIPT = (
     'for f in /sys/class/power_supply/*; do [ -e "$f/type" ] || continue; '
     'echo "$(cat $f/type)|$(cat $f/online 2>/dev/null)|$(cat $f/capacity 2>/dev/null)|$(cat $f/status 2>/dev/null)'
-    '|$(cat $f/power_now 2>/dev/null)|$(cat $f/current_now 2>/dev/null)|$(cat $f/voltage_now 2>/dev/null)"; done'
+    '|$(cat $f/power_now 2>/dev/null)|$(cat $f/current_now 2>/dev/null)|$(cat $f/voltage_now 2>/dev/null)"; done; '
+    # L'onduleur, s'il y en a un (NUT : services/power.py) : état, charge, puissance, charge en %, puissance nominale.
+    "if command -v upsc >/dev/null 2>&1 && s=$(upsc onduleur@localhost ups.status 2>/dev/null); then "
+    'u() { upsc onduleur@localhost "$1" 2>/dev/null; }; '
+    'echo "UPS|$s|$(u battery.charge)|$(u ups.realpower)|$(u ups.load)|$(u ups.realpower.nominal)"; fi'
 )
 REBOOT = "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"
 

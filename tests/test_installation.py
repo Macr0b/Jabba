@@ -134,3 +134,13 @@ def test_cle_tailscale_a_l_installation():
     assert "curl -fsS -o /dev/null -H @-" in script and 'Bearer $CLE_API" https' not in script  # jamais en argument
     assert '"keyExpiryDisabled":true' in script
     assert "(umask 077 && printf" in script and "unset CLE_API" in script
+
+
+def test_onduleur_pret_avant_d_etre_branche():
+    bloc = SCRIPT.split("# Onduleur branché en USB")[1].split("# ----")[0]
+    assert "nut-server nut-client" in bloc and "driver = usbhid-ups" in bloc and "port = auto" in bloc
+    assert "LISTEN 127.0.0.1 3493" in bloc  # jamais joignable depuis le réseau
+    assert "MONITOR onduleur@localhost 1 jabba" in bloc and "POWERDOWNFLAG /etc/killpower" in bloc
+    assert "Restart=always" in bloc  # branché plus tard : reconnu sans rien faire
+    assert "grep -q '^\\[jabba\\]' /etc/nut/upsd.users" in bloc  # relancé : le mot de passe ne change pas
+    assert "chmod 640" in bloc and "unset NUT_MDP" in bloc

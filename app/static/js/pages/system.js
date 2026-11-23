@@ -2,7 +2,7 @@
 //
 // Sommaire :
 //   partagé : pages.systeme (écran), pages.plus (écran)
-//   interne : restartPolicyCard, appUpdateCard (cartes Mes codes, Double vérification et Serveur ouvert au public : components/)
+//   interne : powerText, consumptionText, restartPolicyCard, appUpdateCard (cartes Mes codes, Double vérification et Serveur ouvert au public : components/)
 import { alertsCard } from "../components/alerts.js";
 import { confirmAction, toast } from "../components/dialogs.js";
 import { appearanceCard } from "../components/appearance_card.js";
@@ -34,21 +34,8 @@ pages.systeme = async () => {
         <dt>Système</dt><dd>${escapeHtml(item.os)}</dd>
         <dt>Noyau</dt><dd>${escapeHtml(item.noyau)}</dd>
         <dt>Appli Jabba</dt><dd>version ${escapeHtml(item.version_appli)}</dd>
-        <dt>Courant</dt><dd>${
-          item.courant && item.courant.secteur != null
-            ? (item.courant.secteur ? t("Sur secteur") : t`<strong style="color:var(--rouge)">Sur batterie</strong>`) +
-              (item.courant.batterie != null ? ` · batterie ${item.courant.batterie} %` : "")
-            : t("Pas encore mesuré")
-        }</dd>
-        ${
-          item.courant && item.courant.batterie != null
-            ? t`<dt>Consommation</dt><dd>${
-                item.conso && item.conso.derniere
-                  ? `${String(item.conso.derniere.w).replace(".", ",")} W <span class="note">(${item.courant.secteur ? t("dernière mesure sur batterie, ") + escapeHtml(timeAgo(item.conso.derniere.t)) : t("en ce moment")})</span>${item.conso.repos ? t`<br><span class="note">Au plus bas : ${String(item.conso.repos.w).replace(".", ",")} W, au repos</span>` : ""}`
-                  : t`<span class="note">Se mesure sur batterie : débranche le chargeur 2 minutes pour la voir.</span>`
-              }</dd>`
-            : ""
-        }
+        <dt>Courant</dt><dd>${powerText(item.courant)}</dd>
+        ${item.courant && item.courant.batterie != null ? t`<dt>Consommation</dt><dd>${consumptionText(item.courant, item.conso)}</dd>` : ""}
       </dl></section>
       <section class="carte pad" id="maj"><h2>Appli Jabba</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Admins de Jabba</a></div>
@@ -214,6 +201,39 @@ pages.plus = async () => {
 };
 
 // Redémarrage après une mise à jour du système : seul à 4 h, ou à la main (machine capricieuse au démarrage).
+// Ligne « Courant » : secteur ou batterie, et la batterie du portable ou de l'onduleur.
+function powerText(power) {
+  if (!power || power.secteur == null) return t("Pas encore mesuré");
+  const onUps = power.source === "onduleur";
+  const where = power.secteur
+    ? t("Sur secteur")
+    : onUps
+      ? t`<strong style="color:var(--rouge)">Sur l'onduleur</strong>`
+      : t`<strong style="color:var(--rouge)">Sur batterie</strong>`;
+  if (power.batterie == null) return where;
+  return where + (onUps ? t` · onduleur ${power.batterie} %` : t` · batterie ${power.batterie} %`);
+}
+
+// Ligne « Consommation » : l'onduleur la mesure tout le temps ; la batterie du portable, seulement sur batterie.
+function consumptionText(power, consumption) {
+  const onUps = power.source === "onduleur";
+  if (!consumption || !consumption.derniere)
+    return onUps
+      ? t`<span class="note">Pas encore mesurée.</span>`
+      : t`<span class="note">Se mesure sur batterie : débranche le chargeur 2 minutes pour la voir.</span>`;
+  const when =
+    onUps || !power.secteur
+      ? t("en ce moment")
+      : t("dernière mesure sur batterie, ") + escapeHtml(timeAgo(consumption.derniere.t));
+  const lowest = consumption.repos
+    ? t`<br><span class="note">Au plus bas : ${String(consumption.repos.w).replace(".", ",")} W, au repos</span>`
+    : "";
+  const box = onUps
+    ? t`<br><span class="note">Mesurée par l'onduleur : tout ce qui y est branché (la box aussi).</span>`
+    : "";
+  return `${String(consumption.derniere.w).replace(".", ",")} W <span class="note">(${when})</span>${lowest}${box}`;
+}
+
 async function restartPolicyCard() {
   const element = $("#redem");
   if (!element) return;

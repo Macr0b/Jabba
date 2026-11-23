@@ -3,7 +3,7 @@
 Chaque tour lance certaines vérifications ; les plus lourdes moins souvent.
 
 Sommaire :
-  watch_power : secteur coupé, batterie faible
+  watch_power : secteur coupé, batterie (du portable ou de l'onduleur) faible
   watch_space : disques presque pleins
   heat_watch.watch : processeur trop chaud pendant 10 minutes, puis refroidi (chaque minute)
   disk_health.watch_disk_health : santé SMART des disques (une fois par jour)
@@ -64,18 +64,20 @@ WATCH_STATE = {
 
 
 def watch_power():
-    on_mains, battery, state = power.read_power()
+    on_mains, battery, state, source = power.read_power()
     previous_value = power.POWER_STATE["secteur"]
-    power.POWER_STATE.update(batterie=battery, etat=state)
+    power.POWER_STATE.update(batterie=battery, etat=state, source=source)
     if on_mains is None:
         return
     power.POWER_STATE["secteur"] = on_mains
     name = measurements.server_name()
+    on_ups = source == "onduleur"
     if previous_value is True and not on_mains:
+        where = "sur l'onduleur" if on_ups else "sur batterie"
         notifications.send(
             "courant",
             "Coupure de courant",
-            f"{name} tourne sur batterie ({battery} %). Il s'éteindra proprement sous {config.BATTERY_THRESHOLD} %.",
+            f"{name} tourne {where} ({battery} %). Il s'éteindra proprement avant qu'elle soit vide.",
             "/#/systeme",
             family="courant",
         )
@@ -91,20 +93,25 @@ def watch_power():
             family="courant",
         )
     if (
-        not on_mains
-        and battery is not None
-        and battery <= config.BATTERY_THRESHOLD
+        power.low_battery(on_mains, battery, state, source, config.BATTERY_THRESHOLD)
         and not power.POWER_STATE["arret_prevu"]
     ):
         power.POWER_STATE["arret_prevu"] = True
+        after = (
+            "Il se rallumera tout seul quand le courant reviendra."
+            if on_ups
+            else "Rallume-le avec son bouton quand le courant est revenu."
+        )
         notifications.send(
             "courant",
             "Batterie faible : arrêt dans 1 minute",
-            f"{name} s'éteint proprement pour protéger les disques. Rallume-le avec son bouton quand le courant est revenu.",
+            f"{name} s'éteint proprement pour protéger les disques. {after}",
             "/#/systeme",
             family="courant",
         )
-        commands.run_action("arret_batterie")
+        # Avec un onduleur, l'arrêt passe par NUT : l'onduleur coupe ensuite sa prise, puis la rallume au
+        # retour du courant, ce qui rallume le serveur (BIOS : « After Power Loss → Power On »).
+        commands.run_action("arret_onduleur" if on_ups else "arret_batterie")
 
 
 def watch_space():
