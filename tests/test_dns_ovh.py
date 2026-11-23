@@ -132,32 +132,39 @@ def test_cname_jamais_efface(ovh):
     assert len(ovh.entrees) == 1 and not [a for a in ovh.appels if a[0] in ("PUT", "POST", "DELETE")]
 
 
-def test_surveillance_chaque_heure(ovh, monkeypatch):
+@pytest.fixture
+def surveillance(tmp_path, monkeypatch):
+    from services import cloudflare_dns, dns_update
+
+    monkeypatch.setattr(cloudflare_dns, "KEYS_FILE", str(tmp_path / "cloudflare.json"))  # pas de jeton Cloudflare
+    dns_update._STATE["dernier"] = 0.0
+    return dns_update
+
+
+def test_surveillance_chaque_heure(ovh, surveillance, monkeypatch):
     from services import domain_access
 
     ovh_dns.save_keys("exemple.fr", *CLES)
-    ovh_dns._STATE["dernier"] = 0.0
     monkeypatch.setattr(domain_access, "read", lambda: {"domaine": "exemple.fr", "prefixe": "cloud", "actif": True})
     adresse = {"ip": "203.0.113.7"}
     monkeypatch.setattr(domain_access, "public_ip", lambda: adresse["ip"])
     alertes = []
-    monkeypatch.setattr(ovh_dns.notifications, "send", lambda *a, **k: alertes.append(a[1]))
-    assert ovh_dns.watch(now=10_000) == "cree"
-    assert ovh_dns.watch(now=10_100) is None  # moins d'une heure après : rien
+    monkeypatch.setattr(surveillance.notifications, "send", lambda *a, **k: alertes.append(a[1]))
+    assert surveillance.watch(now=10_000) == "cree"
+    assert surveillance.watch(now=10_100) is None  # moins d'une heure après : rien
     adresse["ip"] = "198.51.100.4"
-    assert ovh_dns.watch(now=20_000) == "corrige"
+    assert surveillance.watch(now=20_000) == "corrige"
     assert alertes == ["Domaine : adresse de la box changée"]
 
 
-def test_sans_cle_ni_domaine_actif_rien(ovh, monkeypatch):
+def test_sans_cle_ni_domaine_actif_rien(ovh, surveillance, monkeypatch):
     from services import domain_access
 
-    ovh_dns._STATE["dernier"] = 0.0
-    assert ovh_dns.watch(now=10_000) is None  # pas de clé
+    assert surveillance.watch(now=10_000) is None  # pas de clé
     ovh_dns.save_keys("exemple.fr", *CLES)
     monkeypatch.setattr(domain_access, "read", lambda: {"domaine": "exemple.fr", "prefixe": "cloud", "actif": False})
-    ovh_dns._STATE["dernier"] = 0.0
-    assert ovh_dns.watch(now=10_000) is None
+    surveillance._STATE["dernier"] = 0.0
+    assert surveillance.watch(now=10_000) is None
     assert not [a for a in ovh.appels if a[0] != "GET"]
 
 

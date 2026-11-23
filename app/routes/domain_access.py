@@ -4,8 +4,11 @@ Sommaire :
   GET  /api/domaine          domain_status (la liste de vérification)
   POST /api/domaine          enable_domain (super admin, mot de passe confirmé : ouvre Nextcloud sur Internet)
   POST /api/domaine/retirer  disable_domain (super admin)
+  POST /api/domaine/cloudflare          cloudflare_token (super admin) : garde le jeton Cloudflare (la clé
+                                        OVH est oubliée), puis règle l'entrée DNS
+  POST /api/domaine/cloudflare/oublier  cloudflare_forget (super admin)
   POST /api/domaine/ovh      ovh_keys (super admin) : enregistre la clé OVH puis règle l'entrée DNS
-  POST /api/domaine/ovh/regler   ovh_sync (super admin) : règle l'entrée DNS maintenant
+  POST /api/domaine/ovh/regler   ovh_sync (super admin) : règle l'entrée DNS maintenant (chez Cloudflare ou OVH)
   POST /api/domaine/ovh/oublier  ovh_forget (super admin)
   interne : _sync_now
 """
@@ -16,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from host import actions
 from security import guard
-from services import activity_log, domain_access, ovh_dns
+from services import activity_log, cloudflare_dns, dns_update, domain_access, ovh_dns
 
 router = APIRouter()
 
@@ -52,11 +55,38 @@ async def disable_domain(request: Request):
 
 
 def _sync_now():
-    """Règle l'entrée DNS chez OVH pour le domaine en place ; renvoie la liste de vérification à jour."""
-    settings = domain_access.read()
-    if settings.get("actif") and settings.get("domaine"):
-        ovh_dns.sync(settings["domaine"], settings.get("prefixe") or "cloud", domain_access.public_ip())
+    """Règle l'entrée DNS (Cloudflare ou OVH) pour le domaine en place ; renvoie la liste de vérification."""
+    dns_update.sync_now(domain_access.read())
     return domain_access.status()
+
+
+@router.post("/api/domaine/cloudflare")
+async def cloudflare_token(request: Request):
+    guard.require_super_admin(request)
+    body = await request.json()
+    zone = domain_access.read().get("domaine")
+    try:
+        await asyncio.to_thread(cloudflare_dns.save_token, zone, body.get("jeton"))
+    except cloudflare_dns.CloudflareError as error:
+        raise HTTPException(400, str(error))
+    activity_log.record("securite", "Jeton Cloudflare enregistré pour le DNS du domaine", request.state.nom)
+    if ovh_dns.is_ready():  # le DNS a déménagé : l'ancienne mise à jour s'arrête
+        await asyncio.to_thread(ovh_dns.forget)
+        activity_log.record(
+            "securite", "Clé OVH oubliée : le DNS est chez Cloudflare (révoque-la chez OVH)", request.state.nom
+        )
+    try:
+        return await asyncio.to_thread(_sync_now)
+    except dns_update.ERRORS as error:
+        raise HTTPException(400, str(error))
+
+
+@router.post("/api/domaine/cloudflare/oublier")
+async def cloudflare_forget(request: Request):
+    guard.require_super_admin(request)
+    await asyncio.to_thread(cloudflare_dns.forget)
+    activity_log.record("securite", "Jeton Cloudflare oublié", request.state.nom)
+    return await asyncio.to_thread(domain_access.status)
 
 
 @router.post("/api/domaine/ovh")
@@ -83,7 +113,7 @@ async def ovh_sync(request: Request):
     guard.require_super_admin(request)
     try:
         return await asyncio.to_thread(_sync_now)
-    except ovh_dns.OvhError as error:
+    except dns_update.ERRORS as error:
         raise HTTPException(400, str(error))
 
 

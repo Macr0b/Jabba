@@ -3,7 +3,7 @@
 L'admin crée une fois chez OVH une clé limitée à la zone DNS de son domaine (lien préparé par
 Jabba, droits lecture / création / modification sur /domain/zone/<domaine>/*, rien d'autre), et colle
 les trois codes dans l'Établi. Jabba crée alors l'entrée A « <préfixe> » vers l'adresse de la box,
-et la corrige si cette adresse change (chaque heure). Les codes sont gardés dans un fichier
+et la corrige si cette adresse change (chaque heure, services/dns_update.py). Les codes sont gardés dans un fichier
 lisible par l'appli seule et ne repartent jamais vers l'écran.
 
 Sommaire :
@@ -12,7 +12,6 @@ Sommaire :
   save_keys(zone, ak, as_, ck)     : vérifie la clé sur la zone, puis l'enregistre
   forget()                         : oublie la clé
   sync(zone, prefix, ip)           : crée ou corrige l'entrée A ; "cree" | "corrige" | "deja"
-  watch()                          : chaque heure, si l'accès par le domaine est actif
   interne : _call, _signature, _records
   OvhError : le refus d'OVH, avec sa phrase
 """
@@ -22,12 +21,11 @@ import json
 import os
 import re
 import threading
-import time
 import urllib.parse
 
 import httpx
 
-from services import activity_log, json_files, notifications
+from services import activity_log, json_files
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 KEYS_FILE = os.path.join(DATA_DIR, "ovh.json")
@@ -35,8 +33,6 @@ API = "https://eu.api.ovh.com/1.0"
 TOKEN_PAGE = "https://eu.api.ovh.com/createToken/"
 KEY = re.compile(r"[A-Za-z0-9]{8,64}")
 ZONE = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
-WATCH_SECONDS = 3600
-_STATE = {"dernier": 0.0}
 _LOCK = threading.Lock()
 
 
@@ -132,31 +128,4 @@ def sync(zone, prefix, ip):
             result = "cree"
         _call("POST", f"/domain/zone/{zone}/refresh")
     activity_log.record("systeme", f"DNS chez OVH : {prefix}.{zone} → {ip} ({result})")
-    return result
-
-
-def watch(now=None):
-    """Chaque heure : si l'adresse de la box a changé, l'entrée DNS suit (une alerte le dit)."""
-    from services import domain_access  # évite l'import circulaire (domain_access se sert de ce module)
-
-    now = now or time.time()
-    if now - _STATE["dernier"] < WATCH_SECONDS or not is_ready():
-        return None
-    _STATE["dernier"] = now
-    settings = domain_access.read()
-    if not settings.get("actif") or not settings.get("domaine"):
-        return None
-    try:
-        result = sync(settings["domaine"], settings.get("prefixe") or "cloud", domain_access.public_ip())
-    except OvhError as error:
-        notifications.send("securite", "Domaine : DNS pas à jour", str(error), "/#/outils", family="systeme")
-        return None
-    if result == "corrige":
-        notifications.send(
-            "mises_a_jour",
-            "Domaine : adresse de la box changée",
-            "Jabba a corrigé l'entrée DNS chez OVH ; le domaine suit dans l'heure.",
-            "/#/outils",
-            family="systeme",
-        )
     return result

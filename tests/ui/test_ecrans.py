@@ -166,14 +166,23 @@ def test_acces_par_le_domaine_dans_l_etabli(page):
         "href", "https://cloud.exemple.fr"
     )
     expect(carte).to_contain_text("port externe 443, TCP, vers 192.168.1.20, port 8443")
-    # DNS réglé par Jabba : un lien vers OVH, droits limités à la zone du domaine, et les trois codes à coller.
+    # DNS réglé par Jabba : Cloudflare d'abord (un jeton limité au domaine), OVH replié en dessous.
+    expect(carte.get_by_role("link", name="Créer le jeton chez Cloudflare")).to_have_attribute(
+        "href", "https://dash.cloudflare.com/profile/api-tokens"
+    )
+    expect(carte).to_contain_text("Zone spécifique → exemple.fr")
+    expect(carte.locator("#cf-jeton")).to_have_attribute("type", "password")
+    carte.locator("#cf-jeton").fill("court")
+    carte.locator("#cf-enregistrer").click()
+    expect(page.get_by_text("recopie-le en entier")).to_be_visible()  # refusé avant d'appeler Cloudflare
+    carte.get_by_text("Domaine chez OVH ?").click()
     lien = carte.get_by_role("link", name="Créer la clé chez OVH")
     expect(lien).to_have_attribute(
         "href", re.compile(r"^https://eu\.api\.ovh\.com/createToken/\?GET=%2Fdomain%2Fzone%2Fexemple\.fr%2F%2A")
     )
     expect(carte.locator("#ovh-as")).to_have_attribute("type", "password")
     carte.locator("#ovh-ak").fill("court")
-    carte.get_by_role("button", name="Enregistrer et régler le DNS").click()
+    carte.locator("#ovh-enregistrer").click()
     expect(page.get_by_text("recopie-les en entier")).to_be_visible()  # refusé avant d'appeler OVH
     carte.locator("#domaine-retirer").click()
     page.locator("dialog[open]").get_by_role("button", name="Fermer l'accès").click()

@@ -12,7 +12,7 @@ Sommaire :
                              la double vérification (codes à 6 chiffres, à activer par chacun)
   disable()                : retire Caddy et l'adresse de Nextcloud
   status(settings)         : la liste de vérification (adresse de la box, DNS, certificat, DNS réglé par
-                             Jabba chez OVH : services/ovh_dns.py)
+                             Jabba chez Cloudflare ou OVH : services/dns_update.py)
   public_link(url)         : un lien de partage Nextcloud, réécrit sur l'adresse publique
   public_ip       : l'adresse de la box sur Internet (celle que le domaine doit indiquer)
   resolve         : les adresses IPv4 vers lesquelles pointe un nom (ce qu'on a mis dans la zone DNS)
@@ -29,7 +29,7 @@ import httpx
 
 import config
 from host import action_common, actions_tools, commands
-from services import guest_network, json_files, nextcloud_settings, ovh_dns, tools
+from services import cloudflare_dns, dns_update, guest_network, json_files, nextcloud_settings, ovh_dns, tools
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "domaine.json")
@@ -166,6 +166,8 @@ def status(settings=None):
         "dns": pointing,
         "dns_ok": bool(box_address) and box_address in pointing,
         "certificat_ok": certificate,
+        "dns_auto": dns_update.provider(),
+        "cloudflare_lien": cloudflare_dns.TOKEN_PAGE,
         "ovh_pret": ovh_dns.is_ready(),
         "ovh_lien": ovh_dns.token_link(settings["domaine"]) if settings.get("domaine") else "",
     }

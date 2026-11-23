@@ -14,7 +14,7 @@ Sommaire :
 import config
 from host import catalog
 from security import second_factor, server_password
-from services import backups, ovh_dns, tool_addresses, tool_credentials
+from services import backups, cloudflare_dns, ovh_dns, tool_addresses, tool_credentials
 
 
 def _entry(name, purpose, place, present=True, note=""):
@@ -108,6 +108,15 @@ def inventory(installed, identifier):
                 note="Révocable dans Nextcloud → Paramètres personnels → Sécurité.",
             )
         )
+    if cloudflare_dns.is_ready():
+        codes.append(
+            _entry(
+                "Jeton Cloudflare",
+                "Tenir à jour l'entrée DNS de ton domaine (droits limités à « Zone → DNS → Modifier » sur ce domaine).",
+                "jabba",
+                note="Révocable dans Jabba (Accès depuis Internet → Oublier le jeton) et chez Cloudflare.",
+            )
+        )
     if ovh_dns.is_ready():
         codes.append(
             _entry(
@@ -125,6 +134,15 @@ def inventory(installed, identifier):
                 "jabba",
                 note="Gardée jusqu'à son expiration (90 jours au plus), lisible par l'appli seule. Révocable : "
                 "console Tailscale → Settings → Keys.",
+            )
+        )
+    if cloudflare_dns.is_ready():
+        codes.append(
+            _entry(
+                "Ancienne clé OVH (application key, secret, consumer key)",
+                "Le DNS est maintenant chez Cloudflare : Jabba l'a oubliée.",
+                "supprimer",
+                note="Révoque-la aussi chez OVH : api.ovh.com/console → /me/api/application → supprime l'application.",
             )
         )
     codes += [

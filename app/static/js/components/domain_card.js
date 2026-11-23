@@ -3,7 +3,7 @@
 //
 // Sommaire :
 //   partagé : domainCardHtml, bindDomain
-//   interne : formHtml, checklistHtml, stepHtml, ovhHtml
+//   interne : formHtml, checklistHtml, stepHtml, dnsHtml
 import { api } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
 import { t } from "../core/i18n.js";
@@ -53,7 +53,7 @@ function checklistHtml(settings, isSuper) {
       ${stepHtml(
         settings.dns_ok,
         t("Le domaine pointe vers ta box"),
-        t`Chez ton fournisseur de domaine (OVH : Zone DNS → Ajouter une entrée → A) : sous-domaine <strong>${prefix}</strong>, cible <strong>${box}</strong>. Aujourd'hui, ${address} pointe vers : ${pointing}. La prise en compte prend de quelques minutes à quelques heures.`,
+        t`Chez ton fournisseur de domaine (Cloudflare : DNS → Enregistrements → Ajouter, type A, nuage gris ; OVH : Zone DNS → Ajouter une entrée → A) : sous-domaine <strong>${prefix}</strong>, cible <strong>${box}</strong>. Aujourd'hui, ${address} pointe vers : ${pointing}. La prise en compte prend de quelques minutes à quelques heures.`,
       )}
       ${stepHtml(
         settings.certificat_ok,
@@ -70,29 +70,43 @@ function checklistHtml(settings, isSuper) {
       )}
     </ol>
     <p class="note">${t("Double vérification : Jabba l'a installée dans Nextcloud. Chacun l'active pour son compte (Paramètres personnels → Sécurité → TOTP), avec une appli de codes comme Authenticator, et garde ses codes de secours.")}</p>
-    ${isSuper ? ovhHtml(settings) : ""}
+    ${isSuper ? dnsHtml(settings) : ""}
     <div class="actions">
       <button class="btn" type="button" id="domaine-verifier">Revérifier</button>
       ${isSuper ? t`<button class="btn" type="button" id="domaine-retirer">Fermer l'accès</button>` : ""}
     </div>`;
 }
 
-/** L'entrée DNS réglée par Jabba chez OVH : une clé créée une fois, puis plus rien à faire. */
-function ovhHtml(settings) {
-  if (settings.ovh_pret)
-    return t`<div class="bloc-ovh"><h3>DNS réglé par Jabba (OVH)</h3>
-      <p class="note">Jabba crée l'entrée ${escapeHtml(settings.prefixe || "cloud")} chez OVH et la corrige toute seule si l'adresse de ta box change (vérifié chaque heure).</p>
-      <div class="actions"><button class="btn" type="button" id="ovh-regler">Régler maintenant</button><button class="lien" type="button" id="ovh-oublier">Oublier la clé</button></div></div>`;
-  return t`<div class="bloc-ovh"><h3>Laisser Jabba régler le DNS (domaine chez OVH)</h3>
+/** L'entrée DNS réglée par Jabba chez Cloudflare ou OVH : un jeton (ou une clé) donné une fois, puis plus rien à faire. */
+function dnsHtml(settings) {
+  const prefix = escapeHtml(settings.prefixe || "cloud");
+  const domain = escapeHtml(settings.domaine);
+  if (settings.dns_auto) {
+    const name = settings.dns_auto === "cloudflare" ? t("Cloudflare") : "OVH";
+    return t`<div class="bloc-ovh"><h3>DNS réglé par Jabba (${name})</h3>
+      <p class="note">Jabba ne touche qu'à l'entrée ${prefix} : il la crée chez ${name} si elle manque et corrige son adresse si celle de ta box change (vérifié chaque heure). Le reste du domaine n'est jamais modifié.</p>
+      <div class="actions"><button class="btn" type="button" id="dns-regler">Régler maintenant</button><button class="lien" type="button" id="${settings.dns_auto}-oublier">${settings.dns_auto === "cloudflare" ? t("Oublier le jeton") : t("Oublier la clé")}</button></div></div>`;
+  }
+  return t`<div class="bloc-ovh"><h3>Laisser Jabba régler le DNS (domaine chez Cloudflare)</h3>
     <ol class="note">
-      <li>Ouvre la page d'OVH ci-dessous et connecte-toi : les droits sont déjà remplis, limités à la zone DNS de ${escapeHtml(settings.domaine)}. Dans « Validity », choisis <strong>Unlimited</strong>, puis <strong>Create keys</strong>.</li>
+      <li>Ouvre la page de Cloudflare ci-dessous → <strong>Créer un jeton</strong> → modèle <strong>Modifier la zone DNS</strong>.</li>
+      <li>Ressources de zone : <strong>Inclure → Zone spécifique → ${domain}</strong>. Ne change rien d'autre, et jamais la « clé API globale ».</li>
+      <li><strong>Continuer vers le résumé → Créer le jeton</strong>, puis colle-le ici.</li>
+    </ol>
+    <p class="note">Garde l'entrée ${prefix} en « DNS uniquement » (nuage gris) : le certificat HTTPS se fait sur le serveur.</p>
+    <p><a class="btn" href="${escapeHtml(settings.cloudflare_lien)}" target="_blank" rel="noopener">Créer le jeton chez Cloudflare</a></p>
+    <label class="champ"><span>Jeton Cloudflare</span><input type="password" id="cf-jeton" autocomplete="off"></label>
+    <div class="actions"><button class="btn btn-p" type="button" id="cf-enregistrer">Enregistrer et régler le DNS</button></div>
+    <details><summary>Domaine chez OVH ?</summary>
+    <ol class="note">
+      <li>Ouvre la page d'OVH ci-dessous et connecte-toi : les droits sont déjà remplis, limités à la zone DNS de ${domain}. Dans « Validity », choisis <strong>Unlimited</strong>, puis <strong>Create keys</strong>.</li>
       <li>Recopie ici les trois codes affichés par OVH.</li>
     </ol>
     <p><a class="btn" href="${escapeHtml(settings.ovh_lien)}" target="_blank" rel="noopener">Créer la clé chez OVH</a></p>
     <label class="champ"><span>Application key</span><input type="text" id="ovh-ak" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <label class="champ"><span>Application secret</span><input type="password" id="ovh-as" autocomplete="off"></label>
     <label class="champ"><span>Consumer key</span><input type="password" id="ovh-ck" autocomplete="off"></label>
-    <div class="actions"><button class="btn btn-p" type="button" id="ovh-enregistrer">Enregistrer et régler le DNS</button></div></div>`;
+    <div class="actions"><button class="btn" type="button" id="ovh-enregistrer">Enregistrer et régler le DNS</button></div></details></div>`;
 }
 
 export function bindDomain() {
@@ -119,7 +133,7 @@ export function bindDomain() {
       };
     const check = $("#domaine-verifier");
     if (check) check.onclick = () => load();
-    const ovhCall = async (button, path, json, done) => {
+    const dnsCall = async (button, path, json, done) => {
       button.disabled = true;
       try {
         render(await api(path, { method: "POST", json }));
@@ -132,7 +146,7 @@ export function bindDomain() {
     const saveKeys = $("#ovh-enregistrer");
     if (saveKeys)
       saveKeys.onclick = () =>
-        ovhCall(
+        dnsCall(
           saveKeys,
           "/api/domaine/ovh",
           {
@@ -142,11 +156,23 @@ export function bindDomain() {
           },
           t("Clé enregistrée : l'entrée DNS est réglée chez OVH."),
         );
-    const syncNow = $("#ovh-regler");
-    if (syncNow)
-      syncNow.onclick = () => ovhCall(syncNow, "/api/domaine/ovh/regler", {}, t("Entrée DNS vérifiée chez OVH."));
+    const saveToken = $("#cf-enregistrer");
+    if (saveToken)
+      saveToken.onclick = () =>
+        dnsCall(
+          saveToken,
+          "/api/domaine/cloudflare",
+          { jeton: $("#cf-jeton").value },
+          t("Jeton enregistré : l'entrée DNS est réglée chez Cloudflare."),
+        );
+    const syncNow = $("#dns-regler");
+    if (syncNow) syncNow.onclick = () => dnsCall(syncNow, "/api/domaine/ovh/regler", {}, t("Entrée DNS vérifiée."));
+    const forgetToken = $("#cloudflare-oublier");
+    if (forgetToken)
+      forgetToken.onclick = () =>
+        dnsCall(forgetToken, "/api/domaine/cloudflare/oublier", {}, t("Jeton Cloudflare oublié."));
     const forgetKey = $("#ovh-oublier");
-    if (forgetKey) forgetKey.onclick = () => ovhCall(forgetKey, "/api/domaine/ovh/oublier", {}, t("Clé OVH oubliée."));
+    if (forgetKey) forgetKey.onclick = () => dnsCall(forgetKey, "/api/domaine/ovh/oublier", {}, t("Clé OVH oubliée."));
     const remove = $("#domaine-retirer");
     if (remove)
       remove.onclick = async () => {

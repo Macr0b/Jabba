@@ -12,7 +12,7 @@ Sommaire :
   antivirus_disks.watch : analyse des disques (en cours, de la semaine, nouveaux fichiers chaque heure)
   antivirus.install_by_default : antivirus installé de base, une fois, si la mémoire suffit
   workshop.watch_reminders : rappels d'entretien de la mémoire d'atelier arrivés à échéance
-  ovh_dns.watch : l'entrée DNS du domaine suit l'adresse de la box (chaque heure, si une clé OVH est là)
+  dns_update.watch : l'entrée DNS du domaine suit l'adresse de la box (chaque heure, chez Cloudflare ou OVH)
   mass_deletion.watch_mass_deletion : beaucoup de fichiers supprimés d'un coup
   tool_updates.watch_tool_updates : nouvelle version d'un outil (une fois par jour)
   public_mode.watch_inactive_accounts : comptes inactifs, en mode public (une fois par mois)
@@ -36,6 +36,7 @@ from services import (
     disk_browser,
     disk_health,
     disk_maintenance,
+    dns_update,
     files_source,
     guest_network,
     heat_watch,
@@ -43,7 +44,6 @@ from services import (
     measurements,
     nextcloud_accounts,
     notifications,
-    ovh_dns,
     power,
     public_mode,
     restart_policy,
@@ -217,7 +217,7 @@ def watch_forever():
                 disk_health.watch_disk_health,
                 antivirus.install_by_default,
                 workshop.watch_reminders,
-                ovh_dns.watch,
+                dns_update.watch,
                 disk_maintenance.watch_fragmentation,
                 mass_deletion.watch_mass_deletion,
                 tool_updates.watch_tool_updates,
