@@ -29,8 +29,8 @@ import config
 from services import nextcloud_accounts
 
 MODES = {
-    "lecture": {"nom": "Voir seulement", "permissions": 1, "readonly": "true"},
-    "ecriture": {"nom": "Voir et modifier", "permissions": 15, "readonly": "false"},
+    "lecture": {"name": "Voir seulement", "permissions": 1, "readonly": "true"},
+    "ecriture": {"name": "Voir et modifier", "permissions": 15, "readonly": "false"},
 }
 # Les partages faits par Jabba sont des stockages externes nommés comme le dossier.
 NAME_PATTERN = re.compile(r"^[^/\\]{1,80}$")
@@ -107,24 +107,22 @@ def share_folder(occ, ocs, state, path, group, mode):
     _check_group(occ, group)
     mounts = external_mounts(occ)
     disk = next((mount for mount in mounts if str(mount.get("mount_point", "")).strip("/") == parts[0]), None)
-    share = {"id": secrets.token_hex(4), "chemin": "/" + "/".join(parts), "groupe": group, "mode": mode}
+    share = {"id": secrets.token_hex(4), "path": "/" + "/".join(parts), "group": group, "mode": mode}
     if disk:
         mount_id, name = _share_disk_folder(occ, mounts, disk, parts, group, mode)
-        share.update(type="stockage", mount_id=mount_id, nom=name)
+        share.update(type="stockage", mount_id=mount_id, name=name)
     else:
         # Un dossier des fichiers Nextcloud : partage ordinaire avec le groupe.
         permissions = MODES[mode]["permissions"]
-        data = ocs(
-            "POST", "", {"path": share["chemin"], "shareType": 1, "shareWith": group, "permissions": permissions}
-        )
-        share.update(type="partage", share_id=str(data.get("id")), nom=parts[-1])
-    state.setdefault("partages", []).append(share)
+        data = ocs("POST", "", {"path": share["path"], "shareType": 1, "shareWith": group, "permissions": permissions})
+        share.update(type="partage", share_id=str(data.get("id")), name=parts[-1])
+    state.setdefault("shares", []).append(share)
     return share
 
 
 def stop_sharing(occ, ocs, state, share_id):
     """Retire un partage noté (l'accès disparaît, les fichiers restent)."""
-    shares = state.setdefault("partages", [])
+    shares = state.setdefault("shares", [])
     share = next((item for item in shares if item["id"] == share_id), None)
     if not share:
         raise nextcloud_accounts.CloudError("Partage introuvable.")
@@ -134,12 +132,12 @@ def stop_sharing(occ, ocs, state, share_id):
             raise nextcloud_accounts.CloudError("Nextcloud n'a pas retiré le partage.")
     else:
         ocs("DELETE", f"/{share['share_id']}", None)
-    state["partages"] = [item for item in shares if item["id"] != share_id]
+    state["shares"] = [item for item in shares if item["id"] != share_id]
     return share
 
 
 def list_shares(state):
-    return list(state.get("partages", []))
+    return list(state.get("shares", []))
 
 
 def nextcloud_ocs(method, url_path, data):

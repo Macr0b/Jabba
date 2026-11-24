@@ -10,7 +10,7 @@ from services import domain_access
 
 
 def test_caddy_serves_only_the_nextcloud_address():
-    commande, _ = actions.build("acces_domaine", {"adresse": "Cloud.Exemple.fr", "port": 8081})
+    commande, _ = actions.build("acces_domaine", {"address": "Cloud.Exemple.fr", "port": 8081})
     assert (
         commande[:3] == ["sh", "-c", actions_tools.script("domain_install")]
         and commande[3] == actions_tools.DOMAIN_FOLDER
@@ -29,13 +29,13 @@ def test_caddy_serves_only_the_nextcloud_address():
 )
 def test_address_refused(adresse):
     with pytest.raises(actions.ActionError):
-        actions.build("acces_domaine", {"adresse": adresse, "port": 8081})
+        actions.build("acces_domaine", {"address": adresse, "port": 8081})
 
 
 @pytest.mark.parametrize("port", [22, 8443, "8081", True, 70000])
 def test_port_refused(port):
     with pytest.raises(actions.ActionError):
-        actions.build("acces_domaine", {"adresse": "cloud.exemple.fr", "port": port})
+        actions.build("acces_domaine", {"address": "cloud.exemple.fr", "port": port})
 
 
 @pytest.mark.skipif(not shutil.which("caddy"), reason="caddy absent (vérifié à la main)")
@@ -49,12 +49,12 @@ def test_caddy_file_is_valid(tmp_path):
 
 
 def test_nextcloud_only_a_few_system_settings():
-    actions.build("nextcloud", {"commande": "config:system:set", "arguments": ["trusted_domains", "1", "--value=x.fr"]})
+    actions.build("nextcloud", {"command": "config:system:set", "arguments": ["trusted_domains", "1", "--value=x.fr"]})
     for key in ("dbpassword", "datadirectory", "maintenance", ""):
         with pytest.raises(actions.ActionError):
-            actions.build("nextcloud", {"commande": "config:system:set", "arguments": [key, "--value=x"]})
+            actions.build("nextcloud", {"command": "config:system:set", "arguments": [key, "--value=x"]})
     with pytest.raises(actions.ActionError):
-        actions.build("nextcloud", {"commande": "config:system:get", "arguments": []})
+        actions.build("nextcloud", {"command": "config:system:get", "arguments": []})
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def serveur(tmp_path, monkeypatch):
     def occ(args, **k):
         commande, key = args[0], (args[1] if len(args) > 1 else "")
         if commande.startswith("app:"):
-            nextcloud.setdefault("applis", []).append((commande, key))
+            nextcloud.setdefault("apps", []).append((commande, key))
             return 0, "", ""
         if commande == "config:system:get":
             return (0, "\n".join(nextcloud[key]) + "\n", "") if key in nextcloud else (1, "", "")
@@ -85,16 +85,16 @@ def serveur(tmp_path, monkeypatch):
 
     monkeypatch.setattr(domain_access.commands, "occ", occ)
     monkeypatch.setattr(domain_access.commands, "run_action", action)
-    return {"nextcloud": nextcloud, "demandes": requests}
+    return {"nextcloud": nextcloud, "requests": requests}
 
 
 def test_open_then_close(serveur):
     settings = domain_access.enable("Exemple.fr", "cloud")
-    assert settings == {"domaine": "exemple.fr", "prefixe": "cloud", "actif": True}
-    assert serveur["demandes"] == [("acces_domaine", {"adresse": "cloud.exemple.fr", "port": 8081})]
+    assert settings == {"domain": "exemple.fr", "prefix": "cloud", "active": True}
+    assert serveur["requests"] == [("acces_domaine", {"address": "cloud.exemple.fr", "port": 8081})]
     assert serveur["nextcloud"]["trusted_domains"] == ["localhost", "serveur-test.ts.net", "cloud.exemple.fr"]
     assert serveur["nextcloud"]["trusted_proxies"] == domain_access.LOCAL_PROXIES
-    assert serveur["nextcloud"]["applis"] == [("app:install", "twofactor_totp")]  # double vérification
+    assert serveur["nextcloud"]["apps"] == [("app:install", "twofactor_totp")]  # double vérification
     domain_access.enable("exemple.fr", "cloud")  # une 2e fois : rien en double
     assert serveur["nextcloud"]["trusted_domains"].count("cloud.exemple.fr") == 1
     assert len(serveur["nextcloud"]["trusted_proxies"]) == 2
@@ -103,8 +103,8 @@ def test_open_then_close(serveur):
         "localhost",
         "serveur-test.ts.net",
     ]  # les autres adresses restent
-    assert serveur["demandes"][-1] == ("retirer_acces_domaine", {})
-    assert domain_access.read()["actif"] is False
+    assert serveur["requests"][-1] == ("retirer_acces_domaine", {})
+    assert domain_access.read()["active"] is False
 
 
 def test_two_factor_already_there(serveur, monkeypatch):
@@ -126,7 +126,7 @@ def test_prefix_refused(serveur):
     for prefix in ("a b", "x;y", "-z"):
         with pytest.raises(ValueError):
             domain_access.enable("exemple.fr", prefix)
-    assert serveur["demandes"] == []
+    assert serveur["requests"] == []
 
 
 def test_checklist(serveur, monkeypatch):
@@ -136,14 +136,12 @@ def test_checklist(serveur, monkeypatch):
     monkeypatch.setattr(domain_access, "certificate_ok", lambda name: False)
     monkeypatch.setattr(domain_access, "resolve", lambda name: ["198.51.100.1"])  # ancienne adresse
     etat = domain_access.status()
-    assert (
-        etat["adresse"] == "cloud.exemple.fr" and etat["ip_serveur"] == "192.168.1.20" and etat["port_serveur"] == 8443
-    )
-    assert not etat["dns_ok"] and not etat["certificat_ok"]
+    assert etat["address"] == "cloud.exemple.fr" and etat["server_ip"] == "192.168.1.20" and etat["server_port"] == 8443
+    assert not etat["dns_ok"] and not etat["certificate_ok"]
     monkeypatch.setattr(domain_access, "resolve", lambda name: ["203.0.113.7"])
     monkeypatch.setattr(domain_access, "certificate_ok", lambda name: True)
     etat = domain_access.status()
-    assert etat["dns_ok"] and etat["certificat_ok"] and etat["protection_ok"] is True
+    assert etat["dns_ok"] and etat["certificate_ok"] and etat["protection_ok"] is True
 
 
 def test_share_links_use_the_public_address(serveur):

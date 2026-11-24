@@ -40,7 +40,7 @@ async function enableAlerts(key) {
       : navigator.platform || t("Appareil");
   await api("/api/alertes/abonnement", {
     method: "POST",
-    json: { abonnement: subscription.toJSON(), appareil: device },
+    json: { subscription: subscription.toJSON(), device },
   });
 }
 
@@ -60,21 +60,21 @@ export async function alertsCard() {
     const subscription = await currentSubscription();
     if (subscription)
       here = (await api("/api/alertes/abonnement/etat", { method: "POST", json: { endpoint: subscription.endpoint } }))
-        .abonne;
+        .subscribed;
   }
   element.innerHTML = t`<h2>Alertes</h2>
-    <p class="note" style="margin:8px 0 12px">${data.appareils ? t`${data.appareils} appareil${data.appareils > 1 ? t("s reçoivent") : t(" reçoit")} les alertes.` : t("Aucun appareil ne reçoit les alertes.")} ${here ? t("<strong>Celui-ci en fait partie.</strong>") : ""}</p>
+    <p class="note" style="margin:8px 0 12px">${data.devices ? t`${data.devices} appareil${data.devices > 1 ? t("s reçoivent") : t(" reçoit")} les alertes.` : t("Aucun appareil ne reçoit les alertes.")} ${here ? t("<strong>Celui-ci en fait partie.</strong>") : ""}</p>
     ${reason ? `<div class="bandeau" style="margin-bottom:12px"><span>${escapeHtml(reason)}</span></div>` : ""}
     <div class="actions" style="margin-bottom:14px">
       ${reason ? "" : here ? t`<button class="btn" id="alertes-off">Ne plus les recevoir ici</button>` : t`<button class="btn btn-p" id="alertes-on">Recevoir les alertes sur cet appareil</button>`}
-      ${data.appareils ? t`<button class="btn" id="alertes-essai">Envoyer une alerte d'essai</button>` : ""}
+      ${data.devices ? t`<button class="btn" id="alertes-essai">Envoyer une alerte d'essai</button>` : ""}
     </div>
     <div class="types-alertes">${data.types
       .map(
         (
           item,
-        ) => `<label class="ligne-reglage"><span><strong>${escapeHtml(item.nom)}</strong><br><span class="note">${escapeHtml(item.detail)}</span></span>
-      <button class="interrupteur" role="switch" aria-checked="${item.actif}" data-type="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.nom)}"><span></span></button></label>`,
+        ) => `<label class="ligne-reglage"><span><strong>${escapeHtml(item.name)}</strong><br><span class="note">${escapeHtml(item.detail)}</span></span>
+      <button class="interrupteur" role="switch" aria-checked="${item.active}" data-type="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)}"><span></span></button></label>`,
       )
       .join("")}</div>
     <p class="note">Ces réglages valent pour tous tes appareils. Tout est aussi noté dans le journal, même ce qui ne t'est pas envoyé.</p>`;
@@ -85,7 +85,7 @@ export async function alertsCard() {
     on.onclick = async () => {
       on.disabled = true;
       try {
-        await enableAlerts(data.cle);
+        await enableAlerts(data.key);
         toast(t("Alertes activées sur cet appareil"));
       } catch (error) {
         toast(error.message, true);
@@ -120,7 +120,7 @@ export async function alertsCard() {
       const active = element.getAttribute("aria-checked") !== "true";
       element.setAttribute("aria-checked", String(active));
       try {
-        await api("/api/alertes/types", { method: "POST", json: { type: element.dataset.type, actif: active } });
+        await api("/api/alertes/types", { method: "POST", json: { type: element.dataset.type, active } });
       } catch (error) {
         toast(error.message, true);
         element.setAttribute("aria-checked", String(!active));

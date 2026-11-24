@@ -27,11 +27,11 @@ export const downloadUrl = (item) => "/api/fichiers/telecharger?chemin=" + encod
 
 // size : 128 pour la liste, 256 pour la grille.
 export function entryIcon(entry, size = 128) {
-  if (entry.dossier) return `<span class="ic-dossier${entry.externe ? " ext" : ""}" aria-hidden="true"></span>`;
-  if (THUMBNAIL_EXTENSIONS.includes(extensionOf(entry.nom))) {
-    return `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="/api/fichiers/apercu?chemin=${encodeURIComponent(entry.chemin)}&taille=${size}"></span>`;
+  if (entry.folder) return `<span class="ic-dossier${entry.external ? " ext" : ""}" aria-hidden="true"></span>`;
+  if (THUMBNAIL_EXTENSIONS.includes(extensionOf(entry.name))) {
+    return `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="/api/fichiers/apercu?chemin=${encodeURIComponent(entry.path)}&taille=${size}"></span>`;
   }
-  return `<span class="ic-fichier${kindOf(entry.nom) ? " " + kindOf(entry.nom) : ""}" aria-hidden="true"></span>`;
+  return `<span class="ic-fichier${kindOf(entry.name) ? " " + kindOf(entry.name) : ""}" aria-hidden="true"></span>`;
 }
 
 // Aperçu impossible (fichier abîmé, format inconnu) : on remet l'icône de fichier.
@@ -51,26 +51,26 @@ document.addEventListener(
 export const viewerElement = $("#visionneuse");
 export async function openViewer(list, index) {
   const entry = list[index];
-  const item = kindOf(entry.nom);
-  const visible = list.filter((item) => !item.dossier && kindOf(item.nom));
+  const item = kindOf(entry.name);
+  const visible = list.filter((item) => !item.folder && kindOf(item.name));
   const position = visible.indexOf(entry);
   let body;
-  if (item === "image") body = `<img src="${viewUrl(entry.chemin)}" alt="${escapeHtml(entry.nom)}">`;
+  if (item === "image") body = `<img src="${viewUrl(entry.path)}" alt="${escapeHtml(entry.name)}">`;
   else if (item === "video")
     body = t`<div class="lecteur" id="lecteur"><p class="note">Préparation de la vidéo…</p></div>`;
   else if (item === "audio")
-    body = `<div class="audio"><span class="ic-fichier audio grand" aria-hidden="true"></span><audio src="${viewUrl(entry.chemin)}" controls autoplay></audio></div>`;
-  else if (item === "pdf") body = `<iframe src="${viewUrl(entry.chemin)}" title="${escapeHtml(entry.nom)}"></iframe>`;
+    body = `<div class="audio"><span class="ic-fichier audio grand" aria-hidden="true"></span><audio src="${viewUrl(entry.path)}" controls autoplay></audio></div>`;
+  else if (item === "pdf") body = `<iframe src="${viewUrl(entry.path)}" title="${escapeHtml(entry.name)}"></iframe>`;
   else body = t`<pre class="texte">Chargement…</pre>`;
   viewerElement.innerHTML = t`
     <div class="barre-vision">
       <button class="btn btn-petit" data-v="fermer">✕ Fermer</button>
-      <strong class="nom-vision">${escapeHtml(entry.nom)}</strong>
+      <strong class="nom-vision">${escapeHtml(entry.name)}</strong>
       <span class="actions">
         ${visible.length > 1 ? t`<button class="btn btn-petit" data-v="prec" aria-label="Précédent">‹</button><span class="note">${position + 1} / ${visible.length}</span><button class="btn btn-petit" data-v="suiv" aria-label="Suivant">›</button>` : ""}
-        ${item === "pdf" ? t`<a class="btn btn-petit" href="${viewUrl(entry.chemin)}" target="_blank" rel="noopener">Plein écran ↗</a>` : ""}
+        ${item === "pdf" ? t`<a class="btn btn-petit" href="${viewUrl(entry.path)}" target="_blank" rel="noopener">Plein écran ↗</a>` : ""}
         ${item === "video" ? t`<button class="btn btn-petit" data-v="jellyfin">Regarder dans Jellyfin</button>` : ""}
-        <a class="btn btn-petit" href="${downloadUrl(entry.chemin)}">Télécharger</a>
+        <a class="btn btn-petit" href="${downloadUrl(entry.path)}">Télécharger</a>
       </span>
     </div>
     <div class="corps-vision">${body}</div>`;
@@ -104,7 +104,7 @@ export async function openViewer(list, index) {
     });
   if (item === "texte") {
     try {
-      const response = await fetch(viewUrl(entry.chemin), { headers: { Range: "bytes=0-1048575" } });
+      const response = await fetch(viewUrl(entry.path), { headers: { Range: "bytes=0-1048575" } });
       if (!response.ok) throw new Error(t`Erreur ${response.status}`);
       const value = await response.text();
       const preview = viewerElement.querySelector("pre.texte");
@@ -116,26 +116,26 @@ export async function openViewer(list, index) {
   }
 }
 viewerElement.addEventListener("close", () => {
-  if (activePlayer) activePlayer.fin();
+  if (activePlayer) activePlayer.end();
   viewerElement.innerHTML = "";
 });
 
 // Ouvre ce film dans Jellyfin. La première fois, Jabba demande la clé d'accès Jellyfin.
 async function watchInJellyfin(entry) {
-  const url = "/api/jellyfin/trouver?chemin=" + encodeURIComponent(entry.chemin);
+  const url = "/api/jellyfin/trouver?chemin=" + encodeURIComponent(entry.path);
   let response = await fetch(url, { credentials: "same-origin" });
   let body = await response.json().catch(() => ({}));
-  if (response.status === 409 && body.detail && body.detail.cle_jellyfin) {
+  if (response.status === 409 && body.detail && body.detail.jellyfin_key) {
     const answers = await formBody({
-      titre: t("Relier Jabba à Jellyfin"),
-      texte: t(
+      title: t("Relier Jabba à Jellyfin"),
+      text: t(
         "Une seule fois : dans Jellyfin, Tableau de bord → Clés API → +, nom « Jabba », puis copie la clé et colle-la ici.",
       ),
-      champs: [{ nom: "cle", label: t("Clé API Jellyfin"), indice: t("32 caractères") }],
-      valider: t("Relier"),
+      fields: [{ name: "key", label: t("Clé API Jellyfin"), hint: t("32 caractères") }],
+      confirmLabel: t("Relier"),
     });
-    if (!answers || answers === "secondaire") return;
-    await api("/api/jellyfin/cle", { method: "POST", json: { cle: answers.cle } });
+    if (!answers || answers === "secondary") return;
+    await api("/api/jellyfin/cle", { method: "POST", json: { key: answers.key } });
     toast(t("Jabba est relié à Jellyfin"));
     response = await fetch(url, { credentials: "same-origin" });
     body = await response.json().catch(() => ({}));
@@ -146,5 +146,5 @@ async function watchInJellyfin(entry) {
     const element = $("#lecteur video");
     if (element) element.pause();
   }
-  window.open(body.lien, "_blank", "noopener");
+  window.open(body.link, "_blank", "noopener");
 }

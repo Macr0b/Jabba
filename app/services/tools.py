@@ -5,7 +5,7 @@ Sommaire :
   list_tools : les outils installés, avec leur état
   find_tool : un outil par son identifiant
   find_icon : l'icône d'un outil (site de l'outil, sinon icône de secours)
-  interne : _in_app, _projects, _state, _tool
+  interne : _in_app, _projects, _state, _is_leftover, _tool
 """
 
 import json
@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 import httpx
 
 import config
-from host import catalog, commands
+from host import actions_tools, catalog, commands
 from services import frame_check, tool_addresses, tool_credentials
 from services.service_error import ServiceError
 
@@ -27,7 +27,7 @@ NAMES = {
     "antivirus": ("Antivirus", "Analyse les fichiers déposés par les invités (ClamAV)"),
     "jabba-app": ("Appli Jabba", "Cette appli"),
     "adresses": ("Adresses", "Les adresses https des outils"),
-    **{tool_id: (tool["nom"], tool["role"]) for tool_id, tool in catalog.OPTIONAL_TOOLS.items()},
+    **{tool_id: (tool["name"], tool["role"]) for tool_id, tool in catalog.OPTIONAL_TOOLS.items()},
 }
 # Outils du système : toujours actifs, sans interrupteur.
 SYSTEM_TOOLS = {"jabba-app", "adresses"}
@@ -76,50 +76,56 @@ def _in_app(pid):
 
 
 def _projects(output):
-    """Les conteneurs Docker (une ligne JSON chacun), rangés par pile : {nom: {id, dossier, conteneurs}}."""
+    """Les conteneurs Docker (une ligne JSON chacun), rangés par pile : {nom: {id, folder, containers}}."""
     projects = {}
     for line in output.splitlines():
         container = json.loads(line)
         labels = dict(label.split("=", 1) for label in container.get("Labels", "").split(",") if "=" in label)
         project_name = labels.get("com.docker.compose.project", container["Names"])
         folder = labels.get("com.docker.compose.project.working_dir", "")
-        project = projects.setdefault(project_name, {"id": project_name, "dossier": folder, "conteneurs": []})
-        project["conteneurs"].append(
-            {"nom": container["Names"], "etat": container["State"], "statut": container["Status"]}
+        project = projects.setdefault(project_name, {"id": project_name, "folder": folder, "containers": []})
+        project["containers"].append(
+            {"name": container["Names"], "state": container["State"], "status": container["Status"]}
         )
     return projects
 
 
 def _state(containers):
     """« actif », « partiel », « arrêté » ou « en panne » (un conteneur qui redémarre en boucle)."""
-    if any("restarting" in container["etat"] for container in containers):
+    if any("restarting" in container["state"] for container in containers):
         return "en panne"
-    states = {container["etat"] for container in containers}
+    states = {container["state"] for container in containers}
     if states == {"running"}:
         return "actif"
     return "partiel" if "running" in states else "arrêté"
+
+
+def _is_leftover(pid, folder):
+    return pid not in NAMES and pid not in actions_tools.KNOWN_STACKS and folder.startswith("/opt/stacks/")
 
 
 def _tool(pid, project):
     name, role = NAMES.get(pid, (pid, ""))
     return {
         "id": pid,
-        "nom": name,
+        "name": name,
         "role": role,
-        "etat": _state(project["conteneurs"]),
-        "lien": tool_addresses.address(pid) or config.LINKS.get(pid),
-        "dossier": project["dossier"],
-        "conteneurs": project["conteneurs"],
-        "modifiable": pid != "jabba-app" and bool(project["dossier"]),
-        "systeme": pid in SYSTEM_TOOLS,
-        "icone": pid in PORTS,
-        "dans_appli": _in_app(pid),
+        "state": _state(project["containers"]),
+        "link": tool_addresses.address(pid) or config.LINKS.get(pid),
+        "folder": project["folder"],
+        "containers": project["containers"],
+        "editable": pid != "jabba-app" and bool(project["folder"]),
+        "system": pid in SYSTEM_TOOLS,
+        "icon": pid in PORTS,
+        "in_app": _in_app(pid),
         # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
         "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
-        "en_option": pid in catalog.OPTIONAL_TOOLS,
+        "optional": pid in catalog.OPTIONAL_TOOLS,
+        # Outil d'une ancienne version, retiré du catalogue (ntfy…) : « Désinstaller » le retire en entier.
+        "leftover": _is_leftover(pid, project["folder"]),
         # Menu « Identifiants » : le compte créé par Jabba, ou celui que tu y notes (tool_credentials.py).
-        "identifiants": pid in tool_credentials.STORABLE,
-        "identifiants_jabba": tool_credentials.created_by_jabba(pid),
+        "credentials": pid in tool_credentials.STORABLE,
+        "jabba_credentials": tool_credentials.created_by_jabba(pid),
     }
 
 
@@ -130,9 +136,9 @@ def list_tools():
         return [
             {
                 **tool,
-                "lien": tool_addresses.address(tool["id"]) or tool.get("lien"),
-                "identifiants": tool["id"] in tool_credentials.STORABLE,
-                "identifiants_jabba": tool_credentials.created_by_jabba(tool["id"]),
+                "link": tool_addresses.address(tool["id"]) or tool.get("link"),
+                "credentials": tool["id"] in tool_credentials.STORABLE,
+                "jabba_credentials": tool_credentials.created_by_jabba(tool["id"]),
             }
             for tool in TOOLS
         ]
@@ -149,9 +155,9 @@ def list_tools():
 def find_tool(pid):
     for tool in list_tools():
         if tool["id"] == pid:
-            if not tool["modifiable"]:
+            if not tool["editable"]:
                 raise ServiceError(400, "Cet outil ne se gère pas depuis l'appli.")
-            if not re.fullmatch(r"/[\w./-]+", tool["dossier"]):
+            if not re.fullmatch(r"/[\w./-]+", tool["folder"]):
                 raise ServiceError(400, "Dossier inattendu.")
             return tool
     raise ServiceError(404, "Outil inconnu")

@@ -11,7 +11,7 @@ def alerts(monkeypatch):
     monkeypatch.setattr(
         heat_watch.notifications, "send", lambda type_, title, *a, **k: sent_items.append((type_, title))
     )
-    heat_watch.STATE.update(depuis=None, alerte=False)
+    heat_watch.STATE.update(since=None, alerte=False)
     return sent_items
 
 

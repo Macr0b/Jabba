@@ -53,7 +53,7 @@ TYPES = {
 
 def _read():
     data = json_files.load(SUBSCRIPTIONS_FILE)
-    data.setdefault("abonnements", [])
+    data.setdefault("subscriptions", [])
     data.setdefault("types", {alert_type: True for alert_type in TYPES})
     for alert_type in TYPES:
         data["types"].setdefault(alert_type, True)
@@ -91,11 +91,11 @@ def public_key():
 def settings():
     data = _read()
     return {
-        "cle": public_key(),
-        "appareils": len(data["abonnements"]),
-        "endpoints": [subscription["endpoint"] for subscription in data["abonnements"]],
+        "key": public_key(),
+        "devices": len(data["subscriptions"]),
+        "endpoints": [subscription["endpoint"] for subscription in data["subscriptions"]],
         "types": [
-            {"id": alert_type, "nom": name, "detail": entry, "actif": data["types"][alert_type]}
+            {"id": alert_type, "name": name, "detail": entry, "active": data["types"][alert_type]}
             for alert_type, (name, entry) in TYPES.items()
         ],
     }
@@ -109,19 +109,19 @@ def subscribe(new_subscription, contact, device="", who=None):
         raise ValueError("Abonnement invalide.")
     with _LOCK:
         data = _read()
-        data["abonnements"] = [
+        data["subscriptions"] = [
             subscription
-            for subscription in data["abonnements"]
+            for subscription in data["subscriptions"]
             if subscription["endpoint"] != new_subscription["endpoint"]
         ]
-        data["abonnements"].append(
+        data["subscriptions"].append(
             {
                 "endpoint": new_subscription["endpoint"],
                 "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]},
                 "contact": contact,
-                "appareil": device[:80],
-                "qui": who,
-                "depuis": int(time.time()),
+                "device": device[:80],
+                "who": who,
+                "since": int(time.time()),
             }
         )
         _write(data)
@@ -130,8 +130,8 @@ def subscribe(new_subscription, contact, device="", who=None):
 def unsubscribe(endpoint):
     with _LOCK:
         data = _read()
-        data["abonnements"] = [
-            subscription for subscription in data["abonnements"] if subscription["endpoint"] != endpoint
+        data["subscriptions"] = [
+            subscription for subscription in data["subscriptions"] if subscription["endpoint"] != endpoint
         ]
         _write(data)
 
@@ -157,8 +157,8 @@ def send(media_type, title, text, url="/", force=False, family="alerte", recipie
         return 0
     targets = [
         subscription
-        for subscription in data["abonnements"]
-        if recipients is None or subscription.get("qui") in recipients
+        for subscription in data["subscriptions"]
+        if recipients is None or subscription.get("who") in recipients
     ]
     if not targets:
         return 0
@@ -185,7 +185,8 @@ def _push(subscriptions, title, text, url):
     except ImportError:
         return
     public_key()
-    message = json.dumps({"titre": title, "texte": text, "url": url})
+    # « titre » et « texte » aussi : un téléphone pas encore passé à la 0.17 les lit encore (à retirer en 0.18).
+    message = json.dumps({"title": title, "text": text, "url": url, "titre": title, "texte": text})
     expired = []
     for subscription in subscriptions:
         try:

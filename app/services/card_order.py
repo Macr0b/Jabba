@@ -5,7 +5,7 @@ départ, à la suite ; une carte masquée ne s'affiche plus que pendant le range
 
 Sommaire :
   SCREENS             : les écrans qu'on peut ranger
-  read(screen)        : {"ordre": [...], "masques": [...]}
+  read(screen)        : {"order": [...], "hidden_items": [...]}
   save(screen, order, hidden) : enregistre ; refuse ce qui n'est pas une liste d'identifiants de cartes
   interne : _clean
 """
@@ -41,15 +41,15 @@ def read(screen):
         raise ValueError("Écran inconnu.")
     saved = json_files.load(ORDER_FILE, {}).get(screen)
     if saved is None and screen == "etabli":
-        saved = {"ordre": json_files.load(OLD_FILE, {}).get("ordre", []), "masques": []}
+        saved = {"order": json_files.load(OLD_FILE, {}).get("order", []), "hidden_items": []}
     saved = saved or {}
-    return {"ordre": saved.get("ordre", []), "masques": saved.get("masques", [])}
+    return {"order": saved.get("order", []), "hidden_items": saved.get("hidden_items", [])}
 
 
 def save(screen, order, hidden=None):
     if screen not in SCREENS:
         raise ValueError("Écran inconnu.")
-    entry = {"ordre": _clean(order), "masques": _clean(hidden or [])}
+    entry = {"order": _clean(order), "hidden_items": _clean(hidden or [])}
     with _LOCK:
         saved = json_files.load(ORDER_FILE, {})
         saved[screen] = entry

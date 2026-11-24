@@ -69,14 +69,14 @@ def dav_entry(rep):
     size = prop.findtext("oc:size", None, DAV_NS) or prop.findtext("d:getcontentlength", None, DAV_NS)
     modified = prop.findtext("d:getlastmodified", None, DAV_NS)
     return {
-        "nom": relative_path.rsplit("/", 1)[-1] or "Nextcloud",
-        "chemin": relative_path,
-        "dossier": folder_flag,
-        "taille": int(size) if size and size.lstrip("-").isdigit() and int(size) >= 0 else None,
-        "modifie": parsedate_to_datetime(modified).isoformat() if modified else None,
+        "name": relative_path.rsplit("/", 1)[-1] or "Nextcloud",
+        "path": relative_path,
+        "folder": folder_flag,
+        "size": int(size) if size and size.lstrip("-").isdigit() and int(size) >= 0 else None,
+        "modified": parsedate_to_datetime(modified).isoformat() if modified else None,
         "type": prop.findtext("d:getcontenttype", None, DAV_NS),
-        "ecriture": any(letter in permissions for letter in ("W", "C", "K")),
-        "externe": prop.findtext("nc:mount-type", "", DAV_NS) == "external",
+        "writable": any(letter in permissions for letter in ("W", "C", "K")),
+        "external": prop.findtext("nc:mount-type", "", DAV_NS) == "external",
     }
 
 
@@ -99,17 +99,17 @@ async def read_folder(path):
     entries, folder = [], None
     for rep in root.findall("d:response", DAV_NS):
         item = dav_entry(rep)
-        relative_path = item["chemin"]
+        relative_path = item["path"]
         if relative_path.rstrip("/") == path.rstrip("/") or (relative_path == "/" and path == "/"):
             folder = item
         else:
             entries.append(item)
-    entries.sort(key=lambda entry: (not entry["dossier"], entry["nom"].lower()))
+    entries.sort(key=lambda entry: (not entry["folder"], entry["name"].lower()))
     return {
-        "chemin": path,
-        "elements": entries,
-        "ecriture": folder["ecriture"] if folder else True,
-        "lien_nextcloud": f"{config.NC_PUBLIC}/apps/files/?dir={quote(path)}" if config.NC_PUBLIC else None,
+        "path": path,
+        "items": entries,
+        "writable": folder["writable"] if folder else True,
+        "nextcloud_link": f"{config.NC_PUBLIC}/apps/files/?dir={quote(path)}" if config.NC_PUBLIC else None,
     }
 
 
@@ -179,11 +179,11 @@ async def nextcloud_trash():
         result.append(
             {
                 "id": identifier,
-                "nom": prop.findtext("nc:trashbin-filename", identifier, DAV_NS),
-                "origine": "/" + (prop.findtext("nc:trashbin-original-location", "", DAV_NS) or "").strip("/"),
-                "supprime": int(when) if when.isdigit() else 0,
-                "dossier": prop.find("d:resourcetype/d:collection", DAV_NS) is not None,
-                "taille": int(size) if size and size.isdigit() else None,
+                "name": prop.findtext("nc:trashbin-filename", identifier, DAV_NS),
+                "origin": "/" + (prop.findtext("nc:trashbin-original-location", "", DAV_NS) or "").strip("/"),
+                "deleted": int(when) if when.isdigit() else 0,
+                "folder": prop.find("d:resourcetype/d:collection", DAV_NS) is not None,
+                "size": int(size) if size and size.isdigit() else None,
                 "source": "nextcloud",
             }
         )

@@ -63,7 +63,7 @@ KEY_FILE = os.path.join(DATA_DIR, "sauvegardes.cle")
 STATE_FILE = os.path.join(DATA_DIR, "sauvegarde-etat.json")
 REPOSITORY_FOLDER = ".sauvegardes-jabba"
 RESTORE_ROOT = "/srv/data/dossiers/Restaurations"
-KEEP = {"jours": 7, "semaines": 4, "mois": 6}
+KEEP = {"days": 7, "weeks": 4, "months": 6}
 SOURCES = {
     "fichiers": ("Fichiers", "Tes dossiers sur le serveur (/srv/data), sans les films ni les téléchargements"),
     "outils": ("Réglages des outils", "Nextcloud (avec sa base), Jellyfin, Jabba… (/opt/stacks)"),
@@ -87,15 +87,15 @@ _lock = threading.RLock()
 # ---------------------------------------------------------------- réglages
 def read():
     settings = json_files.load(SETTINGS_FILE)
-    settings.setdefault("actif", False)
-    settings.setdefault("disque", None)  # nom du disque choisi
-    settings.setdefault("chemin", None)  # point de montage du disque
-    settings.setdefault("heure", "03:30")
+    settings.setdefault("active", False)
+    settings.setdefault("disk", None)  # nom du disque choisi
+    settings.setdefault("path", None)  # point de montage du disque
+    settings.setdefault("hour", "03:30")
     settings.setdefault("sources", {key: True for key in SOURCES})
-    settings.setdefault("unite", None)  # tâche en cours sur le serveur
-    settings.setdefault("lancee", 0)
-    settings.setdefault("derniere_reussie", None)
-    settings.setdefault("alerte_absent", None)
+    settings.setdefault("unit", None)  # tâche en cours sur le serveur
+    settings.setdefault("launched", 0)
+    settings.setdefault("last_success", None)
+    settings.setdefault("alert_missing", None)
     return settings
 
 
@@ -125,7 +125,7 @@ def set_passphrase(process):
 
 
 def repository(settings):
-    return os.path.join(settings["chemin"], REPOSITORY_FOLDER)
+    return os.path.join(settings["path"], REPOSITORY_FOLDER)
 
 
 # ---------------------------------------------------------------- la copie
@@ -138,13 +138,13 @@ def backup_script(settings, host_dir, demo=False):
         sources = [os.environ.get("JABBA_DEMO_SAUVER", "/tmp")]
     values = {
         "state_file": os.path.join(host_dir, "sauvegarde-etat.json"),
-        "disk": settings["chemin"],
+        "disk": settings["path"],
         "demo": 1 if demo else 0,
         "sources": sources,
         "excludes": EXCLUDE,
-        "keep_daily": KEEP["jours"],
-        "keep_weekly": KEEP["semaines"],
-        "keep_monthly": KEEP["mois"],
+        "keep_daily": KEEP["days"],
+        "keep_weekly": KEEP["weeks"],
+        "keep_monthly": KEEP["months"],
         "RESTIC_REPOSITORY": repository(settings),
         "RESTIC_PASSWORD_FILE": os.path.join(host_dir, "sauvegardes.cle"),
         "RESTIC_CACHE_DIR": "/tmp/restic-jabba-cache" if demo else "/var/cache/restic-jabba",
@@ -169,41 +169,41 @@ def result(state):
     """Le dernier résultat, en clair."""
     if not state:
         return None
-    completed = state.get("resume") or {}
+    completed = state.get("summary") or {}
     succeeded = state.get("code") == 0
     return {
         "ok": succeeded,
-        "debut": state.get("debut"),
-        "fin": state.get("fin"),
-        "duree": max(0, (state.get("fin") or 0) - (state.get("debut") or 0)),
-        "erreur": None if succeeded else STEPS.get(state.get("etape"), "La sauvegarde s'est arrêtée."),
-        "avert": (state.get("avert") or "").strip() or None,
-        "ajoute": completed.get("data_added"),
-        "fichiers": completed.get("total_files_processed"),
-        "taille": completed.get("total_bytes_processed"),
-        "nouveaux": completed.get("files_new"),
-        "modifies": completed.get("files_changed"),
-        "instantane": completed.get("snapshot_id"),
+        "start": state.get("start"),
+        "end": state.get("end"),
+        "duration": max(0, (state.get("end") or 0) - (state.get("start") or 0)),
+        "error": None if succeeded else STEPS.get(state.get("step"), "La sauvegarde s'est arrêtée."),
+        "warning": (state.get("warning") or "").strip() or None,
+        "added": completed.get("data_added"),
+        "files": completed.get("total_files_processed"),
+        "size": completed.get("total_bytes_processed"),
+        "new_items": completed.get("files_new"),
+        "modified_items": completed.get("files_changed"),
+        "snapshot": completed.get("snapshot_id"),
     }
 
 
 def is_due(settings, now=None):
     """Faut-il lancer la sauvegarde de cette nuit ? (manquée : dès que possible)"""
-    if not settings["actif"] or not settings["chemin"]:
+    if not settings["active"] or not settings["path"]:
         return False
     now = now or datetime.now()
-    hour, minute = (int(share) for share in settings["heure"].split(":"))
+    hour, minute = (int(share) for share in settings["hour"].split(":"))
     scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if now < scheduled:
         scheduled = scheduled.fromtimestamp(scheduled.timestamp() - 86400)
-    if ((settings.get("derniere_reussie") or {}).get("fin") or 0) >= scheduled.timestamp():
+    if ((settings.get("last_success") or {}).get("end") or 0) >= scheduled.timestamp():
         return False
     # Pas encore réussie depuis l'heure prévue : on (re)tente, au plus une fois par heure.
-    return now.timestamp() - (settings.get("lancee") or 0) >= 3600
+    return now.timestamp() - (settings.get("launched") or 0) >= 3600
 
 
 def next_run(settings):
-    hour, minute = (int(share) for share in settings["heure"].split(":"))
+    hour, minute = (int(share) for share in settings["hour"].split(":"))
     now = datetime.now()
     process = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if process <= now:
@@ -228,18 +228,18 @@ def run_restic(settings, host_dir, gesture, timeout, **args):
     """Une lecture ou une restauration restic : par la liste fermée sur le serveur, ou dans le conteneur en démo."""
     if not config.DEMO:
         try:
-            return commands.run_action("restic", geste=gesture, disque=settings["chemin"], donnees=host_dir, **args)
+            return commands.run_action("restic", gesture=gesture, disk=settings["path"], data=host_dir, **args)
         except actions.ActionError as error:
             return 1, "", str(error)
     command = restic_command(settings, host_dir)
     if gesture == "copies":
         command += ["snapshots", "--tag", "jabba", "--json"]
     elif gesture == "parcourir":
-        command += ["ls", "--json", args["copie"], args["chemin"]]
+        command += ["ls", "--json", args["copy"], args["path"]]
     else:
-        parent, name = args["chemin"].rsplit("/", 1)
-        target = os.path.join(restore_root(), f"{args['horodatage']} ({args['copie']})")
-        command += ["restore", f"{args['copie']}:{parent or '/'}", "--target", target, "--include", "/" + name]
+        parent, name = args["path"].rsplit("/", 1)
+        target = os.path.join(restore_root(), f"{args['timestamp']} ({args['copy']})")
+        command += ["restore", f"{args['copy']}:{parent or '/'}", "--target", target, "--include", "/" + name]
     completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
     return completed.returncode, completed.stdout, completed.stderr
 
@@ -260,8 +260,8 @@ def snapshots(settings, host_dir):
         {
             "id": source_list["short_id"],
             "date": source_list["time"][:19],
-            "chemins": source_list.get("paths", []),
-            "taille": (source_list.get("summary") or {}).get("total_bytes_processed"),
+            "paths": source_list.get("paths", []),
+            "size": (source_list.get("summary") or {}).get("total_bytes_processed"),
         }
         for source_list in items
     ]
@@ -286,14 +286,14 @@ def browse(settings, host_dir, identifier, path):
             continue
         entries.append(
             {
-                "nom": event["name"],
-                "chemin": event["path"],
-                "dossier": event.get("type") == "dir",
-                "taille": event.get("size"),
-                "modifie": (event.get("mtime") or "")[:19],
+                "name": event["name"],
+                "path": event["path"],
+                "folder": event.get("type") == "dir",
+                "size": event.get("size"),
+                "modified": (event.get("mtime") or "")[:19],
             }
         )
-    entries.sort(key=lambda state: (not state["dossier"], state["nom"].lower()))
+    entries.sort(key=lambda state: (not state["folder"], state["name"].lower()))
     return entries
 
 
@@ -324,30 +324,30 @@ def host_data_dir():
 
 
 def is_running(settings):
-    if not settings["unite"]:
+    if not settings["unit"]:
         return False
     if config.DEMO:
-        process = DEMO_STATE.get(settings["unite"])
+        process = DEMO_STATE.get(settings["unit"])
         return bool(process and process.poll() is None)
     try:
-        _, active, _ = commands.run_action("etat_tache", unite=settings["unite"])
+        _, active, _ = commands.run_action("etat_tache", unit=settings["unit"])
     except actions.ActionError:
         return False
     return active.strip() in ("active", "activating")
 
 
 def disk_is_present(settings):
-    return True if config.DEMO else bool(settings["chemin"]) and files_source.disk_is_present(settings["chemin"])
+    return True if config.DEMO else bool(settings["path"]) and files_source.disk_is_present(settings["path"])
 
 
 def start_backup(who=None):
     settings = read()
-    if not settings["chemin"] or not passphrase():
+    if not settings["path"] or not passphrase():
         raise ServiceError(409, "Les sauvegardes ne sont pas encore mises en route.")
     if is_running(settings):
         raise ServiceError(409, "Une sauvegarde est déjà en cours.")
     if not disk_is_present(settings):
-        raise ServiceError(409, f"Le disque {settings['disque']} n'est pas branché.")
+        raise ServiceError(409, f"Le disque {settings['disk']} n'est pas branché.")
     unit = f"jabba-sauvegarde-{int(time.time())}"
     if config.DEMO:
         DEMO_STATE[unit] = subprocess.Popen(["bash", "-c", backup_script(settings, host_data_dir(), demo=True)])
@@ -356,14 +356,14 @@ def start_backup(who=None):
         # elle va au bout même si l'appli redémarre.
         sources = [key for key, value in settings["sources"].items() if value]
         code, _, error_output = commands.run_action(
-            "lancer_sauvegarde", disque=settings["chemin"], donnees=host_data_dir(), sources=sources, unite=unit
+            "lancer_sauvegarde", disk=settings["path"], data=host_data_dir(), sources=sources, unit=unit
         )
         if code != 0:
             raise ServiceError(500, "Lancement impossible : " + error_output[:200])
-    settings.update(unite=unit, lancee=int(time.time()))
+    settings.update(unit=unit, launched=int(time.time()))
     write(settings)
     activity_log.record(
-        "sauvegardes", f"Sauvegarde lancée vers {settings['disque']}" + ("" if who else " (automatique)"), who
+        "sauvegardes", f"Sauvegarde lancée vers {settings['disk']}" + ("" if who else " (automatique)"), who
     )
     return unit
 
@@ -371,33 +371,33 @@ def start_backup(who=None):
 def follow_backup():
     """Quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté."""
     settings = read()
-    if not settings["unite"] or is_running(settings):
+    if not settings["unit"] or is_running(settings):
         return settings
     state = read_state()
-    outcome = result(state) if (state.get("debut") or 0) >= settings["lancee"] - 5 else None
+    outcome = result(state) if (state.get("start") or 0) >= settings["launched"] - 5 else None
     if outcome is None:
         outcome = {
             "ok": False,
-            "debut": settings["lancee"],
-            "fin": int(time.time()),
-            "duree": 0,
-            "erreur": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?).",
+            "start": settings["launched"],
+            "end": int(time.time()),
+            "duration": 0,
+            "error": "La sauvegarde s'est arrêtée avant la fin (serveur redémarré ?).",
         }
-    settings["unite"] = None
-    settings["dernier"] = outcome
+    settings["unit"] = None
+    settings["last"] = outcome
     if outcome["ok"]:
-        settings["derniere_reussie"] = outcome
-        settings["alerte_absent"] = None
+        settings["last_success"] = outcome
+        settings["alert_missing"] = None
         activity_log.record(
             "sauvegardes",
-            "Sauvegarde terminée" + (f" ({outcome['avert'].strip()})" if outcome.get("avert") else ""),
+            "Sauvegarde terminée" + (f" ({outcome['warning'].strip()})" if outcome.get("warning") else ""),
             None,
         )
-        if outcome.get("avert"):
+        if outcome.get("warning"):
             notifications.send(
                 "sauvegardes",
                 "Sauvegarde incomplète",
-                outcome["avert"],
+                outcome["warning"],
                 "/#/sauvegardes",
                 family="sauvegardes",
                 log=False,
@@ -405,44 +405,44 @@ def follow_backup():
     else:
         # Une alerte par jour au plus (la sauvegarde est retentée chaque heure).
         day = time.strftime("%Y-%m-%d")
-        if settings.get("alerte_echec") != day:
+        if settings.get("alert_failure") != day:
             notifications.send(
                 "sauvegardes",
                 "Sauvegarde échouée",
-                outcome["erreur"] + (" Nouvel essai dans une heure." if settings["actif"] else ""),
+                outcome["error"] + (" Nouvel essai dans une heure." if settings["active"] else ""),
                 "/#/sauvegardes",
                 family="sauvegardes",
             )
         else:
-            activity_log.record("sauvegardes", "Sauvegarde échouée — " + outcome["erreur"])
-        settings["alerte_echec"] = day
+            activity_log.record("sauvegardes", "Sauvegarde échouée — " + outcome["error"])
+        settings["alert_failure"] = day
     write(settings)
     return settings
 
 
 def watch_backups():
     settings = follow_backup()
-    if settings["unite"] or not is_due(settings):
+    if settings["unit"] or not is_due(settings):
         return
     if disk_is_present(settings):
         start_backup()
         return
     # Disque absent : on prévient une fois par jour, et la copie part dès qu'il revient.
     day = time.strftime("%Y-%m-%d")
-    if settings.get("alerte_absent") != day:
-        settings["alerte_absent"] = day
+    if settings.get("alert_missing") != day:
+        settings["alert_missing"] = day
         write(settings)
         notifications.send(
             "sauvegardes",
             "Sauvegarde en attente",
-            f"Le disque {settings['disque']} n'est pas branché : la sauvegarde partira dès son retour.",
+            f"Le disque {settings['disk']} n'est pas branché : la sauvegarde partira dès son retour.",
             "/#/sauvegardes",
             family="sauvegardes",
         )
 
 
 def require_readable(settings):
-    if not settings["chemin"] or not passphrase():
+    if not settings["path"] or not passphrase():
         raise ServiceError(409, "Les sauvegardes ne sont pas encore mises en route.")
     if not disk_is_present(settings):
-        raise ServiceError(409, f"Branche le disque {settings['disque']} pour voir les sauvegardes.")
+        raise ServiceError(409, f"Branche le disque {settings['disk']} pour voir les sauvegardes.")

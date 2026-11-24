@@ -38,7 +38,7 @@ def files_source():
         return "disque"
     if time.time() - _SOURCE_CACHE["t"] < 15:
         return _SOURCE_CACHE["v"]
-    code, output, _ = commands.run_action("conteneur_actif", nom="nextcloud")
+    code, output, _ = commands.run_action("conteneur_actif", name="nextcloud")
     value = "nextcloud" if code == 0 and output.strip() == "true" else "disque"
     _SOURCE_CACHE.update(t=time.time(), v=value)
     return value
@@ -104,7 +104,7 @@ def rescan_in_nextcloud(path):
 def is_mounted(path):
     """Vrai si un disque est monté sur `path` (action « est_monte » de la liste fermée)."""
     try:
-        return commands.run_action("est_monte", chemin=path)[0] == 0
+        return commands.run_action("est_monte", path=path)[0] == 0
     except actions.ActionError:
         return False
 
@@ -112,10 +112,10 @@ def is_mounted(path):
 def _mount(path):
     """Ouvre le disque (un accès réveille l'ouverture automatique), sinon la réarme."""
     try:
-        commands.run_action("reveiller_disque", chemin=path)
+        commands.run_action("reveiller_disque", path=path)
         if is_mounted(path):
             return True
-        commands.run_action("rearmer_disque", chemin=path)
+        commands.run_action("rearmer_disque", path=path)
     except actions.ActionError:
         return False
     return is_mounted(path)

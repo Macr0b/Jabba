@@ -12,8 +12,8 @@ import { t } from "../core/i18n.js";
 function deviceRowHtml(device) {
   const where = device.tailscale ? t("Tailscale") : t("Maison");
   return `<li class="ligne-appareil">
-      <div><strong>${escapeHtml(device.nom)}</strong><div class="note">${escapeHtml(where)} · ${escapeHtml(device.ip)}</div></div>
-      <button class="interrupteur" role="switch" aria-checked="${device.protege}" aria-label="${escapeHtml(t`Bloqueur de pubs pour ${device.nom}`)}" data-appareil="${escapeHtml(device.ip)}"><span></span></button>
+      <div><strong>${escapeHtml(device.name)}</strong><div class="note">${escapeHtml(where)} · ${escapeHtml(device.ip)}</div></div>
+      <button class="interrupteur" role="switch" aria-checked="${device.protected}" aria-label="${escapeHtml(t`Bloqueur de pubs pour ${device.name}`)}" data-appareil="${escapeHtml(device.ip)}"><span></span></button>
     </li>`;
 }
 
@@ -21,7 +21,7 @@ async function toggleDevice(button) {
   const protect = button.getAttribute("aria-checked") !== "true";
   button.disabled = true;
   try {
-    await api("/api/adguard/appareils", { method: "POST", json: { ip: button.dataset.appareil, protege: protect } });
+    await api("/api/adguard/appareils", { method: "POST", json: { ip: button.dataset.appareil, protected: protect } });
     button.setAttribute("aria-checked", String(protect));
   } catch (error) {
     toast(error.message, true);
@@ -39,7 +39,7 @@ export async function renderAdblockDevices(panel) {
     panel.innerHTML = `<p class="note alerte-memoire">${escapeHtml(error.message)}</p>`;
     return;
   }
-  if (!result.pret) {
+  if (!result.ready) {
     panel.innerHTML = `<p class="note alerte-memoire">${escapeHtml(result.message)}</p>`;
     return;
   }
@@ -50,7 +50,7 @@ export async function renderAdblockDevices(panel) {
     "Aucun appareil vu pour l'instant : un appareil apparaît ici dès qu'il utilise le serveur comme DNS (réglage de la box, ou de l'appareil).",
   );
   panel.innerHTML = `<p class="note">${escapeHtml(intro)}</p>
-    ${result.appareils.length ? `<ul class="liste-appareils">${result.appareils.map(deviceRowHtml).join("")}</ul>` : `<p class="note">${escapeHtml(empty)}</p>`}`;
+    ${result.devices.length ? `<ul class="liste-appareils">${result.devices.map(deviceRowHtml).join("")}</ul>` : `<p class="note">${escapeHtml(empty)}</p>`}`;
   panel.querySelectorAll("[data-appareil]").forEach((button) => {
     button.onclick = () => toggleDevice(button);
   });

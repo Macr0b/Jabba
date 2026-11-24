@@ -19,7 +19,7 @@ finish() {
   code=$?
   [ "$reopened" = 1 ] && mount -o remount,ro "$disk" 2>/dev/null
   rm -f "$output"
-  printf '{"debut":%s,"fin":%s,"code":%s,"etape":"%s","avert":"%s","resume":%s}\n' \
+  printf '{"start":%s,"end":%s,"code":%s,"step":"%s","warning":"%s","summary":%s}\n' \
     "$started" "$(date +%s)" "$code" "$step" "$warnings" "$summary" > "$state_file"
 }
 trap finish EXIT

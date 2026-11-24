@@ -14,7 +14,7 @@ import { toolIcon } from "../pages/home.js";
 export function domainCardHtml() {
   return t`<h2 class="titre-section">Accès depuis Internet</h2>
     <div class="grille g2"><article class="carte pad outil" id="carte-domaine">
-      <div class="haut"><div class="titre-outil">${toolIcon({ id: "domaine", nom: t("Domaine") })}<div><h2>Accès par le domaine</h2><div class="role">Nextcloud joignable de partout, en HTTPS (Jabba reste privé)</div></div></div></div>
+      <div class="haut"><div class="titre-outil">${toolIcon({ id: "domaine", name: t("Domaine") })}<div><h2>Accès par le domaine</h2><div class="role">Nextcloud joignable de partout, en HTTPS (Jabba reste privé)</div></div></div></div>
       <div id="domaine-detail"><p class="note">Chargement…</p></div>
     </article></div>`;
 }
@@ -30,23 +30,23 @@ function formHtml(settings, isSuper) {
   if (!isSuper) return t`<p class="note">Seul le super admin peut ouvrir Nextcloud sur Internet.</p>`;
   return t`<p class="note">Indique ton nom de domaine (acheté chez OVH, Gandi…). Seul Nextcloud sera ouvert, à l'adresse « préfixe.domaine ». Jabba, lui, reste réservé à Tailscale.</p>
     <div class="formulaire-domaine">
-      <label class="champ"><span>Domaine</span><input type="text" id="domaine-nom" value="${escapeHtml(settings.domaine || "")}" placeholder="exemple.fr" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-      <label class="champ"><span>Préfixe pour Nextcloud</span><input type="text" id="domaine-prefixe" value="${escapeHtml(settings.prefixe || "cloud")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="champ"><span>Domaine</span><input type="text" id="domaine-nom" value="${escapeHtml(settings.domain || "")}" placeholder="exemple.fr" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="champ"><span>Préfixe pour Nextcloud</span><input type="text" id="domaine-prefixe" value="${escapeHtml(settings.prefix || "cloud")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     </div>
     <div class="actions"><button class="btn btn-p" type="button" id="domaine-activer">Ouvrir Nextcloud sur Internet</button></div>`;
 }
 
 function checklistHtml(settings, isSuper) {
-  const address = escapeHtml(settings.adresse);
-  const box = escapeHtml(settings.ip_box || t("inconnue"));
-  const prefix = escapeHtml(settings.prefixe || "@");
+  const address = escapeHtml(settings.address);
+  const box = escapeHtml(settings.router_ip || t("inconnue"));
+  const prefix = escapeHtml(settings.prefix || "@");
   const pointing = settings.dns.length ? escapeHtml(settings.dns.join(", ")) : t("rien pour l'instant");
-  const ready = settings.dns_ok && settings.certificat_ok;
+  const ready = settings.dns_ok && settings.certificate_ok;
   return t`<p><span class="pastille ${ready ? "p-ok" : "p-alerte"}">${ready ? t("En ligne") : t("En préparation")}</span>
       ${ready ? `<a href="https://${address}" target="_blank" rel="noopener">https://${address}</a>` : address}</p>
     <ol class="etapes-domaine">
       ${stepHtml(
-        Boolean(settings.ip_box),
+        Boolean(settings.router_ip),
         t("Une adresse Internet à toi"),
         t`Adresse de ta box : <strong>${box}</strong>. Si ton fournisseur la partage entre plusieurs abonnés (chez Free : « IPv4 partagée »), demande une adresse « full-stack » (Free : Espace abonné → Ma Freebox), depuis un appareil connecté à la box, puis redémarre la box.`,
       )}
@@ -56,13 +56,13 @@ function checklistHtml(settings, isSuper) {
         t`Chez ton fournisseur de domaine (Cloudflare : DNS → Enregistrements → Ajouter, type A, nuage gris ; OVH : Zone DNS → Ajouter une entrée → A) : sous-domaine <strong>${prefix}</strong>, cible <strong>${box}</strong>. Aujourd'hui, ${address} pointe vers : ${pointing}. La prise en compte prend de quelques minutes à quelques heures.`,
       )}
       ${stepHtml(
-        settings.certificat_ok,
+        settings.certificate_ok,
         t("La box laisse passer HTTPS vers le serveur"),
-        t`Dans l'interface de la box (Freebox OS : Paramètres → Gestion des ports) : port externe <strong>443</strong>, TCP, vers <strong>${escapeHtml(settings.ip_serveur || t("le serveur"))}</strong>, port <strong>${settings.port_serveur}</strong>. Rien d'autre à ouvrir. Jabba ne voit pas dans la box : cette étape se valide avec le certificat.`,
+        t`Dans l'interface de la box (Freebox OS : Paramètres → Gestion des ports) : port externe <strong>443</strong>, TCP, vers <strong>${escapeHtml(settings.server_ip || t("le serveur"))}</strong>, port <strong>${settings.server_port}</strong>. Rien d'autre à ouvrir. Jabba ne voit pas dans la box : cette étape se valide avec le certificat.`,
         t("Se vérifie avec le certificat"),
       )}
       ${stepHtml(
-        settings.certificat_ok,
+        settings.certificate_ok,
         t("Le certificat HTTPS"),
         t(
           "Obtenu et renouvelé tout seul (Let's Encrypt) dès que les deux étapes d'avant sont faites. Revérifie dans quelques minutes.",
@@ -92,8 +92,8 @@ function checklistHtml(settings, isSuper) {
 
 /** L'entrée DNS réglée par Jabba chez Cloudflare ou OVH : un jeton (ou une clé) donné une fois, puis plus rien à faire. */
 function dnsHtml(settings) {
-  const prefix = escapeHtml(settings.prefixe || "cloud");
-  const domain = escapeHtml(settings.domaine);
+  const prefix = escapeHtml(settings.prefix || "cloud");
+  const domain = escapeHtml(settings.domain);
   if (settings.dns_auto) {
     const name = settings.dns_auto === "cloudflare" ? t("Cloudflare") : "OVH";
     return t`<div class="bloc-ovh"><h3>DNS réglé par Jabba (${name})</h3>
@@ -107,7 +107,7 @@ function dnsHtml(settings) {
       <li><strong>Continuer vers le résumé → Créer le jeton</strong>, puis colle-le ici.</li>
     </ol>
     <p class="note">Garde l'entrée ${prefix} en « DNS uniquement » (nuage gris) : le certificat HTTPS se fait sur le serveur.</p>
-    <p><a class="btn" href="${escapeHtml(settings.cloudflare_lien)}" target="_blank" rel="noopener">Créer le jeton chez Cloudflare</a></p>
+    <p><a class="btn" href="${escapeHtml(settings.cloudflare_link)}" target="_blank" rel="noopener">Créer le jeton chez Cloudflare</a></p>
     <label class="champ"><span>Jeton Cloudflare</span><input type="password" id="cf-jeton" autocomplete="off"></label>
     <div class="actions"><button class="btn btn-p" type="button" id="cf-enregistrer">Enregistrer et régler le DNS</button></div>
     <details><summary>Domaine chez OVH ?</summary>
@@ -115,7 +115,7 @@ function dnsHtml(settings) {
       <li>Ouvre la page d'OVH ci-dessous et connecte-toi : les droits sont déjà remplis, limités à la zone DNS de ${domain}. Dans « Validity », choisis <strong>Unlimited</strong>, puis <strong>Create keys</strong>.</li>
       <li>Recopie ici les trois codes affichés par OVH.</li>
     </ol>
-    <p><a class="btn" href="${escapeHtml(settings.ovh_lien)}" target="_blank" rel="noopener">Créer la clé chez OVH</a></p>
+    <p><a class="btn" href="${escapeHtml(settings.ovh_link)}" target="_blank" rel="noopener">Créer la clé chez OVH</a></p>
     <label class="champ"><span>Application key</span><input type="text" id="ovh-ak" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <label class="champ"><span>Application secret</span><input type="password" id="ovh-as" autocomplete="off"></label>
     <label class="champ"><span>Consumer key</span><input type="password" id="ovh-ck" autocomplete="off"></label>
@@ -125,9 +125,9 @@ function dnsHtml(settings) {
 export function bindDomain() {
   const detail = $("#domaine-detail");
   if (!detail) return;
-  const isSuper = Boolean(state.admin && state.admin.rang === "super");
+  const isSuper = Boolean(state.admin && state.admin.rank === "super");
   const render = (settings) => {
-    detail.innerHTML = settings.actif ? checklistHtml(settings, isSuper) : formHtml(settings, isSuper);
+    detail.innerHTML = settings.active ? checklistHtml(settings, isSuper) : formHtml(settings, isSuper);
     const enable = $("#domaine-activer");
     if (enable)
       enable.onclick = async () => {
@@ -135,7 +135,7 @@ export function bindDomain() {
         try {
           const result = await api("/api/domaine", {
             method: "POST",
-            json: { domaine: $("#domaine-nom").value.trim(), prefixe: $("#domaine-prefixe").value.trim() },
+            json: { domain: $("#domaine-nom").value.trim(), prefix: $("#domaine-prefixe").value.trim() },
           });
           toast(t("Caddy est en place : suis les étapes pour finir."));
           render(result);
@@ -175,7 +175,7 @@ export function bindDomain() {
         dnsCall(
           saveToken,
           "/api/domaine/cloudflare",
-          { jeton: $("#cf-jeton").value },
+          { token: $("#cf-jeton").value },
           t("Jeton enregistré : l'entrée DNS est réglée chez Cloudflare."),
         );
     const syncNow = $("#dns-regler");
@@ -190,11 +190,11 @@ export function bindDomain() {
     if (remove)
       remove.onclick = async () => {
         const ok = await confirmAction({
-          titre: t("Fermer l'accès par le domaine ?"),
-          texte: t(
+          title: t("Fermer l'accès par le domaine ?"),
+          text: t(
             "Nextcloud ne sera plus joignable depuis Internet (il le reste par Tailscale). Pense aussi à retirer la redirection du port 443 dans la box.",
           ),
-          valider: t("Fermer l'accès"),
+          confirmLabel: t("Fermer l'accès"),
         });
         if (!ok) return;
         try {

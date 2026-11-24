@@ -94,7 +94,7 @@ def check_password(user, password):
     if not password or is_locked():
         return False
     try:
-        code, _, _ = commands.run_action("verifier_mot_de_passe_serveur", input_text=password, utilisateur=user)
+        code, _, _ = commands.run_action("verifier_mot_de_passe_serveur", input_text=password, user=user)
     except actions.ActionError:
         return False
     if code == 1:
@@ -111,9 +111,7 @@ def change_password(user, new_value):
     if ":" in new_value or "\n" in new_value:
         raise ValueError("Le mot de passe du serveur ne peut pas contenir « : » ni de retour à la ligne.")
     try:
-        code, _, error_output = commands.run_action(
-            "changer_mot_de_passe_serveur", input_text=new_value, utilisateur=user
-        )
+        code, _, error_output = commands.run_action("changer_mot_de_passe_serveur", input_text=new_value, user=user)
     except actions.ActionError as error:
         raise ValueError(str(error))
     if code != 0:
@@ -130,7 +128,7 @@ def generate_recovery_code():
     code = " ".join(secrets.choice(WORDS) for _ in range(6))
     salt = secrets.token_hex(16)
     data = _read()
-    data["code"] = {"sel": salt, "empreinte": _code_hash(code, salt), "cree": int(time.time())}
+    data["code"] = {"salt": salt, "fingerprint": _code_hash(code, salt), "created": int(time.time())}
     _write(data)
     return code
 
@@ -143,7 +141,7 @@ def check_recovery_code(code):
     if is_locked():
         return False
     stored = _read().get("code")
-    valid = bool(stored) and hmac.compare_digest(_code_hash(code, stored["sel"]), stored["empreinte"])
+    valid = bool(stored) and hmac.compare_digest(_code_hash(code, stored["salt"]), stored["fingerprint"])
     if not valid:
         _record_failure()
     return valid

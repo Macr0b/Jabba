@@ -21,7 +21,7 @@ def dossier(page):
     chemin = f"/Films et séries/Essais {uuid.uuid4().hex[:6]}"
     page.evaluate(
         """async (chemin) => { await fetch("/api/fichiers/dossier", {method: "POST",
-           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({chemin})}); }""",
+           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({path: chemin})}); }""",
         chemin,
     )
     page.goto(page.root + "/#/fichiers?chemin=" + urllib.parse.quote(chemin))
@@ -33,14 +33,14 @@ def dossier(page):
     yield chemin
     page.evaluate(
         """async (chemin) => { await fetch("/api/fichiers/supprimer", {method: "POST",
-           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({chemin, dossier: true})}); }""",
+           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({path: chemin, folder: true})}); }""",
         chemin,
     )
 
 
 def test_sort_remembered_and_grid(page, dossier):
     expect(page.locator(".element a")).to_have_text(["a-petit.txt", "b-moyen.txt", "c-gros.txt"])
-    page.select_option("#tri", "taille:-1")
+    page.select_option("#tri", "size:-1")
     expect(page.locator(".element a").first).to_have_text("c-gros.txt")
     page.reload()
     expect(page.locator(".element a").first).to_have_text("c-gros.txt")  # gardé pour ce dossier
@@ -51,9 +51,9 @@ def test_sort_remembered_and_grid(page, dossier):
     page.click("[data-vue=liste]")
     expect(page.locator(".grille-fichiers")).to_have_count(0)
     if page.appareil == "ordinateur":
-        page.click("button[data-tri=nom]")
+        page.click("button[data-tri=name]")
         expect(page.locator(".element a")).to_have_text(["a-petit.txt", "b-moyen.txt", "c-gros.txt"])
-        page.click("button[data-tri=nom]")
+        page.click("button[data-tri=name]")
         expect(page.locator(".element a")).to_have_text(["c-gros.txt", "b-moyen.txt", "a-petit.txt"])
 
 
@@ -142,7 +142,7 @@ def test_upload_error_then_retry(page, dossier):
 def create_folder(page, chemin):
     page.evaluate(
         """async (chemin) => { await fetch("/api/fichiers/dossier", {method: "POST",
-           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({chemin})}); }""",
+           headers: {"X-Jabba": "1", "Content-Type": "application/json"}, body: JSON.stringify({path: chemin})}); }""",
         chemin,
     )
 

@@ -30,13 +30,13 @@ def guest_settings(request: Request):
         pass
     state = guests.read()
     return {
-        "actif": state["actif"],
+        "active": state["active"],
         "code": state["code"],
         "url": guest_network.guest_url(state),
-        "nom_local": f"http://{guard.hostname()}.local",
-        "dossiers": state["dossiers"],
+        "local_name": f"http://{guard.hostname()}.local",
+        "folders": state["folders"],
         "wifi": state["wifi"],
-        "outils": [{**tool, "wifi": bool(state["wifi"].get(tool["id"]))} for tool in state["outils"]],
+        "tools": [{**tool, "wifi": bool(state["wifi"].get(tool["id"]))} for tool in state["tools"]],
     }
 
 
@@ -58,8 +58,8 @@ def guest_qr_code(request: Request):
 # ---------------------------------------------------------------- un réglage de l'accès invités
 # Chaque geste : (body) -> texte du Journal.
 def _switch(body):
-    active = bool(body.get("actif"))
-    guests.update(lambda state: state.update(actif=active))
+    active = bool(body.get("active"))
+    guests.update(lambda state: state.update(active=active))
     if active:
         guests.prepare_guest_folder()
     return f"Accès invités {'ouvert' if active else 'fermé'}"
@@ -87,7 +87,7 @@ def _mode_text(mode):
 
 
 def _add_folder(body):
-    virtual_path, mode = nextcloud_files.clean_path(body.get("chemin", "")), body.get("mode", "lecture")
+    virtual_path, mode = nextcloud_files.clean_path(body.get("path", "")), body.get("mode", "lecture")
     real_path, _ = files_source.run_disk_action(
         lambda: disk_browser.resolve(virtual_path, guest_network.shareable_roots(), set())
     )
@@ -98,9 +98,9 @@ def _add_folder(body):
     name = virtual_path.rstrip("/").rsplit("/", 1)[-1]
 
     def add(state):
-        if any(folder["chemin"] == real_path for folder in state["dossiers"]):
+        if any(folder["path"] == real_path for folder in state["folders"]):
             raise HTTPException(409, "Ce dossier est déjà partagé.")
-        state["dossiers"].append({"id": uuid.uuid4().hex[:8], "nom": name, "chemin": real_path, "mode": mode})
+        state["folders"].append({"id": uuid.uuid4().hex[:8], "name": name, "path": real_path, "mode": mode})
 
     guests.update(add)
     return f"Dossier « {name} » partagé avec les invités ({_mode_text(mode)})"
@@ -110,14 +110,14 @@ def _change_folder(body, remove):
     folder_id, mode = body.get("id"), body.get("mode")
 
     def change(state):
-        folder = next((folder for folder in state["dossiers"] if folder["id"] == folder_id), None)
+        folder = next((folder for folder in state["folders"] if folder["id"] == folder_id), None)
         if not folder:
             raise HTTPException(404, "Dossier introuvable.")
         if remove:
-            state["dossiers"] = [other for other in state["dossiers"] if other["id"] != folder_id]
+            state["folders"] = [other for other in state["folders"] if other["id"] != folder_id]
         elif mode in ("lecture", "depot"):
             folder["mode"] = mode
-        return folder["nom"]
+        return folder["name"]
 
     name = guests.update(change)
     if remove:
@@ -143,7 +143,7 @@ async def update_guest_settings(request: Request):
     if action not in GUEST_ACTIONS:
         raise HTTPException(400, "Action inconnue.")
     text = GUEST_ACTIONS[action](body)
-    activity_log.record("invite", f"{text}, par {session['identifiant']}", request.state.nom)
+    activity_log.record("invite", f"{text}, par {session['username']}", request.state.nom)
     return {"ok": True}
 
 
@@ -156,15 +156,15 @@ def browse_shareable_folders(request: Request, chemin: str = "/"):
         guests.prepare_guest_folder()
         all_entries = {**disk_browser.roots(), **guest_network.shareable_roots()}
         folder_entries = [
-            {"nom": name, "chemin": "/" + name} for name, disk_path in all_entries.items() if os.path.isdir(disk_path)
+            {"name": name, "path": "/" + name} for name, disk_path in all_entries.items() if os.path.isdir(disk_path)
         ]
-        return {"chemin": "/", "elements": folder_entries}
+        return {"path": "/", "items": folder_entries}
     state = files_source.run_disk_action(
         lambda: disk_browser.list_folder(chemin, guest_network.shareable_roots(), set())
     )
     return {
-        "chemin": chemin,
-        "elements": [
-            {"nom": entries["nom"], "chemin": entries["chemin"]} for entries in state["elements"] if entries["dossier"]
+        "path": chemin,
+        "items": [
+            {"name": entries["name"], "path": entries["path"]} for entries in state["items"] if entries["folder"]
         ],
     }

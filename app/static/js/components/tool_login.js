@@ -28,16 +28,16 @@ function loginUrl(item) {
 
 function showLogin(panel, item, login) {
   const hidden = "•".repeat(12);
-  const intro = login.cree_par_jabba
-    ? t`Le compte créé par Jabba dans ${escapeHtml(item.nom)}. Copie-le au moment de te connecter.`
-    : t`Le compte que tu as noté pour ${escapeHtml(item.nom)}. Jabba le garde pour toi.`;
-  const actions = login.cree_par_jabba
+  const intro = login.created_by_jabba
+    ? t`Le compte créé par Jabba dans ${escapeHtml(item.name)}. Copie-le au moment de te connecter.`
+    : t`Le compte que tu as noté pour ${escapeHtml(item.name)}. Jabba le garde pour toi.`;
+  const actions = login.created_by_jabba
     ? ""
     : t`<div class="actions"><button class="btn" type="button" data-modifier>Modifier</button><button class="lien" type="button" data-oublier>Oublier</button></div>`;
   panel.innerHTML = t`<p class="note">${intro}</p>
     <dl class="identifiants-outil">
-      <dt>Identifiant</dt><dd><code>${escapeHtml(login.identifiant)}</code> <button class="lien" type="button" data-copier="identifiant">Copier</button></dd>
-      <dt>Mot de passe</dt><dd><code data-secret>${hidden}</code> <button class="lien" type="button" data-afficher>Afficher</button> <button class="lien" type="button" data-copier="mot_de_passe">Copier</button></dd>
+      <dt>Identifiant</dt><dd><code>${escapeHtml(login.username)}</code> <button class="lien" type="button" data-copier="username">Copier</button></dd>
+      <dt>Mot de passe</dt><dd><code data-secret>${hidden}</code> <button class="lien" type="button" data-afficher>Afficher</button> <button class="lien" type="button" data-copier="password">Copier</button></dd>
     </dl>${actions}`;
   panel.querySelectorAll("[data-copier]").forEach((button) => {
     button.onclick = () => copy(login[button.dataset.copier]);
@@ -45,7 +45,7 @@ function showLogin(panel, item, login) {
   const secret = panel.querySelector("[data-secret]");
   panel.querySelector("[data-afficher]").onclick = (event) => {
     const shown = secret.textContent !== hidden;
-    secret.textContent = shown ? hidden : login.mot_de_passe;
+    secret.textContent = shown ? hidden : login.password;
     event.target.textContent = shown ? t("Afficher") : t("Masquer");
   };
   const edit = panel.querySelector("[data-modifier]");
@@ -55,7 +55,7 @@ function showLogin(panel, item, login) {
     forget.onclick = async () => {
       try {
         await api(loginUrl(item), { method: "DELETE" });
-        toast(t`Jabba a oublié les identifiants de ${item.nom}`);
+        toast(t`Jabba a oublié les identifiants de ${item.name}`);
         showForm(panel, item, null);
       } catch (error) {
         toast(error.message, true);
@@ -64,9 +64,9 @@ function showLogin(panel, item, login) {
 }
 
 function showForm(panel, item, login) {
-  panel.innerHTML = t`<p class="note">Note ici l'identifiant et le mot de passe que tu utilises dans ${escapeHtml(item.nom)} : Jabba les garde pour toi, et seul le super admin peut les revoir.</p>
+  panel.innerHTML = t`<p class="note">Note ici l'identifiant et le mot de passe que tu utilises dans ${escapeHtml(item.name)} : Jabba les garde pour toi, et seul le super admin peut les revoir.</p>
     <div class="formulaire-identifiants">
-      <label class="champ"><span>Identifiant</span><input type="text" data-champ="identifiant" value="${escapeHtml((login && login.identifiant) || "")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="champ"><span>Identifiant</span><input type="text" data-champ="identifiant" value="${escapeHtml((login && login.username) || "")}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
       <label class="champ"><span>Mot de passe</span><input type="text" class="saisie-secrete" data-champ="mot_de_passe" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     </div>
     <div class="actions"><button class="btn btn-p" type="button" data-enregistrer>Enregistrer</button>${login ? t`<button class="lien" type="button" data-annuler>Annuler</button>` : ""}</div>`;
@@ -76,9 +76,9 @@ function showForm(panel, item, login) {
     try {
       const saved = await api(loginUrl(item), {
         method: "PUT",
-        json: { identifiant: field("identifiant").value, mot_de_passe: field("mot_de_passe").value },
+        json: { username: field("identifiant").value, password: field("mot_de_passe").value },
       });
-      toast(t`Identifiants de ${item.nom} gardés par Jabba`);
+      toast(t`Identifiants de ${item.name} gardés par Jabba`);
       showLogin(panel, item, saved);
     } catch (error) {
       toast(error.message, true);
@@ -94,7 +94,7 @@ export async function renderToolLogin(panel, item) {
   try {
     showLogin(panel, item, await api(loginUrl(item)));
   } catch (error) {
-    if (error.status === 404 && !item.identifiants_jabba) return showForm(panel, item, null);
+    if (error.status === 404 && !item.jabba_credentials) return showForm(panel, item, null);
     panel.innerHTML = `<p class="note alerte-memoire">${escapeHtml(error.message)}</p>`;
   }
 }

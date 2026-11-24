@@ -90,7 +90,7 @@ function renderBar() {
     content.appendChild(bar);
   }
   const count = current.selected.size;
-  const writable = current.context.folder.ecriture && selectedEntries().every((entry) => entry.ecriture);
+  const writable = current.context.folder.writable && selectedEntries().every((entry) => entry.writable);
   const everything = allSelected();
   bar.innerHTML = t`<strong>${count} sélectionné${count > 1 ? "s" : ""}</strong>
     ${everything ? t('<button class="btn btn-petit" type="button" data-action="aucun">Tout désélectionner</button>') : t('<button class="btn btn-petit" type="button" data-action="tout">Tout sélectionner</button>')}
@@ -121,7 +121,7 @@ async function openMenu(index) {
   const choices = multiple
     ? selectionChoices(entries, current.context)
     : itemChoices(entries[0], { ...current.context, list: current.entries, index });
-  const choice = await chooseFromMenu(multiple ? t`${entries.length} éléments` : entries[0].nom, choices);
+  const choice = await chooseFromMenu(multiple ? t`${entries.length} éléments` : entries[0].name, choices);
   if (choice) setTimeout(choice.f, 50);
 }
 
@@ -169,7 +169,7 @@ function onKey(event) {
       refresh();
     },
     F2: () =>
-      focused && focused.ecriture && current.context.folder.ecriture && renameEntry(focused, current.context.after),
+      focused && focused.writable && current.context.folder.writable && renameEntry(focused, current.context.after),
     "/": () => {
       const search = content.querySelector("#form-recherche input");
       if (search) search.focus();
@@ -181,7 +181,7 @@ function onKey(event) {
   }
   if (event.key === "Delete" || (command && event.key === "Backspace")) {
     const entries = current.selected.size ? selectedEntries() : focused ? [focused] : [];
-    if (!entries.length || !current.context.folder.ecriture || !entries.every((entry) => entry.ecriture)) return;
+    if (!entries.length || !current.context.folder.writable || !entries.every((entry) => entry.writable)) return;
     event.preventDefault();
     return deleteEntries(entries, current.context.after);
   }
@@ -236,7 +236,7 @@ export function attachSelection(entries, context) {
       true,
     );
     // Glisser un élément (ou toute la sélection) sur un dossier pour l'y déplacer.
-    if (context.folder.ecriture && entries[index].ecriture) {
+    if (context.folder.writable && entries[index].writable) {
       element.draggable = true;
       element.querySelectorAll("a, img").forEach((inner) => (inner.draggable = false));
       element.addEventListener("dragstart", (event) => {

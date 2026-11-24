@@ -43,7 +43,7 @@ def test_the_check_returns_only_yes_or_no():
     fingerprint = _openssl_fingerprint("Bon-mot-de-passe", "abcdefgh", "-6")
     was_read = (0, f"rob:{fingerprint}:19000:0:99999:7:::\n", "")
     nom = "verifier_mot_de_passe_serveur"
-    assert actions.host_input(nom, {"utilisateur": "rob"}, "Bon-mot-de-passe") is None
+    assert actions.host_input(nom, {"user": "rob"}, "Bon-mot-de-passe") is None
     assert actions.finish(nom, was_read, "Bon-mot-de-passe") == (0, "ok", "")
     code, output, error = actions.finish(nom, was_read, "Mauvais")
     assert code == 1 and fingerprint not in output + error
@@ -71,14 +71,14 @@ def test_check_by_the_server(monkeypatch):
 
 def test_only_a_human_account(tmp_path):
     """root ou un compte de service ne peuvent être ni vérifiés ni changés."""
-    commande, _ = actions.build("changer_mot_de_passe_serveur", {"utilisateur": "root"})
+    commande, _ = actions.build("changer_mot_de_passe_serveur", {"user": "root"})
     output = subprocess.run(
         ["sh", "-c", commande[2].replace("exec chpasswd", "echo change"), *commande[3:]], capture_output=True, text=True
     )
     assert output.returncode == 5 and "change" not in output.stdout
     for account in ("Root", "-x", "a b", "rob:x"):
         with pytest.raises(actions.ActionError):
-            actions.build("verifier_mot_de_passe_serveur", {"utilisateur": account})
+            actions.build("verifier_mot_de_passe_serveur", {"user": account})
 
 
 def test_change_through_the_service(monkeypatch):
@@ -94,7 +94,7 @@ def test_change_through_the_service(monkeypatch):
     assert entry == "rob:Une phrase de passe bien longue\n"
     assert "Une phrase" not in " ".join(commande)  # jamais dans la liste des processus
     with pytest.raises(actions.ActionError):
-        actions.host_input("changer_mot_de_passe_serveur", {"utilisateur": "rob"}, "a\nroot:x")
+        actions.host_input("changer_mot_de_passe_serveur", {"user": "rob"}, "a\nroot:x")
 
 
 def test_lockout_per_person(monkeypatch):

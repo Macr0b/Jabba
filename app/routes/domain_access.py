@@ -35,7 +35,7 @@ async def enable_domain(request: Request):
     guard.require_super_admin(request, strong=True)
     body = await request.json()
     try:
-        settings = await asyncio.to_thread(domain_access.enable, body.get("domaine"), body.get("prefixe", "cloud"))
+        settings = await asyncio.to_thread(domain_access.enable, body.get("domain"), body.get("prefix", "cloud"))
     except (ValueError, actions.ActionError) as error:
         raise HTTPException(400, str(error))
     except RuntimeError as error:
@@ -64,9 +64,9 @@ def _sync_now():
 async def cloudflare_token(request: Request):
     guard.require_super_admin(request)
     body = await request.json()
-    zone = domain_access.read().get("domaine")
+    zone = domain_access.read().get("domain")
     try:
-        await asyncio.to_thread(cloudflare_dns.save_token, zone, body.get("jeton"))
+        await asyncio.to_thread(cloudflare_dns.save_token, zone, body.get("token"))
     except cloudflare_dns.CloudflareError as error:
         raise HTTPException(400, str(error))
     activity_log.record("securite", "Jeton Cloudflare enregistré pour le DNS du domaine", request.state.nom)
@@ -93,7 +93,7 @@ async def cloudflare_forget(request: Request):
 async def ovh_keys(request: Request):
     guard.require_super_admin(request)
     body = await request.json()
-    zone = domain_access.read().get("domaine")
+    zone = domain_access.read().get("domain")
     try:
         await asyncio.to_thread(
             ovh_dns.save_keys,

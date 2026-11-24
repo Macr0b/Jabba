@@ -14,19 +14,19 @@ from host import action_common, actions, actions_system, commands, host_service
 
 def test_known_actions():
     assert actions.build("nom_du_serveur") == (["hostname"], 10)
-    assert actions.build("ejecter", {"chemin": "/srv/disques/R2-D2 (copie) l'été"})[0] == [
+    assert actions.build("ejecter", {"path": "/srv/disques/R2-D2 (copie) l'été"})[0] == [
         "sh",
         "-c",
         'sync && umount "$1"',
         "ejecter",
         "/srv/disques/R2-D2 (copie) l'été",
     ]
-    assert actions.build("sante_disque", {"appareil": "/dev/nvme0n1", "pont_sat": True})[0][-3:] == [
+    assert actions.build("sante_disque", {"device": "/dev/nvme0n1", "sat_bridge": True})[0][-3:] == [
         "-d",
         "sat",
         "/dev/nvme0n1",
     ]
-    assert actions.build("espace_disques", {"chemins": ["/", "/srv/data", "/mnt/x"]})[0][-3:] == [
+    assert actions.build("espace_disques", {"paths": ["/", "/srv/data", "/mnt/x"]})[0][-3:] == [
         "/",
         "/srv/data",
         "/mnt/x",
@@ -37,23 +37,23 @@ def test_known_actions():
     "nom, args",
     [
         ("rm", {}),
-        ("sh", {"commande": "id"}),
+        ("sh", {"command": "id"}),
         ("", {}),
-        ("ejecter", {"chemin": "/etc"}),
-        ("ejecter", {"chemin": "/srv/../etc"}),
-        ("ejecter", {"chemin": "/srv/disques/x/../../../etc"}),
-        ("ejecter", {"chemin": "srv/disques/x"}),
-        ("ejecter", {"chemin": "/srv/disques/x\n; reboot"}),
-        ("ejecter", {"chemin": "/srv//x"}),
+        ("ejecter", {"path": "/etc"}),
+        ("ejecter", {"path": "/srv/../etc"}),
+        ("ejecter", {"path": "/srv/disques/x/../../../etc"}),
+        ("ejecter", {"path": "srv/disques/x"}),
+        ("ejecter", {"path": "/srv/disques/x\n; reboot"}),
+        ("ejecter", {"path": "/srv//x"}),
         ("ejecter", {}),
-        ("est_monte", {"chemin": "/"}),
-        ("sante_disque", {"appareil": "/dev/sda; reboot"}),
-        ("sante_disque", {"appareil": "/etc/passwd"}),
-        ("sante_disque", {"appareil": "/dev/zram0"}),
-        ("espace_disques", {"chemins": "/"}),
-        ("espace_disques", {"chemins": []}),
-        ("espace_disques", {"chemins": ["/home"]}),
-        ("espace_disques", {"chemins": ["/srv/x"] * 33}),
+        ("est_monte", {"path": "/"}),
+        ("sante_disque", {"device": "/dev/sda; reboot"}),
+        ("sante_disque", {"device": "/etc/passwd"}),
+        ("sante_disque", {"device": "/dev/zram0"}),
+        ("espace_disques", {"paths": "/"}),
+        ("espace_disques", {"paths": []}),
+        ("espace_disques", {"paths": ["/home"]}),
+        ("espace_disques", {"paths": ["/srv/x"] * 33}),
         ("nom_du_serveur", ["liste"]),
     ],
 )
@@ -71,8 +71,8 @@ def test_the_service_runs_only_the_list():
 
     assert host_service.handle(json.dumps({"action": "nom_du_serveur"}), fake) == {
         "code": 0,
-        "sortie": "serveur-test\n",
-        "erreur": "",
+        "output": "serveur-test\n",
+        "error": "",
     }
     for request_made in [
         '{"action": "rm", "args": {}}',
@@ -111,9 +111,9 @@ def test_through_the_service_socket(monkeypatch):
         time.sleep(0.02)
     assert oct(os.stat(chemin).st_mode)[-3:] == "660"
     monkeypatch.setattr(commands, "HOST_SOCKET", chemin)
-    assert commands.run_action("est_monte", chemin="/srv/disques/R2") == (0, "mountpoint -q /srv/disques/R2", "")
+    assert commands.run_action("est_monte", path="/srv/disques/R2") == (0, "mountpoint -q /srv/disques/R2", "")
     with pytest.raises(actions.ActionError):
-        commands.run_action("ejecter", chemin="/etc")  # refusé avant même d'être envoyé
+        commands.run_action("ejecter", path="/etc")  # refusé avant même d'être envoyé
     # une demande trafiquée envoyée directement à la prise est refusée aussi
     with socket.socket(socket.AF_UNIX) as raw:
         raw.connect(chemin)
@@ -162,41 +162,41 @@ def test_the_app_has_no_rights_on_the_server():
 
 def test_tool_gestures():
     commande, delai = actions.build(
-        "outil", {"dossier": "/opt/stacks/nextcloud", "geste": "demarrer", "adresse": "adresse-nextcloud"}
+        "outil", {"folder": "/opt/stacks/nextcloud", "gesture": "demarrer", "address": "adresse-nextcloud"}
     )
     assert commande[:2] == ["sh", "-c"] and commande[3:] == ["outil", "/opt/stacks/nextcloud", "adresse-nextcloud"]
     assert '"$1"' in commande[2] and "/opt" not in commande[2]  # le dossier n'est jamais dans le texte du script
-    assert actions.build("outil", {"dossier": "/opt/dockge", "geste": "redemarrer"})[0][-1] == ""
+    assert actions.build("outil", {"folder": "/opt/dockge", "gesture": "redemarrer"})[0][-1] == ""
     for args in (
-        {"dossier": "/opt/stacks/x", "geste": "rm"},
-        {"dossier": "/etc", "geste": "demarrer"},
-        {"dossier": "/opt/stacks/../../etc", "geste": "demarrer"},
-        {"dossier": "/opt/stacks/x; reboot", "geste": "demarrer"},
-        {"dossier": "/opt/stacks/x", "geste": "demarrer", "adresse": "x; reboot"},
+        {"folder": "/opt/stacks/x", "gesture": "rm"},
+        {"folder": "/etc", "gesture": "demarrer"},
+        {"folder": "/opt/stacks/../../etc", "gesture": "demarrer"},
+        {"folder": "/opt/stacks/x; reboot", "gesture": "demarrer"},
+        {"folder": "/opt/stacks/x", "gesture": "demarrer", "address": "x; reboot"},
     ):
         with pytest.raises(actions.ActionError):
             actions.build("outil", args)
     for nom in ("", "-rf", "a b", "x;y"):
         with pytest.raises(actions.ActionError):
-            actions.build("conteneur_actif", {"nom": nom})
+            actions.build("conteneur_actif", {"name": nom})
     with pytest.raises(actions.ActionError):
         actions.build("details_image", {"image": "nextcloud:latest"})
 
 
 def test_nextcloud_only_the_planned_commands():
-    commande, delai = actions.build("nextcloud", {"commande": "user:list", "arguments": ["--output=json"]})
+    commande, delai = actions.build("nextcloud", {"command": "user:list", "arguments": ["--output=json"]})
     assert commande[:2] == ["docker", "exec"] and commande[-2:] == ["user:list", "--output=json"] and delai == 60
     # Un texte avec « ; » ou des guillemets reste un seul argument : jamais interprété par un shell.
     commande, _ = actions.build(
-        "nextcloud", {"commande": "config:app:set", "arguments": ["a", "b", "--value", "x; reboot"]}
+        "nextcloud", {"command": "config:app:set", "arguments": ["a", "b", "--value", "x; reboot"]}
     )
     assert commande[-1] == "x; reboot" and "sh" not in commande
     for args in (
-        {"commande": "maintenance:mode"},
-        {"commande": "db:convert-type"},
-        {"commande": "user:list", "arguments": "--output=json"},
-        {"commande": "user:list", "arguments": ["a\x00b"]},
-        {"commande": "user:list", "delai": 999999},
+        {"command": "maintenance:mode"},
+        {"command": "db:convert-type"},
+        {"command": "user:list", "arguments": "--output=json"},
+        {"command": "user:list", "arguments": ["a\x00b"]},
+        {"command": "user:list", "delay": 999999},
     ):
         with pytest.raises(actions.ActionError):
             actions.build("nextcloud", args)
@@ -204,7 +204,7 @@ def test_nextcloud_only_the_planned_commands():
 
 def test_password_through_standard_input():
     commande, _ = actions.build(
-        "nextcloud", {"commande": "user:add", "arguments": ["--password-from-env", "alice"], "mot_de_passe": True}
+        "nextcloud", {"command": "user:add", "arguments": ["--password-from-env", "alice"], "password": True}
     )
     assert commande[:2] == ["sh", "-c"] and "OC_PASS" in commande
     assert actions.check_input("nextcloud", "secret-tres-long") == "secret-tres-long"
@@ -220,15 +220,15 @@ def test_password_through_standard_input():
         {
             "action": "nextcloud",
             "args": {
-                "commande": "user:resetpassword",
+                "command": "user:resetpassword",
                 "arguments": ["--password-from-env", "alice"],
-                "mot_de_passe": True,
+                "password": True,
             },
-            "entree": "secret-tres-long",
+            "entry": "secret-tres-long",
         }
     )
     assert host_service.handle(request_made, runner)["code"] == 0 and seen == ["secret-tres-long"]
-    request_made = json.dumps({"action": "espace_disques", "args": {"chemins": ["/"]}, "entree": "x"})
+    request_made = json.dumps({"action": "espace_disques", "args": {"paths": ["/"]}, "entry": "x"})
     assert host_service.handle(request_made, runner)["code"] == host_service.REFUSED
 
 
@@ -278,22 +278,22 @@ def test_app_update_key_read_by_the_service(monkeypatch):
     key = "ssh-ed25519 " + "A" * 68
     monkeypatch.setattr(app_update, "publication_key", lambda: key)
     commande, _ = actions.build(
-        "installer_appli", {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "jabba-maj-1700000000"}
+        "installer_appli", {"folder": "/opt/jabba", "tag": "v0.14.0", "unit": "jabba-maj-1700000000"}
     )
     assert commande[:2] == ["sh", "-c"] and commande[3:6] == ["tache", action_common.TASKS_DIR, "jabba-maj-1700000000"]
     script = commande[6]
     assert key in script and "${LIGNE% *}" in script  # le script arrive intact, ${…} compris
     assert "$3" in commande[2] and "/opt/jabba" not in commande[2]  # jamais collé dans le texte du shell
     for args in (
-        {"dossier": "/opt/jabba", "tag": "v0.14.0; reboot", "unite": "jabba-maj-1"},
-        {"dossier": "/opt/../etc", "tag": "v0.14.0", "unite": "jabba-maj-1"},
-        {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "sshd"},
+        {"folder": "/opt/jabba", "tag": "v0.14.0; reboot", "unit": "jabba-maj-1"},
+        {"folder": "/opt/../etc", "tag": "v0.14.0", "unit": "jabba-maj-1"},
+        {"folder": "/opt/jabba", "tag": "v0.14.0", "unit": "sshd"},
     ):
         with pytest.raises(actions.ActionError):
             actions.build("installer_appli", args)
     monkeypatch.setattr(app_update, "publication_key", lambda: None)  # sans clé chez le service : rien ne s'installe
     with pytest.raises(actions.ActionError):
-        actions.build("installer_appli", {"dossier": "/opt/jabba", "tag": "v0.14.0", "unite": "jabba-maj-1"})
+        actions.build("installer_appli", {"folder": "/opt/jabba", "tag": "v0.14.0", "unit": "jabba-maj-1"})
 
 
 def test_background_task_writes_then_runs_the_script(tmp_path):
@@ -309,10 +309,10 @@ def test_background_task_writes_then_runs_the_script(tmp_path):
 
 
 def test_task_tracking():
-    assert actions.build("etat_tache", {"unite": "jabba-maj-12"})[0][-1] == "jabba-maj-12"
+    assert actions.build("etat_tache", {"unit": "jabba-maj-12"})[0][-1] == "jabba-maj-12"
     for unite in ("ssh", "jabba-maj-", "jabba-maj-1;x", "--all"):
         with pytest.raises(actions.ActionError):
-            actions.build("journal_tache", {"unite": unite})
+            actions.build("journal_tache", {"unit": unite})
 
 
 # ---------------------------------------------------------------- disques : /etc/fstab modifié par le service
@@ -344,7 +344,7 @@ def test_disk_declared_set_then_forgotten(tmp_path):
     fstab = tmp_path / "fstab"
     fstab.write_text(FSTAB_START)
     declare = actions.build(
-        "declarer_disque", {"uuid": "1234-abcd", "format": "exfat", "dossier": "Mes-photos", "nom": "Mes photos"}
+        "declarer_disque", {"uuid": "1234-abcd", "format": "exfat", "folder": "Mes-photos", "name": "Mes photos"}
     )[0]
     assert _run_on_fake_server(tmp_path, declare).returncode == 0
     lines = fstab.read_text().splitlines()
@@ -354,42 +354,40 @@ def test_disk_declared_set_then_forgotten(tmp_path):
     assert (tmp_path / "fstab.jabba-bak").read_text() == FSTAB_START
     assert _run_on_fake_server(tmp_path, declare).returncode == 3  # déjà déclaré : refusé
 
-    ecriture = actions.build("mode_disque", {"chemin": "/srv/disques/Mes-photos", "ecriture": True})[0]
+    ecriture = actions.build("mode_disque", {"path": "/srv/disques/Mes-photos", "writable": True})[0]
     assert _run_on_fake_server(tmp_path, ecriture).returncode == 0
     line = fstab.read_text().splitlines()[4]
     assert line.split()[3].startswith("rw,") and ",ro" not in line and "gid=33,umask=002" in line
     assert fstab.read_text().splitlines()[:4] == lines[:4]
-    reading = actions.build("mode_disque", {"chemin": "/srv/disques/Mes-photos", "ecriture": "oui"})[
+    reading = actions.build("mode_disque", {"path": "/srv/disques/Mes-photos", "writable": "oui"})[
         0
     ]  # seul True vaut écriture
     _run_on_fake_server(tmp_path, reading)
     assert fstab.read_text().splitlines()[4].split()[3].startswith("ro,")
-    absent = actions.build("mode_disque", {"chemin": "/srv/disques/Autre", "ecriture": True})[0]
+    absent = actions.build("mode_disque", {"path": "/srv/disques/Autre", "writable": True})[0]
     before = fstab.read_text()
     assert _run_on_fake_server(tmp_path, absent).returncode == 4 and fstab.read_text() == before
 
-    forget_ = actions.build("oublier_disque", {"chemin": "/srv/disques/Mes-photos", "nom": "Mes photos"})[0]
+    forget_ = actions.build("oublier_disque", {"path": "/srv/disques/Mes-photos", "name": "Mes photos"})[0]
     assert _run_on_fake_server(tmp_path, forget_).returncode == 0
     assert fstab.read_text() == FSTAB_START + "\n"
 
 
 def test_disk_parameters_refused():
     for args in (
-        {"uuid": "1234; reboot", "format": "exfat", "dossier": "x", "nom": "x"},
-        {"uuid": "1234-abcd", "format": "btrfs", "dossier": "x", "nom": "x"},
-        {"uuid": "1234-abcd", "format": "exfat", "dossier": "../etc", "nom": "x"},
-        {"uuid": "1234-abcd", "format": "exfat", "dossier": "a b", "nom": "x"},
-        {"uuid": "1234-abcd", "format": "exfat", "dossier": "x", "nom": "x\nUUID=1 / ext4"},
+        {"uuid": "1234; reboot", "format": "exfat", "folder": "x", "name": "x"},
+        {"uuid": "1234-abcd", "format": "btrfs", "folder": "x", "name": "x"},
+        {"uuid": "1234-abcd", "format": "exfat", "folder": "../etc", "name": "x"},
+        {"uuid": "1234-abcd", "format": "exfat", "folder": "a b", "name": "x"},
+        {"uuid": "1234-abcd", "format": "exfat", "folder": "x", "name": "x\nUUID=1 / ext4"},
     ):
         with pytest.raises(actions.ActionError):
             actions.build("declarer_disque", args)
     for chemin in ("/srv/data", "/etc", "/srv/disques/../data", "/srv/disques/"):
         with pytest.raises(actions.ActionError):
-            actions.build("oublier_disque", {"chemin": chemin, "nom": "x"})
+            actions.build("oublier_disque", {"path": chemin, "name": "x"})
     with pytest.raises(actions.ActionError):
-        actions.build(
-            "mode_disque", {"chemin": "/srv/data", "ecriture": False}
-        )  # le disque de données reste en écriture
+        actions.build("mode_disque", {"path": "/srv/data", "writable": False})  # le disque de données reste en écriture
     with pytest.raises(actions.ActionError):
         actions.build("disque_present", {"uuid": "-o x"})
 
@@ -426,15 +424,15 @@ def test_usb_disk_added_automatically(tmp_path, monkeypatch):
     alerts = []
     auto_disks.scan(lambda: False, lambda *a: alerts.append(a[1]), lambda: [])
     additions = [args for nom, args in requests if nom == "declarer_disque"]
-    assert additions == [{"uuid": "5e5e-0002", "format": "exfat", "dossier": "Vacances", "nom": "Vacances"}]
+    assert additions == [{"uuid": "5e5e-0002", "format": "exfat", "folder": "Vacances", "name": "Vacances"}]
     actions.build("declarer_disque", additions[0])  # la demande passe la vérification du service
     assert auto_disks.known_disks() == {"Vacances": "/srv/disques/Vacances"}
     assert alerts == ["Disque illisible", "Nouveau disque : Vacances"]
 
     requests.clear()
     assert auto_disks.forget("Vacances")["uuid"] == "5e5e-0002"
-    assert requests == [("oublier_disque", {"chemin": "/srv/disques/Vacances", "nom": "Vacances"})]
-    assert auto_disks.known_disks() == {} and "5e5e-0002" in auto_disks.read()["oublies"]
+    assert requests == [("oublier_disque", {"path": "/srv/disques/Vacances", "name": "Vacances"})]
+    assert auto_disks.known_disks() == {} and "5e5e-0002" in auto_disks.read()["forgotten_items"]
 
 
 # ---------------------------------------------------------------- réseau invités
@@ -467,11 +465,11 @@ def test_wifi_firewall(tmp_path):
 
 
 # ---------------------------------------------------------------- sauvegardes
-BACKUP = {"disque": "/srv/disques/Gros", "donnees": "/opt/stacks/jabba/donnees"}
+BACKUP = {"disk": "/srv/disques/Gros", "data": "/opt/stacks/jabba/donnees"}
 
 
 def test_restic_read_and_browse():
-    commande, _ = actions.build("restic", {**BACKUP, "geste": "copies"})
+    commande, _ = actions.build("restic", {**BACKUP, "gesture": "copies"})
     assert commande[:4] == [
         "env",
         "RESTIC_REPOSITORY=/srv/disques/Gros/.sauvegardes-jabba",
@@ -480,7 +478,7 @@ def test_restic_read_and_browse():
     ]
     assert commande[4:] == ["restic", "--no-lock", "snapshots", "--tag", "jabba", "--json"]
     commande, _ = actions.build(
-        "restic", {**BACKUP, "geste": "parcourir", "copie": "abcd1234", "chemin": "/srv/data/a b"}
+        "restic", {**BACKUP, "gesture": "parcourir", "copy": "abcd1234", "path": "/srv/data/a b"}
     )
     assert commande[-3:] == ["--json", "abcd1234", "/srv/data/a b"]
 
@@ -490,10 +488,10 @@ def test_restic_always_restores_alongside():
         "restic",
         {
             **BACKUP,
-            "geste": "restaurer",
-            "copie": "abcd1234",
-            "chemin": "/srv/data/Photos/2024",
-            "horodatage": "2026-11-17 01h30",
+            "gesture": "restaurer",
+            "copy": "abcd1234",
+            "path": "/srv/data/Photos/2024",
+            "timestamp": "2026-11-17 01h30",
         },
     )
     assert (
@@ -510,13 +508,13 @@ def test_restic_always_restores_alongside():
     ]
     assert delai == 3600
     for args in (
-        {"geste": "restaurer", "copie": "abcd1234", "chemin": "/srv/data/x", "horodatage": "../../etc"},
-        {"geste": "restaurer", "copie": "abcd1234", "chemin": "/", "horodatage": "2026-11-17 01h30"},
-        {"geste": "parcourir", "copie": "--help", "chemin": "/"},
-        {"geste": "parcourir", "copie": "abcd1234", "chemin": "relatif"},
-        {"geste": "forget", "copie": "abcd1234", "chemin": "/"},
-        {"geste": "copies", "disque": "/etc"},
-        {"geste": "copies", "donnees": "/root"},
+        {"gesture": "restaurer", "copy": "abcd1234", "path": "/srv/data/x", "timestamp": "../../etc"},
+        {"gesture": "restaurer", "copy": "abcd1234", "path": "/", "timestamp": "2026-11-17 01h30"},
+        {"gesture": "parcourir", "copy": "--help", "path": "/"},
+        {"gesture": "parcourir", "copy": "abcd1234", "path": "relatif"},
+        {"gesture": "forget", "copy": "abcd1234", "path": "/"},
+        {"gesture": "copies", "disk": "/etc"},
+        {"gesture": "copies", "data": "/root"},
     ):
         with pytest.raises(actions.ActionError):
             actions.build("restic", {**BACKUP, **args})
@@ -524,7 +522,7 @@ def test_restic_always_restores_alongside():
 
 def test_start_backup_script_written_by_the_service():
     commande, _ = actions.build(
-        "lancer_sauvegarde", {**BACKUP, "sources": ["fichiers", "outils"], "unite": "jabba-sauvegarde-17"}
+        "lancer_sauvegarde", {**BACKUP, "sources": ["fichiers", "outils"], "unit": "jabba-sauvegarde-17"}
     )
     script = commande[6]
     assert (
@@ -533,10 +531,10 @@ def test_start_backup_script_written_by_the_service():
         and "sources=(/srv/data /opt/stacks)" in script  # /etc pas demandé : pas copié
     )
     assert commande[7:] == ["-p", "Nice=10", "-p", "IOSchedulingClass=idle", "bash"]
-    for args in ({"sources": ["fichiers", "/root"]}, {"sources": []}, {"sources": "fichiers"}, {"unite": "sshd"}):
+    for args in ({"sources": ["fichiers", "/root"]}, {"sources": []}, {"sources": "fichiers"}, {"unit": "sshd"}):
         with pytest.raises(actions.ActionError):
             actions.build(
-                "lancer_sauvegarde", {**BACKUP, "sources": ["fichiers"], "unite": "jabba-sauvegarde-1", **args}
+                "lancer_sauvegarde", {**BACKUP, "sources": ["fichiers"], "unit": "jabba-sauvegarde-1", **args}
             )
 
 
@@ -562,7 +560,7 @@ def test_old_disk_made_writable_for_nextcloud(tmp_path):
         "UUID=c2 /srv/disques/Linux ext4 ro,nofail,x-systemd.automount 0 0\n"
     )
     for chemin in ("/srv/disques/R2-D2", "/srv/disques/Linux"):
-        commande = actions.build("mode_disque", {"chemin": chemin, "ecriture": True})[0]
+        commande = actions.build("mode_disque", {"path": chemin, "writable": True})[0]
         assert _run_on_fake_server(tmp_path, commande).returncode == 0
     lines = fstab.read_text().splitlines()
     assert lines[1].split()[3] == "rw,nofail,x-systemd.automount,uid=1000,gid=33,umask=002"

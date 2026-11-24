@@ -23,9 +23,9 @@ const FAMILIES = {
   nuage: t("Nextcloud"),
   systeme: t("Système"),
 };
-export const activityLine = (event) => `<div class="evenement f-${escapeHtml(event.famille)}">
-    <span class="famille">${FAMILIES[event.famille] || t("Système")}</span>
-    <span class="texte-ev">${escapeHtml(event.texte)}${event.qui ? ` <span class="note">· ${escapeHtml(event.qui)}</span>` : ""}</span>
+export const activityLine = (event) => `<div class="evenement f-${escapeHtml(event.family)}">
+    <span class="famille">${FAMILIES[event.family] || t("Système")}</span>
+    <span class="texte-ev">${escapeHtml(event.text)}${event.who ? ` <span class="note">· ${escapeHtml(event.who)}</span>` : ""}</span>
     <span class="note quand-ev">${formatWhen(new Date(event.t * 1000).toISOString())}</span></div>`;
 
 pages.journal = async (params) => {

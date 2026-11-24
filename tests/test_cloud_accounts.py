@@ -23,7 +23,7 @@ class FakeOcc:
             "enabled": enabled,
             "quota": "5 GB",
             "groups": list(group_list),
-            "attente": pending,
+            "pending": pending,
             "last_seen": "never",
         }
         for g in group_list:
@@ -45,11 +45,11 @@ class FakeOcc:
                 if (app, key) == ("files", "quota"):
                     self.users[uid]["quota"] = a[4]
                 return ok()
-            if (app, key) == ("registration", "send_welcome_mail_on_enable") and self.users[uid]["attente"]:
+            if (app, key) == ("registration", "send_welcome_mail_on_enable") and self.users[uid]["pending"]:
                 return ok("yes\n")
             return 1, "", ""
         if c == "user:enable":
-            self.users[a[1]].update(enabled=True, attente=False)
+            self.users[a[1]].update(enabled=True, pending=False)
             return ok()
         if c == "user:disable":
             self.users[a[1]]["enabled"] = False
@@ -127,9 +127,9 @@ def test_sizes():
 
 def test_account_states(occ):
     c = {x["id"]: x for x in nextcloud_accounts.accounts(occ)}
-    assert c["bob"]["etat"] == "attente"  # inscrit, en attente de validation
-    assert c["carole"]["etat"] == "suspendu"  # désactivé par un admin
-    assert c["alice"]["etat"] == "actif" and c["rob"]["admin"]
+    assert c["bob"]["state"] == "attente"  # inscrit, en attente de validation
+    assert c["carole"]["state"] == "suspendu"  # désactivé par un admin
+    assert c["alice"]["state"] == "actif" and c["rob"]["admin"]
     assert [x["id"] for x in nextcloud_accounts.accounts(occ)][0] == "bob"  # les demandes d'abord
 
 
@@ -160,35 +160,35 @@ def test_set_up(occ):
 
 def test_cumulative_ranks(occ):
     d = nextcloud_accounts.read()
-    d["rangs_actif"] = True
+    d["ranks_enabled"] = True
     member = nextcloud_accounts.create_rank(occ, d, "Adhérent")
     employee = nextcloud_accounts.create_rank(occ, d, "Employé")
     manager = nextcloud_accounts.create_rank(occ, d, "Gérant")
-    d["rang_de"] = {"alice": manager, "rob": member}
+    d["rank_of"] = {"alice": manager, "rob": member}
     nextcloud_accounts.sync_ranks(occ, d)
     assert set(occ.groups[member]) == {"alice", "rob"}
     assert occ.groups[employee] == ["alice"] and occ.groups[manager] == ["alice"]
     # On descend Employé sous Adhérent : rob (Adhérent) entre dans Employé.
-    d["rangs"][0], d["rangs"][1] = d["rangs"][1], d["rangs"][0]
+    d["ranks"][0], d["ranks"][1] = d["ranks"][1], d["ranks"][0]
     nextcloud_accounts.sync_ranks(occ, d)
     assert set(occ.groups[employee]) == {"alice", "rob"} and set(occ.groups[member]) == {"alice", "rob"}
     assert occ.groups[manager] == ["alice"]
     # Rangs désactivés : plus personne dans les groupes de rang (les rangs restent notés).
-    d["rangs_actif"] = False
+    d["ranks_enabled"] = False
     nextcloud_accounts.sync_ranks(occ, d)
-    assert all(not occ.groups[r] for r in (member, employee, manager)) and d["rang_de"]["alice"] == manager
+    assert all(not occ.groups[r] for r in (member, employee, manager)) and d["rank_of"]["alice"] == manager
 
 
 def test_deleting_a_rank_moves_members_down(occ):
     d = nextcloud_accounts.read()
-    d["rangs_actif"] = True
+    d["ranks_enabled"] = True
     bottom = nextcloud_accounts.create_rank(occ, d, "Bas")
     top = nextcloud_accounts.create_rank(occ, d, "Haut")
-    d["rang_de"] = {"alice": top, "rob": bottom}
+    d["rank_of"] = {"alice": top, "rob": bottom}
     nextcloud_accounts.delete_rank(occ, d, top)
-    assert d["rang_de"] == {"alice": bottom, "rob": bottom} and top not in occ.groups
+    assert d["rank_of"] == {"alice": bottom, "rob": bottom} and top not in occ.groups
     nextcloud_accounts.delete_rank(occ, d, bottom)
-    assert d["rang_de"] == {}
+    assert d["rank_of"] == {}
 
 
 def test_duplicate_rank_refused(occ):

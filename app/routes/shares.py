@@ -25,8 +25,8 @@ def _ocs(method, url_path, data):
 def list_shared_folders(request: Request):
     guard.require_admin(request)
     return {
-        "partages": nextcloud_shares.list_shares(nextcloud_accounts.read()),
-        "modes": {key: value["nom"] for key, value in nextcloud_shares.MODES.items()},
+        "shares": nextcloud_shares.list_shares(nextcloud_accounts.read()),
+        "modes": {key: value["name"] for key, value in nextcloud_shares.MODES.items()},
     }
 
 
@@ -35,8 +35,8 @@ async def share_folder(request: Request):
     """Partage un dossier de l'écran Fichiers avec un rang ou un groupe."""
     guard.require_admin(request, strong=True)
     body = await request.json()
-    path = nextcloud_files.clean_path(str(body.get("chemin", "")))
-    group, mode = str(body.get("groupe", "")), str(body.get("mode", ""))
+    path = nextcloud_files.clean_path(str(body.get("path", "")))
+    group, mode = str(body.get("group", "")), str(body.get("mode", ""))
     if config.DEMO and not commands.DEMO_OCC:
         raise HTTPException(409, "Nextcloud absent (démo).")
     state = nextcloud_accounts.read()
@@ -47,8 +47,8 @@ async def share_folder(request: Request):
     nextcloud_accounts.write(state)
     activity_log.record(
         "nuage",
-        f"Dossier partagé : {share['chemin']} avec {nextcloud_accounts.describe_group(group)}"
-        f" ({nextcloud_shares.MODES[mode]['nom'].lower()})",
+        f"Dossier partagé : {share['path']} avec {nextcloud_accounts.describe_group(group)}"
+        f" ({nextcloud_shares.MODES[mode]['name'].lower()})",
         request.state.nom,
     )
     return share
@@ -65,7 +65,7 @@ def stop_sharing(sid: str, request: Request):
     nextcloud_accounts.write(state)
     activity_log.record(
         "nuage",
-        f"Partage arrêté : {share['chemin']} ({nextcloud_accounts.describe_group(share['groupe'])})",
+        f"Partage arrêté : {share['path']} ({nextcloud_accounts.describe_group(share['group'])})",
         request.state.nom,
     )
     return {"ok": True}

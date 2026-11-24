@@ -45,8 +45,8 @@ def _ping(url):
 def status():
     settings = json_files.load(SETTINGS_FILE, {})
     return {
-        "pret": bool(settings.get("url")),
-        "dernier": settings.get("dernier"),
+        "ready": bool(settings.get("url")),
+        "last": settings.get("last"),
         "ok": settings.get("ok"),
         "page": SIGNUP_PAGE,
     }
@@ -58,7 +58,7 @@ def save(url):
         raise ServiceError(400, "Colle l'adresse de signal en entier (elle commence par https://hc-ping.com/…).")
     if not _ping(url):
         raise ServiceError(400, "Le service n'a pas reçu le signal : vérifie l'adresse, puis réessaie.")
-    json_files.save(SETTINGS_FILE, {"url": url, "dernier": int(time.time()), "ok": True}, private=True)
+    json_files.save(SETTINGS_FILE, {"url": url, "last": int(time.time()), "ok": True}, private=True)
     return status()
 
 
@@ -70,11 +70,11 @@ def forget():
 def watch(now=None):
     now = now or time.time()
     settings = json_files.load(SETTINGS_FILE, {})
-    if not settings.get("url") or now - settings.get("essai", 0) < EVERY_SECONDS - 30:
+    if not settings.get("url") or now - settings.get("attempt", 0) < EVERY_SECONDS - 30:
         return None
     ok = _ping(settings["url"])
-    settings.update(essai=int(now), ok=ok)
+    settings.update(attempt=int(now), ok=ok)
     if ok:
-        settings["dernier"] = int(now)
+        settings["last"] = int(now)
     json_files.save(SETTINGS_FILE, settings, private=True)
     return ok

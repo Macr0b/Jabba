@@ -33,8 +33,8 @@ def _context(tree):
         "usage": measurements.disk_space([mount for mount in mounted if mount.startswith("/")]) if mounted else {},
         "known": known,
         "by_uuid": by_uuid,
-        "auto": {disk["chemin"] for disk in saved["disques"]},
-        "forgotten": set(saved["oublies"]),
+        "auto": {disk["path"] for disk in saved["disks"]},
+        "forgotten": set(saved["forgotten_items"]),
     }
 
 
@@ -58,34 +58,34 @@ def _partition(partition, context):
     jabba_disk = None
     if jabba_path:
         jabba_disk = {
-            "nom": context["known"][jabba_path],
-            "ecriture": files_source.is_writable(jabba_path),
+            "name": context["known"][jabba_path],
+            "writable": files_source.is_writable(jabba_path),
             "auto": jabba_path in context["auto"],
         }
     return {
-        "nom": partition["name"],
-        "taille": partition["size"],
+        "name": partition["name"],
+        "size": partition["size"],
         "type": partition.get("fstype"),
-        "etiquette": partition.get("label"),
-        "montage": mountpoint,
+        "label": partition.get("label"),
+        "mount": mountpoint,
         "role": _role(mountpoint, jabba_path, context),
         "usage": context["usage"].get(mountpoint),
-        "disque_jabba": jabba_disk,
-        "oublie": uuid if uuid in context["forgotten"] and not mountpoint else None,
-        "illisible": auto_disks.UNREADABLE.get((partition.get("fstype") or "").lower()),
-        "technique": disk_names.is_technical(partition),
+        "jabba_disk": jabba_disk,
+        "forgotten": uuid if uuid in context["forgotten"] and not mountpoint else None,
+        "unreadable": auto_disks.UNREADABLE.get((partition.get("fstype") or "").lower()),
+        "technical": disk_names.is_technical(partition),
     }
 
 
 def _device(device, context):
     partitions = [_partition(partition, context) for partition in device.get("children") or []]
     return {
-        "nom": device["name"],
-        "titre": disk_names.title(device),
+        "name": device["name"],
+        "title": disk_names.title(device),
         "genre": disk_names.kind(device),
-        "modele": (device.get("model") or "").strip(),
-        "taille": device["size"],
-        "externe": disk_names.is_external(device),
+        "model": (device.get("model") or "").strip(),
+        "size": device["size"],
+        "external": disk_names.is_external(device),
         "partitions": [partition for partition in partitions if partition],
     }
 

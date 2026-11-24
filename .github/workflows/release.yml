@@ -49,7 +49,7 @@ jobs:
             NOTES=$(python3 -c "
           import json
           v = json.load(open('/tmp/versions.json'))[0]
-          print('\n'.join('- ' + c for c in v['changements']) if v['version'] == '$V' else '')
+          print('\n'.join('- ' + c for c in v['changes']) if v['version'] == '$V' else '')
           ")
             gh release create "$TAG" --target "$SHA" --title "Jabba $V" --notes "$NOTES" --latest
           done

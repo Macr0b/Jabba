@@ -40,7 +40,7 @@ async def list_folder(chemin: str = "/", visite: int = 1):
         listing["source"] = "nextcloud"
     if chemin != "/" and visite:
         home_data.record_visit(chemin)
-    listing["favori"] = chemin in home_data.read()["favoris"]
+    listing["favorite"] = chemin in home_data.read()["favorites"]
     return listing
 
 
@@ -52,57 +52,57 @@ async def home_folders():
         nextcloud_files.require_nextcloud()
         root = await nextcloud_files.read_folder("/")
     plugged, known = files_source.plugged_disks(), files_source.known_disks()
-    essentials = [{"nom": "Mes fichiers", "chemin": "/", "type": "racine"}]
-    for entry in root["elements"]:
-        if files_source.files_source() == "disque" and entry["dossier"]:
+    essentials = [{"name": "Mes fichiers", "path": "/", "type": "racine"}]
+    for entry in root["items"]:
+        if files_source.files_source() == "disque" and entry["folder"]:
             essentials.append(
-                {"nom": entry["nom"], "chemin": entry["chemin"], "type": "disque" if entry["externe"] else "espace"}
+                {"name": entry["name"], "path": entry["path"], "type": "disque" if entry["external"] else "espace"}
             )
-        elif entry["dossier"] and entry["externe"]:
-            if entry["nom"] in known:
-                if entry["nom"] in plugged:
-                    essentials.append({"nom": entry["nom"], "chemin": entry["chemin"], "type": "disque"})
+        elif entry["folder"] and entry["external"]:
+            if entry["name"] in known:
+                if entry["name"] in plugged:
+                    essentials.append({"name": entry["name"], "path": entry["path"], "type": "disque"})
             else:
-                essentials.append({"nom": entry["nom"], "chemin": entry["chemin"], "type": "espace"})
+                essentials.append({"name": entry["name"], "path": entry["path"], "type": "espace"})
     listing = home_data.read()
-    favorites = [{"nom": dav_client.rsplit("/", 1)[-1], "chemin": dav_client} for dav_client in listing["favoris"]]
+    favorites = [{"name": dav_client.rsplit("/", 1)[-1], "path": dav_client} for dav_client in listing["favorites"]]
     cutoff = time.time() - home_data.SUGGESTION_WINDOW
     suggestions = []
-    for dav_client, timestamps in listing["visites"].items():
+    for dav_client, timestamps in listing["visits"].items():
         count = sum(1 for media_type in timestamps if media_type > cutoff)
         if (
             count >= home_data.SUGGESTION_THRESHOLD
-            and dav_client not in listing["favoris"]
-            and dav_client not in listing["ignores"]
+            and dav_client not in listing["favorites"]
+            and dav_client not in listing["ignored"]
         ):
-            suggestions.append({"nom": dav_client.rsplit("/", 1)[-1], "chemin": dav_client, "ouvertures": count})
-    suggestions.sort(key=lambda source_name: -source_name["ouvertures"])
-    return {"essentiels": essentials, "favoris": favorites, "suggestions": suggestions[:2]}
+            suggestions.append({"name": dav_client.rsplit("/", 1)[-1], "path": dav_client, "opens": count})
+    suggestions.sort(key=lambda source_name: -source_name["opens"])
+    return {"essentials": essentials, "favorites": favorites, "suggestions": suggestions[:2]}
 
 
 @router.post("/api/favoris")
 async def toggle_favorite(request: Request):
     body = await request.json()
-    path = nextcloud_files.clean_path(body.get("chemin", ""))
+    path = nextcloud_files.clean_path(body.get("path", ""))
     action = body.get("action")
     if path == "/" or action not in ("ajouter", "retirer", "ignorer"):
         raise HTTPException(400, "Demande invalide")
     with home_data.LOCK:
         listing = home_data.read()
-        if action == "ajouter" and path not in listing["favoris"]:
-            listing["favoris"].append(path)
+        if action == "ajouter" and path not in listing["favorites"]:
+            listing["favorites"].append(path)
         elif action == "retirer":
-            listing["favoris"] = [dav_client for dav_client in listing["favoris"] if dav_client != path]
-        elif action == "ignorer" and path not in listing["ignores"]:
-            listing["ignores"].append(path)
+            listing["favorites"] = [dav_client for dav_client in listing["favorites"] if dav_client != path]
+        elif action == "ignorer" and path not in listing["ignored"]:
+            listing["ignored"].append(path)
         home_data.write(listing)
-    return {"ok": True, "favori": path in listing["favoris"]}
+    return {"ok": True, "favorite": path in listing["favorites"]}
 
 
 @router.post("/api/fichiers/dossier")
 async def create_folder(request: Request):
     body = await request.json()
-    path = nextcloud_files.clean_path(body.get("chemin", ""))
+    path = nextcloud_files.clean_path(body.get("path", ""))
     if files_source.files_source() == "disque":
         files_source.run_disk_action(lambda: disk_browser.create_folder(path, *files_source.disk_params()))
         return {"ok": True}
@@ -141,7 +141,7 @@ async def upload_files(request: Request, chemin: str = "/"):
             disk_browser.finish_upload(real_path)
             uploaded.append(name)
         log_upload(request, chemin, uploaded)
-        return {"envoyes": uploaded}
+        return {"sent": uploaded}
     nextcloud_files.require_nextcloud()
     for upload in form.getlist("fichiers"):
         if not isinstance(upload, UploadFile) or not upload.filename:
@@ -160,7 +160,7 @@ async def upload_files(request: Request, chemin: str = "/"):
         await nextcloud_files.check_response(response, f"Envoi de {name}")
         uploaded.append(name)
     log_upload(request, chemin, uploaded)
-    return {"envoyes": uploaded}
+    return {"sent": uploaded}
 
 
 def log_upload(request, path, uploaded):
@@ -209,8 +209,8 @@ async def download_file(chemin: str):
 async def move_item(request: Request):
     body = await request.json()
     source_path, destination = (
-        nextcloud_files.clean_path(body.get("de", "")),
-        nextcloud_files.clean_path(body.get("vers", "")),
+        nextcloud_files.clean_path(body.get("source", "")),
+        nextcloud_files.clean_path(body.get("destination", "")),
     )
     if source_path == "/" or destination == "/":
         raise HTTPException(400, "Chemin invalide")
@@ -233,7 +233,7 @@ async def move_item(request: Request):
 @router.post("/api/fichiers/supprimer")
 async def delete_item(request: Request):
     body = await request.json()
-    path = nextcloud_files.clean_path(body.get("chemin", ""))
+    path = nextcloud_files.clean_path(body.get("path", ""))
     if (
         path == "/"
         or len([parts_list for parts_list in path.split("/") if parts_list]) < 2
@@ -249,7 +249,7 @@ async def delete_item(request: Request):
         return {"ok": True}
     nextcloud_files.require_nextcloud()
     if config.DEMO:
-        if body.get("dossier"):
+        if body.get("folder"):
             guard.require_admin(request)
         return {"ok": True}
     if await nextcloud_files.is_nextcloud_folder(path):
@@ -274,7 +274,7 @@ async def search(q: str = ""):
     disks, read_only = files_source.disk_params()
     if files_source.files_source() == "disque":
         result, full_command = await asyncio.to_thread(disk_browser.search, q, disks, read_only)
-        return {"elements": result, "complet": full_command}
+        return {"items": result, "full": full_command}
     nextcloud_files.require_nextcloud()
     async with nextcloud_files.client() as dav_client:
         response = await dav_client.request(
@@ -291,11 +291,11 @@ async def search(q: str = ""):
     # Les dossiers du serveur vus dans Nextcloud (films, disques…) ne sont pas
     # tous indexés par Nextcloud : on les parcourt directement.
     root = await nextcloud_files.read_folder("/")
-    external_disks = {entry["nom"] for entry in root["elements"] if entry["externe"]}
+    external_disks = {entry["name"] for entry in root["items"] if entry["external"]}
     direct_play, full_command = await asyncio.to_thread(disk_browser.search, q, disks, read_only, external_disks)
-    seen = {entry["chemin"] for entry in result}
-    result += [entry for entry in direct_play if entry["chemin"] not in seen]
+    seen = {entry["path"] for entry in result}
+    result += [entry for entry in direct_play if entry["path"] not in seen]
     result.sort(
-        key=lambda entry: (not entry["nom"].lower().startswith(q.lower()), not entry["dossier"], entry["nom"].lower())
+        key=lambda entry: (not entry["name"].lower().startswith(q.lower()), not entry["folder"], entry["name"].lower())
     )
-    return {"elements": result[:100], "complet": full_command and len(result) <= 100}
+    return {"items": result[:100], "full": full_command and len(result) <= 100}

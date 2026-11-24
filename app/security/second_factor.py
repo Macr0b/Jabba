@@ -60,14 +60,14 @@ def _write(data):
 
 def _entry(data, identifier):
     entry = data.setdefault(identifier, {})
-    entry.setdefault("cles", [])
+    entry.setdefault("keys", [])
     entry.setdefault("codes", [])
-    entry.setdefault("poignee", secrets.token_hex(16))  # identifiant anonyme donné aux clés d'accès
+    entry.setdefault("handle", secrets.token_hex(16))  # identifiant anonyme donné aux clés d'accès
     return entry
 
 
 def _has_method(entry):
-    return bool(entry.get("appli") or entry.get("cles"))
+    return bool(entry.get("app") or entry.get("keys"))
 
 
 # ---------------------------------------------------------------- état
@@ -75,9 +75,9 @@ def methods(identifier):
     """Les méthodes actives du compte, dans l'ordre où on les propose."""
     entry = _read().get(identifier) or {}
     found = []
-    if entry.get("cles"):
+    if entry.get("keys"):
         found.append("cle")
-    if entry.get("appli"):
+    if entry.get("app"):
         found.append("appli")
     if found and entry.get("codes"):
         found.append("secours")
@@ -88,12 +88,17 @@ def summary(identifier):
     entry = _read().get(identifier) or {}
     return {
         "active": _has_method(entry),
-        "appli": bool(entry.get("appli")),
-        "cles": [
-            {"id": key["id"], "nom": key.get("nom", "Clé"), "cree": key.get("cree"), "utilisee": key.get("utilisee")}
-            for key in entry.get("cles", [])
+        "app": bool(entry.get("app")),
+        "keys": [
+            {
+                "id": key["id"],
+                "name": key.get("name", "Clé"),
+                "created": key.get("created"),
+                "used_space": key.get("used_space"),
+            }
+            for key in entry.get("keys", [])
         ],
-        "codes_restants": len(entry.get("codes", [])),
+        "codes_left": len(entry.get("codes", [])),
     }
 
 
@@ -121,7 +126,7 @@ def _store_new_codes(entry):
     entry["codes"] = []
     for code in codes:
         salt = secrets.token_hex(16)
-        entry["codes"].append({"sel": salt, "empreinte": _code_hash(code, salt)})
+        entry["codes"].append({"salt": salt, "fingerprint": _code_hash(code, salt)})
     return codes
 
 
@@ -138,7 +143,7 @@ def new_recovery_codes(identifier):
 
 def _use_recovery_code(entry, typed):
     for stored in entry.get("codes", []):
-        if hmac.compare_digest(_code_hash(typed or "", stored["sel"]), stored["empreinte"]):
+        if hmac.compare_digest(_code_hash(typed or "", stored["salt"]), stored["fingerprint"]):
             entry["codes"].remove(stored)
             return True
     return False
@@ -172,7 +177,7 @@ def finish_app_enrolment(identifier, code, moment=None):
             raise SecondFactorError(400, "Code incorrect. Vérifie que l'heure du téléphone est à jour.")
         data = _read()
         entry = _entry(data, identifier)
-        entry["appli"] = {"secret": pending["secret"], "dernier_creneau": step, "cree": int(moment)}
+        entry["app"] = {"secret": pending["secret"], "last_slot": step, "created": int(moment)}
         codes = _first_method_codes(entry)
         _write(data)
         del _app_enrolments[identifier]
@@ -183,7 +188,7 @@ def remove_app(identifier):
     with _lock:
         data = _read()
         entry = _entry(data, identifier)
-        entry.pop("appli", None)
+        entry.pop("app", None)
         if not _has_method(entry):
             entry["codes"] = []
         _write(data)
@@ -196,9 +201,9 @@ def start_key_enrolment(identifier, display_name, rp_id):
         entry = _entry(data, identifier)
         _write(data)  # garde la « poignée » créée au premier passage
         options, challenge = passkeys.registration_options(
-            rp_id, entry["poignee"], identifier, display_name, [key["id"] for key in entry["cles"]]
+            rp_id, entry["handle"], identifier, display_name, [key["id"] for key in entry["keys"]]
         )
-        _key_enrolments[identifier] = {"defi": challenge, "exp": time.time() + ENROLMENT_LIFETIME}
+        _key_enrolments[identifier] = {"challenge": challenge, "exp": time.time() + ENROLMENT_LIFETIME}
         return options
 
 
@@ -208,13 +213,13 @@ def finish_key_enrolment(identifier, credential, key_name, rp_id, origins):
         if not pending or pending["exp"] < time.time():
             raise SecondFactorError(400, "La demande a expiré : recommence.")
         try:
-            key = passkeys.verify_registration(credential, pending["defi"], rp_id, origins)
+            key = passkeys.verify_registration(credential, pending["challenge"], rp_id, origins)
         except Exception:
             raise SecondFactorError(400, "La clé n'a pas pu être vérifiée. Réessaie.")
         data = _read()
         entry = _entry(data, identifier)
-        key.update({"nom": (key_name or "").strip()[:60] or "Clé d'accès", "cree": int(time.time())})
-        entry["cles"].append(key)
+        key.update({"name": (key_name or "").strip()[:60] or "Clé d'accès", "created": int(time.time())})
+        entry["keys"].append(key)
         codes = _first_method_codes(entry)
         _write(data)
         return codes
@@ -224,10 +229,10 @@ def remove_key(identifier, key_id):
     with _lock:
         data = _read()
         entry = _entry(data, identifier)
-        remaining = [key for key in entry["cles"] if key["id"] != key_id]
-        if len(remaining) == len(entry["cles"]):
+        remaining = [key for key in entry["keys"] if key["id"] != key_id]
+        if len(remaining) == len(entry["keys"]):
             raise SecondFactorError(404, "Clé introuvable.")
-        entry["cles"] = remaining
+        entry["keys"] = remaining
         if not _has_method(entry):
             entry["codes"] = []
         _write(data)
@@ -246,10 +251,10 @@ def start_login_step(account):
     with _lock:
         _drop_expired_steps()
         _login_steps[token] = {
-            "compte": dict(account),
+            "account": dict(account),
             "exp": time.time() + LOGIN_STEP_LIFETIME,
-            "essais": 0,
-            "defi": None,
+            "attempts": 0,
+            "challenge": None,
         }
     return token
 
@@ -265,37 +270,37 @@ def _step(token):
 def key_login_options(token, rp_id):
     with _lock:
         step = _step(token)
-        entry = _read().get(step["compte"]["identifiant"]) or {}
-        credential_ids = [key["id"] for key in entry.get("cles", [])]
+        entry = _read().get(step["account"]["username"]) or {}
+        credential_ids = [key["id"] for key in entry.get("keys", [])]
         if not credential_ids:
             raise SecondFactorError(400, "Aucune clé d'accès sur ce compte.")
         options, challenge = passkeys.authentication_options(rp_id, credential_ids)
-        step["defi"] = challenge
+        step["challenge"] = challenge
         return options
 
 
 def _check_key(entry, step, credential, rp_id, origins):
-    if not step["defi"] or not isinstance(credential, dict):
+    if not step["challenge"] or not isinstance(credential, dict):
         return False
-    stored = next((key for key in entry.get("cles", []) if key["id"] == credential.get("id")), None)
+    stored = next((key for key in entry.get("keys", []) if key["id"] == credential.get("id")), None)
     if not stored:
         return False
     try:
-        stored["compteur"] = passkeys.verify_authentication(credential, step["defi"], rp_id, origins, stored)
+        stored["counter"] = passkeys.verify_authentication(credential, step["challenge"], rp_id, origins, stored)
     except Exception:
         return False
-    stored["utilisee"] = int(time.time())
+    stored["used_space"] = int(time.time())
     return True
 
 
 def _check_app(entry, code, moment):
-    app = entry.get("appli")
+    app = entry.get("app")
     if not app:
         return False
-    step_number = totp.matching_step(app["secret"], code, moment, app.get("dernier_creneau", -1))
+    step_number = totp.matching_step(app["secret"], code, moment, app.get("last_slot", -1))
     if step_number is None:
         return False
-    app["dernier_creneau"] = step_number
+    app["last_slot"] = step_number
     return True
 
 
@@ -304,7 +309,7 @@ def finish_login_step(token, method, answer, rp_id="", origins=(), moment=None):
     moment = time.time() if moment is None else moment
     with _lock:
         step = _step(token)
-        identifier = step["compte"]["identifiant"]
+        identifier = step["account"]["username"]
         data = _read()
         entry = _entry(data, identifier)
         if method == "cle":
@@ -316,11 +321,11 @@ def finish_login_step(token, method, answer, rp_id="", origins=(), moment=None):
         else:
             raise SecondFactorError(400, "Méthode inconnue.")
         if not accepted:
-            step["essais"] += 1
-            step["defi"] = None
-            if step["essais"] >= LOGIN_STEP_ATTEMPTS:
+            step["attempts"] += 1
+            step["challenge"] = None
+            if step["attempts"] >= LOGIN_STEP_ATTEMPTS:
                 del _login_steps[token]
             return None
         _write(data)
         del _login_steps[token]
-        return step["compte"]
+        return step["account"]

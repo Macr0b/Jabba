@@ -40,7 +40,7 @@ MANIFEST_TYPES = ", ".join(
 
 
 def _read_state():
-    return json_files.load(STATE_FILE, {"outils": {}, "lu": 0})
+    return json_files.load(STATE_FILE, {"tools": {}, "read": 0})
 
 
 def _write_state(state):
@@ -103,7 +103,7 @@ def _local_images(container_names):
     """Pour chaque conteneur : son image, ses empreintes connues et sa version (étiquette OCI)."""
     found = {}
     for name in container_names:
-        code, output, _ = commands.run_action("image_du_conteneur", nom=name)
+        code, output, _ = commands.run_action("image_du_conteneur", name=name)
         if code != 0 or "|" not in output:
             continue
         image, image_id = output.strip().split("|", 1)
@@ -118,18 +118,18 @@ def _local_images(container_names):
             digests = [entry.split("@", 1)[1] for entry in json.loads(digests_json) if "@" in entry]
         except ValueError:
             digests = []
-        found[name] = {"image": image, "empreintes": digests, "version": version if version != "<no value>" else ""}
+        found[name] = {"image": image, "fingerprints": digests, "version": version if version != "<no value>" else ""}
     return found
 
 
 def check_all(now=None, get=_http_get):
     now = time.time() if now is None else now
-    previous = _read_state().get("outils", {})
+    previous = _read_state().get("tools", {})
     current = {}
     for tool in tools.list_tools():
-        if tool["id"] in tools.SYSTEM_TOOLS or not tool.get("modifiable"):
+        if tool["id"] in tools.SYSTEM_TOOLS or not tool.get("editable"):
             continue
-        images = _local_images([container["nom"] for container in tool["conteneurs"]])
+        images = _local_images([container["name"] for container in tool["containers"]])
         newer = []
         versions = []
         for image in images.values():
@@ -138,28 +138,28 @@ def check_all(now=None, get=_http_get):
                 digest = remote_digest(registry, repository, tag, get)
             except httpx.HTTPError:
                 digest = None
-            if digest and image["empreintes"] and digest not in image["empreintes"]:
+            if digest and image["fingerprints"] and digest not in image["fingerprints"]:
                 newer.append(image["image"])
             if image["version"]:
                 versions.append(image["version"])
         entry = {
-            "nom": tool["nom"],
+            "name": tool["name"],
             "version": versions[0] if versions else "",
-            "a_jour": not newer,
+            "up_to_date": not newer,
             "images": newer,
-            "lu": int(now),
+            "read": int(now),
         }
         current[tool["id"]] = entry
         already_known = previous.get(tool["id"], {}).get("images") == newer
         if newer and not already_known:
             notifications.send(
                 "mises_a_jour",
-                f"Mise à jour disponible : {tool['nom']}",
+                f"Mise à jour disponible : {tool['name']}",
                 "Installe-la depuis l'Établi (bouton « Mettre à jour »). Tes réglages et tes fichiers sont conservés.",
                 "/#/outils",
                 family="outil",
             )
-    state = {"outils": current, "lu": int(now)}
+    state = {"tools": current, "read": int(now)}
     _write_state(state)
     return state
 
@@ -169,7 +169,7 @@ def summary():
 
 
 def watch_tool_updates():
-    if config.DEMO or time.time() - (_read_state().get("lu") or 0) < CHECK_EVERY_SECONDS:
+    if config.DEMO or time.time() - (_read_state().get("read") or 0) < CHECK_EVERY_SECONDS:
         return
     check_all()
 
@@ -177,6 +177,6 @@ def watch_tool_updates():
 def forget(pid):
     """Après « Mettre à jour » : l'outil est à jour (on revérifiera au prochain passage)."""
     state = _read_state()
-    if pid in state.get("outils", {}):
-        state["outils"][pid].update(a_jour=True, images=[])
+    if pid in state.get("tools", {}):
+        state["tools"][pid].update(up_to_date=True, images=[])
         _write_state(state)

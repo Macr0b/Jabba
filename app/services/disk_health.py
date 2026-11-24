@@ -41,7 +41,7 @@ ATA_ATTRIBUTES = {
 
 
 def _read_state():
-    return json_files.load(STATE_FILE, {"disques": {}, "lu": 0})
+    return json_files.load(STATE_FILE, {"disks": {}, "read": 0})
 
 
 def _write_state(state):
@@ -97,9 +97,9 @@ def assess(report):
         worse("a_surveiller", f"Chaud : {temperature} °C")
     details = {
         "temperature": temperature,
-        "heures": (report.get("power_on_time") or {}).get("hours"),
-        "usure": used,
-        "compteurs": {str(key): value for key, value in counts.items()},
+        "hours": (report.get("power_on_time") or {}).get("hours"),
+        "wear": used,
+        "counters": {str(key): value for key, value in counts.items()},
     }
     return level, reasons, details
 
@@ -123,7 +123,7 @@ def _smart_report(path, usb):
     attempts = [False, True] if usb else [False]  # USB : on essaie aussi le pont « sat »
     for sat_bridge in attempts:
         try:
-            code, output, _ = commands.run_action("sante_disque", appareil=path, pont_sat=sat_bridge)
+            code, output, _ = commands.run_action("sante_disque", device=path, sat_bridge=sat_bridge)
         except actions.ActionError:
             return None
         try:
@@ -143,22 +143,22 @@ def _smart_report(path, usb):
 
 DEMO_DISKS = {
     "demo-ssd": {
-        "nom": "Disque système",
-        "etat": "bon",
-        "raisons": [],
+        "name": "Disque système",
+        "state": "bon",
+        "reasons": [],
         "temperature": 36,
-        "heures": 9120,
-        "usure": None,
-        "compteurs": {},
+        "hours": 9120,
+        "wear": None,
+        "counters": {},
     },
     "demo-r2": {
-        "nom": "R2-D2",
-        "etat": "a_surveiller",
-        "raisons": ["3 secteurs remplacés"],
+        "name": "R2-D2",
+        "state": "a_surveiller",
+        "reasons": ["3 secteurs remplacés"],
         "temperature": 41,
-        "heures": 21300,
-        "usure": None,
-        "compteurs": {"5": 3},
+        "hours": 21300,
+        "wear": None,
+        "counters": {"5": 3},
     },
 }
 
@@ -166,11 +166,11 @@ DEMO_DISKS = {
 def check_all(now=None):
     now = time.time() if now is None else now
     if config.DEMO:
-        state = {"disques": {key: {**value, "lu": int(now)} for key, value in DEMO_DISKS.items()}, "lu": int(now)}
+        state = {"disks": {key: {**value, "read": int(now)} for key, value in DEMO_DISKS.items()}, "read": int(now)}
         _write_state(state)
         return state
     state = _read_state()
-    previous = state.get("disques", {})
+    previous = state.get("disks", {})
     current = {}
     for device in _physical_disks():
         key = device.get("serial") or device["path"]
@@ -179,19 +179,19 @@ def check_all(now=None):
         if report is None:
             old = previous.get(key)
             current[key] = (
-                {**old, "nom": name, "endormi": True}
+                {**old, "name": name, "asleep": True}
                 if old
-                else {"nom": name, "etat": "inconnu", "raisons": [], "lu": None}
+                else {"name": name, "state": "inconnu", "reasons": [], "read": None}
             )
             continue
         level, reasons, details = assess(report)
-        current[key] = {"nom": name, "etat": level, "raisons": reasons, "lu": int(now), **details}
+        current[key] = {"name": name, "state": level, "reasons": reasons, "read": int(now), **details}
         before = previous.get(key, {})
-        got_worse = RANK[level] > RANK.get(before.get("etat", "bon"), 0)
+        got_worse = RANK[level] > RANK.get(before.get("state", "bon"), 0)
         counts_grew = (
             any(
-                value > int((before.get("compteurs") or {}).get(attribute_id, 0))
-                for attribute_id, value in details["compteurs"].items()
+                value > int((before.get("counters") or {}).get(attribute_id, 0))
+                for attribute_id, value in details["counters"].items()
             )
             and level != "bon"
         )
@@ -204,7 +204,7 @@ def check_all(now=None):
                 "/#/disques",
                 family="disque",
             )
-    state = {"disques": current, "lu": int(now)}
+    state = {"disks": current, "read": int(now)}
     _write_state(state)
     return state
 
@@ -212,10 +212,10 @@ def check_all(now=None):
 def summary():
     state = _read_state()
     return {
-        "installe": installed(),
-        "lu": state.get("lu") or None,
-        "disques": [
-            {"id": key, **value, "libelle": LABELS[value["etat"]]} for key, value in state.get("disques", {}).items()
+        "installed": installed(),
+        "read": state.get("read") or None,
+        "disks": [
+            {"id": key, **value, "label_text": LABELS[value["state"]]} for key, value in state.get("disks", {}).items()
         ],
     }
 
@@ -223,6 +223,6 @@ def summary():
 def watch_disk_health():
     if not installed():
         return
-    if time.time() - (_read_state().get("lu") or 0) < CHECK_EVERY_SECONDS:
+    if time.time() - (_read_state().get("read") or 0) < CHECK_EVERY_SECONDS:
         return
     check_all()

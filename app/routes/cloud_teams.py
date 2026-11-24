@@ -21,36 +21,36 @@ router = APIRouter()
 # ---------------------------------------------------------------- rangs
 # Chaque geste : (cloud_state, body, rank_id, ids) -> (texte du Journal, tous les comptes à revoir ?).
 def _rank_switch(cloud_state, body, rank_id, ids):
-    cloud_state["rangs_actif"] = bool(body.get("actif"))
-    if cloud_state["rangs_actif"]:
+    cloud_state["ranks_enabled"] = bool(body.get("active"))
+    if cloud_state["ranks_enabled"]:
         return "Rangs activés", True
     return "Rangs désactivés (chacun garde son rang, sans effet jusqu'à la réactivation)", True
 
 
 def _rank_create(cloud_state, body, rank_id, ids):
-    name = str(body.get("nom", ""))
+    name = str(body.get("name", ""))
     run_cloud_action(nextcloud_accounts.create_rank, cloud_state, name)
     return f"Nouveau rang : {name.strip()}", False
 
 
 def _rank_rename(cloud_state, body, rank_id, ids):
-    name = str(body.get("nom", "")).strip()[:40]
+    name = str(body.get("name", "")).strip()[:40]
     if not name:
         raise HTTPException(400, "Nom vide.")
     before = nextcloud_accounts.rank_name(cloud_state, rank_id)
-    next(rank for rank in cloud_state["rangs"] if rank["id"] == rank_id)["nom"] = name
+    next(rank for rank in cloud_state["ranks"] if rank["id"] == rank_id)["name"] = name
     commands.occ(["group:add", "--display-name", name, rank_id])  # sans effet si le groupe existe
     return f"Rang {before} renommé en {name}", False
 
 
 def _rank_move(cloud_state, body, rank_id, ids):
     index = ids.index(rank_id)
-    other = index + (1 if body.get("sens") == "haut" else -1)
+    other = index + (1 if body.get("direction") == "haut" else -1)
     if not 0 <= other < len(ids):
         return None, False  # déjà tout en haut ou tout en bas
-    ranks = cloud_state["rangs"]
+    ranks = cloud_state["ranks"]
     ranks[index], ranks[other] = ranks[other], ranks[index]
-    return "Ordre des rangs : " + " < ".join(rank["nom"] for rank in ranks), True
+    return "Ordre des rangs : " + " < ".join(rank["name"] for rank in ranks), True
 
 
 def _rank_delete(cloud_state, body, rank_id, ids):
@@ -72,7 +72,7 @@ RANK_ACTIONS = {
 async def rank_action(request: Request):
     """Les rangs : réglés par le compte du serveur seulement (c'est lui qui décide de la hiérarchie)."""
     session = guard.require_admin(request, "super")
-    if session["identifiant"] != guard.hostname():
+    if session["username"] != guard.hostname():
         raise HTTPException(403, "Seul le compte du serveur règle les rangs.")
     body = await request.json()
     action = body.get("action")
@@ -99,7 +99,7 @@ async def rank_action(request: Request):
 async def group_action(request: Request):
     guard.require_admin(request)
     body = await request.json()
-    name = str(body.get("nom", "")).strip()
+    name = str(body.get("name", "")).strip()
     if body.get("supprimer"):
         run_cloud_action(nextcloud_accounts.delete_group, name)
         activity_log.record("nuage", f"Groupe supprimé : {name}", request.state.nom)
@@ -116,8 +116,8 @@ def _check_mode(mode, allow_none=False):
 
 
 def _folder_create(body, who):
-    name = str(body.get("nom", "")).strip()
-    group = body.get("groupe") or nextcloud_accounts.MEMBERS_GROUP
+    name = str(body.get("name", "")).strip()
+    group = body.get("group") or nextcloud_accounts.MEMBERS_GROUP
     mode = body.get("mode") or "lecture"
     _check_mode(mode)
     folder_id = run_cloud_action(nextcloud_accounts.create_team_folder, name)
@@ -129,7 +129,7 @@ def _folder_create(body, who):
 
 # Chaque geste sur un dossier qui existe : (folder_id, name, body) -> texte du Journal.
 def _folder_access(folder_id, name, body):
-    group, mode = str(body.get("groupe", "")), body.get("mode")
+    group, mode = str(body.get("group", "")), body.get("mode")
     _check_mode(mode, allow_none=True)
     run_cloud_action(nextcloud_accounts.set_team_folder_access, folder_id, group, mode)
     access = "plus d’accès" if mode is None else nextcloud_accounts.MODES[mode][1].lower()
@@ -146,8 +146,8 @@ def _folder_quota(folder_id, name, body):
 
 
 def _folder_rename(folder_id, name, body):
-    run_cloud_action(nextcloud_accounts.rename_team_folder, folder_id, str(body.get("nom", "")))
-    return f"Dossier {name} renommé en {body.get('nom')}"
+    run_cloud_action(nextcloud_accounts.rename_team_folder, folder_id, str(body.get("name", "")))
+    return f"Dossier {name} renommé en {body.get('name')}"
 
 
 def _folder_delete(folder_id, name, body):
@@ -172,7 +172,7 @@ async def team_folder_action(request: Request):
         return _folder_create(body, request.state.nom)
     if action not in FOLDER_ACTIONS:
         raise HTTPException(400, "Action inconnue.")
-    names = {folder["id"]: folder["nom"] for folder in run_cloud_action(nextcloud_accounts.team_folders)}
+    names = {folder["id"]: folder["name"] for folder in run_cloud_action(nextcloud_accounts.team_folders)}
     folder_id = body.get("id")
     if folder_id not in names:
         raise HTTPException(404, "Dossier inconnu.")

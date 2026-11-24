@@ -32,17 +32,17 @@ def sync_guest_tools():
             tools_list.append(
                 {
                     "id": tool["id"],
-                    "nom": tool["nom"],
+                    "name": tool["name"],
                     "role": tool["role"],
                     "port": tools.PORTS[tool["id"]],
-                    "actif": tool["etat"] != "arrêté",
-                    "lien_tailscale": tool.get("lien"),
+                    "active": tool["state"] != "arrêté",
+                    "tailscale_link": tool.get("link"),
                 }
             )
     _, address = wifi_address()
 
     def f(state):
-        state["outils"], state["adresse"] = tools_list, address
+        state["tools"], state["address"] = tools_list, address
 
     guests.update(f)
 
@@ -73,7 +73,7 @@ def apply_firewall():
 
 
 def guest_url(state):
-    address = state.get("adresse") or wifi_address()[1]
+    address = state.get("address") or wifi_address()[1]
     return f"http://{address}/?c={state['code']}" if address else None
 
 

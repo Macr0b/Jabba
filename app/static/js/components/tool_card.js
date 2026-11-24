@@ -20,7 +20,7 @@ const STATUS = {
 };
 
 export function statusHtml(item) {
-  const [badge, text] = STATUS[item.etat] || ["p-gris", item.etat];
+  const [badge, text] = STATUS[item.state] || ["p-gris", item.state];
   return `<span class="pastille ${badge}">${escapeHtml(text)}</span>`;
 }
 
@@ -33,27 +33,27 @@ function toolHint(item) {
 /** « Ouvrir » (dans l'appli si l'outil l'accepte) ; Nextcloud a ses fichiers et sa gestion des comptes. */
 function openButtonsHtml(item) {
   if (item.page) return t`<a class="btn btn-p" href="${escapeHtml(item.page)}">Ouvrir</a>`;
-  if (!item.lien) return "";
+  if (!item.link) return "";
   if (item.id === "nextcloud")
-    return t`<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Comptes<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Nextcloud ↗</a>`;
-  if (item.dans_appli) return t`<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(item.id)}">Ouvrir</a>`;
-  return t`<a class="btn btn-p" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Ouvrir</a>`;
+    return t`<a class="btn btn-p" href="#/fichiers">Mes fichiers</a><a class="btn" href="#/nuage">Comptes<span class="compteur" id="attente-nuage" hidden></span></a><a class="btn" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">Nextcloud ↗</a>`;
+  if (item.in_app) return t`<a class="btn btn-p" href="#/ouvrir?outil=${encodeURIComponent(item.id)}">Ouvrir</a>`;
+  return t`<a class="btn btn-p" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">Ouvrir</a>`;
 }
 
 /** `update` : une version plus récente existe. */
 export function toolCardHtml(item, update = false) {
-  const running = item.etat !== "arrêté";
+  const running = item.state !== "arrêté";
   const toggle =
-    item.modifiable && !item.systeme
-      ? `<button class="interrupteur" role="switch" aria-checked="${running}" aria-label="${escapeHtml(running ? t`Mettre ${item.nom} en pause` : t`Remettre ${item.nom} en marche`)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
+    item.editable && !item.system
+      ? `<button class="interrupteur" role="switch" aria-checked="${running}" aria-label="${escapeHtml(running ? t`Mettre ${item.name} en pause` : t`Remettre ${item.name} en marche`)}" data-bascule="${escapeHtml(item.id)}"><span></span></button>`
       : "";
   const trouble =
-    item.etat === "en panne" || item.etat === "partiel"
+    item.state === "en panne" || item.state === "partiel"
       ? `<p class="note alerte-memoire">${escapeHtml(t("Essaie Redémarrer, dans le menu •••."))}</p>`
       : "";
   return `<article class="carte pad outil${running ? "" : " eteint"}" data-carte="${escapeHtml(item.id)}">
       <div class="haut">
-        <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.nom)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div>
+        <div class="titre-outil">${toolIcon(item)}<div><h2>${escapeHtml(item.name)}</h2><div class="role">${escapeHtml(item.role)}</div></div></div>
         <div class="haut-droite">${toggle}${toolMenuHtml(item)}</div>
       </div>
       <div class="etat-outil">${statusHtml(item)}${update ? `<span class="pastille p-alerte">${escapeHtml(t("Mise à jour disponible"))}</span>` : ""}${running ? `<span class="note" data-conso="${escapeHtml(item.id)}"></span>` : ""}</div>

@@ -36,13 +36,13 @@ async function showPassphrase(passphrase, first) {
 }
 
 function backupStateHtml(item) {
-  if (item.en_cours)
-    return t`<span class="pastille p-alerte">En cours</span> <span class="note">depuis ${timeOf(item.depuis)}</span>`;
-  const result = item.dernier;
+  if (item.in_progress)
+    return t`<span class="pastille p-alerte">En cours</span> <span class="note">depuis ${timeOf(item.since)}</span>`;
+  const result = item.last;
   if (!result) return t`<span class="pastille p-gris">Pas encore faite</span>`;
   if (!result.ok)
-    return t`<span class="pastille p-rouge">Échouée</span> <span class="note">${escapeHtml(timeAgo(result.fin))}</span><br><span style="color:var(--rouge)">${escapeHtml(result.erreur)}</span>`;
-  return t`<span class="pastille p-ok">Réussie</span> <span class="note">${escapeHtml(timeAgo(result.fin))} à ${timeOf(result.fin)}, en ${shortDuration(result.duree)}</span>${result.avert ? `<br><span class="note">${escapeHtml(result.avert)}</span>` : ""}`;
+    return t`<span class="pastille p-rouge">Échouée</span> <span class="note">${escapeHtml(timeAgo(result.end))}</span><br><span style="color:var(--rouge)">${escapeHtml(result.error)}</span>`;
+  return t`<span class="pastille p-ok">Réussie</span> <span class="note">${escapeHtml(timeAgo(result.end))} à ${timeOf(result.end)}, en ${shortDuration(result.duration)}</span>${result.warning ? `<br><span class="note">${escapeHtml(result.warning)}</span>` : ""}`;
 }
 
 pages.sauvegardes = async () => {
@@ -52,18 +52,18 @@ pages.sauvegardes = async () => {
   }
   content.innerHTML = t`<div class="entete"><div><h1>Sauvegardes</h1></div></div>${loadingHtml()}`;
   const data = await api("/api/sauvegardes");
-  const superAdmin = state.admin && state.admin.rang === "super";
+  const superAdmin = state.admin && state.admin.rank === "super";
   const diskPickerHtml = (selected) =>
-    `<select id="sauv-disque">${data.disques.map((item) => `<option value="${escapeHtml(item.nom)}"${item.nom === selected ? " selected" : ""}>${escapeHtml(item.nom)}</option>`).join("")}</select>`;
-  const what = t`<p class="note" style="margin:8px 0">Chaque nuit, une copie chiffrée part sur le disque choisi : tes dossiers (sans les films ni les téléchargements, qui existent ailleurs), les réglages des outils avec leurs bases, et ceux du serveur. Seules les nouveautés prennent de la place. On garde les ${data.garder.jours} derniers jours, ${data.garder.semaines} semaines et ${data.garder.mois} mois.</p>`;
-  if (!data.pret) {
+    `<select id="sauv-disque">${data.disks.map((item) => `<option value="${escapeHtml(item.name)}"${item.name === selected ? " selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select>`;
+  const what = t`<p class="note" style="margin:8px 0">Chaque nuit, une copie chiffrée part sur le disque choisi : tes dossiers (sans les films ni les téléchargements, qui existent ailleurs), les réglages des outils avec leurs bases, et ceux du serveur. Seules les nouveautés prennent de la place. On garde les ${data.garder.days} derniers jours, ${data.garder.weeks} semaines et ${data.garder.months} mois.</p>`;
+  if (!data.ready) {
     content.innerHTML = t`<div class="entete"><div><h1>Sauvegardes</h1><p class="sous-titre">Pas encore en route.</p></div></div>
       <section class="carte pad"><h2>Mettre en route</h2>${what}
         <p class="note" style="margin:8px 0 14px">La copie est rangée dans un dossier caché du disque (<code>.sauvegardes-jabba</code>), à côté de ce qu'il contient déjà. Un disque en lecture seule n'est ouvert en écriture que le temps de la copie.</p>
         ${
-          data.disques.length
+          data.disks.length
             ? superAdmin
-              ? t`<label class="note" for="sauv-disque">Disque des sauvegardes</label>${diskPickerHtml(data.disques[0].nom)}
+              ? t`<label class="note" for="sauv-disque">Disque des sauvegardes</label>${diskPickerHtml(data.disks[0].name)}
           <div class="actions" style="margin-top:14px"><button class="btn btn-p" id="sauv-activer">Mettre en route</button></div>`
               : t('<p class="note">Seul un super admin peut les mettre en route.</p>')
             : t(
@@ -79,7 +79,7 @@ pages.sauvegardes = async () => {
         try {
           const data = await api("/api/sauvegardes/activer", {
             method: "POST",
-            json: { disque: $("#sauv-disque").value },
+            json: { disk: $("#sauv-disque").value },
           });
           if (data.phrase) await showPassphrase(data.phrase, true);
           toast(t("Sauvegardes en route : la première peut partir tout de suite"));
@@ -90,23 +90,23 @@ pages.sauvegardes = async () => {
       };
     return;
   }
-  const result = data.derniere_reussie;
+  const result = data.last_success;
   content.innerHTML = t`
-    <div class="entete"><div><h1>Sauvegardes</h1><p class="sous-titre">${data.actif ? t`Chaque nuit à ${escapeHtml(data.heure)}, vers ${escapeHtml(data.disque)}` : t("En pause")}</p></div>
-      <div class="actions"><button class="btn btn-p" id="sauv-lancer"${data.en_cours || !data.branche ? " disabled" : ""}>${data.en_cours ? t("Sauvegarde en cours…") : t("Sauvegarder maintenant")}</button></div></div>
-    ${data.branche ? "" : t`<div class="bandeau"><span>Le disque ${escapeHtml(data.disque)} n'est pas branché. ${data.actif ? t("La sauvegarde partira toute seule dès qu'il reviendra.") : ""}</span></div>`}
+    <div class="entete"><div><h1>Sauvegardes</h1><p class="sous-titre">${data.active ? t`Chaque nuit à ${escapeHtml(data.hour)}, vers ${escapeHtml(data.disk)}` : t("En pause")}</p></div>
+      <div class="actions"><button class="btn btn-p" id="sauv-lancer"${data.in_progress || !data.plugged ? " disabled" : ""}>${data.in_progress ? t("Sauvegarde en cours…") : t("Sauvegarder maintenant")}</button></div></div>
+    ${data.plugged ? "" : t`<div class="bandeau"><span>Le disque ${escapeHtml(data.disk)} n'est pas branché. ${data.active ? t("La sauvegarde partira toute seule dès qu'il reviendra.") : ""}</span></div>`}
     <div class="grille g2">
       <section class="carte pad"><h2>Dernière sauvegarde</h2>
         <p style="margin:10px 0">${backupStateHtml(data)}</p>
         <dl class="cles">
-          <dt>Dernière réussie</dt><dd>${result ? `${escapeHtml(dayOf(result.fin))} à ${timeOf(result.fin)}` : t("Aucune")}</dd>
+          <dt>Dernière réussie</dt><dd>${result ? `${escapeHtml(dayOf(result.end))} à ${timeOf(result.end)}` : t("Aucune")}</dd>
           ${
-            result && result.taille != null
-              ? t`<dt>Contenu</dt><dd>${formatBytes(result.taille)} · ${(result.fichiers || 0).toLocaleString("fr-FR")} fichiers</dd>
-          <dt>Nouveautés copiées</dt><dd>${formatBytes(result.ajoute)}${result.nouveaux != null ? t` <span class="note">(${result.nouveaux} nouveaux, ${result.modifies} modifiés)</span>` : ""}</dd>`
+            result && result.size != null
+              ? t`<dt>Contenu</dt><dd>${formatBytes(result.size)} · ${(result.files || 0).toLocaleString("fr-FR")} fichiers</dd>
+          <dt>Nouveautés copiées</dt><dd>${formatBytes(result.added)}${result.new_items != null ? t` <span class="note">(${result.new_items} nouveaux, ${result.modified_items} modifiés)</span>` : ""}</dd>`
               : ""
           }
-          <dt>Prochaine</dt><dd>${data.prochaine ? (data.prochaine * 1000 - Date.now() < 86400000 ? (+data.heure.slice(0, 2) < 12 ? t("Cette nuit") : t("Aujourd'hui")) : escapeHtml(formatWhen(new Date(data.prochaine * 1000).toISOString()))) + ` à ${escapeHtml(data.heure)}` : t("En pause")}</dd>
+          <dt>Prochaine</dt><dd>${data.next ? (data.next * 1000 - Date.now() < 86400000 ? (+data.hour.slice(0, 2) < 12 ? t("Cette nuit") : t("Aujourd'hui")) : escapeHtml(formatWhen(new Date(data.next * 1000).toISOString()))) + ` à ${escapeHtml(data.hour)}` : t("En pause")}</dd>
         </dl>
       </section>
       <section class="carte pad"><h2>Réglages</h2>${what}
@@ -114,18 +114,18 @@ pages.sauvegardes = async () => {
           superAdmin
             ? t`
         <label class="ligne-reglage"><span><strong>Sauvegarde chaque nuit</strong></span>
-          <button class="interrupteur" role="switch" aria-checked="${data.actif}" id="sauv-actif" aria-label="Sauvegarde chaque nuit"><span></span></button></label>
+          <button class="interrupteur" role="switch" aria-checked="${data.active}" id="sauv-actif" aria-label="Sauvegarde chaque nuit"><span></span></button></label>
         <label class="ligne-reglage"><span><strong>Heure</strong><br><span class="note">Une sauvegarde manquée (serveur éteint, disque absent) part dès que possible.</span></span>
-          <input type="time" id="sauv-heure" value="${escapeHtml(data.heure)}" style="width:auto"></label>
+          <input type="time" id="sauv-heure" value="${escapeHtml(data.hour)}" style="width:auto"></label>
         ${data.sources
           .map(
             (
               item,
-            ) => `<label class="ligne-reglage"><span><strong>${escapeHtml(item.nom)}</strong><br><span class="note">${escapeHtml(item.detail)}</span></span>
-          <button class="interrupteur" role="switch" aria-checked="${item.actif}" data-source="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.nom)}"><span></span></button></label>`,
+            ) => `<label class="ligne-reglage"><span><strong>${escapeHtml(item.name)}</strong><br><span class="note">${escapeHtml(item.detail)}</span></span>
+          <button class="interrupteur" role="switch" aria-checked="${item.active}" data-source="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)}"><span></span></button></label>`,
           )
           .join("")}
-        <label class="ligne-reglage"><span><strong>Disque</strong></span><span style="min-width:140px">${diskPickerHtml(data.disque)}</span></label>
+        <label class="ligne-reglage"><span><strong>Disque</strong></span><span style="min-width:140px">${diskPickerHtml(data.disk)}</span></label>
         <div class="actions" style="margin-top:12px"><button class="btn" id="sauv-phrase">Revoir la phrase de passe</button></div>`
             : t`<p class="note">Seul un super admin peut changer ces réglages.</p>`
         }
@@ -133,7 +133,7 @@ pages.sauvegardes = async () => {
     </div>
     <section class="carte pad" id="sauv-copies" style="margin-top:16px"><div class="entete-carte"><h2>Retrouver un fichier</h2></div>
       <p class="note" style="margin:8px 0 12px">Choisis une date, puis le fichier ou le dossier à récupérer. Il revient dans <strong>Mes dossiers › Restaurations</strong> : rien n'est remplacé.</p>
-      <div class="actions"><button class="btn" id="sauv-voir"${data.branche ? "" : " disabled"}>Voir les sauvegardes</button></div>
+      <div class="actions"><button class="btn" id="sauv-voir"${data.plugged ? "" : " disabled"}>Voir les sauvegardes</button></div>
     </section>`;
   $("#sauv-lancer").onclick = async () => {
     try {
@@ -145,7 +145,7 @@ pages.sauvegardes = async () => {
     pages.sauvegardes().catch(showError);
   };
   $("#sauv-voir").onclick = () => snapshotList().catch((entry) => toast(entry.message, true));
-  if (data.en_cours)
+  if (data.in_progress)
     backupFollower = setTimeout(() => {
       if (location.hash.startsWith("#/sauvegardes")) pages.sauvegardes().catch(showError);
     }, 5000);
@@ -160,9 +160,9 @@ pages.sauvegardes = async () => {
     pages.sauvegardes().catch(showError);
   };
   $("#sauv-actif").onclick = () =>
-    save({ actif: !data.actif }, data.actif ? t("Sauvegardes en pause") : t("Sauvegardes réactivées"));
+    save({ active: !data.active }, data.active ? t("Sauvegardes en pause") : t("Sauvegardes réactivées"));
   $("#sauv-heure").onchange = (event) =>
-    event.target.value && save({ heure: event.target.value }, t`Chaque nuit à ${event.target.value}`);
+    event.target.value && save({ hour: event.target.value }, t`Chaque nuit à ${event.target.value}`);
   content
     .querySelectorAll("[data-source]")
     .forEach((element) =>
@@ -177,16 +177,16 @@ pages.sauvegardes = async () => {
     const name = event.target.value;
     if (
       !(await confirmAction({
-        titre: t`Sauvegarder sur ${name} ?`,
-        texte: t`Les prochaines sauvegardes iront sur ${name}. Celles déjà faites restent sur ${data.disque}. La phrase de passe ne change pas.`,
-        valider: t("Changer"),
+        title: t`Sauvegarder sur ${name} ?`,
+        text: t`Les prochaines sauvegardes iront sur ${name}. Celles déjà faites restent sur ${data.disk}. La phrase de passe ne change pas.`,
+        confirmLabel: t("Changer"),
       }))
     ) {
-      event.target.value = data.disque;
+      event.target.value = data.disk;
       return;
     }
     try {
-      await api("/api/sauvegardes/activer", { method: "POST", json: { disque: name } });
+      await api("/api/sauvegardes/activer", { method: "POST", json: { disk: name } });
       toast(t`Sauvegardes vers ${name}`);
     } catch (error) {
       toast(error.message, true);
@@ -231,15 +231,14 @@ async function browseSnapshot(item, path) {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const root = path && item.chemins.find((result) => path === result || path.startsWith(result + "/"));
+  const root = path && item.paths.find((result) => path === result || path.startsWith(result + "/"));
   let entries;
-  if (!path)
-    entries = item.chemins.map((result) => ({ nom: ROOT_NAMES[result] || result, chemin: result, dossier: true }));
+  if (!path) entries = item.paths.map((result) => ({ name: ROOT_NAMES[result] || result, path: result, folder: true }));
   else {
     element.querySelector(".sauv-liste").innerHTML = '<div class="squelette"></div>';
     entries = (
       await api(`/api/sauvegardes/parcourir?id=${encodeURIComponent(item.id)}&chemin=${encodeURIComponent(path)}`)
-    ).elements;
+    ).items;
   }
   const parts = [];
   if (root) {
@@ -256,8 +255,8 @@ async function browseSnapshot(item, path) {
       entries
         .map(
           (item) => `<div class="sauv-ligne">
-        ${item.dossier ? `<a href="#" data-aller="${escapeHtml(item.chemin)}"><strong>${escapeHtml(item.nom)}</strong></a>` : `<span>${escapeHtml(item.nom)} <span class="note">${formatBytes(item.taille)}</span></span>`}
-        ${path ? t`<button class="btn btn-petit" data-restaurer="${escapeHtml(item.chemin)}">Récupérer</button>` : ""}</div>`,
+        ${item.folder ? `<a href="#" data-aller="${escapeHtml(item.path)}"><strong>${escapeHtml(item.name)}</strong></a>` : `<span>${escapeHtml(item.name)} <span class="note">${formatBytes(item.size)}</span></span>`}
+        ${path ? t`<button class="btn btn-petit" data-restaurer="${escapeHtml(item.path)}">Récupérer</button>` : ""}</div>`,
         )
         .join("") || t('<p class="note">Dossier vide.</p>')
     }</div>`;
@@ -274,16 +273,16 @@ async function browseSnapshot(item, path) {
       const name = value.split("/").pop();
       if (
         !(await confirmAction({
-          titre: t`Récupérer « ${name} » ?`,
-          texte: t`Il revient tel qu'il était le ${date}, dans Mes dossiers › Restaurations. Rien n'est remplacé.`,
-          valider: t("Récupérer"),
+          title: t`Récupérer « ${name} » ?`,
+          text: t`Il revient tel qu'il était le ${date}, dans Mes dossiers › Restaurations. Rien n'est remplacé.`,
+          confirmLabel: t("Récupérer"),
         }))
       )
         return;
       element.disabled = true;
       element.textContent = t("Récupération…");
       try {
-        await api("/api/sauvegardes/restaurer", { method: "POST", json: { id: item.id, chemin: value } });
+        await api("/api/sauvegardes/restaurer", { method: "POST", json: { id: item.id, path: value } });
         toast(t`« ${name} » est dans Mes dossiers › Restaurations`);
         element.textContent = t("Récupéré");
       } catch (error) {

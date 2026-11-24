@@ -23,13 +23,13 @@ from services import domain_access, json_files, notifications
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "public.json")
 DEFAULTS = {
-    "actif": False,
-    "organisme": "",
+    "active": False,
+    "organisation": "",
     "contact": "",
-    "inactif_mois": 12,
-    "expiration_jours": 30,
-    "avant": {},  # réglages Nextcloud d'avant, remis si on referme
-    "derniere_alerte_inactifs": 0,
+    "inactive_months": 12,
+    "expiry_days": 30,
+    "before": {},  # réglages Nextcloud d'avant, remis si on referme
+    "last_inactive_alert": 0,
 }
 # Réglages de partage de Nextcloud (application « core ») appliqués en mode public.
 LINK_POLICY = {
@@ -58,27 +58,27 @@ def apply_link_policy(occ, enabled, settings):
         for key in [*LINK_POLICY, EXPIRE_DAYS_KEY]:
             code, output, _ = occ(["config:app:get", "core", key])
             before[key] = output.strip() if code == 0 else None
-        if not settings.get("avant"):
-            settings["avant"] = before
+        if not settings.get("before"):
+            settings["before"] = before
         for key, value in LINK_POLICY.items():
             occ(["config:app:set", "core", key, "--value", value])
-        occ(["config:app:set", "core", EXPIRE_DAYS_KEY, "--value", str(int(settings["expiration_jours"]))])
+        occ(["config:app:set", "core", EXPIRE_DAYS_KEY, "--value", str(int(settings["expiry_days"]))])
         return settings
-    for key, value in (settings.get("avant") or {}).items():
+    for key, value in (settings.get("before") or {}).items():
         if value is None:
             occ(["config:app:delete", "core", key])
         else:
             occ(["config:app:set", "core", key, "--value", value])
-    settings["avant"] = {}
+    settings["before"] = {}
     return settings
 
 
 # ---------------------------------------------------------------- RGPD
 def privacy_notice(settings):
     """Mentions d'information (RGPD, article 13), courtes, à placer dans la charte d'inscription."""
-    organisation = settings.get("organisme") or "l'association qui gère ce serveur"
+    organisation = settings.get("organisation") or "l'association qui gère ce serveur"
     contact = settings.get("contact") or "l'administrateur"
-    months = int(settings.get("inactif_mois") or 12)
+    months = int(settings.get("inactive_months") or 12)
     return (
         f"Données personnelles : {organisation} conserve ton nom, ton adresse e-mail et les fichiers que tu déposes, "
         "uniquement pour te fournir cet espace de stockage. Rien n'est vendu ni transmis. "
@@ -90,7 +90,7 @@ def privacy_notice(settings):
 
 
 def _last_seen(account):
-    value = account.get("vu")
+    value = account.get("seen")
     if not value:
         return None
     try:
@@ -105,15 +105,15 @@ def inactive_accounts(accounts, months, now=None):
     limit = now - months * 30.4 * 86400
     found = []
     for account in accounts:
-        if account.get("admin") or account.get("etat") != "actif":
+        if account.get("admin") or account.get("state") != "actif":
             continue
         seen = _last_seen(account)
         if seen is None:
-            created = _last_seen({"vu": account.get("cree")})
+            created = _last_seen({"seen": account.get("created")})
             if created is not None and created < limit:
-                found.append({**account, "inactif_depuis": None})
+                found.append({**account, "inactive_since": None})
         elif seen < limit:
-            found.append({**account, "inactif_depuis": int((now - seen) // 86400)})
+            found.append({**account, "inactive_since": int((now - seen) // 86400)})
     return found
 
 
@@ -124,18 +124,18 @@ def readiness(own_second_factor, backups_active, settings, nextcloud_ready):
         {
             "id": "double",
             "ok": own_second_factor,
-            "texte": "Double vérification activée sur ton compte admin (Système).",
+            "text": "Double vérification activée sur ton compte admin (Système).",
         },
-        {"id": "sauvegardes", "ok": backups_active, "texte": "Sauvegardes en route (Sauvegardes)."},
+        {"id": "sauvegardes", "ok": backups_active, "text": "Sauvegardes en route (Sauvegardes)."},
         {
             "id": "nextcloud",
             "ok": nextcloud_ready,
-            "texte": "Comptes Nextcloud mis en route, avec validation à la main.",
+            "text": "Comptes Nextcloud mis en route, avec validation à la main.",
         },
         {
             "id": "mentions",
-            "ok": bool(settings.get("organisme") and settings.get("contact")),
-            "texte": "Nom de l'organisme et contact renseignés (mentions RGPD).",
+            "ok": bool(settings.get("organisation") and settings.get("contact")),
+            "text": "Nom de l'organisme et contact renseignés (mentions RGPD).",
         },
     ]
 
@@ -162,16 +162,16 @@ def create_file_request(ocs, path, days, password, label):
 def watch_inactive_accounts(occ, list_accounts, now=None):
     now = time.time() if now is None else now
     settings = read()
-    if not settings["actif"] or now - settings.get("derniere_alerte_inactifs", 0) < 30 * 86400:
+    if not settings["active"] or now - settings.get("last_inactive_alert", 0) < 30 * 86400:
         return
-    inactive = inactive_accounts(list_accounts(occ), int(settings["inactif_mois"]), now)
-    settings["derniere_alerte_inactifs"] = now
+    inactive = inactive_accounts(list_accounts(occ), int(settings["inactive_months"]), now)
+    settings["last_inactive_alert"] = now
     write(settings)
     if inactive:
         notifications.send(
             "comptes",
             f"{len(inactive)} compte{'s' if len(inactive) > 1 else ''} inactif{'s' if len(inactive) > 1 else ''}",
-            f"Sans connexion depuis plus de {settings['inactif_mois']} mois. Préviens-les, puis supprime-les depuis Comptes.",
+            f"Sans connexion depuis plus de {settings['inactive_months']} mois. Préviens-les, puis supprime-les depuis Comptes.",
             "/#/nuage",
             family="comptes",
         )

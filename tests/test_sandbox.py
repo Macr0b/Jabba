@@ -53,14 +53,14 @@ def test_can_be_disabled(monkeypatch):
 @outil("ffmpeg")
 def test_full_read(video):
     """Analyse, conversion en morceaux et sous-titres : avec le fichier passé déjà ouvert."""
-    src = {"entree": video}
+    src = {"entry": video}
     info = video_player.probe(src)
-    assert 5.5 < info["duree"] < 6.5 and info["video"]["codec"] == "h264" and info["soustitres"]
+    assert 5.5 < info["duration"] < 6.5 and info["video"]["codec"] == "h264" and info["subtitles"]
     sid, debut = video_player.start(src, info, 2)
     assert video_player.session_file(sid, "index.m3u8"), video_player.session_error(sid)
     if sandbox.is_active():
         assert os.stat(os.path.join(video_player.WORK_DIR, sid)).st_uid == sandbox.NOBODY
-    vtt = video_player.subtitles(src, info["soustitres"][0]["index"], 0).decode()
+    vtt = video_player.subtitles(src, info["subtitles"][0]["index"], 0).decode()
     assert vtt.startswith("WEBVTT") and "Bonjour" in vtt
     video_player.stop(sid)
     assert not os.path.exists(os.path.join(video_player.WORK_DIR, sid))
@@ -71,11 +71,11 @@ def test_unreadable_file(tmp_path):
     f = tmp_path / "faux.mkv"
     f.write_bytes(b"pas une video" * 100)
     with pytest.raises(RuntimeError):
-        video_player.probe({"entree": str(f)})
+        video_player.probe({"entry": str(f)})
 
 
 def test_address_passed_as_is():
-    with sandbox.open_input({"entree": "http://127.0.0.1:8081/f.mkv", "entetes": "Authorization: x\r\n"}) as (a, fds):
+    with sandbox.open_input({"entry": "http://127.0.0.1:8081/f.mkv", "headers": "Authorization: x\r\n"}) as (a, fds):
         assert a == ["-headers", "Authorization: x\r\n", "-i", "http://127.0.0.1:8081/f.mkv"] and fds == ()
 
 
@@ -102,7 +102,7 @@ def test_thumbnail_of_a_trap_file(tmp_path):
 def test_input_refuses_what_is_not_a_file(tmp_path, monkeypatch):
     monkeypatch.setattr(sandbox, "is_active", lambda: True)
     with pytest.raises((RuntimeError, OSError)):
-        with sandbox.open_input({"entree": str(tmp_path)}):
+        with sandbox.open_input({"entry": str(tmp_path)}):
             pass
 
 
@@ -131,7 +131,7 @@ def test_avi_converted_and_played(tmp_path):
         ],
         check=True,
     )
-    src = {"entree": str(movie)}
+    src = {"entry": str(movie)}
     info = video_player.probe(src)
     assert info["video"]["codec"] == "mpeg4" and not video_player.plays_directly(info)
     sid, _ = video_player.start(src, info, 0)
@@ -151,4 +151,4 @@ def test_probe_too_long_clear_message(monkeypatch, tmp_path):
 
     monkeypatch.setattr(video_player.sandbox, "run", too_long)
     with pytest.raises(RuntimeError, match="Analyse trop longue"):
-        video_player.probe({"entree": str(movie)})
+        video_player.probe({"entry": str(movie)})

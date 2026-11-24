@@ -81,14 +81,14 @@ def test_ports_limited_to_the_server():
 
 
 def test_catalog_and_memory(monkeypatch):
-    monkeypatch.setattr(optional_tools.measurements, "memory", lambda: {"total": 8 * 1024**3, "utilise": 5 * 1024**3})
+    monkeypatch.setattr(optional_tools.measurements, "memory", lambda: {"total": 8 * 1024**3, "used": 5 * 1024**3})
     budget = optional_tools.memory_budget(
-        {"nextcloud": {"memoire": 600 * 1024**2}, "jellyfin": {"memoire": 400 * 1024**2}}
+        {"nextcloud": {"memory": 600 * 1024**2}, "jellyfin": {"memory": 400 * 1024**2}}
     )
-    assert budget == {"total": 8 * 1024**3, "utilise": 5 * 1024**3, "outils": 1000 * 1024**2, "libre": 3 * 1024**3}
+    assert budget == {"total": 8 * 1024**3, "used": 5 * 1024**3, "tools": 1000 * 1024**2, "free": 3 * 1024**3}
     listing = {outil["id"]: outil for outil in optional_tools.catalog({"vaultwarden"})}
-    assert listing["vaultwarden"]["installe"] and not listing["immich"]["installe"]
-    assert listing["immich"]["memoire"] == 3 * 1024**3 and "mot_de_passe" not in listing["time-machine"]
+    assert listing["vaultwarden"]["installed"] and not listing["immich"]["installed"]
+    assert listing["immich"]["memory"] == 3 * 1024**3 and "password" not in listing["time-machine"]
 
 
 def test_install_as_a_long_task(monkeypatch, tmp_path):
@@ -108,9 +108,9 @@ def test_install_as_a_long_task(monkeypatch, tmp_path):
     optional_tools.install("time-machine", "rob")
     assert started[2][-1] == word
     assert tool_credentials.read("time-machine") == {
-        "identifiant": "timemachine",
-        "mot_de_passe": word,
-        "cree_par_jabba": True,
+        "username": "timemachine",
+        "password": word,
+        "created_by_jabba": True,
     }
     assert (tmp_path / "identifiants.json").stat().st_mode & 0o077 == 0  # lisible par l'appli seule
     with pytest.raises(actions.ActionError):
@@ -193,7 +193,7 @@ def test_adguard_listens_on_the_server_addresses(tmp_path):
     """Pas sur 0.0.0.0:53 (pris par le résolveur de Debian) : l'adresse de la maison et celle de Tailscale."""
     assert '"53:53' not in catalog.ADGUARD_COMPOSE and '"${IP_LOCALE}:53:53/udp"' in catalog.ADGUARD_COMPOSE
     assert '"${IP_TAILSCALE}:53:53/udp"' in catalog.ADGUARD_COMPOSE
-    assert "ip_nonlocal_bind=1" in catalog.OPTIONAL_TOOLS["adguard-home"]["preparer"]
+    assert "ip_nonlocal_bind=1" in catalog.OPTIONAL_TOOLS["adguard-home"]["prepare"]
     commande, _ = actions.build("installer_outil_option", {"outil": "adguard-home"})
     commande[6] = ""  # pas de préparation (sysctl) pendant le test
     tools = tmp_path / "outils"
@@ -250,17 +250,17 @@ def test_logins_noted_by_you(vault):
     assert tool_credentials.read("homebox") is None
     tool_credentials.save("homebox", "  rob  ", "phrase avec espaces et accents é€ '\"")
     assert tool_credentials.read("homebox") == {
-        "identifiant": "rob",
-        "mot_de_passe": "phrase avec espaces et accents é€ '\"",
-        "cree_par_jabba": False,
+        "username": "rob",
+        "password": "phrase avec espaces et accents é€ '\"",
+        "created_by_jabba": False,
     }
     assert vault.stat().st_mode & 0o077 == 0  # lisible par l'appli seule
     tool_credentials.save("homebox", "rob", "autre")
-    assert tool_credentials.read("homebox")["mot_de_passe"] == "autre"
+    assert tool_credentials.read("homebox")["password"] == "autre"
     tool_credentials.save("dockge", "rob", "dock")
     tool_credentials.forget("homebox")
     assert tool_credentials.read("homebox") is None
-    assert tool_credentials.read("dockge")["mot_de_passe"] == "dock"  # les autres restent
+    assert tool_credentials.read("dockge")["password"] == "dock"  # les autres restent
 
 
 def test_account_created_by_jabba_untouchable(vault):
@@ -272,9 +272,9 @@ def test_account_created_by_jabba_untouchable(vault):
         with pytest.raises(ValueError, match="créé par Jabba"):
             action()
     assert tool_credentials.read("paperless") == {
-        "identifiant": "admin",
-        "mot_de_passe": mot_de_passe,
-        "cree_par_jabba": True,
+        "username": "admin",
+        "password": mot_de_passe,
+        "created_by_jabba": True,
     }
 
 
@@ -308,3 +308,34 @@ def test_a_noted_account_never_becomes_a_drawn_password(vault):
     assert tool_credentials.read("homebox") is None
     assert tool_credentials.read("paperless") is None
     assert isinstance(tool_credentials.password_for("paperless"), str)
+
+
+@pytest.mark.parametrize(
+    "name", ["nextcloud", "jabba-app", "dockge", "acces-domaine", "vaultwarden", "adresse-ntfy", "../etc", "", "A"]
+)
+def test_leftover_removal_never_touches_a_known_tool(name):
+    with pytest.raises(actions.ActionError):
+        actions.build("retirer_ancien_outil", {"outil": name})
+
+
+def test_leftover_tool_removed_entirely(monkeypatch):
+    """ntfy, resté d'une ancienne version : « Désinstaller » retire tout, en tâche longue."""
+    commande, _ = actions.build("retirer_ancien_outil", {"outil": "ntfy"})
+    assert commande[-1] == "/opt/stacks/ntfy" and "docker compose down -v" in commande[2]
+    started = []
+    monkeypatch.setattr(
+        optional_tools.background_tasks, "start_task", lambda *a, **k: started.append(a) or {"id": "t1"}
+    )
+    assert optional_tools.remove_leftover("ntfy", "rob") == {"id": "t1"}
+    assert started[0][1:] == ("retirer_ancien_outil", {"outil": "ntfy"}, "rob", "ntfy")
+    with pytest.raises(actions.ActionError):
+        optional_tools.remove_leftover("nextcloud", "rob")
+
+
+def test_leftover_flag_on_the_card():
+    from services import tools
+
+    ntfy = tools._tool("ntfy", {"folder": "/opt/stacks/ntfy", "containers": []})
+    nextcloud = tools._tool("nextcloud", {"folder": "/opt/stacks/nextcloud", "containers": []})
+    elsewhere = tools._tool("essai", {"folder": "/home/rob/essai", "containers": []})
+    assert ntfy["leftover"] and not nextcloud["leftover"] and not elsewhere["leftover"]

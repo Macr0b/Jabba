@@ -39,26 +39,26 @@ def _read_nextcloud():
 def _forget_handled_signups(accounts):
     """Les inscriptions validées ou refusées entre-temps sortent de la liste des déjà signalées (les
     nouvelles, c'est la surveillance qui les signale)."""
-    pending = sorted(account["id"] for account in accounts if account["etat"] == "attente")
+    pending = sorted(account["id"] for account in accounts if account["state"] == "attente")
     with nextcloud_accounts._lock:
         cloud_state = nextcloud_accounts.read()
-        seen = cloud_state["en_attente_vus"]
+        seen = cloud_state["pending_seen"]
         if seen != pending and set(pending) <= set(seen):
-            cloud_state["en_attente_vus"] = pending
+            cloud_state["pending_seen"] = pending
             nextcloud_accounts.write(cloud_state)
     return cloud_state
 
 
 def _ranks(cloud_state, groups):
     """Chaque rang : son nom, combien de personnes l'ont, combien voient ses dossiers."""
-    members = {group["id"]: group["membres"] for group in groups}
-    rank_of = cloud_state.get("rang_de", {})
+    members = {group["id"]: group["members"] for group in groups}
+    rank_of = cloud_state.get("rank_of", {})
     return [
         {
             "id": rank["id"],
-            "nom": rank["nom"],
-            "membres": sum(1 for value in rank_of.values() if value == rank["id"]),
-            "voient": len(members.get(rank["id"], [])),
+            "name": rank["name"],
+            "members": sum(1 for value in rank_of.values() if value == rank["id"]),
+            "member_count": len(members.get(rank["id"], [])),
         }
         for rank in nextcloud_accounts.ranks_of(cloud_state)
     ]
@@ -67,27 +67,27 @@ def _ranks(cloud_state, groups):
 def overview(session):
     state, accounts, groups, folders = _read_nextcloud()
     if accounts is None:
-        return {"etat": state, "rang": session["rang"]}
+        return {"state": state, "rank": session["rank"]}
     nextcloud_accounts.refresh_usage_in_background()
     cloud_state = _forget_handled_signups(accounts)
-    ranks_on = bool(cloud_state.get("rangs_actif"))
+    ranks_on = bool(cloud_state.get("ranks_enabled"))
     for account in accounts:
-        account["rang_nuage"] = cloud_state.get("rang_de", {}).get(account["id"]) if ranks_on else None
+        account["cloud_rank"] = cloud_state.get("rank_of", {}).get(account["id"]) if ranks_on else None
     return {
-        "etat": state,
-        "rang": session["rang"],
-        "plafond_go": cloud_state["plafond_go"],
-        "comptes": accounts,
-        "groupes": [group for group in groups if not group["id"].startswith(nextcloud_accounts.RANK_PREFIX)],
-        "rangs_actif": ranks_on,
-        "rangs": _ranks(cloud_state, groups),
-        "createur": session["identifiant"] == guard.hostname(),
-        "charte": nextcloud_accounts.charter(commands.occ),
-        "charte_defaut": nextcloud_accounts.DEFAULT_CHARTER,
-        "charte_max": nextcloud_accounts.CHARTER_MAX,
-        "dossiers": folders,
-        "modes": {mode: {"nom": value[1], "detail": value[2]} for mode, value in nextcloud_accounts.MODES.items()},
-        "tous": nextcloud_accounts.MEMBERS_GROUP,
-        "promis": sum(account["quota"] or 0 for account in accounts if account["etat"] == "actif"),
-        "espace": None if config.DEMO else measurements.disk_space(["/srv/data"]).get("/srv/data"),
+        "state": state,
+        "rank": session["rank"],
+        "cap_gb": cloud_state["cap_gb"],
+        "accounts": accounts,
+        "groups": [group for group in groups if not group["id"].startswith(nextcloud_accounts.RANK_PREFIX)],
+        "ranks_enabled": ranks_on,
+        "ranks": _ranks(cloud_state, groups),
+        "creator": session["username"] == guard.hostname(),
+        "charter": nextcloud_accounts.charter(commands.occ),
+        "default_charter": nextcloud_accounts.DEFAULT_CHARTER,
+        "charter_max": nextcloud_accounts.CHARTER_MAX,
+        "folders": folders,
+        "modes": {mode: {"name": value[1], "detail": value[2]} for mode, value in nextcloud_accounts.MODES.items()},
+        "all": nextcloud_accounts.MEMBERS_GROUP,
+        "promised": sum(account["quota"] or 0 for account in accounts if account["state"] == "actif"),
+        "space": None if config.DEMO else measurements.disk_space(["/srv/data"]).get("/srv/data"),
     }

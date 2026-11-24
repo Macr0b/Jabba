@@ -25,7 +25,7 @@ async def list_devices(request: Request):
 async def protect_device(request: Request):
     guard.require_admin(request)
     body = await request.json()
-    protected = bool(body.get("protege"))
+    protected = bool(body.get("protected"))
     try:
         await asyncio.to_thread(ad_blocker.set_protected, body.get("ip"), protected)
     except ad_blocker.AdBlockerError as error:

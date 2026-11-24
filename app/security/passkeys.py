@@ -75,8 +75,8 @@ def verify_registration(credential, challenge, rp_id, origins):
     )
     return {
         "id": bytes_to_base64url(verified.credential_id),
-        "cle_publique": bytes_to_base64url(verified.credential_public_key),
-        "compteur": verified.sign_count,
+        "public_key": bytes_to_base64url(verified.credential_public_key),
+        "counter": verified.sign_count,
     }
 
 
@@ -96,8 +96,8 @@ def verify_authentication(credential, challenge, rp_id, origins, stored_key):
         expected_challenge=challenge,
         expected_rp_id=rp_id,
         expected_origin=origins,
-        credential_public_key=base64url_to_bytes(stored_key["cle_publique"]),
-        credential_current_sign_count=stored_key.get("compteur", 0),
+        credential_public_key=base64url_to_bytes(stored_key["public_key"]),
+        credential_current_sign_count=stored_key.get("counter", 0),
         require_user_verification=True,
     )
     return verified.new_sign_count

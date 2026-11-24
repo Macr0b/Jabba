@@ -32,7 +32,7 @@ TEMPORARY_LIFETIME = 15 * 60
 CONFIRMATION_WINDOW = 10 * 60
 COOKIE = "jabba_session"
 _lock = threading.RLock()
-_cache = {"d": None, "ecrit": 0}
+_cache = {"d": None, "written": 0}
 
 
 def _token_hash(token):
@@ -47,7 +47,7 @@ def _read():
 
 def _write():
     json_files.save(SESSIONS_FILE, _cache["d"], private=True)
-    _cache["ecrit"] = time.time()
+    _cache["written"] = time.time()
 
 
 def _drop_expired(sessions_data):
@@ -64,15 +64,15 @@ def create(identifier, rank, temporary=False, device=None, login=None):
         _drop_expired(sessions_data)
         sessions_data[_token_hash(token)] = {
             "id": secrets.token_hex(4),
-            "identifiant": identifier,
-            "rang": rank,
-            "provisoire": temporary,
-            "appareil": device,
+            "username": identifier,
+            "rank": rank,
+            "temporary": temporary,
+            "device": device,
             "login": login,
-            "cree": int(now),
-            "vu": int(now),
+            "created": int(now),
+            "seen": int(now),
             "exp": now + (TEMPORARY_LIFETIME if temporary else LIFETIME),
-            "confirme": now,
+            "confirmed": now,
         }
         _write()
     return token
@@ -86,8 +86,8 @@ def read(token):
         session = _read().get(_token_hash(token))
         if not session or session["exp"] < time.time():
             return None
-        if time.time() - session["vu"] > 300:
-            session["vu"] = int(time.time())
+        if time.time() - session["seen"] > 300:
+            session["seen"] = int(time.time())
             _write()
         return dict(session)
 
@@ -96,12 +96,12 @@ def confirm(token):
     with _lock:
         session = _read().get(_token_hash(token))
         if session:
-            session["confirme"] = time.time()
+            session["confirmed"] = time.time()
             _write()
 
 
 def confirmed_recently(session):
-    return time.time() - session.get("confirme", 0) < CONFIRMATION_WINDOW
+    return time.time() - session.get("confirmed", 0) < CONFIRMATION_WINDOW
 
 
 def close(token):
@@ -125,7 +125,7 @@ def close_account(identifier=None):
     with _lock:
         sessions_data = _read()
         for key in [
-            key for key, session in sessions_data.items() if identifier is None or session["identifiant"] == identifier
+            key for key, session in sessions_data.items() if identifier is None or session["username"] == identifier
         ]:
             del sessions_data[key]
         _write()
@@ -139,7 +139,7 @@ def list_sessions():
             (
                 {key: value for key, value in session.items() if key != "exp"}
                 for session in sessions_data.values()
-                if not session["provisoire"]
+                if not session["temporary"]
             ),
-            key=lambda session: -session["vu"],
+            key=lambda session: -session["seen"],
         )

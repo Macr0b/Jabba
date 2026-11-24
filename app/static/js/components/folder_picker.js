@@ -29,13 +29,13 @@ export function pickFolder({ title, start = "/", confirmLabel = t("Déplacer ici
         }
         return dialogElement.close("non");
       }
-      const folders = listing.elements.filter((entry) => entry.dossier && !blocked(entry.chemin));
-      const writable = listing.ecriture && current !== "/" && !blocked(current);
+      const folders = listing.items.filter((entry) => entry.folder && !blocked(entry.path));
+      const writable = listing.writable && current !== "/" && !blocked(current);
       dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2>
         <p class="chemin-choisi"><span class="note">Dans :</span> <strong>${escapeHtml(current === "/" ? t("Tous les emplacements") : current)}</strong></p>
         <div class="liste-dossiers" role="list">
           ${current !== "/" ? t('<button class="ligne-dossier" type="button" data-aller=".." role="listitem">↑ Dossier parent</button>') : ""}
-          ${folders.map((entry) => `<button class="ligne-dossier" type="button" data-aller="${escapeHtml(entry.chemin)}" role="listitem"><span class="ic-dossier" aria-hidden="true"></span>${escapeHtml(entry.nom)}<span aria-hidden="true">›</span></button>`).join("")}
+          ${folders.map((entry) => `<button class="ligne-dossier" type="button" data-aller="${escapeHtml(entry.path)}" role="listitem"><span class="ic-dossier" aria-hidden="true"></span>${escapeHtml(entry.name)}<span aria-hidden="true">›</span></button>`).join("")}
           ${folders.length ? "" : t('<p class="note">Aucun sous-dossier.</p>')}
         </div>
         ${writable ? "" : `<p class="note">${current === "/" ? t("Ouvre un dossier pour y déplacer.") : t("Ce dossier est en lecture seule.")}</p>`}

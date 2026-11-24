@@ -30,26 +30,20 @@ export function toast(text, isError = false, action = null) {
 
 export const dialogElement = $("#dialogue");
 export const dialogForm = $("#dialogue-form");
-export function confirmAction({
-  titre: title,
-  texte: text = "",
-  champ: field = null,
-  valider: confirmLabel = "OK",
-  danger = false,
-}) {
+export function confirmAction({ title, text = "", field = null, confirmLabel = "OK", danger = false }) {
   return new Promise((resolve) => {
     dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2>${text ? `<p>${escapeHtml(text)}</p>` : ""}
-      ${field !== null ? `<input type="text" name="champ" value="${escapeHtml(field)}" aria-label="${escapeHtml(title)}" autocomplete="off" autocapitalize="off">` : ""}
+      ${field !== null ? `<input type="text" name="field" value="${escapeHtml(field)}" aria-label="${escapeHtml(title)}" autocomplete="off" autocapitalize="off">` : ""}
       <div class="actions"><button class="btn" value="non" type="submit">Annuler</button>
       <button class="btn ${danger ? "btn-danger" : "btn-p"}" value="oui" type="submit">${escapeHtml(confirmLabel)}</button></div>`;
     dialogElement.onclose = () => {
       const ok = dialogElement.returnValue === "oui";
-      const value = field !== null ? dialogForm.champ.value.trim() : true;
+      const value = field !== null ? dialogForm.field.value.trim() : true;
       resolve(ok ? value : null);
     };
     dialogElement.showModal();
     if (field !== null) {
-      const item = dialogForm.champ;
+      const item = dialogForm.field;
       item.focus();
       const value = item.value.lastIndexOf(".");
       item.setSelectionRange(0, value > 0 ? value : item.value.length);
@@ -61,7 +55,7 @@ export function chooseFromMenu(title, choices) {
     dialogForm.innerHTML = t`<h2>${escapeHtml(title)}</h2><div class="menu-actions">${choices
       .map(
         (item, index) =>
-          `<button class="btn ${item.danger ? "btn-danger" : ""}" value="${index}" type="submit">${escapeHtml(item.texte)}</button>`,
+          `<button class="btn ${item.danger ? "btn-danger" : ""}" value="${index}" type="submit">${escapeHtml(item.text)}</button>`,
       )
       .join("")}</div><div class="actions"><button class="btn" value="" type="submit">Fermer</button></div>`;
     dialogElement.onclose = () =>

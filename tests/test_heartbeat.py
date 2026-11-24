@@ -31,7 +31,7 @@ def signal(tmp_path, monkeypatch):
 
 def test_address_tried_then_kept_never_shown_again(signal, tmp_path):
     etat = heartbeat.save(f"  {ADDRESS} ")
-    assert etat["pret"] and etat["ok"] and ADDRESS not in json.dumps(etat)
+    assert etat["ready"] and etat["ok"] and ADDRESS not in json.dumps(etat)
     assert signal == [ADDRESS]  # un premier signal, avant de garder
     assert oct((tmp_path / "surveillance.json").stat().st_mode)[-3:] == "600"
 
@@ -40,14 +40,14 @@ def test_address_tried_then_kept_never_shown_again(signal, tmp_path):
 def test_address_miscopied(signal, adresse):
     with pytest.raises(heartbeat.ServiceError, match="en entier"):
         heartbeat.save(adresse)
-    assert signal == [] and not heartbeat.status()["pret"]
+    assert signal == [] and not heartbeat.status()["ready"]
 
 
 def test_address_unknown_to_the_service(signal):
     signal.answers = False
     with pytest.raises(heartbeat.ServiceError, match="n'a pas reçu"):
         heartbeat.save(ADDRESS)
-    assert not heartbeat.status()["pret"]
+    assert not heartbeat.status()["ready"]
 
 
 def test_a_signal_every_5_minutes(signal):
@@ -60,9 +60,9 @@ def test_a_signal_every_5_minutes(signal):
     signal.answers = False
     assert heartbeat.watch(now=10_600) is False
     etat = heartbeat.status()
-    assert etat["ok"] is False and etat["dernier"] == 10_300  # le dernier signal reçu reste affiché
+    assert etat["ok"] is False and etat["last"] == 10_300  # le dernier signal reçu reste affiché
     heartbeat.forget()
-    assert not heartbeat.status()["pret"] and heartbeat.watch(now=20_000) is None
+    assert not heartbeat.status()["ready"] and heartbeat.watch(now=20_000) is None
 
 
 @pytest.fixture
@@ -113,10 +113,10 @@ def test_alert_if_protection_stays_off(nextcloud, monkeypatch):
     settings, _ = nextcloud
     alerts = []
     monkeypatch.setattr(domain_access.notifications, "send", lambda *a, **k: alerts.append(a[1]))
-    monkeypatch.setattr(domain_access, "read", lambda: {"actif": False})
+    monkeypatch.setattr(domain_access, "read", lambda: {"active": False})
     settings["auth.bruteforce.protection.enabled"] = ["false"]
     domain_access.watch_protection()
     assert alerts == []  # accès fermé : Nextcloud n'est pas sur Internet
-    monkeypatch.setattr(domain_access, "read", lambda: {"actif": True, "domaine": "exemple.fr"})
+    monkeypatch.setattr(domain_access, "read", lambda: {"active": True, "domain": "exemple.fr"})
     domain_access.watch_protection()
     assert alerts == ["Nextcloud : protection contre les essais en rafale coupée"]

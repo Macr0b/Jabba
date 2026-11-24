@@ -69,9 +69,9 @@ function deviceKind() {
 /** L'adresse publique (domaine) si elle marche, sinon celle de Tailscale. */
 async function serverAddress(item) {
   const domain = await api("/api/domaine").catch(() => null);
-  if (domain && domain.actif && domain.dns_ok && domain.certificat_ok)
-    return { url: `https://${domain.adresse}`, everywhere: true };
-  return { url: item.lien, everywhere: false };
+  if (domain && domain.active && domain.dns_ok && domain.certificate_ok)
+    return { url: `https://${domain.address}`, everywhere: true };
+  return { url: item.link, everywhere: false };
 }
 
 function stepsHtml(kind) {

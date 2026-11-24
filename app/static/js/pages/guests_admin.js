@@ -18,15 +18,15 @@ pages.invites = async () => {
   content.innerHTML = t`
     <div class="entete"><div><h1>Invités</h1><p class="sous-titre">Ce que voient les personnes connectées à ton Wi-Fi, sans compte ni application.</p></div></div>
     <section class="carte pad">
-      <label class="ligne-reglage"><span><strong>Accès invités</strong><br><span class="note">${settings.actif ? t("Ouvert : avec le code, un invité sur ton Wi-Fi voit les dossiers ci-dessous.") : t("Fermé : la page invités n'affiche rien.")}</span></span>
-        <button class="interrupteur" role="switch" aria-checked="${settings.actif}" id="actif"><span></span></button></label>
+      <label class="ligne-reglage"><span><strong>Accès invités</strong><br><span class="note">${settings.active ? t("Ouvert : avec le code, un invité sur ton Wi-Fi voit les dossiers ci-dessous.") : t("Fermé : la page invités n'affiche rien.")}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${settings.active}" id="actif"><span></span></button></label>
     </section>
     ${
-      settings.actif
+      settings.active
         ? t`<section class="carte pad acces-invites">
       <div class="qr"><img src="/api/invites/qr.svg?c=${escapeHtml(settings.code)}" alt="QR code de l'accès invités" width="180" height="180"></div>
       <div><h2>Code d'accès : <span class="code-invite">${escapeHtml(settings.code)}</span></h2>
-        <p class="note">Les invités scannent le QR code, connectés à ton Wi-Fi principal (pas le Wi-Fi invités de la box, isolé du serveur). Sans téléphone : ouvrir <strong>${escapeHtml(settings.url ? settings.url.split("/?")[0] : settings.nom_local)}</strong> ou <strong>${escapeHtml(settings.nom_local)}</strong>, puis taper le code.</p>
+        <p class="note">Les invités scannent le QR code, connectés à ton Wi-Fi principal (pas le Wi-Fi invités de la box, isolé du serveur). Sans téléphone : ouvrir <strong>${escapeHtml(settings.url ? settings.url.split("/?")[0] : settings.local_name)}</strong> ou <strong>${escapeHtml(settings.local_name)}</strong>, puis taper le code.</p>
         <p class="note">Un appareil reste reconnu 7 jours. Changer le code fait sortir tout le monde.</p>
         <div class="actions"><button class="btn" id="code">Nouveau code</button><button class="btn" id="imprimer">Imprimer</button></div></div>
     </section>`
@@ -35,13 +35,13 @@ pages.invites = async () => {
     <h2 class="titre-section">Dossiers partagés</h2>
     <section class="carte tableau">
       ${
-        settings.dossiers
+        settings.folders
           .map(
             (
               item,
-            ) => t`<div class="ligne"><span class="nom"><span class="ic-dossier" aria-hidden="true"></span><span>${escapeHtml(item.nom)}<span class="detail-chemin">${escapeHtml(item.chemin)}</span></span></span>
-        <span class="col-l"><select data-mode="${escapeHtml(item.id)}" aria-label="Droits sur ${escapeHtml(item.nom)}"><option value="lecture"${item.mode === "lecture" ? " selected" : ""}>Lecture seule</option><option value="depot"${item.mode === "depot" ? " selected" : ""}>Lire et déposer</option></select></span>
-        <span></span><button class="btn-menu" data-retirer="${escapeHtml(item.id)}" aria-label="Retirer ${escapeHtml(item.nom)}">✕</button></div>`,
+            ) => t`<div class="ligne"><span class="nom"><span class="ic-dossier" aria-hidden="true"></span><span>${escapeHtml(item.name)}<span class="detail-chemin">${escapeHtml(item.path)}</span></span></span>
+        <span class="col-l"><select data-mode="${escapeHtml(item.id)}" aria-label="Droits sur ${escapeHtml(item.name)}"><option value="lecture"${item.mode === "lecture" ? " selected" : ""}>Lecture seule</option><option value="depot"${item.mode === "depot" ? " selected" : ""}>Lire et déposer</option></select></span>
+        <span></span><button class="btn-menu" data-retirer="${escapeHtml(item.id)}" aria-label="Retirer ${escapeHtml(item.name)}">✕</button></div>`,
           )
           .join("") || t('<div class="vide">Aucun dossier partagé.</div>')
       }
@@ -51,11 +51,11 @@ pages.invites = async () => {
     <section class="carte pad">
       <p class="note" style="margin:0 0 12px">Un outil coché est joignable depuis ton Wi-Fi (par les invités, la télé…) et apparaît sur leur page. Décoché, il n'est joignable que par Tailscale. Chaque outil garde son propre mot de passe.</p>
       ${
-        settings.outils
+        settings.tools
           .map(
             (
               item,
-            ) => `<label class="ligne-reglage" style="margin-bottom:12px"><span><strong>${escapeHtml(item.nom)}</strong> <span class="note">· port ${item.port}${item.actif ? "" : t(" · désactivé dans l'établi")}</span><br><span class="note">${escapeHtml(item.role)}</span></span>
+            ) => `<label class="ligne-reglage" style="margin-bottom:12px"><span><strong>${escapeHtml(item.name)}</strong> <span class="note">· port ${item.port}${item.active ? "" : t(" · désactivé dans l'établi")}</span><br><span class="note">${escapeHtml(item.role)}</span></span>
         <button class="interrupteur" role="switch" aria-checked="${item.wifi}" data-wifi="${escapeHtml(item.id)}"><span></span></button></label>`,
           )
           .join("") || t('<p class="note">Aucun outil.</p>')
@@ -73,17 +73,17 @@ pages.invites = async () => {
   };
   $("#actif").onclick = () =>
     send(
-      { action: "actif", actif: !settings.actif },
-      settings.actif ? t("Accès invités fermé") : t("Accès invités ouvert"),
+      { action: "actif", active: !settings.active },
+      settings.active ? t("Accès invités fermé") : t("Accès invités ouvert"),
     );
   const code = $("#code");
   if (code)
     code.onclick = async () => {
       if (
         await confirmAction({
-          titre: t("Nouveau code ?"),
-          texte: t("Les invités déjà entrés devront saisir le nouveau code, et l'ancien QR code ne marchera plus."),
-          valider: t("Changer le code"),
+          title: t("Nouveau code ?"),
+          text: t("Les invités déjà entrés devront saisir le nouveau code, et l'ancien QR code ne marchera plus."),
+          confirmLabel: t("Changer le code"),
         })
       )
         send({ action: "code" }, "Nouveau code créé");
@@ -94,7 +94,7 @@ pages.invites = async () => {
       const printWindow = window.open("", "_blank");
       if (!printWindow) return toast(t("Autorise les fenêtres pour imprimer."), true);
       printWindow.document.write(
-        t`<title>Accès invités</title><body style="font-family:-apple-system,sans-serif;text-align:center;padding:40px"><h1>Wi-Fi : fichiers partagés</h1><img src="${location.origin}/api/invites/qr.svg" width="320"><p style="font-size:22px">Code : <b>${escapeHtml(settings.code)}</b></p><p>${escapeHtml(settings.url ? settings.url.split("/?")[0] : settings.nom_local)}</p></body>`,
+        t`<title>Accès invités</title><body style="font-family:-apple-system,sans-serif;text-align:center;padding:40px"><h1>Wi-Fi : fichiers partagés</h1><img src="${location.origin}/api/invites/qr.svg" width="320"><p style="font-size:22px">Code : <b>${escapeHtml(settings.code)}</b></p><p>${escapeHtml(settings.url ? settings.url.split("/?")[0] : settings.local_name)}</p></body>`,
       );
       printWindow.document.close();
       // Impression dès que le QR code est affiché (lancée d'ici : aucun script dans la page imprimée).
@@ -113,9 +113,9 @@ pages.invites = async () => {
     element.addEventListener("click", async () => {
       if (
         await confirmAction({
-          titre: t("Ne plus partager ce dossier ?"),
-          texte: t("Les invités ne le verront plus. Son contenu n'est pas touché."),
-          valider: t("Retirer"),
+          title: t("Ne plus partager ce dossier ?"),
+          text: t("Les invités ne le verront plus. Son contenu n'est pas touché."),
+          confirmLabel: t("Retirer"),
         })
       )
         send({ action: "retirer_dossier", id: element.dataset.retirer }, "Dossier retiré");
@@ -135,10 +135,10 @@ pages.invites = async () => {
     const path = await chooseFolder();
     if (!path) return;
     const item = await chooseFromMenu(t`Partager « ${path.split("/").pop()} »`, [
-      { texte: t("En lecture seule"), mode: "lecture" },
-      { texte: t("Lire et déposer"), mode: "depot" },
+      { text: t("En lecture seule"), mode: "lecture" },
+      { text: t("Lire et déposer"), mode: "depot" },
     ]);
-    if (item) send({ action: "ajouter_dossier", chemin: path, mode: item.mode }, "Dossier partagé");
+    if (item) send({ action: "ajouter_dossier", path, mode: item.mode }, "Dossier partagé");
   };
 };
 
@@ -155,7 +155,7 @@ function chooseFolder(path = "/") {
     const parent = path === "/" ? null : path.split("/").slice(0, -1).join("/") || "/";
     dialogForm.innerHTML = t`<h2>Choisir un dossier</h2><p class="note">${escapeHtml(path === "/" ? t("Dossiers du serveur") : path)}</p>
       <div class="liste-dossiers">${parent !== null ? t`<button class="btn" type="button" data-aller="${escapeHtml(parent)}">‹ Retour</button>` : ""}
-      ${data.elements.map((item) => `<button class="btn" type="button" data-aller="${escapeHtml(item.chemin)}"><span class="ic-dossier" aria-hidden="true"></span> ${escapeHtml(item.nom)}</button>`).join("") || t('<p class="note">Pas de sous-dossier.</p>')}</div>
+      ${data.items.map((item) => `<button class="btn" type="button" data-aller="${escapeHtml(item.path)}"><span class="ic-dossier" aria-hidden="true"></span> ${escapeHtml(item.name)}</button>`).join("") || t('<p class="note">Pas de sous-dossier.</p>')}</div>
       <div class="actions"><button class="btn" value="non" type="submit">Annuler</button>${path !== "/" ? t`<button class="btn btn-p" value="oui" type="submit">Choisir ce dossier</button>` : ""}</div>`;
     dialogElement.onclose = () => resolve(dialogElement.returnValue === "oui" ? path : null);
     dialogElement.returnValue = "";

@@ -50,21 +50,21 @@ def _log(request, text):
 @router.get("/api/double")
 def my_second_factor(request: Request):
     session = guard.require_admin(request)
-    return second_factor.summary(session["identifiant"])
+    return second_factor.summary(session["username"])
 
 
 @router.post("/api/double/appli/debut")
 def start_app(request: Request):
     session = guard.require_admin(request, strong=True)
-    secret, link = second_factor.start_app_enrolment(session["identifiant"])
-    _qr_links[session["identifiant"]] = link
+    secret, link = second_factor.start_app_enrolment(session["username"])
+    _qr_links[session["username"]] = link
     return {"secret": secret}
 
 
 @router.get("/api/double/appli/qr.svg")
 def app_qr_code(request: Request):
     session = guard.require_admin(request, strong=True)
-    link = _qr_links.get(session["identifiant"])
+    link = _qr_links.get(session["username"])
     if not link:
         raise HTTPException(404, "Aucun QR code en cours.")
     buffer = io.BytesIO()
@@ -76,27 +76,27 @@ def app_qr_code(request: Request):
 async def finish_app(request: Request):
     session = guard.require_admin(request, strong=True)
     code = (await request.json()).get("code", "")
-    codes = _translate(lambda: second_factor.finish_app_enrolment(session["identifiant"], code))
-    _qr_links.pop(session["identifiant"], None)
-    _log(request, f"Double vérification : appli d'authentification ajoutée ({session['identifiant']})")
+    codes = _translate(lambda: second_factor.finish_app_enrolment(session["username"], code))
+    _qr_links.pop(session["username"], None)
+    _log(request, f"Double vérification : appli d'authentification ajoutée ({session['username']})")
     return {"ok": True, "codes": codes}
 
 
 @router.post("/api/double/appli/retirer")
 def remove_app(request: Request):
     session = guard.require_admin(request, strong=True)
-    second_factor.remove_app(session["identifiant"])
-    _log(request, f"Double vérification : appli d'authentification retirée ({session['identifiant']})")
-    return second_factor.summary(session["identifiant"])
+    second_factor.remove_app(session["username"])
+    _log(request, f"Double vérification : appli d'authentification retirée ({session['username']})")
+    return second_factor.summary(session["username"])
 
 
 @router.post("/api/double/cle/debut")
 def start_key(request: Request):
     session = guard.require_admin(request, strong=True)
     rp_id, _ = _relying_party(request)
-    account = accounts.find(session["identifiant"]) or {}
-    display_name = account.get("nom") or session["identifiant"]
-    return _translate(lambda: second_factor.start_key_enrolment(session["identifiant"], display_name, rp_id))
+    account = accounts.find(session["username"]) or {}
+    display_name = account.get("name") or session["username"]
+    return _translate(lambda: second_factor.start_key_enrolment(session["username"], display_name, rp_id))
 
 
 @router.post("/api/double/cle/fin")
@@ -106,26 +106,26 @@ async def finish_key(request: Request):
     rp_id, origins = _relying_party(request)
     codes = _translate(
         lambda: second_factor.finish_key_enrolment(
-            session["identifiant"], body.get("credential"), body.get("nom", ""), rp_id, origins
+            session["username"], body.get("credential"), body.get("name", ""), rp_id, origins
         )
     )
-    _log(request, f"Double vérification : clé d'accès ajoutée ({session['identifiant']})")
+    _log(request, f"Double vérification : clé d'accès ajoutée ({session['username']})")
     return {"ok": True, "codes": codes}
 
 
 @router.post("/api/double/cle/{kid}/retirer")
 def remove_key(kid: str, request: Request):
     session = guard.require_admin(request, strong=True)
-    _translate(lambda: second_factor.remove_key(session["identifiant"], kid))
-    _log(request, f"Double vérification : clé d'accès retirée ({session['identifiant']})")
-    return second_factor.summary(session["identifiant"])
+    _translate(lambda: second_factor.remove_key(session["username"], kid))
+    _log(request, f"Double vérification : clé d'accès retirée ({session['username']})")
+    return second_factor.summary(session["username"])
 
 
 @router.post("/api/double/codes")
 def new_recovery_codes(request: Request):
     session = guard.require_admin(request, strong=True)
-    codes = _translate(lambda: second_factor.new_recovery_codes(session["identifiant"]))
-    _log(request, f"Double vérification : nouveaux codes de secours ({session['identifiant']})")
+    codes = _translate(lambda: second_factor.new_recovery_codes(session["username"]))
+    _log(request, f"Double vérification : nouveaux codes de secours ({session['username']})")
     return {"codes": codes}
 
 
@@ -133,15 +133,15 @@ def new_recovery_codes(request: Request):
 async def clear_for_account(request: Request):
     """Un super admin retire la double vérification d'un autre compte (téléphone perdu)."""
     session = guard.require_super_admin(request, strong=True)
-    identifier = ((await request.json()).get("identifiant") or "").strip().lower()
-    if not identifier or identifier == session["identifiant"]:
+    identifier = ((await request.json()).get("username") or "").strip().lower()
+    if not identifier or identifier == session["username"]:
         raise HTTPException(400, "Choisis un autre compte que le tien.")
     second_factor.clear(identifier)
-    _log(request, f"Double vérification retirée du compte {identifier}, par {session['identifiant']}")
+    _log(request, f"Double vérification retirée du compte {identifier}, par {session['username']}")
     notifications.send(
         "securite",
         "Double vérification retirée",
-        f"Compte {identifier}, par {session['identifiant']}.",
+        f"Compte {identifier}, par {session['username']}.",
         "/#/admins",
         family="admin",
         recipients=guard.super_admin_logins(),
@@ -152,7 +152,7 @@ async def clear_for_account(request: Request):
 # ---------------------------------------------------------------- connexion, étape 2
 @router.post("/api/admin/cle/options")
 async def key_login_options(request: Request):
-    token = (await request.json()).get("etape", "")
+    token = (await request.json()).get("step", "")
     rp_id, _ = _relying_party(request)
     return _translate(lambda: second_factor.key_login_options(token, rp_id))
 
@@ -162,15 +162,15 @@ async def verify_second_step(request: Request):
     if server_password.is_locked():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
     body = await request.json()
-    method = body.get("methode", "")
+    method = body.get("method", "")
     answer = body.get("credential") if method == "cle" else body.get("code", "")
     rp_id, origins = _relying_party(request)
-    account = _translate(lambda: second_factor.finish_login_step(body.get("etape", ""), method, answer, rp_id, origins))
+    account = _translate(lambda: second_factor.finish_login_step(body.get("step", ""), method, answer, rp_id, origins))
     if not account:
         server_password.record_failure()
         guard.log_failed_login(request, f"{METHOD_NAMES.get(method, method)} refusée")
         raise HTTPException(403, "Vérification refusée. Réessaie.")
     if method == "secours":
-        left = second_factor.summary(account["identifiant"])["codes_restants"]
-        _log(request, f"Code de secours utilisé par {account['identifiant']} (il en reste {left})")
+        left = second_factor.summary(account["username"])["codes_left"]
+        _log(request, f"Code de secours utilisé par {account['username']} (il en reste {left})")
     return admin_session.open_admin_session(request, account)

@@ -45,7 +45,7 @@ from services import (
 
 DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "domaine.json")
-DEFAULTS = {"domaine": "", "prefixe": "cloud", "actif": False}
+DEFAULTS = {"domain": "", "prefix": "cloud", "active": False}
 PUBLIC_IP_SERVICE = "https://api.ipify.org"
 # Les demandes arrivent de Caddy (sur le serveur) ou d'un pont Docker : Nextcloud peut alors lire
 # la vraie adresse de chaque visiteur (sa protection contre les essais en rafale en dépend).
@@ -63,10 +63,10 @@ def save(settings):
 
 
 def address(settings):
-    if not settings.get("domaine"):
+    if not settings.get("domain"):
         return ""
-    prefix = settings.get("prefixe") or ""
-    return f"{prefix}.{settings['domaine']}" if prefix else settings["domaine"]
+    prefix = settings.get("prefix") or ""
+    return f"{prefix}.{settings['domain']}" if prefix else settings["domain"]
 
 
 def _tell_nextcloud(public_address):
@@ -99,18 +99,18 @@ def enable(domain, prefix="cloud"):
     prefix = str(prefix or "").strip().lower()
     if prefix and not action_common.HOST_NAME.fullmatch(prefix + ".exemple.fr"):
         raise ValueError(f"Préfixe refusé : {prefix!r}")
-    settings = {**read(), "domaine": domain, "prefixe": prefix}
+    settings = {**read(), "domain": domain, "prefix": prefix}
     public_address = address(settings)
     action_common.host_name(public_address)
     if not config.DEMO:
         code, _, error_output = commands.run_action(
-            "acces_domaine", adresse=public_address, port=tools.PORTS["nextcloud"]
+            "acces_domaine", address=public_address, port=tools.PORTS["nextcloud"]
         )
         if code != 0:
             raise RuntimeError(error_output.strip()[-300:] or "Caddy n'a pas pu démarrer.")
         _tell_nextcloud(public_address)
         _offer_two_factor()
-    settings["actif"] = True
+    settings["active"] = True
     save(settings)
     return settings
 
@@ -119,9 +119,9 @@ def disable():
     settings = read()
     if not config.DEMO:
         commands.run_action("retirer_acces_domaine")
-        if settings.get("domaine"):
+        if settings.get("domain"):
             _forget_in_nextcloud(address(settings))
-    settings["actif"] = False
+    settings["active"] = False
     save(settings)
     return settings
 
@@ -147,7 +147,7 @@ def protection():
 def watch_protection():
     """Chaque heure, si l'accès par le domaine est ouvert : la protection de Nextcloud (alerte si coupée)."""
     settings = read()
-    if not settings.get("actif") or protection() is not False:
+    if not settings.get("active") or protection() is not False:
         return
     notifications.send(
         "securite",
@@ -197,32 +197,32 @@ def status(settings=None):
     _, lan_address = guest_network.wifi_address()
     box_address = public_ip()
     if config.DEMO:
-        pointing = [box_address] if settings.get("actif") else []
-        certificate = bool(settings.get("actif"))
+        pointing = [box_address] if settings.get("active") else []
+        certificate = bool(settings.get("active"))
     else:
         pointing = resolve(public_address) if public_address else []
-        certificate = bool(settings.get("actif")) and certificate_ok(public_address)
+        certificate = bool(settings.get("active")) and certificate_ok(public_address)
     return {
         **settings,
-        "adresse": public_address,
-        "ip_box": box_address,
-        "ip_serveur": lan_address or "",
-        "port_serveur": actions_tools.DOMAIN_PORT,
+        "address": public_address,
+        "router_ip": box_address,
+        "server_ip": lan_address or "",
+        "server_port": actions_tools.DOMAIN_PORT,
         "dns": pointing,
         "dns_ok": bool(box_address) and box_address in pointing,
-        "certificat_ok": certificate,
-        "protection_ok": protection() if settings.get("actif") else None,
+        "certificate_ok": certificate,
+        "protection_ok": protection() if settings.get("active") else None,
         "dns_auto": dns_update.provider(),
-        "cloudflare_lien": cloudflare_dns.TOKEN_PAGE,
-        "ovh_pret": ovh_dns.is_ready(),
-        "ovh_lien": ovh_dns.token_link(settings["domaine"]) if settings.get("domaine") else "",
+        "cloudflare_link": cloudflare_dns.TOKEN_PAGE,
+        "ovh_ready": ovh_dns.is_ready(),
+        "ovh_link": ovh_dns.token_link(settings["domain"]) if settings.get("domain") else "",
     }
 
 
 def public_link(url):
     """Un lien de partage créé par Nextcloud porte l'adresse interne : on y met l'adresse publique."""
     settings = read()
-    if not url or not settings.get("actif") or not settings.get("domaine"):
+    if not url or not settings.get("active") or not settings.get("domain"):
         return url
     parts = urllib.parse.urlsplit(url)
     return urllib.parse.urlunsplit(("https", address(settings), parts.path, parts.query, parts.fragment))

@@ -1,8 +1,16 @@
 [
   {
+    "version": "0.17.0",
+    "date": "2026-11-24",
+    "changes": [
+      "Le code de Jabba passe en anglais (étape 2 sur 3) : les noms des données qu'il garde et qu'il échange avec le serveur. Au premier démarrage, Jabba convertit lui-même ses fichiers et garde une copie des anciens dans donnees/copie-avant-0.17. Rien ne change à l'écran.",
+      "Établi : un outil retiré de Jabba mais resté sur le serveur (comme ntfy) se désinstalle depuis son menu « ••• ». Il part en entier : conteneurs, données, dossier et adresse."
+    ]
+  },
+  {
     "version": "0.16.7",
     "date": "2026-11-23",
-    "changements": [
+    "changes": [
       "Onduleur : un onduleur branché en USB (APC, Eaton, CyberPower…) remplace la batterie du portable. Jabba prévient de la coupure et du retour du courant, montre la charge et la consommation (mesurée en permanence), et éteint proprement le serveur avant que la batterie soit vide ; l'onduleur coupe ensuite sa prise et la rallume au retour du courant, ce qui rallume le serveur (BIOS : « After Power Loss → Power On »). Le script d'installation prépare tout ; un onduleur branché plus tard est reconnu tout seul.",
       "Déménager vers un nouvel ordinateur (Système, super admin) : Jabba arrête les outils et copie tout sur un disque (comptes, outils et leurs données, Nextcloud et sa base, Jellyfin, réglages de Jabba, compte de Dockge, tâches planifiées) ; sur le disque de données, que l'on met dans le nouvel ordinateur, seuls les réglages sont ajoutés, sinon les fichiers sont copiés aussi. « Éteindre l'ancien serveur » libère ses noms dans Tailscale. Sur le nouvel ordinateur, le script d'installation trouve le déménagement, demande s'il faut le reprendre et remet tout en place ; Jabba refait seul les adresses des outils. Changement d'avis : « Annuler » relance les outils et efface la copie.",
       "DNS chez Cloudflare : dans « Accès depuis Internet », Jabba tient à jour l'entrée « cloud » chez Cloudflare avec un jeton limité à « Zone → DNS → Modifier » sur ce seul domaine (refusé s'il ouvre d'autres domaines, jamais la clé globale). Seule cette entrée est créée ou corrigée, sans proxy ; le reste du domaine n'est jamais touché. Enregistrer le jeton fait oublier la clé OVH ; Mes codes rappelle de la révoquer chez OVH.",
@@ -18,7 +26,7 @@
   {
     "version": "0.16.6",
     "date": "2026-11-23",
-    "changements": [
+    "changes": [
       "Nextcloud et Jellyfin s'installent depuis l'Établi, d'un bouton, comme les autres outils : plus aucune commande après le script d'installation. Jabba prépare les dossiers, crée le compte admin (au nom de ton compte du serveur, mot de passe dans … → Identifiants) et leur adresse à part ; pour Jellyfin, il fait l'assistant (français, accès à distance sans UPnP) et crée les médiathèques Films et Séries ; pour Nextcloud, il lance ses tâches de fond, y montre les films et les téléchargements, et relie l'écran Fichiers de Jabba. Un Nextcloud ou un Jellyfin installé à la main avant reste tel quel. Désinstaller Nextcloud retire aussi sa tâche de fond ; réinstaller un outil retrouve ses comptes et ses données, et Identifiants ne montre plus un mot de passe tiré pour rien.",
       "Deux styles en plus, au choix dans Système → Apparence (pour chaque appareil) : « Salle des machines » (sombre et chaud, voyants ambre, chiffres en police technique) et « Atelier clair » (papier, traits d'encre, une seule couleur vive). Chacun existe en clair et en sombre ; « Cube » reste celui de base. Polices servies par Jabba (licence OFL).",
       "Alerte de température : quand le processeur du serveur reste au-dessus de 85 °C pendant 10 minutes (un pic court ne prévient pas), puis quand il est redescendu sous 75 °C. Interrupteur dans Système → Alertes → Température.",
@@ -28,7 +36,7 @@
   {
     "version": "0.16.5",
     "date": "2026-11-21",
-    "changements": [
+    "changes": [
       "Revue du code : chaque fichier commence par un sommaire qui nomme toutes ses fonctions, une seule instruction par ligne, et des tests qui y veillent désormais. La liste des actions sur le serveur est rangée en familles (disques, outils, système) ; les pages des invités ont quitté la logique des invités ; du code qui ne servait plus est retiré.",
       "Nouveau style « Cube » : nuit vert d'eau (ou clair, selon l'appareil), formes rondes, police Sora, une vraie icône pour chaque outil (dans un losange) et pour chaque écran de la navigation. Police (licence OFL) et icônes Tabler (licence MIT) servies par Jabba lui-même, rien n'est chargé ailleurs.",
       "Établi réorganisé : « Mes outils » (installés ; le curseur les met en pause ou en marche, un seul bouton « Ouvrir », « Mettre à jour » seulement quand une version plus récente existe ; Redémarrer et Désinstaller dans le menu •••), « Ajouter un outil » (rangés par usage, avec un bouton « Installer »), et « Réglages du serveur », replié (accès depuis Internet, adresses, Jabba lui-même).",
@@ -41,7 +49,7 @@
   {
     "version": "0.16.4",
     "date": "2026-11-20",
-    "changements": [
+    "changes": [
       "Une adresse à part pour chaque outil qui a un compte (paperless.tailxxxx.ts.net, homebox.…, dockge.…) : le trousseau du navigateur ne mélange plus les mots de passe. Établi → Système → « Adresses des outils » : on colle une fois une clé d'accès Tailscale, Jabba crée les adresses (sans expiration), puis oublie la clé. Les boutons « Ouvrir » prennent les nouvelles adresses ; les anciennes marchent encore.",
       "Identifiants : Jabba garde aussi les comptes que tu as créés toi-même dans un outil (Jellyfin, Immich, Homebox, Dockge, Vaultwarden…). Menu … → Identifiants : tu notes une fois l'identifiant et le mot de passe, puis tu les revois, les copies, les modifies ou les fais oublier, dans la carte. Réservé au super admin, gardé dans un fichier lisible par l'appli seule. Les champs ne déclenchent pas le trousseau du navigateur, qui ne peut donc plus écraser un autre mot de passe."
     ]
@@ -49,7 +57,7 @@
   {
     "version": "0.16.3",
     "date": "2026-11-20",
-    "changements": [
+    "changes": [
       "Établi et Accueil : bouton « Ranger » à côté du titre. Les cartes se déplacent en les glissant, ou avec les flèches ↑ ↓ (au doigt et au clavier), et se masquent (« Masquer », puis « Afficher » pour les remettre). « Terminé » garde le rangement, le même sur tous les appareils. Sur l'Accueil : les mesures et les tuiles d'accès rapide.",
       "Accès par le domaine : Jabba installe la double vérification dans Nextcloud (codes à 6 chiffres, à activer par chacun dans Paramètres personnels → Sécurité). L'étape « la box laisse passer HTTPS » dit maintenant qu'elle se vérifie avec le certificat, au lieu d'un « À faire » trompeur.",
       "Accès par le domaine : Jabba peut régler lui-même l'entrée DNS chez OVH. On crée une fois une clé chez OVH (lien préparé par Jabba, droits limités à la zone DNS du domaine, sans droit d'effacer), on colle les trois codes, et Jabba crée l'entrée puis la corrige toute seule si l'adresse de la box change (vérifié chaque heure, avec une alerte).",
@@ -61,7 +69,7 @@
   {
     "version": "0.16.2",
     "date": "2026-11-19",
-    "changements": [
+    "changes": [
       "Établi : plus aucun mot de passe à taper pour activer un outil. Pour AdGuard Home, Paperless et Time Machine, Jabba crée le compte avec un mot de passe tiré au sort ; menu … → Identifiants pour le voir et le copier.",
       "Les outils de l'Établi s'ouvrent dans Jabba, avec la barre de retour, quand ils l'acceptent ; Jabba le vérifie lui-même. Ceux qui l'interdisent (Vaultwarden, Paperless…) s'ouvrent à part.",
       "Menu … → Installer sur cet appareil : les clics à faire dans ton navigateur pour faire de l'outil une appli à part (Dock du Mac, écran d'accueil de l'iPhone).",
@@ -73,7 +81,7 @@
   {
     "version": "0.16.1",
     "date": "2026-11-19",
-    "changements": [
+    "changes": [
       "AdGuard Home : le bloqueur de pubs s'allume appareil par appareil, depuis la carte (menu … → Appareils). Aucun appareil n'est filtré de base : un nouveau téléphone passe sans filtre tant qu'on ne l'a pas allumé. Jabba fait lui-même l'installation d'AdGuard avec le mot de passe tapé sur la carte (plus d'assistant).",
       "Établi : une barre de mémoire sous le bandeau, qui se remplit selon ce qu'utilisent les outils et le système.",
       "AdGuard Home s'active : le DNS écoute sur l'adresse de la maison et sur celle de Tailscale, au lieu de tout le serveur (où le résolveur de Debian occupe déjà le port 53).",
@@ -84,7 +92,7 @@
   {
     "version": "0.16.0",
     "date": "2026-11-17",
-    "changements": [
+    "changes": [
       "Établi : nouvel outil « Accès par le domaine ». On saisit son propre domaine : Nextcloud devient joignable de partout en HTTPS à l'adresse « cloud. » + domaine (Caddy, certificat Let's Encrypt obtenu et renouvelé tout seul, par le seul port 443). Jabba reste réservé à Tailscale. Une liste de vérification guide les étapes (adresse de la box, zone DNS, redirection du port) et se coche toute seule. Les liens de dépôt créés depuis Jabba portent l'adresse publique.",
       "Établi : nouveaux outils, dans la grille avec les autres, qu'on allume d'un geste avec leur interrupteur (le serveur les installe avec des fichiers fixés d'avance) — Vaultwarden (mots de passe, applis Bitwarden), Immich (photos et vidéos de l'iPhone, rangées sur le disque de données), Time Machine (sauvegarde des Mac par le réseau), AdGuard Home (publicités et traqueurs bloqués pour toute la maison), Paperless (papiers numérisés, lus et rangés, dossier A-classer dans Fichiers), Homebox (inventaire avec étiquettes à QR code), ntfy (les alertes de Jabba et les rappels d'entretien sur le téléphone, sujet indiqué dans Système → Alertes), changedetection.io (prévient quand une page web change). L'éteindre garde ses données.",
       "Établi : la mémoire du serveur (utilisée, prise par les outils, libre), et avant chaque activation ce qu'il en resterait ; l'activation est bloquée s'il en resterait trop peu.",
@@ -102,7 +110,7 @@
   {
     "version": "0.15.1",
     "date": "2026-11-17",
-    "changements": [
+    "changes": [
       "Les vidéos AVI (et WMV, FLV, MPG, M2TS, 3GP, OGV, DivX) s'ouvrent dans le lecteur au lieu d'être téléchargées : le serveur les convertit, comme les MKV.",
       "Disques USB en exFAT, FAT ou NTFS : Nextcloud peut maintenant y écrire (supprimer, renommer, déposer) quand l'écriture est autorisée. Pour un disque déjà ajouté, couper puis rétablir « Écriture autorisée » dans Disques applique la correction.",
       "Écran Disques : chaque tuile porte le nom de ce qu'elle contient (R2-D2, Disque de données, Disque système), le modèle en petit ; les partitions de démarrage et de swap sont repliées. Mêmes noms dans la carte Santé et ses alertes.",
@@ -112,7 +120,7 @@
   {
     "version": "0.15.0",
     "date": "2026-11-17",
-    "changements": [
+    "changes": [
       "L'appli web n'a plus aucun droit sur le serveur : ni tous les pouvoirs (privileged), ni la vue sur ses processus, et seulement les capacités utiles pour écrire dans les dossiers et décoder les fichiers sans droits. Toute action passe par le service jabba-hote et sa liste fermée ; l'ancienne voie de secours est retirée.",
       "Si le service jabba-hote ne répond pas, l'appli le dit (« Le service du serveur ne répond pas ») au lieu d'agir elle-même.",
       "La carte graphique est donnée au lecteur vidéo de façon explicite (posé tout seul à l'installation ou à la mise à jour s'il y en a une)."
@@ -121,7 +129,7 @@
   {
     "version": "0.14.1",
     "date": "2026-11-17",
-    "changements": [
+    "changes": [
       "Après une mise à jour, l'interface est toujours la nouvelle : les adresses des scripts et des styles portent la version de Jabba, et le navigateur revérifie chaque fichier. Avant, il pouvait garder d'anciens écrans plusieurs jours (le bouton Terminal restait visible, l'antivirus n'apparaissait pas dans l'Établi).",
       "Vérification automatique sur GitHub : composants passés à leur version actuelle (checkout et setup-python v6, Node 24)."
     ]
@@ -129,7 +137,7 @@
   {
     "version": "0.14.0",
     "date": "2026-11-17",
-    "changements": [
+    "changes": [
       "Apparence (Système) : clair, sombre, ou comme l'appareil. Le choix vaut pour chaque appareil et s'applique dès l'ouverture, sans flash.",
       "Santé des disques : le temps affiché est le total de fonctionnement depuis la fabrication du disque (et non depuis le dernier démarrage), désormais écrit clairement.",
       "Fichiers, comme dans le Finder : « Déplacer vers… » ouvre un sélecteur de dossier (plus besoin de taper un chemin) ; on peut glisser un élément, ou toute la sélection, sur un dossier de la liste ou du fil d'Ariane pour l'y déplacer.",
@@ -148,7 +156,7 @@
   {
     "version": "0.13.0",
     "date": "2026-11-12",
-    "changements": [
+    "changes": [
       "Redémarrage après une mise à jour du système, au choix : seul à 4 h, ou à la main (Jabba te prévient, tu redémarres quand tu es devant). Le script d'installation pose la question ; ça se change ensuite dans Système, carte « Redémarrage après une mise à jour ». Les alertes et les bandeaux disent ce qui va se passer.",
       "Redémarrage classique de nouveau : le redémarrage sans BIOS (kexec) a figé le démarrage d'un serveur. Il est retiré.",
       "Veille des disques à plateaux limitée aux disques internes, et jamais plus de 5 secondes : certains boîtiers USB se figeaient en la recevant, au démarrage.",
@@ -182,7 +190,7 @@
   {
     "version": "0.12.1",
     "date": "2026-11-12",
-    "changements": [
+    "changes": [
       "Correctif : la mise à jour en un clic et les sauvegardes étaient lancées d'une façon qui laissait systemd modifier leur script (tout ce qui ressemble à ${…}). La vérification de signature échouait donc toujours, et le compte rendu des sauvegardes était faussé. Le script passe maintenant par un fichier. Pour passer de la 0.11.0 à cette version, il faut relancer le script d'installation (la mise à jour en un clic de la 0.11.0 ne peut pas s'en remettre seule).",
       "Test avec le vrai systemd sur GitHub, pour que ce genre de problème ne passe plus."
     ]
@@ -190,7 +198,7 @@
   {
     "version": "0.12.0",
     "date": "2026-11-12",
-    "changements": [
+    "changes": [
       "Lecteur vidéo comme les lecteurs habituels : commandes par-dessus l'image, barre en bas, lecture, son et temps à gauche, ⚙ (son et sous-titres) et plein écran en bas à droite, vraies icônes ; tout se cache pendant la lecture et revient au moindre geste.",
       "Lecteur : bouton « image dans l'image » (en bas à droite, ou touche i) : la vidéo continue dans une petite fenêtre flottante pendant que tu fais autre chose.",
       "Redémarrages sans passer par le BIOS (kexec) : bouton Redémarrer, « sudo redemarrer » et redémarrage de 4 h après une mise à jour. Certains portables restent bloqués au démarrage du BIOS ; le serveur n'en dépend plus (à appliquer en relançant le script d'installation).",
@@ -205,7 +213,7 @@
   {
     "version": "0.11.0",
     "date": "2026-11-10",
-    "changements": [
+    "changes": [
       "Sécurité : la page invités du Wi-Fi tourne dans son propre conteneur, sans aucun pouvoir, et ne voit plus les données de l'appli.",
       "Sécurité : ffmpeg (lecteur vidéo) et Pillow (aperçus d'images) tournent sans aucun droit et ne reçoivent que le fichier à lire.",
       "Sécurité : les mises à jour sont signées ; le serveur vérifie la signature avec sa propre clé avant d'installer quoi que ce soit, et alerte si elle manque.",
@@ -218,7 +226,7 @@
   {
     "version": "0.10.0",
     "date": "2026-11-10",
-    "changements": [
+    "changes": [
       "Comptes Nextcloud (façon Dropbox) : chacun peut demander un compte, un super admin le valide dans Jabba (alerte à chaque demande).",
       "Chaque compte a 5 Go par défaut. Les admins changent l'espace sans dépasser le plafond fixé par le super admin ; chaque changement est noté au Journal.",
       "Dossiers communs pour tous les membres ou pour un groupe : lecture seule, dépôt (ajouter et modifier sans supprimer) ou accès complet.",
@@ -229,7 +237,7 @@
   {
     "version": "0.9.0",
     "date": "2026-11-10",
-    "changements": [
+    "changes": [
       "Sauvegardes : chaque nuit, une copie chiffrée des fichiers, des réglages des outils (avec leurs bases de données) et de ceux du serveur part sur le disque choisi. Seules les nouveautés prennent de la place ; on garde 7 jours, 4 semaines et 6 mois.",
       "Sauvegardes : un disque en lecture seule n'est ouvert en écriture que le temps de la copie. Disque absent : alerte, et la copie part dès son retour. Échec : alerte, et nouvel essai chaque heure.",
       "Sauvegardes : pour retrouver un fichier, choisis une date puis le fichier ou le dossier ; il revient dans « Mes dossiers › Restaurations », sans rien écraser.",
@@ -239,7 +247,7 @@
   {
     "version": "0.8.2",
     "date": "2026-11-09",
-    "changements": [
+    "changes": [
       "Lecteur vidéo : comme YouTube, deux touches rapides à droite de l'image avancent de 10 s, à gauche reculent de 10 s ; chaque touche de plus ajoute 10 s. Une touche au centre : pause.",
       "Lecteur vidéo : plein écran avec les commandes de Jabba, y compris sur iPhone (plus de lecteur « direct » du système, barre juste). Les commandes se cachent après 3 s et reviennent d'une touche."
     ]
@@ -247,7 +255,7 @@
   {
     "version": "0.8.1",
     "date": "2026-11-09",
-    "changements": [
+    "changes": [
       "Lecteur vidéo : le même lecteur pour toutes les vidéos (MP4 compris), avec boutons −10 s et +10 s. Au clavier : ← → pour 10 s, espace pour pause, M pour couper le son, F pour le plein écran.",
       "Lecteur vidéo : saut dans le film plus rapide, et la lecture ne s'arrête plus entre deux morceaux.",
       "Lecteur vidéo : sous-titres et temps affiché bien calés après un saut.",
@@ -258,7 +266,7 @@
   {
     "version": "0.8.0",
     "date": "2026-11-09",
-    "changements": [
+    "changes": [
       "Lecteur vidéo : Fichiers lit maintenant tous les formats, comme VLC. Ce que le navigateur ne sait pas lire (MKV, HEVC, son AC3/DTS…) est converti par le serveur pendant la lecture, sans rien installer.",
       "Lecteur vidéo : choix de la piste son, sous-titres (SRT, ASS…), barre pour avancer dans le film, plein écran.",
       "Bouton « Regarder dans Jellyfin » sur les vidéos : ouvre directement le film dans Jellyfin (Jabba se relie à Jellyfin une seule fois avec une clé).",
@@ -268,7 +276,7 @@
   {
     "version": "0.7.0",
     "date": "2026-11-09",
-    "changements": [
+    "changes": [
       "Terminal du serveur dans l'appli (Système → Terminal), avec le compte du serveur : pour les super admins, mot de passe redemandé, alerte « Terminal ouvert » sur le téléphone. Chaque commande tapée est notée au Journal au nom de la personne. Un super admin peut retirer le terminal à un autre (Utilisateurs). Touches Échap, Tab, Ctrl+C et flèches sur iPhone.",
       "Fichiers : une rangée en haut pour choisir où naviguer — Mes fichiers, chaque espace et chaque disque branché (R2-D2…).",
       "Mises à jour : si une installation échoue, Système l'affiche avec le détail et un bouton Réessayer, et une alerte part sur le téléphone, au lieu d'une attente sans fin.",
@@ -279,7 +287,7 @@
   {
     "version": "0.6.1",
     "date": "2026-11-08",
-    "changements": [
+    "changes": [
       "Serveur injoignable : au lieu d'une page blanche, Jabba le dit, propose les pistes dans l'ordre et se recharge toute seule dès que le serveur répond.",
       "Aide : une page de pistes et solutions aux soucis courants, accessible même quand le serveur ne répond pas.",
       "Fichiers : boutons Précédent et Suivant, Dossier parent et retour au début ; raccourcis ⌘[ ⌘] et ⌘↑ comme dans le Finder.",
@@ -290,7 +298,7 @@
   {
     "version": "0.6.0",
     "date": "2026-11-04",
-    "changements": [
+    "changes": [
       "L'appli s'ouvre en mode invité ; avec son identifiant et son mot de passe, on a l'interface complète. La connexion reste mémorisée 30 jours sur l'appareil.",
       "Les actions les plus sensibles redemandent le mot de passe (s'il a été saisi il y a plus de 10 minutes).",
       "Comptes admin : chaque admin a son identifiant et son mot de passe ; deux rangs, super admin et admin. Le super admin principal reste le compte du serveur.",
@@ -307,7 +315,7 @@
   {
     "version": "0.5.1",
     "date": "2026-11-04",
-    "changements": [
+    "changes": [
       "Alertes : correctif, les alertes arrivent sur le Mac et l'iPhone.",
       "Historique des versions dans l'écran Système."
     ]
@@ -315,7 +323,7 @@
   {
     "version": "0.5.0",
     "date": "2026-11-04",
-    "changements": [
+    "changes": [
       "Fichiers : recherche par nom partout, disques compris.",
       "Fichiers : aperçus des photos et visionneuse (photos, vidéos, musique, PDF, textes).",
       "Corbeille : ce qu'on supprime y reste 30 jours, avec Restaurer.",
@@ -330,7 +338,7 @@
   {
     "version": "0.4.0",
     "date": "2026-11-04",
-    "changements": [
+    "changes": [
       "Mot de passe du serveur pour les actions sensibles, code de secours et changement du mot de passe.",
       "Disques : réglage lecture seule ou écriture, et bouton Éjecter.",
       "Glisser des fichiers sur un favori ou un dossier pour les y copier.",
@@ -341,7 +349,7 @@
   {
     "version": "0.3.0",
     "date": "2026-11-03",
-    "changements": [
+    "changes": [
       "Accueil : accès rapide aux dossiers essentiels, favoris et suggestions.",
       "Logos des outils fournis par les outils eux-mêmes."
     ]
@@ -349,7 +357,7 @@
   {
     "version": "0.2.0",
     "date": "2026-11-03",
-    "changements": [
+    "changes": [
       "Établi : un interrupteur par outil.",
       "Ouverture des outils dans l'appli."
     ]
@@ -357,7 +365,7 @@
   {
     "version": "0.1.0",
     "date": "2026-11-03",
-    "changements": [
+    "changes": [
       "Première version : état du serveur, outils, fichiers Nextcloud, disques, système."
     ]
   }

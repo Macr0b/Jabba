@@ -60,11 +60,11 @@ def log_in(p):
     expect(window.locator("p").first).to_contain_text("La connexion reste mémorisée 30 jours")
     expect(window.locator("button.lien")).to_have_text("Mot de passe oublié ?")
     expect(window.locator("button.btn-p")).to_have_text("Continuer")
-    p.fill("input[name=identifiant]", "serveur-demo")
-    p.fill("input[name=mdp]", "demo-mot-de-passe")
+    p.fill("input[name=username]", "serveur-demo")
+    p.fill("input[name=password]", "demo-mot-de-passe")
     # on attend la réponse : la fenêtre se ferme avant, et recharger trop tôt couperait la connexion
     with p.expect_response(lambda r: "/api/admin/connexion" in r.url):
-        p.press("input[name=mdp]", "Enter")
+        p.press("input[name=password]", "Enter")
 
 
 def test_face_id_and_app(localhost_page):
@@ -76,10 +76,10 @@ def test_face_id_and_app(localhost_page):
 
     # Face ID
     p.click("#ajouter-cle")
-    expect(p.locator("dialog[open] input[name=nom]")).to_have_value(
+    expect(p.locator("dialog[open] input[name=name]")).to_have_value(
         "Mac" if "Macintosh" in p.evaluate("navigator.userAgent") else "Clé d'accès"
     )
-    p.fill("dialog[open] input[name=nom]", "Mac de test")
+    p.fill("dialog[open] input[name=name]", "Mac de test")
     p.click("dialog[open] button.btn-p")
     expect(p.locator("dialog[open] .codes-secours li")).to_have_count(10)
     p.click("dialog[open] button.btn-p")

@@ -84,7 +84,7 @@ function sendOne(item) {
       let message = "";
       try {
         const body = JSON.parse(request.responseText);
-        const detail = body.detail || body.erreur;
+        const detail = body.detail || body.error;
         message = (detail && (detail.message || (typeof detail === "string" ? detail : ""))) || "";
       } catch (_) {
         /* réponse vide */

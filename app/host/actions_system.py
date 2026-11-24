@@ -78,7 +78,7 @@ def _app_folder_action(args):
 
 
 def _app_update_ready(args):
-    return ["sh", "-c", 'test -d "$1/.git" && command -v git', "pret", _app_folder(args.get("dossier"))], 10
+    return ["sh", "-c", 'test -d "$1/.git" && command -v git', "pret", _app_folder(args.get("folder"))], 10
 
 
 def _app_update_install(args):
@@ -87,19 +87,19 @@ def _app_update_install(args):
 
     try:
         script = app_update.install_script(
-            _app_folder(args.get("dossier")), str(args.get("tag") or ""), app_update.publication_key()
+            _app_folder(args.get("folder")), str(args.get("tag") or ""), app_update.publication_key()
         )
     except ValueError as error:
         raise ActionError(str(error))
-    return background(task_unit(args.get("unite")), script)
+    return background(task_unit(args.get("unit")), script)
 
 
 def _task_state(args):
-    return ["systemctl", "show", "-p", "ActiveState", "--value", task_unit(args.get("unite"))], 10
+    return ["systemctl", "show", "-p", "ActiveState", "--value", task_unit(args.get("unit"))], 10
 
 
 def _task_log(args):
-    return ["journalctl", "-u", task_unit(args.get("unite")), "--no-pager", "-o", "cat", "-n", "300"], 10
+    return ["journalctl", "-u", task_unit(args.get("unit")), "--no-pager", "-o", "cat", "-n", "300"], 10
 
 
 # ---------------------------------------------------------------- réseau invités (pare-feu)
@@ -149,11 +149,11 @@ def _snapshot_path(value):
 def _restic_env(args):
     from services import backups
 
-    disk = folder_path(args.get("disque"))
+    disk = folder_path(args.get("disk"))
     return [
         "env",
         f"RESTIC_REPOSITORY={disk}/{backups.REPOSITORY_FOLDER}",
-        f"RESTIC_PASSWORD_FILE={_data_folder(args.get('donnees'))}/sauvegardes.cle",
+        f"RESTIC_PASSWORD_FILE={_data_folder(args.get('data'))}/sauvegardes.cle",
         "RESTIC_CACHE_DIR=/var/cache/restic-jabba",
     ]
 
@@ -168,19 +168,19 @@ def _install_restic(args):
 
 def _restic(args):
     """Lire les copies, en parcourir une, ou en remettre un morceau dans Restaurations/ (jamais par-dessus)."""
-    gesture = args.get("geste")
+    gesture = args.get("gesture")
     env = _restic_env(args)
     if gesture == "copies":
         return [*env, "restic", "--no-lock", "snapshots", "--tag", "jabba", "--json"], 120
-    snapshot = str(args.get("copie") or "")
+    snapshot = str(args.get("copy") or "")
     if not SNAPSHOT_ID.fullmatch(snapshot):
         raise ActionError(f"Copie refusée : {snapshot!r}")
-    path = _snapshot_path(args.get("chemin"))
+    path = _snapshot_path(args.get("path"))
     if gesture == "parcourir":
         return [*env, "restic", "--no-lock", "ls", "--json", snapshot, path], 120
     if gesture != "restaurer":
         raise ActionError(f"Geste refusé : {gesture!r}")
-    stamp = str(args.get("horodatage") or "")
+    stamp = str(args.get("timestamp") or "")
     if not RESTORE_STAMP.fullmatch(stamp) or path == "/":
         raise ActionError("Restauration refusée")
     parent, name = path.rsplit("/", 1)
@@ -196,9 +196,9 @@ def _start_backup(args):
     sources = args.get("sources")
     if not isinstance(sources, list) or not sources or not set(sources) <= set(backups.PATHS):
         raise ActionError(f"Sources refusées : {sources!r}")
-    settings = {"chemin": folder_path(args.get("disque")), "sources": {key: True for key in sources}}
-    script = backups.backup_script(settings, _data_folder(args.get("donnees")))
-    return background(task_unit(args.get("unite")), script, "bash", BACKUP_PROPERTIES)
+    settings = {"path": folder_path(args.get("disk")), "sources": {key: True for key in sources}}
+    script = backups.backup_script(settings, _data_folder(args.get("data")))
+    return background(task_unit(args.get("unit")), script, "bash", BACKUP_PROPERTIES)
 
 
 # ---------------------------------------------------------------- déménagement (services/server_move.py)
@@ -208,15 +208,15 @@ def _move(args):
     """Le script est écrit ICI (services/server_move.py), à partir du disque choisi."""
     from services import server_move
 
-    with_files = args.get("fichiers")
+    with_files = args.get("files")
     if not isinstance(with_files, bool):
         raise ActionError(f"Choix refusé : {with_files!r}")
-    script = server_move.move_script(folder_path(args.get("disque")), with_files, _data_folder(args.get("donnees")))
-    return background(task_unit(args.get("unite")), script, "bash", BACKUP_PROPERTIES)
+    script = server_move.move_script(folder_path(args.get("disk")), with_files, _data_folder(args.get("data")))
+    return background(task_unit(args.get("unit")), script, "bash", BACKUP_PROPERTIES)
 
 
 def _move_cancel(args):
-    return ["sh", "-c", script("move_cancel"), "annuler", folder_path(args.get("disque"))], 300
+    return ["sh", "-c", script("move_cancel"), "annuler", folder_path(args.get("disk"))], 300
 
 
 def _move_end(args):
@@ -246,12 +246,12 @@ def _check_server_password(args):
         script("human_account"),
         "compte",
         "lire",
-        _server_user(args.get("utilisateur")),
+        _server_user(args.get("user")),
     ], 10
 
 
 def _change_server_password(args):
-    return ["sh", "-c", script("human_account"), "compte", "changer", _server_user(args.get("utilisateur"))], 30
+    return ["sh", "-c", script("human_account"), "compte", "changer", _server_user(args.get("user"))], 30
 
 
 ACTIONS = {

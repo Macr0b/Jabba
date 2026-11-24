@@ -18,21 +18,21 @@ from services import notifications, trash
 WINDOW_SECONDS = 3600
 THRESHOLD = int(os.environ.get("JABBA_ALERTE_SUPPRESSIONS", "200"))
 QUIET_SECONDS = 6 * 3600  # une seule alerte par vague
-STATE = {"derniere_alerte": 0}
+STATE = {"last_alert": 0}
 
 
 def deleted_recently(entries, now):
-    return sum(1 for entry in entries if now - (entry.get("supprime") or 0) <= WINDOW_SECONDS)
+    return sum(1 for entry in entries if now - (entry.get("deleted") or 0) <= WINDOW_SECONDS)
 
 
 def watch_mass_deletion(now=None):
     now = time.time() if now is None else now
-    if now - STATE["derniere_alerte"] < QUIET_SECONDS:
+    if now - STATE["last_alert"] < QUIET_SECONDS:
         return
     count = deleted_recently(asyncio.run(trash.list_entries()), now)
     if count < THRESHOLD:
         return
-    STATE["derniere_alerte"] = now
+    STATE["last_alert"] = now
     notifications.send(
         "securite",
         "Suppression massive",

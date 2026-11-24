@@ -18,7 +18,7 @@ def client():
 
 def log_in_as(client, identifier, password):
     client.cookies.clear()
-    r = client.post("/api/admin/connexion", json={"identifiant": identifier, "mot_de_passe": password}, headers=H)
+    r = client.post("/api/admin/connexion", json={"username": identifier, "password": password}, headers=H)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -52,7 +52,7 @@ def test_restart_choice(client):
     log_in_as(client, "serveur-demo", "demo-mot-de-passe")
     assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] in ("auto", "manuel")
     assert client.post("/api/systeme/redemarrage", json={"mode": "manuel"}, headers=H).status_code == 200
-    assert client.get("/api/systeme/redemarrage", headers=H).json() == {"mode": "manuel", "choisi": True}
+    assert client.get("/api/systeme/redemarrage", headers=H).json() == {"mode": "manuel", "chosen": True}
     assert client.post("/api/systeme/redemarrage", json={"mode": "reboot"}, headers=H).status_code == 400
     assert client.post("/api/systeme/redemarrage", json={"mode": "auto"}, headers=H).status_code == 200
     assert client.get("/api/systeme/redemarrage", headers=H).json()["mode"] == "auto"
@@ -93,15 +93,11 @@ def test_wrong_passwords_block_only_their_author(client, monkeypatch):
     client.cookies.clear()
     curious = {**H, "X-Demo-Login": "curieux@exemple.fr"}
     for _ in range(server_password.MAX_ATTEMPTS):
-        client.post(
-            "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "faux"}, headers=curious
-        )
-    r = client.post(
-        "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "faux"}, headers=curious
-    )
+        client.post("/api/admin/connexion", json={"username": "serveur-demo", "password": "faux"}, headers=curious)
+    r = client.post("/api/admin/connexion", json={"username": "serveur-demo", "password": "faux"}, headers=curious)
     assert r.status_code == 429
     r = client.post(
-        "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"}, headers=H
+        "/api/admin/connexion", json={"username": "serveur-demo", "password": "demo-mot-de-passe"}, headers=H
     )
     assert r.status_code == 200  # l'admin, lui, se connecte normalement
 
@@ -109,10 +105,8 @@ def test_wrong_passwords_block_only_their_author(client, monkeypatch):
 def test_shares_api(client):
     log_in_as(client, "serveur-demo", "demo-mot-de-passe")
     r = client.get("/api/partages", headers=H)
-    assert r.status_code == 200 and r.json()["partages"] == [] and set(r.json()["modes"]) == {"lecture", "ecriture"}
-    r = client.post(
-        "/api/partages", json={"chemin": "/R2-D2/Projets", "groupe": "membres", "mode": "lecture"}, headers=H
-    )
+    assert r.status_code == 200 and r.json()["shares"] == [] and set(r.json()["modes"]) == {"lecture", "ecriture"}
+    r = client.post("/api/partages", json={"path": "/R2-D2/Projets", "group": "membres", "mode": "lecture"}, headers=H)
     assert r.status_code == 409  # pas de Nextcloud dans la démo
     assert client.post("/api/partages/inconnu/arreter", headers=H).status_code == 400
 
@@ -146,13 +140,13 @@ def test_disk_antivirus_through_the_api(client, tmp_path, monkeypatch):
 
     monkeypatch.setattr(antivirus, "STATE_FILE", str(tmp_path / "av.json"))
     log_in_as(client, "serveur-demo", "demo-mot-de-passe")
-    disks = client.get("/api/antivirus", headers=H).json()["disques"]
-    assert disks[0] == {"chemin": "/srv/data", "nom": "Disque de données", "chaque_semaine": True, "analyse": None}
-    r = client.post("/api/antivirus/disques", json={"chemin": "/srv/data", "chaque_semaine": False}, headers=H)
+    disks = client.get("/api/antivirus", headers=H).json()["disks"]
+    assert disks[0] == {"path": "/srv/data", "name": "Disque de données", "weekly": True, "scan": None}
+    r = client.post("/api/antivirus/disques", json={"path": "/srv/data", "weekly": False}, headers=H)
     assert r.status_code == 200
-    assert client.get("/api/antivirus", headers=H).json()["disques"][0]["chaque_semaine"] is False
-    assert client.post("/api/antivirus/analyser", json={"chemin": "/etc"}, headers=H).status_code == 404
-    assert client.post("/api/antivirus/analyser", json={"chemin": "/srv/data"}, headers=H).status_code == 200
+    assert client.get("/api/antivirus", headers=H).json()["disks"][0]["weekly"] is False
+    assert client.post("/api/antivirus/analyser", json={"path": "/etc"}, headers=H).status_code == 404
+    assert client.post("/api/antivirus/analyser", json={"path": "/srv/data"}, headers=H).status_code == 200
 
 
 def test_workshop_log_through_the_api(client, tmp_path, monkeypatch):
@@ -162,14 +156,14 @@ def test_workshop_log_through_the_api(client, tmp_path, monkeypatch):
     log_in_as(client, "serveur-demo", "demo-mot-de-passe")
     assert client.get("/api/atelier", headers=H).status_code == 404  # pas activée
     assert client.post("/api/etabli/atelier/installer", json={}, headers=H).status_code == 200
-    machine = client.post("/api/atelier/machines", json={"nom": "Laser"}, headers=H).json()
-    r = client.post(f"/api/atelier/machines/{machine['id']}/journal", json={"titre": "Miroir nettoyé"}, headers=H)
+    machine = client.post("/api/atelier/machines", json={"name": "Laser"}, headers=H).json()
+    r = client.post(f"/api/atelier/machines/{machine['id']}/journal", json={"title": "Miroir nettoyé"}, headers=H)
     assert r.status_code == 200
     assert (
-        client.post(f"/api/atelier/machines/{machine['id']}/journal", json={"titre": ""}, headers=H).status_code == 400
+        client.post(f"/api/atelier/machines/{machine['id']}/journal", json={"title": ""}, headers=H).status_code == 400
     )
     assert client.get("/api/atelier/machines/inconnue", headers=H).status_code == 404
-    assert client.get("/api/atelier", headers=H).json()["machines"][0]["entrees"] == 1
+    assert client.get("/api/atelier", headers=H).json()["machines"][0]["entries"] == 1
 
 
 def test_server_version_in_every_answer(client):

@@ -70,7 +70,7 @@ def test_key_checked_then_kept_private(ts, tmp_path):
     tool_addresses.save_token("  " + TOKEN + "\n")
     assert ts.calls == [("GET", "/tailnet/-/devices", None, f"Bearer {TOKEN}")]
     assert (tmp_path / "tailscale-api.json").stat().st_mode & 0o077 == 0
-    assert tool_addresses.status(set())["cle_prete"]
+    assert tool_addresses.status(set())["key_ready"]
 
 
 @pytest.mark.parametrize(
@@ -88,14 +88,14 @@ def test_key_checked_then_kept_private(ts, tmp_path):
 def test_key_refused_before_any_call(ts, key):
     with pytest.raises(tool_addresses.AddressError):
         tool_addresses.save_token(key)
-    assert not ts.calls and not tool_addresses.status(set())["cle_prete"]
+    assert not ts.calls and not tool_addresses.status(set())["key_ready"]
 
 
 def test_key_refused_by_tailscale_is_not_kept(ts):
     ts.refused = True
     with pytest.raises(tool_addresses.AddressError, match="refuse la clé"):
         tool_addresses.save_token(TOKEN)
-    assert not tool_addresses.status(set())["cle_prete"]
+    assert not tool_addresses.status(set())["key_ready"]
 
 
 def test_addresses_created_then_key_forgotten(ts):
@@ -114,8 +114,8 @@ def test_addresses_created_then_key_forgotten(ts):
     assert ("POST", "/device/n-paperless/key", {"keyExpiryDisabled": True}, f"Bearer {TOKEN}") in ts.calls
     # Paperless apprend sa nouvelle adresse ; Homebox n'en a pas besoin.
     settings = [a for a in ts.actions if a[0] == "adresse_dans_outil"]
-    assert settings == [("adresse_dans_outil", None, {"outil": "paperless", "adresse": "paperless.tail1234.ts.net"})]
-    assert tool_addresses.status(set())["cle_prete"]  # gardée : les prochains outils auront leur adresse seuls
+    assert settings == [("adresse_dans_outil", None, {"outil": "paperless", "address": "paperless.tail1234.ts.net"})]
+    assert tool_addresses.status(set())["key_ready"]  # gardée : les prochains outils auront leur adresse seuls
     assert tool_addresses.create_missing({"paperless"}, "rob") == []  # déjà là : rien à refaire
 
 
@@ -124,8 +124,8 @@ def test_a_failure_keeps_the_key_and_says_why(ts, monkeypatch):
     monkeypatch.setattr(tool_addresses.commands, "run_action", lambda *a, **k: (1, "", "pull access denied"))
     tool_addresses.create_missing({"homebox"})
     etat = tool_addresses.status({"homebox"})
-    assert etat["cle_prete"]  # on pourra réessayer
-    assert etat["outils"] == [{"id": "homebox", "nom": "Homebox", "adresse": None, "etat": "pull access denied"}]
+    assert etat["key_ready"]  # on pourra réessayer
+    assert etat["tools"] == [{"id": "homebox", "name": "Homebox", "address": None, "state": "pull access denied"}]
 
 
 def test_machine_that_never_shows_up(ts):
@@ -162,20 +162,20 @@ def test_address_action_refuses_the_rest():
     assert actions.host_input("adresse_outil", {"outil": "paperless"}, AUTH) == AUTH
     for adresse in ("paperless.exemple.fr", "a b.ts.net", "x;rm.ts.net", "", None):
         with pytest.raises(actions.ActionError):
-            actions.build("adresse_dans_outil", {"outil": "paperless", "adresse": adresse})
+            actions.build("adresse_dans_outil", {"outil": "paperless", "address": adresse})
     with pytest.raises(actions.ActionError):
-        actions.build("adresse_dans_outil", {"outil": "homebox", "adresse": "homebox.tail1234.ts.net"})
-    commande, _ = actions.build("adresse_dans_outil", {"outil": "paperless", "adresse": "paperless.tail1234.ts.net"})
+        actions.build("adresse_dans_outil", {"outil": "homebox", "address": "homebox.tail1234.ts.net"})
+    commande, _ = actions.build("adresse_dans_outil", {"outil": "paperless", "address": "paperless.tail1234.ts.net"})
     assert commande[-3:] == ["paperless", "PAPERLESS_URL", "paperless.tail1234.ts.net"]
 
 
 def test_tool_link_takes_its_address(ts, monkeypatch):
     monkeypatch.setattr(tools.config, "DEMO", True)
-    before = {t["id"]: t["lien"] for t in tools.list_tools()}
+    before = {t["id"]: t["link"] for t in tools.list_tools()}
     tool_addresses.json_files.save(
         tool_addresses.ADDRESSES_FILE, {"adguard-home": "https://adguard-home.tail1234.ts.net"}
     )
-    after = {t["id"]: t["lien"] for t in tools.list_tools()}
+    after = {t["id"]: t["link"] for t in tools.list_tools()}
     assert after["adguard-home"] == "https://adguard-home.tail1234.ts.net" != before["adguard-home"]
     assert after["jellyfin"] == before["jellyfin"]
 
@@ -199,8 +199,8 @@ def test_expired_key_forgotten_and_reported(ts):
     ts.refused = True
     message = tool_addresses.after_install("homebox", "rob")
     assert message.startswith("Adresse à part non créée") and "expirée" in message
-    assert not tool_addresses.status(set())["cle_prete"]  # inutile de garder une clé morte
-    assert tool_addresses.status({"homebox"})["outils"][0]["etat"].startswith("Tailscale refuse la clé")
+    assert not tool_addresses.status(set())["key_ready"]  # inutile de garder une clé morte
+    assert tool_addresses.status({"homebox"})["tools"][0]["state"].startswith("Tailscale refuse la clé")
 
 
 def test_install_then_address_in_the_same_task(ts, monkeypatch):
@@ -232,7 +232,7 @@ def test_install_then_address_in_the_same_task(ts, monkeypatch):
     monkeypatch.setattr(tool_addresses.commands, "run_action", action)
     task = optional_tools.install("homebox", "rob")
     assert started_ones == ["installer_outil_option", "adresse_outil"]
-    assert task["etat"] == "terminé" and "Adresse : https://homebox.tail1234.ts.net" in task["journal"]
+    assert task["state"] == "terminé" and "Adresse : https://homebox.tail1234.ts.net" in task["log"]
 
 
 def test_address_already_there_from_an_old_install(ts, monkeypatch):

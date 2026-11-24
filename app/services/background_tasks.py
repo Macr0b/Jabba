@@ -24,10 +24,10 @@ def start_task(title, action, args, who=None, tool=None, input_text=None, then=N
     task_id = uuid.uuid4().hex[:8]
     TASKS[task_id] = {
         "id": task_id,
-        "titre": title,
-        "etat": "en cours",
-        "debut": time.time(),
-        "journal": "",
+        "title": title,
+        "state": "en cours",
+        "start": time.time(),
+        "log": "",
         "outil": tool,
     }
 
@@ -38,16 +38,16 @@ def start_task(title, action, args, who=None, tool=None, input_text=None, then=N
                 code, output, error_output = 0, "ok", ""
             else:
                 code, output, error_output = commands.run_action(action, input_text=input_text, **args)
-            TASKS[task_id]["journal"] = (output + error_output)[-4000:]
+            TASKS[task_id]["log"] = (output + error_output)[-4000:]
             if code == 0 and then:
-                TASKS[task_id]["journal"] += "\n" + (then(output) or "")
-            TASKS[task_id]["etat"] = "terminé" if code == 0 else "erreur"
+                TASKS[task_id]["log"] += "\n" + (then(output) or "")
+            TASKS[task_id]["state"] = "terminé" if code == 0 else "erreur"
         except Exception as error:  # noqa: BLE001
-            TASKS[task_id]["journal"] = str(error)
-            TASKS[task_id]["etat"] = "erreur"
-        TASKS[task_id]["fin"] = time.time()
+            TASKS[task_id]["log"] = str(error)
+            TASKS[task_id]["state"] = "erreur"
+        TASKS[task_id]["end"] = time.time()
         activity_log.record(
-            "outil", title + (" : terminé" if TASKS[task_id]["etat"] == "terminé" else " : erreur"), who
+            "outil", title + (" : terminé" if TASKS[task_id]["state"] == "terminé" else " : erreur"), who
         )
 
     threading.Thread(target=travail, daemon=True).start()

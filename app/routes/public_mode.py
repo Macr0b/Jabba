@@ -20,17 +20,17 @@ from security import guard, second_factor
 from services import activity_log, backups, files_source, nextcloud_accounts, nextcloud_shares, public_mode
 
 router = APIRouter()
-EDITABLE = {"organisme": 80, "contact": 120}
+EDITABLE = {"organisation": 80, "contact": 120}
 
 
 def _visible(settings):
-    return {key: value for key, value in settings.items() if key not in ("avant", "derniere_alerte_inactifs")}
+    return {key: value for key, value in settings.items() if key not in ("before", "last_inactive_alert")}
 
 
 @router.get("/api/public/etat")
 def public_state(request: Request):
     guard.require_admin(request)
-    return {"actif": public_mode.read()["actif"]}
+    return {"active": public_mode.read()["active"]}
 
 
 @router.get("/api/public")
@@ -39,22 +39,22 @@ async def public_overview(request: Request):
     settings = public_mode.read()
     cloud = await asyncio.to_thread(nextcloud_accounts.overview, commands.occ)
     inactive = []
-    if settings["actif"] and cloud.get("present"):
+    if settings["active"] and cloud.get("present"):
         try:
             accounts = await asyncio.to_thread(nextcloud_accounts.accounts, commands.occ)
-            inactive = public_mode.inactive_accounts(accounts, int(settings["inactif_mois"]))
+            inactive = public_mode.inactive_accounts(accounts, int(settings["inactive_months"]))
         except nextcloud_accounts.CloudError:
             inactive = []
     return {
-        "reglages": _visible(settings),
-        "pret": public_mode.readiness(
-            second_factor.summary(session["identifiant"])["active"],
-            bool(backups.read().get("actif")),
+        "settings": _visible(settings),
+        "ready": public_mode.readiness(
+            second_factor.summary(session["username"])["active"],
+            bool(backups.read().get("active")),
             settings,
-            bool(cloud.get("pret")),
+            bool(cloud.get("ready")),
         ),
         "mentions": public_mode.privacy_notice(settings),
-        "inactifs": [{"id": a["id"], "nom": a["nom"], "inactif_depuis": a["inactif_depuis"]} for a in inactive],
+        "inactive": [{"id": a["id"], "name": a["name"], "inactive_since": a["inactive_since"]} for a in inactive],
         "nextcloud": bool(cloud.get("present")),
     }
 
@@ -67,11 +67,11 @@ async def public_settings(request: Request):
     for key, limit in EDITABLE.items():
         if key in body:
             settings[key] = " ".join(str(body[key] or "").split())[:limit]
-    if "inactif_mois" in body:
-        settings["inactif_mois"] = max(3, min(int(body["inactif_mois"]), 60))
-    if "expiration_jours" in body:
-        settings["expiration_jours"] = max(1, min(int(body["expiration_jours"]), 365))
-        if settings["actif"]:
+    if "inactive_months" in body:
+        settings["inactive_months"] = max(3, min(int(body["inactive_months"]), 60))
+    if "expiry_days" in body:
+        settings["expiry_days"] = max(1, min(int(body["expiry_days"]), 365))
+        if settings["active"]:
             settings = public_mode.apply_link_policy(commands.occ, True, settings)
     public_mode.write(settings)
     return _visible(settings)
@@ -80,12 +80,12 @@ async def public_settings(request: Request):
 @router.post("/api/public/ouvrir")
 async def open_or_close(request: Request):
     session = guard.require_super_admin(request, strong=True)
-    wanted = bool((await request.json()).get("actif"))
+    wanted = bool((await request.json()).get("active"))
     settings = public_mode.read()
-    if wanted and not second_factor.summary(session["identifiant"])["active"]:
+    if wanted and not second_factor.summary(session["username"])["active"]:
         raise HTTPException(400, "Active d'abord la double vérification sur ton compte (Système).")
     settings = await asyncio.to_thread(public_mode.apply_link_policy, commands.occ, wanted, settings)
-    settings["actif"] = wanted
+    settings["active"] = wanted
     public_mode.write(settings)
     activity_log.record(
         "securite", "Mode « serveur ouvert au public » " + ("activé" if wanted else "désactivé"), request.state.nom
@@ -108,12 +108,12 @@ async def add_privacy_notice(request: Request):
 @router.post("/api/demandes-fichiers")
 async def file_request(request: Request):
     guard.require_admin(request)
-    if not public_mode.read()["actif"]:
+    if not public_mode.read()["active"]:
         raise HTTPException(400, "Les demandes de fichiers servent quand le serveur est ouvert au public (Système).")
     if files_source.files_source() != "nextcloud":
         raise HTTPException(400, "Les demandes de fichiers passent par Nextcloud.")
     body = await request.json()
-    path = "/" + "/".join(part for part in str(body.get("chemin", "")).split("/") if part and part not in (".", ".."))
+    path = "/" + "/".join(part for part in str(body.get("path", "")).split("/") if part and part not in (".", ".."))
     if path == "/":
         raise HTTPException(400, "Choisis un dossier.")
     try:
@@ -121,9 +121,9 @@ async def file_request(request: Request):
             public_mode.create_file_request,
             nextcloud_shares.nextcloud_ocs,
             path,
-            body.get("jours", 7),
-            body.get("mot_de_passe") or "",
-            body.get("titre") or "",
+            body.get("days", 7),
+            body.get("password") or "",
+            body.get("title") or "",
         )
     except nextcloud_accounts.CloudError as error:
         raise HTTPException(400, str(error))

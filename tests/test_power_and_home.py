@@ -49,25 +49,25 @@ def test_consumption_measured_on_battery_only(usage, monkeypatch):
     output = lines(("Battery", "", "80", "Discharging", "", "800000", "12000000"))  # 0,8 A × 12 V = 9,6 W
     monkeypatch.setattr(power.commands, "run_action", lambda nom: (0, output, ""))
     power.read_power()
-    assert power.read_consumption()["derniere"]["w"] == 9.6
+    assert power.read_consumption()["latest"]["w"] == 9.6
     power.measure_consumption(14.0)
     measure = power.read_consumption()
-    assert measure["derniere"]["w"] == 14.0 and measure["repos"]["w"] == 9.6  # le repos garde la plus basse
+    assert measure["latest"]["w"] == 14.0 and measure["idle"]["w"] == 9.6  # le repos garde la plus basse
     output = lines(("Battery", "", "80", "Charging", "20000000", "", ""))  # sur secteur : pas mesurable
     monkeypatch.setattr(power.commands, "run_action", lambda nom: (0, output, ""))
     power.read_power()
-    assert power.read_consumption()["derniere"]["w"] == 14.0
+    assert power.read_consumption()["latest"]["w"] == 14.0
 
 
 def test_consumption_measured_by_the_ups_even_on_mains(usage, monkeypatch):
     output = lines(("UPS", "OL", "100", "11", "", ""))
     monkeypatch.setattr(power.commands, "run_action", lambda nom: (0, output, ""))
     power.read_power()
-    assert power.read_consumption()["derniere"]["w"] == 11.0
+    assert power.read_consumption()["latest"]["w"] == 11.0
     output = lines(("UPS", "OL", "100", "", "3", "360"))  # pas de puissance donnée : 3 % de 360 W
     monkeypatch.setattr(power.commands, "run_action", lambda nom: (0, output, ""))
     power.read_power()
-    assert power.read_consumption()["derniere"]["w"] == 10.8
+    assert power.read_consumption()["latest"]["w"] == 10.8
 
 
 @pytest.mark.parametrize(
@@ -89,15 +89,15 @@ def test_when_to_shut_down(reading, switch_off):
 
 def test_home_suggestions(tmp_path, monkeypatch):
     monkeypatch.setattr(home_data, "HOME_FILE", str(tmp_path / "accueil.json"))
-    assert home_data.read() == {"favoris": [], "visites": {}, "ignores": []}
+    assert home_data.read() == {"favorites": [], "visits": {}, "ignored": []}
     for _ in range(60):
         home_data.record_visit("/Photos")
-    assert len(home_data.read()["visites"]["/Photos"]) == 50  # au plus 50 ouvertures gardées
+    assert len(home_data.read()["visits"]["/Photos"]) == 50  # au plus 50 ouvertures gardées
     donnees = home_data.read()
-    donnees["visites"]["/Vieux"] = [1]  # ouvert il y a très longtemps : oublié à la prochaine visite
+    donnees["visits"]["/Vieux"] = [1]  # ouvert il y a très longtemps : oublié à la prochaine visite
     home_data.write(donnees)
     home_data.record_visit("/Photos")
-    assert "/Vieux" not in home_data.read()["visites"]
+    assert "/Vieux" not in home_data.read()["visits"]
 
 
 @pytest.fixture
@@ -110,8 +110,8 @@ def watcher(monkeypatch):
     )
     monkeypatch.setattr(watchers.commands, "run_action", lambda nom, **k: actions_run.append(nom) or (0, "", ""))
     monkeypatch.setattr(watchers.measurements, "server_name", lambda: "serveur-test")
-    monkeypatch.setitem(power.POWER_STATE, "secteur", True)
-    monkeypatch.setitem(power.POWER_STATE, "arret_prevu", False)
+    monkeypatch.setitem(power.POWER_STATE, "mains", True)
+    monkeypatch.setitem(power.POWER_STATE, "shutdown_planned", False)
     return watchers, sent, actions_run
 
 

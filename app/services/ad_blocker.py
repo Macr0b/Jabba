@@ -9,7 +9,7 @@ le compte « admin » et le mot de passe tiré au sort à l'activation (services
 AdGuard écoute sur le serveur (127.0.0.1:3000) ; l'appli tourne sur le réseau de l'hôte.
 
 Sommaire :
-  devices()                      : {"pret", "message", "appareils": [{ip, nom, protege, tailscale}]}
+  devices()                      : {"ready", "message", "devices": [{ip, name, protected, tailscale}]}
   set_protected(ip, protected)   : allume / éteint le filtrage d'un appareil
   interne : _client, _ensure_ready, _tailscale_names, _client_name, _demo, _password
   AdBlockerError : le refus du bloqueur de pubs, avec sa phrase
@@ -38,7 +38,7 @@ class AdBlockerError(Exception):
 
 
 def _password():
-    return (tool_credentials.read("adguard-home") or {}).get("mot_de_passe", "")
+    return (tool_credentials.read("adguard-home") or {}).get("password", "")
 
 
 def _client():
@@ -101,10 +101,10 @@ def _demo():
         ("100.64.0.2", "macbook", True),
     ]
     return {
-        "pret": True,
+        "ready": True,
         "message": "",
-        "appareils": [
-            {"ip": ip, "nom": name, "protege": ip in _DEMO_PROTECTED, "tailscale": tailscale}
+        "devices": [
+            {"ip": ip, "name": name, "protected": ip in _DEMO_PROTECTED, "tailscale": tailscale}
             for ip, name, tailscale in seen
         ],
     }
@@ -118,7 +118,7 @@ def devices():
             _ensure_ready(client)
             data = client.get("/control/clients").json()
     except (AdBlockerError, httpx.HTTPError, ValueError) as error:
-        return {"pret": False, "message": str(error) or "AdGuard Home ne répond pas.", "appareils": []}
+        return {"ready": False, "message": str(error) or "AdGuard Home ne répond pas.", "devices": []}
     names = _tailscale_names()
     protected = set()
     found = {}
@@ -137,13 +137,13 @@ def devices():
         listed.append(
             {
                 "ip": ip,
-                "nom": names.get(ip) or name or ip,
-                "protege": ip in protected,
+                "name": names.get(ip) or name or ip,
+                "protected": ip in protected,
                 "tailscale": ip in names,
             }
         )
-    listed.sort(key=lambda device: (not device["protege"], device["nom"].lower()))
-    return {"pret": True, "message": "", "appareils": listed}
+    listed.sort(key=lambda device: (not device["protected"], device["name"].lower()))
+    return {"ready": True, "message": "", "devices": listed}
 
 
 def set_protected(ip, protected):

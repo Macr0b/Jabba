@@ -237,18 +237,18 @@ def test_workshop_log(page):
     expect(card).to_be_visible()
     card.get_by_role("link", name="Ouvrir").click()
     page.get_by_role("button", name="Ajouter une machine").click()
-    page.locator("#form-machine input[name=nom]").fill(machine)
-    page.locator("#form-machine input[name=modele]").fill("Speedy 360")
+    page.locator("#form-machine input[name=name]").fill(machine)
+    page.locator("#form-machine input[name=model]").fill("Speedy 360")
     page.locator("#form-machine").get_by_role("button", name="Ajouter").click()
     expect(page.locator("h1")).to_have_text(machine)
-    page.locator("#form-entree input[name=titre]").fill("Lentille nettoyée")
+    page.locator("#form-entree input[name=title]").fill("Lentille nettoyée")
     page.locator("#form-entree").get_by_role("button", name="Noter").click()
     expect(page.locator(".entree-atelier")).to_contain_text("Lentille nettoyée")
     identifiant = page.locator(".entree-atelier", has_text="Lentille nettoyée").get_attribute("data-entree")
     note = page.locator(f'.entree-atelier[data-entree="{identifiant}"]')
     note.get_by_role("button", name="Modifier").click()  # corrigée sur place, sans fenêtre par-dessus
-    note.locator("input[name=titre]").fill("Lentille nettoyée à l'alcool")
-    note.locator("input[name=pieces]").fill("Coton-tige")
+    note.locator("input[name=title]").fill("Lentille nettoyée à l'alcool")
+    note.locator("input[name=parts]").fill("Coton-tige")
     note.get_by_role("button", name="Enregistrer").click()
     fixed_entry = page.locator(".entree-atelier", has_text="Lentille nettoyée à l'alcool")
     expect(fixed_entry).to_contain_text("Coton-tige")
@@ -256,7 +256,7 @@ def test_workshop_log(page):
     note.get_by_role("button", name="Modifier").click()
     note.get_by_role("button", name="Annuler").click()
     expect(page.locator(".entree-atelier form")).to_have_count(0)
-    page.locator("#form-rappel input[name=titre]").fill("Vider le bac à déchets")
+    page.locator("#form-rappel input[name=title]").fill("Vider le bac à déchets")
     page.locator("#form-rappel").get_by_role("button", name="Ajouter le rappel").click()
     page.get_by_role("button", name="Fait aujourd'hui").click()
     expect(page.locator(".entree-atelier").first).to_contain_text("Vider le bac à déchets")
@@ -297,22 +297,22 @@ def test_workbench_card_menus(page):
 
 
 CLOUD_READY = {
-    "etat": {"present": True, "pret": True, "quota_defaut": "5 GB"},
-    "rang": "super",
-    "plafond_go": 50,
-    "comptes": [],
-    "groupes": [],
-    "rangs_actif": False,
-    "rangs": [],
-    "createur": True,
-    "charte": "",
-    "charte_defaut": "",
-    "charte_max": 1500,
-    "dossiers": [],
-    "modes": {"lecture": {"nom": "Lecture", "detail": ""}},
-    "tous": "membres",
-    "promis": 0,
-    "espace": None,
+    "state": {"present": True, "ready": True, "default_quota": "5 GB"},
+    "rank": "super",
+    "cap_gb": 50,
+    "accounts": [],
+    "groups": [],
+    "ranks_enabled": False,
+    "ranks": [],
+    "creator": True,
+    "charter": "",
+    "default_charter": "",
+    "charter_max": 1500,
+    "folders": [],
+    "modes": {"lecture": {"name": "Lecture", "detail": ""}},
+    "all": "membres",
+    "promised": 0,
+    "space": None,
 }
 
 
@@ -322,7 +322,7 @@ def test_shared_folders_load(page):
 
     page.route("**/api/nuage", lambda route: route.fulfill(json=CLOUD_READY))
     share = {
-        "partages": [{"id": "p1", "nom": "Plans", "chemin": "/Plans", "groupe": "membres", "mode": "lecture"}],
+        "shares": [{"id": "p1", "name": "Plans", "path": "/Plans", "group": "membres", "mode": "lecture"}],
         "modes": {"lecture": "Lecture"},
     }
     page.route("**/api/partages", lambda route: route.fulfill(body=json.dumps(share), content_type="application/json"))
@@ -544,7 +544,7 @@ def test_paused_tools_after_running_ones(page):
             if (pause) carte.classList.add("eteint");
             grille.appendChild(carte);
           }
-          const rangement = { ordre: ["c", "a", "d", "b"], masques: [] };
+          const rangement = { order: ["c", "a", "d", "b"], hidden_items: [] };
           applyArrangement(grille, rangement, { pausedLast: true });
           const apres = [...grille.children].map((c) => c.dataset.carte).join("");
           applyArrangement(grille, rangement);

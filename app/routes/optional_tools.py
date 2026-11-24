@@ -4,6 +4,7 @@ Sommaire :
   GET  /api/etabli/catalogue            optional_catalog (outils en option + mémoire)
   POST /api/etabli/{outil}/installer    install_optional (super admin ; rien à taper)
   POST /api/etabli/{outil}/retirer      remove_optional (super admin ; données gardées)
+  POST /api/etabli/{outil}/retirer-ancien remove_leftover (super admin ; un outil retiré du catalogue, en entier)
   GET  /api/etabli/{outil}/identifiants tool_login (super admin ; le compte créé par Jabba, ou noté par toi)
   PUT  /api/etabli/{outil}/identifiants save_tool_login (super admin ; noter l'identifiant et le mot de passe)
   DELETE /api/etabli/{outil}/identifiants forget_tool_login (super admin)
@@ -28,8 +29,8 @@ async def optional_catalog(request: Request):
     installed = {tool["id"] for tool in await asyncio.to_thread(tools.list_tools)}
     usage = await asyncio.to_thread(tool_usage.read_usage)
     return {
-        "outils": optional_tools.catalog(installed),
-        "memoire": await asyncio.to_thread(optional_tools.memory_budget, usage),
+        "tools": optional_tools.catalog(installed),
+        "memory": await asyncio.to_thread(optional_tools.memory_budget, usage),
     }
 
 
@@ -47,6 +48,15 @@ async def remove_optional(outil: str, request: Request):
     guard.require_super_admin(request)
     try:
         return optional_tools.remove(outil, request.state.nom)
+    except actions.ActionError as error:
+        raise HTTPException(400, str(error))
+
+
+@router.post("/api/etabli/{outil}/retirer-ancien")
+async def remove_leftover(outil: str, request: Request):
+    guard.require_super_admin(request)
+    try:
+        return optional_tools.remove_leftover(outil, request.state.nom)
     except actions.ActionError as error:
         raise HTTPException(400, str(error))
 
@@ -71,7 +81,7 @@ async def save_tool_login(outil: str, request: Request):
     guard.require_super_admin(request)
     body = await request.json()
     try:
-        tool_credentials.save(outil, body.get("identifiant"), body.get("mot_de_passe"))
+        tool_credentials.save(outil, body.get("username"), body.get("password"))
     except ValueError as error:
         raise HTTPException(400, str(error))
     activity_log.record("outil", f"Identifiants de {outil} notés dans Jabba", request.state.nom)
@@ -103,6 +113,6 @@ async def save_cards_order(ecran: str, request: Request):
     guard.require_admin(request)
     body = await request.json()
     try:
-        return card_order.save(ecran, body.get("ordre"), body.get("masques"))
+        return card_order.save(ecran, body.get("order"), body.get("hidden_items"))
     except ValueError as error:
         raise HTTPException(400, str(error))

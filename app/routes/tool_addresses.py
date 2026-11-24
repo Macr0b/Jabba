@@ -33,7 +33,7 @@ async def save_token(request: Request):
     guard.require_super_admin(request)
     body = await request.json()
     try:
-        await asyncio.to_thread(tool_addresses.save_token, body.get("cle"))
+        await asyncio.to_thread(tool_addresses.save_token, body.get("key"))
         activity_log.record("securite", "Clé d'accès Tailscale donnée à Jabba (adresses des outils)", request.state.nom)
         tool_addresses.create_missing(await asyncio.to_thread(_installed), request.state.nom)
     except tool_addresses.AddressError as error:

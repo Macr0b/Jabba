@@ -17,7 +17,7 @@ export function formatBytes(item) {
   );
 }
 export function formatPercent(user) {
-  return user && user.total ? Math.round((100 * user.utilise) / user.total) : 0;
+  return user && user.total ? Math.round((100 * user.used) / user.total) : 0;
 }
 export function formatDuration(value) {
   const session = Math.floor(value / 86400);

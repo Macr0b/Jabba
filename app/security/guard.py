@@ -42,7 +42,7 @@ async def guard(request: Request, call_next):
         if not login or login not in allowed_logins():
             if login and request.url.path.startswith("/api/"):
                 record_refusal(login, request)
-            return JSONResponse({"erreur": "Accès réservé à tes appareils Tailscale."}, status_code=403)
+            return JSONResponse({"error": "Accès réservé à tes appareils Tailscale."}, status_code=403)
         request.state.user = login
         request.state.nom = request.headers.get("tailscale-user-name") or login
         if request.url.path == "/api/moi":
@@ -57,7 +57,7 @@ async def guard(request: Request, call_next):
     if path.startswith("/api/") and not path.startswith(PUBLIC_PATHS):
         if not session:
             return JSONResponse({"detail": {"admin": True, "message": "Connexion admin demandée."}}, status_code=401)
-        if session.get("provisoire") and path not in ALLOWED_WITH_TEMPORARY_PASSWORD:
+        if session.get("temporary") and path not in ALLOWED_WITH_TEMPORARY_PASSWORD:
             return JSONResponse(
                 {"detail": {"admin": True, "changer": True, "message": "Choisis d'abord ton nouveau mot de passe."}},
                 status_code=401,
@@ -65,7 +65,7 @@ async def guard(request: Request, call_next):
     # Anti-CSRF : toute action doit venir de l'appli (en-tête impossible à
     # ajouter depuis un autre site sans autorisation CORS, jamais accordée).
     if request.method not in ("GET", "HEAD") and request.headers.get("x-jabba") != "1":
-        return JSONResponse({"erreur": "Requête refusée."}, status_code=403)
+        return JSONResponse({"error": "Requête refusée."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Content-Security-Policy", PAGE_POLICY)
@@ -163,17 +163,17 @@ def require_admin(request: Request, rank="admin", strong=False):
     session = getattr(request.state, "session", None)
     if not session:
         raise HTTPException(401, {"admin": True, "message": "Connexion admin demandée."})
-    if session.get("provisoire"):
+    if session.get("temporary"):
         raise HTTPException(
             401, {"admin": True, "changer": True, "message": "Choisis d'abord ton nouveau mot de passe."}
         )
-    if rank == "super" and session["rang"] != "super":
+    if rank == "super" and session["rank"] != "super":
         raise HTTPException(403, "Réservé au super admin.")
     if strong and not sessions.confirmed_recently(session):
         raise HTTPException(
             401, {"admin": True, "confirmer": True, "message": "Confirme ton mot de passe pour cette action."}
         )
-    request.state.admin = session["identifiant"]
+    request.state.admin = session["username"]
     return session
 
 
@@ -183,7 +183,7 @@ def require_super_admin(request: Request, strong=False):
 
 def require_server_account(request: Request):
     session = require_admin(request, "super", strong=True)
-    if session["identifiant"] != hostname():
+    if session["username"] != hostname():
         raise HTTPException(403, "Réservé au compte du serveur.")
     return session
 
@@ -234,7 +234,7 @@ def check_login(request, identifier, password):
     identifier = (identifier or hostname()).strip().lower()
     if identifier in server_identifiers():
         if check_server_password(password):
-            return {"identifiant": hostname(), "nom": "Compte du serveur", "rang": "super", "provisoire": False}
+            return {"username": hostname(), "name": "Compte du serveur", "rank": "super", "temporary": False}
     else:
         account = accounts.check_credentials(identifier, password)
         if account:
@@ -245,9 +245,9 @@ def check_login(request, identifier, password):
 
 
 def open_session(response, request, account):
-    temporary = bool(account.get("provisoire"))
+    temporary = bool(account.get("temporary"))
     token = sessions.create(
-        account["identifiant"], account["rang"], temporary, device_of(request), getattr(request.state, "user", None)
+        account["username"], account["rank"], temporary, device_of(request), getattr(request.state, "user", None)
     )
     response.set_cookie(
         sessions.COOKIE,
@@ -262,10 +262,10 @@ def open_session(response, request, account):
 
 def session_info(account):
     return {
-        "identifiant": account["identifiant"],
-        "rang": account["rang"],
-        "changer": bool(account.get("provisoire")),
-        "compte_serveur": account["identifiant"] == hostname(),
+        "username": account["username"],
+        "rank": account["rank"],
+        "changer": bool(account.get("temporary")),
+        "compte_serveur": account["username"] == hostname(),
     }
 
 
@@ -314,6 +314,6 @@ def translate_account_refusal(function):
 def require_admin_space(request: Request):
     """L'espace Utilisateurs : tous les admins, ou le super admin seul selon le réglage."""
     session = require_admin(request)
-    if session["rang"] != "super" and not accounts.admin_space_open():
+    if session["rank"] != "super" and not accounts.admin_space_open():
         raise HTTPException(403, "L'espace Utilisateurs est réservé au super admin.")
     return session

@@ -58,7 +58,7 @@ def host_input(name, args, text):
     if name == "changer_mot_de_passe_serveur":
         if not text or ":" in text or "\n" in text:
             raise ActionError("Mot de passe refusé (ni « : » ni retour à la ligne).")
-        return f"{args['utilisateur']}:{text}\n"
+        return f"{args['user']}:{text}\n"
     return text
 
 

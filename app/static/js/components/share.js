@@ -8,17 +8,17 @@ import { t } from "../core/i18n.js";
 
 // Nom affiché d'un groupe : « Tous les membres », « Gérant et au-dessus », ou le nom du groupe.
 export function groupLabel(groupId, cloud) {
-  if (groupId === cloud.tous) return t("Tous les membres");
-  const rank = (cloud.rangs || []).find((entry) => entry.id === groupId);
-  return rank ? t`${rank.nom} et au-dessus` : groupId;
+  if (groupId === cloud.all) return t("Tous les membres");
+  const rank = (cloud.ranks || []).find((entry) => entry.id === groupId);
+  return rank ? t`${rank.name} et au-dessus` : groupId;
 }
 
 // À qui donner un dossier : tous, puis les rangs (du plus haut au plus bas), puis les groupes.
 export function folderTargets(cloud) {
   return [
-    ...cloud.groupes.filter((group) => group.id === cloud.tous),
-    ...(cloud.rangs_actif ? [...cloud.rangs].reverse() : []),
-    ...cloud.groupes.filter((group) => group.id !== cloud.tous),
+    ...cloud.groups.filter((group) => group.id === cloud.all),
+    ...(cloud.ranks_enabled ? [...cloud.ranks].reverse() : []),
+    ...cloud.groups.filter((group) => group.id !== cloud.all),
   ];
 }
 
@@ -33,17 +33,17 @@ export async function shareFolder(path, name) {
   }
   const target = await chooseFromMenu(
     t`Partager « ${name} » avec…`,
-    folderTargets(cloud).map((group) => ({ texte: groupLabel(group.id, cloud), id: group.id })),
+    folderTargets(cloud).map((group) => ({ text: groupLabel(group.id, cloud), id: group.id })),
   );
   if (!target) return;
-  const mode = await chooseFromMenu(`${target.texte} pourra…`, [
-    { texte: t("Voir seulement"), id: "lecture" },
-    { texte: t("Voir et modifier"), id: "ecriture" },
+  const mode = await chooseFromMenu(`${target.text} pourra…`, [
+    { text: t("Voir seulement"), id: "lecture" },
+    { text: t("Voir et modifier"), id: "ecriture" },
   ]);
   if (!mode) return;
   try {
-    await api("/api/partages", { method: "POST", json: { chemin: path, groupe: target.id, mode: mode.id } });
-    toast(t`« ${name} » partagé avec ${target.texte}. Il apparaît dans leur Nextcloud.`);
+    await api("/api/partages", { method: "POST", json: { path, group: target.id, mode: mode.id } });
+    toast(t`« ${name} » partagé avec ${target.text}. Il apparaît dans leur Nextcloud.`);
   } catch (error) {
     toast(error.message, true);
   }

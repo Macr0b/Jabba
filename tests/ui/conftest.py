@@ -150,9 +150,9 @@ def page(request, browser, jabba_app):
     p.goto(jabba_app + "/")
     p.wait_for_selector("#connexion", state="attached")
     p.evaluate("document.querySelector('#connexion').click()")
-    p.fill("input[name=identifiant]", "serveur-demo")
-    p.fill("input[name=mdp]", "demo-mot-de-passe")
-    p.press("input[name=mdp]", "Enter")
+    p.fill("input[name=username]", "serveur-demo")
+    p.fill("input[name=password]", "demo-mot-de-passe")
+    p.press("input[name=password]", "Enter")
     wait_until(p, "!document.querySelector('dialog[open]')")
     p.wait_for_timeout(500)
     p.root = jabba_app

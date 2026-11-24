@@ -75,12 +75,12 @@ async def _nextcloud_files(paths):
 
     async def walk(path, name):
         listing = await nextcloud_files.read_folder(path)
-        for entry in listing["elements"]:
-            inner_name = f"{name}/{entry['nom']}"
-            if entry["dossier"]:
-                await walk(entry["chemin"], inner_name)
+        for entry in listing["items"]:
+            inner_name = f"{name}/{entry['name']}"
+            if entry["folder"]:
+                await walk(entry["path"], inner_name)
             else:
-                found.append((entry["chemin"], inner_name, entry.get("taille") or 0))
+                found.append((entry["path"], inner_name, entry.get("size") or 0))
 
     for path in paths:
         name = path.rstrip("/").rsplit("/", 1)[-1]
@@ -89,12 +89,12 @@ async def _nextcloud_files(paths):
         else:
             parent = path.rstrip("/").rsplit("/", 1)[0] or "/"
             entry = next(
-                (item for item in (await nextcloud_files.read_folder(parent))["elements"] if item["chemin"] == path),
+                (item for item in (await nextcloud_files.read_folder(parent))["items"] if item["path"] == path),
                 None,
             )
             if not entry:
                 raise ServiceError(404, f"Introuvable : {path}")
-            found.append((path, name, entry.get("taille") or 0))
+            found.append((path, name, entry.get("size") or 0))
     return found
 
 

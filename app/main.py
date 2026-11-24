@@ -88,7 +88,7 @@ async def lifespan(_app):
     note_installed_version()
     try:
         guests.prepare_state()
-        guests.update(lambda state: state.update(serveur=guard.hostname()))
+        guests.update(lambda state: state.update(server=guard.hostname()))
     except OSError as error:
         print("invités :", error, flush=True)
     threading.Thread(target=watchers.watch_forever, daemon=True, name="surveillance").start()

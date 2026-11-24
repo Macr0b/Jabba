@@ -13,9 +13,9 @@ import { toast } from "./dialogs.js";
 
 function render(card, data) {
   const head = t`<h2>Si le serveur ne répond plus</h2>`;
-  if (data.pret) {
+  if (data.ready) {
     card.innerHTML = t`${head}<p><span class="pastille ${data.ok ? "p-ok" : "p-alerte"}">${data.ok ? t("En place") : t("Dernier signal raté")}</span>
-      <span class="note">Dernier signal reçu : ${escapeHtml(timeAgo(data.dernier))}.</span></p>
+      <span class="note">Dernier signal reçu : ${escapeHtml(timeAgo(data.last))}.</span></p>
       <p class="note">Jabba envoie un signal de vie toutes les 5 minutes à healthchecks.io. S'il se tait (serveur éteint, figé, sans courant ou sans Internet), c'est healthchecks.io qui te prévient.</p>
       <div class="actions"><button class="lien" type="button" data-retirer>Retirer</button></div>`;
     card.querySelector("[data-retirer]").onclick = async (event) => {

@@ -67,7 +67,7 @@ class AddressError(Exception):
 
 
 def _token():
-    return json_files.load(TOKEN_FILE, {}).get("cle", "")
+    return json_files.load(TOKEN_FILE, {}).get("key", "")
 
 
 def _api(method, path, payload=None, token=None):
@@ -98,9 +98,9 @@ def status(installed):
     """Pour la carte : la clé est-elle là ? et, pour chaque outil installé qui a une page, son adresse."""
     entries = []
     for tool in sorted(set(installed) & set(TARGETS)):
-        name = catalog.OPTIONAL_TOOLS.get(tool, {}).get("nom", "Dockge" if tool == "dockge" else tool)
-        entries.append({"id": tool, "nom": name, "adresse": address(tool), "etat": _STATE.get(tool)})
-    return {"cle_prete": bool(_token()), "page_cles": KEYS_PAGE, "outils": entries}
+        name = catalog.OPTIONAL_TOOLS.get(tool, {}).get("name", "Dockge" if tool == "dockge" else tool)
+        entries.append({"id": tool, "name": name, "address": address(tool), "state": _STATE.get(tool)})
+    return {"key_ready": bool(_token()), "keys_page": KEYS_PAGE, "tools": entries}
 
 
 def save_token(token):
@@ -109,7 +109,7 @@ def save_token(token):
         raise AddressError("Ce n'est pas une clé d'accès Tailscale : elle commence par « tskey-api- ».")
     if not config.DEMO:
         _api("GET", "/tailnet/-/devices", token=token)  # la clé doit marcher avant d'être gardée
-    json_files.save(TOKEN_FILE, {"cle": token}, private=True)
+    json_files.save(TOKEN_FILE, {"key": token}, private=True)
 
 
 def forget_token():
@@ -172,8 +172,8 @@ def _create(tool, who):
         from services import tool_setup  # Nextcloud doit accepter sa nouvelle adresse
 
         tool_setup.after_address(tool, url)
-        if catalog.OPTIONAL_TOOLS.get(tool, {}).get("variable_adresse"):
-            commands.run_action("adresse_dans_outil", outil=tool, adresse=url.removeprefix("https://"))
+        if catalog.OPTIONAL_TOOLS.get(tool, {}).get("address_variable"):
+            commands.run_action("adresse_dans_outil", outil=tool, address=url.removeprefix("https://"))
     with _LOCK:
         saved = json_files.load(ADDRESSES_FILE, {})
         saved[tool] = url

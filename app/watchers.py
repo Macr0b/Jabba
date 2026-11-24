@@ -65,22 +65,22 @@ from services import (
 from version import VERSION
 
 WATCH_STATE = {
-    "disques_pleins": set(),
-    "pannes": {},
-    "redemarrage_signale": False,
-    "maj_signalee": None,
-    "derniere_purge": 0,
-    "dernier_lien_nc": 0,
+    "full_disks": set(),
+    "failures": {},
+    "restart_reported": False,
+    "update_reported": None,
+    "last_purge": 0,
+    "last_nc_link": 0,
 }
 
 
 def watch_power():
     on_mains, battery, state, source = power.read_power()
-    previous_value = power.POWER_STATE["secteur"]
-    power.POWER_STATE.update(batterie=battery, etat=state, source=source)
+    previous_value = power.POWER_STATE["mains"]
+    power.POWER_STATE.update(battery=battery, state=state, source=source)
     if on_mains is None:
         return
-    power.POWER_STATE["secteur"] = on_mains
+    power.POWER_STATE["mains"] = on_mains
     name = measurements.server_name()
     on_ups = source == "onduleur"
     if previous_value is True and not on_mains:
@@ -93,9 +93,9 @@ def watch_power():
             family="courant",
         )
     elif previous_value is False and on_mains:
-        if power.POWER_STATE["arret_prevu"]:
+        if power.POWER_STATE["shutdown_planned"]:
             commands.run_action("annuler_arret_batterie")
-            power.POWER_STATE["arret_prevu"] = False
+            power.POWER_STATE["shutdown_planned"] = False
         notifications.send(
             "courant",
             "Courant revenu",
@@ -105,9 +105,9 @@ def watch_power():
         )
     if (
         power.low_battery(on_mains, battery, state, source, config.BATTERY_THRESHOLD)
-        and not power.POWER_STATE["arret_prevu"]
+        and not power.POWER_STATE["shutdown_planned"]
     ):
-        power.POWER_STATE["arret_prevu"] = True
+        power.POWER_STATE["shutdown_planned"] = True
         after = (
             "Il se rallumera tout seul quand le courant reviendra."
             if on_ups
@@ -131,9 +131,9 @@ def watch_space():
         if files_source.is_mounted(path):
             paths[path] = name
     for path, usage_entry in measurements.disk_space(list(paths)).items():
-        percent = 100 * usage_entry["utilise"] / max(1, usage_entry["total"])
-        if percent >= 90 and path not in WATCH_STATE["disques_pleins"]:
-            WATCH_STATE["disques_pleins"].add(path)
+        percent = 100 * usage_entry["used"] / max(1, usage_entry["total"])
+        if percent >= 90 and path not in WATCH_STATE["full_disks"]:
+            WATCH_STATE["full_disks"].add(path)
             notifications.send(
                 "disque_plein",
                 f"{paths.get(path, path)} presque plein",
@@ -142,49 +142,49 @@ def watch_space():
                 family="disque",
             )
         elif percent < 85:
-            WATCH_STATE["disques_pleins"].discard(path)
+            WATCH_STATE["full_disks"].discard(path)
 
 
 def watch_tools():
-    running = {task.get("outil") for task in background_tasks.TASKS.values() if task["etat"] == "en cours"}
+    running = {task.get("outil") for task in background_tasks.TASKS.values() if task["state"] == "en cours"}
     for tool in tools.list_tools():
         pid = tool["id"]
-        problem = tool["etat"] in ("en panne", "partiel") and pid not in running
-        failures = WATCH_STATE["pannes"].get(pid, 0)
+        problem = tool["state"] in ("en panne", "partiel") and pid not in running
+        failures = WATCH_STATE["failures"].get(pid, 0)
         if problem:
-            WATCH_STATE["pannes"][pid] = failures + 1
+            WATCH_STATE["failures"][pid] = failures + 1
             if failures + 1 == 2:  # deux passages de suite (2 minutes) : ce n'est pas un simple redémarrage
                 notifications.send(
                     "outil_panne",
-                    f"{tool['nom']} en panne",
+                    f"{tool['name']} en panne",
                     "Ouvre l'Établi et essaie « Redémarrer ».",
                     "/#/outils",
                     family="outil",
                 )
         else:
-            if failures >= 2 and tool["etat"] == "actif":
-                notifications.send("outil_panne", f"{tool['nom']} est reparti", "", "/#/outils", family="outil")
-            WATCH_STATE["pannes"].pop(pid, None)
+            if failures >= 2 and tool["state"] == "actif":
+                notifications.send("outil_panne", f"{tool['name']} est reparti", "", "/#/outils", family="outil")
+            WATCH_STATE["failures"].pop(pid, None)
 
 
 def watch_system_updates():
     if commands.run_action("redemarrage_requis")[0] == 0:
-        if not WATCH_STATE["redemarrage_signale"]:
-            WATCH_STATE["redemarrage_signale"] = True
+        if not WATCH_STATE["restart_reported"]:
+            WATCH_STATE["restart_reported"] = True
             auto = restart_policy.current_mode()["mode"] == "auto"
             notifications.send(
                 "mises_a_jour", "Redémarrage en attente", restart_policy.message(auto), "/#/systeme", family="systeme"
             )
     else:
-        WATCH_STATE["redemarrage_signale"] = False
+        WATCH_STATE["restart_reported"] = False
     if config.REPOSITORY:
         latest = app_update.latest_release(config.REPOSITORY)
         if (
             latest
             and app_update.is_newer(VERSION, latest["version"])
-            and WATCH_STATE["maj_signalee"] != latest["version"]
+            and WATCH_STATE["update_reported"] != latest["version"]
         ):
-            WATCH_STATE["maj_signalee"] = latest["version"]
+            WATCH_STATE["update_reported"] = latest["version"]
             notifications.send(
                 "mises_a_jour",
                 f"Appli Jabba {latest['version']} disponible",
@@ -197,7 +197,7 @@ def watch_system_updates():
 def _follow_app_update():
     """La mise à jour de l'appli en cours : son résultat, signalé une fois."""
     current = app_update.CURRENT_UPDATE
-    if current["unite"] and not current["signale"]:
+    if current["unit"] and not current["reported"]:
         app_update.update_state()
 
 
@@ -247,8 +247,8 @@ SCHEDULE = {
 def steps_for(tick, now):
     """Ce qui tourne à ce tour-ci (le premier tour fait tout), plus la purge des corbeilles une fois par jour."""
     steps = [step for every, todo in SCHEDULE.items() if tick % every == 0 for step in todo]
-    if now - WATCH_STATE["derniere_purge"] > 86400:
-        WATCH_STATE["derniere_purge"] = now
+    if now - WATCH_STATE["last_purge"] > 86400:
+        WATCH_STATE["last_purge"] = now
         steps.append(disk_browser.purge_old_trash)
     return steps
 

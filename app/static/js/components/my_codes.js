@@ -18,22 +18,22 @@ const GROUPS = [
 ];
 
 function codeHtml(code) {
-  const missing = code.rangement !== "supprimer" && !code.present;
-  return `<li class="${missing ? "code-absent" : ""}"><strong>${escapeHtml(code.nom)}</strong>${missing ? ` <span class="pastille p-gris">${escapeHtml(t("pas encore"))}</span>` : ""}
-    <br><span class="note">${escapeHtml(code.sert_a)}${code.note ? " " + escapeHtml(code.note) : ""}</span></li>`;
+  const missing = code.arrangement !== "supprimer" && !code.present;
+  return `<li class="${missing ? "code-absent" : ""}"><strong>${escapeHtml(code.name)}</strong>${missing ? ` <span class="pastille p-gris">${escapeHtml(t("pas encore"))}</span>` : ""}
+    <br><span class="note">${escapeHtml(code.purpose)}${code.note ? " " + escapeHtml(code.note) : ""}</span></li>`;
 }
 
 function sheetHtml(codes) {
   const today = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  const toKeep = codes.filter((code) => code.rangement === "trousseau");
-  return t`<h1>Codes du serveur ${escapeHtml((state.me && state.me.serveur) || location.hostname.split(".")[0])}</h1>
+  const toKeep = codes.filter((code) => code.arrangement === "trousseau");
+  return t`<h1>Codes du serveur ${escapeHtml((state.me && state.me.server) || location.hostname.split(".")[0])}</h1>
     <p>Fiche du ${escapeHtml(today)}. Remplis-la à la main, puis range-la dans une enveloppe, chez toi, loin du serveur.
       Elle sert le jour où tu n'as plus accès à ton trousseau.</p>
     <p><strong>Adresse de Jabba</strong> (avec Tailscale allumé) : ${escapeHtml(location.origin)}</p>
     <ol>${toKeep
       .map(
         (code) =>
-          `<li><strong>${escapeHtml(code.nom)}</strong><br><span>${escapeHtml(code.sert_a)}</span><div class="ligne-a-remplir"></div></li>`,
+          `<li><strong>${escapeHtml(code.name)}</strong><br><span>${escapeHtml(code.purpose)}</span><div class="ligne-a-remplir"></div></li>`,
       )
       .join("")}
       <li><strong>${escapeHtml(t("Compte Tailscale"))}</strong><br><span>${escapeHtml(t("L'adresse mail et la façon de te connecter (Apple, Google…) : sans lui, plus d'accès à distance."))}</span><div class="ligne-a-remplir"></div></li>
@@ -60,7 +60,7 @@ export async function myCodesCard() {
   const { codes } = await api("/api/codes");
   card.innerHTML = t`<div class="entete-carte"><h2>Mes codes</h2><button class="btn btn-petit" type="button" data-imprimer>Fiche à imprimer</button></div><p class="note">Tous les codes autour de ton serveur, et où ils sont rangés. Jabba ne les affiche jamais ici. Un code qui n'est pas dans cette liste ne vient pas de Jabba : dans le doute, garde-le.</p>
     ${GROUPS.map(([place, title]) => {
-      const items = codes.filter((code) => code.rangement === place);
+      const items = codes.filter((code) => code.arrangement === place);
       return items.length
         ? `<h3 class="titre-codes">${escapeHtml(title)}</h3><ul class="liste-codes">${items.map(codeHtml).join("")}</ul>`
         : "";

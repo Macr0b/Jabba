@@ -57,14 +57,14 @@ _failures = {}  # ip -> [horodatages]
 # ---------------------------------------------------------------- réglages
 def read():
     state = json_files.load(STATE_FILE)
-    state.setdefault("actif", False)
+    state.setdefault("active", False)
     state.setdefault("code", "%04d" % secrets.randbelow(10000))
     state.setdefault("generation", 1)
     state.setdefault("secret", secrets.token_hex(32))
-    state.setdefault("dossiers", [{"id": "invites", "nom": "Invités", "chemin": GUEST_FOLDER, "mode": "depot"}])
+    state.setdefault("folders", [{"id": "invites", "name": "Invités", "path": GUEST_FOLDER, "mode": "depot"}])
     state.setdefault("wifi", {"jellyfin": True})  # outils joignables depuis le Wi-Fi
-    state.setdefault("outils", [])  # copie tenue à jour par l'appli : {id, nom, role, port, actif}
-    state.setdefault("adresse", None)  # adresse IP du serveur sur le Wi-Fi
+    state.setdefault("tools", [])  # copie tenue à jour par l'appli : {id, nom, role, port, actif}
+    state.setdefault("address", None)  # adresse IP du serveur sur le Wi-Fi
     return state
 
 

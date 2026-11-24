@@ -19,21 +19,21 @@ function partitionsHtml(partitions) {
     .map(
       (item) => `
   <div class="part">
-    <div><strong>${escapeHtml(item.etiquette || item.nom)}</strong> <span class="note">· ${escapeHtml(item.type || "?")} · ${formatBytes(item.taille)}</span><div class="note">${escapeHtml(item.role)}${item.montage && item.role !== item.montage ? " · " + escapeHtml(item.montage) : ""}</div></div>
-    <div class="note">${item.usage ? formatBytes(item.usage.utilise) + t(" utilisés") : ""}</div>
+    <div><strong>${escapeHtml(item.label || item.name)}</strong> <span class="note">· ${escapeHtml(item.type || "?")} · ${formatBytes(item.size)}</span><div class="note">${escapeHtml(item.role)}${item.mount && item.role !== item.mount ? " · " + escapeHtml(item.mount) : ""}</div></div>
+    <div class="note">${item.usage ? formatBytes(item.usage.used) + t(" utilisés") : ""}</div>
     ${item.usage ? `<div class="jauge"><span style="width:${formatPercent(item.usage)}%"></span></div>` : ""}
     ${
-      item.disque_jabba
+      item.jabba_disk
         ? t`<div class="reglages-disque">
-      <label class="ligne-reglage"><span><strong>Écriture autorisée</strong><br><span class="note">${item.disque_jabba.ecriture ? t("On peut ajouter et modifier des fichiers. Éjecte avant de débrancher.") : t("Lecture seule : tu peux débrancher à tout moment.")}</span></span>
-        <button class="interrupteur" role="switch" aria-checked="${item.disque_jabba.ecriture}" data-mode="${escapeHtml(item.disque_jabba.nom)}"><span></span></button></label>
-      <div class="actions"><button class="btn" data-ejecter="${escapeHtml(item.disque_jabba.nom)}">Éjecter</button>
-      ${item.disque_jabba.auto ? t`<button class="btn btn-danger" data-oublier="${escapeHtml(item.disque_jabba.nom)}">Oublier ce disque</button>` : ""}</div>
+      <label class="ligne-reglage"><span><strong>Écriture autorisée</strong><br><span class="note">${item.jabba_disk.writable ? t("On peut ajouter et modifier des fichiers. Éjecte avant de débrancher.") : t("Lecture seule : tu peux débrancher à tout moment.")}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${item.jabba_disk.writable}" data-mode="${escapeHtml(item.jabba_disk.name)}"><span></span></button></label>
+      <div class="actions"><button class="btn" data-ejecter="${escapeHtml(item.jabba_disk.name)}">Éjecter</button>
+      ${item.jabba_disk.auto ? t`<button class="btn btn-danger" data-oublier="${escapeHtml(item.jabba_disk.name)}">Oublier ce disque</button>` : ""}</div>
     </div>`
         : ""
     }
-    ${item.oublie ? t`<div class="reglages-disque"><span class="note">Disque oublié : il n'est plus ajouté tout seul.</span><button class="btn" data-reprendre="${escapeHtml(item.oublie)}">Utiliser ce disque</button></div>` : ""}
-    ${item.illisible && !item.montage ? t`<div class="reglages-disque"><span class="note">Format ${escapeHtml(item.illisible)} : illisible par le serveur. Pour l'utiliser ici, reformate-le en exFAT depuis le Mac (Utilitaire de disque).</span></div>` : ""}
+    ${item.forgotten ? t`<div class="reglages-disque"><span class="note">Disque oublié : il n'est plus ajouté tout seul.</span><button class="btn" data-reprendre="${escapeHtml(item.forgotten)}">Utiliser ce disque</button></div>` : ""}
+    ${item.unreadable && !item.mount ? t`<div class="reglages-disque"><span class="note">Format ${escapeHtml(item.unreadable)} : illisible par le serveur. Pour l'utiliser ici, reformate-le en exFAT depuis le Mac (Utilitaire de disque).</span></div>` : ""}
   </div>`,
     )
     .join("");
@@ -65,12 +65,12 @@ pages.disques = async () => {
       .map(
         (item) => `
       <article class="carte pad disque">
-        <div class="entete"><div><h2>${escapeHtml(item.titre || item.modele || item.nom)}</h2><div class="note">${escapeHtml(item.genre || "")} · ${formatBytes(item.taille)}${item.modele ? " · " + escapeHtml(item.modele) : ""}</div></div></div>
+        <div class="entete"><div><h2>${escapeHtml(item.title || item.model || item.name)}</h2><div class="note">${escapeHtml(item.genre || "")} · ${formatBytes(item.size)}${item.model ? " · " + escapeHtml(item.model) : ""}</div></div></div>
         <div class="parts">${
           item.partitions.length
-            ? partitionsHtml(item.partitions.filter((part) => !part.technique)) +
-              (item.partitions.some((part) => part.technique)
-                ? t`<details class="parts-techniques"><summary class="note">Partitions techniques (${item.partitions.filter((part) => part.technique).length}) : on n'y touche pas</summary>${partitionsHtml(item.partitions.filter((part) => part.technique))}</details>`
+            ? partitionsHtml(item.partitions.filter((part) => !part.technical)) +
+              (item.partitions.some((part) => part.technical)
+                ? t`<details class="parts-techniques"><summary class="note">Partitions techniques (${item.partitions.filter((part) => part.technical).length}) : on n'y touche pas</summary>${partitionsHtml(item.partitions.filter((part) => part.technical))}</details>`
                 : "")
             : t`<div class="note part">Aucune partition lisible</div>`
         }
@@ -92,17 +92,17 @@ pages.disques = async () => {
       if (
         writable &&
         !(await confirmAction({
-          titre: t`Autoriser l'écriture sur ${name} ?`,
-          texte: t(
+          title: t`Autoriser l'écriture sur ${name} ?`,
+          text: t(
             "Tu pourras ajouter et modifier des fichiers depuis l'appli, Nextcloud et le Finder. Avant de débrancher le disque, il faudra cliquer sur « Éjecter ». Jellyfin, lui, reste en lecture seule.",
           ),
-          valider: t("Autoriser"),
+          confirmLabel: t("Autoriser"),
         }))
       )
         return;
       element.disabled = true;
       try {
-        await api(`/api/disques/${encodeURIComponent(name)}/mode`, { method: "POST", json: { ecriture: writable } });
+        await api(`/api/disques/${encodeURIComponent(name)}/mode`, { method: "POST", json: { writable } });
         toast(writable ? t`${name} : écriture autorisée` : t`${name} : lecture seule`);
       } catch (error) {
         toast(error.message, true);
@@ -115,11 +115,11 @@ pages.disques = async () => {
       const name = element.dataset.oublier;
       if (
         !(await confirmAction({
-          titre: t`Oublier ${name} ?`,
-          texte: t(
+          title: t`Oublier ${name} ?`,
+          text: t(
             "Il disparaît de l'appli, de Nextcloud et de Jellyfin, et ne sera plus ajouté tout seul quand tu le branches. Son contenu n'est pas touché.",
           ),
-          valider: t("Oublier"),
+          confirmLabel: t("Oublier"),
           danger: true,
         }))
       )
@@ -152,9 +152,9 @@ pages.disques = async () => {
       try {
         await api(`/api/disques/${encodeURIComponent(name)}/ejecter`, { method: "POST" });
         await confirmAction({
-          titre: t`Tu peux débrancher ${name}`,
-          texte: t("Toutes les copies sont terminées. Rebranché, il reviendra tout seul."),
-          valider: "OK",
+          title: t`Tu peux débrancher ${name}`,
+          text: t("Toutes les copies sont terminées. Rebranché, il reviendra tout seul."),
+          confirmLabel: "OK",
         });
       } catch (error) {
         toast(error.message, true);

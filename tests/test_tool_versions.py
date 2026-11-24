@@ -81,17 +81,17 @@ def serveur(tmp_path, monkeypatch):
         tool_updates.tools,
         "list_tools",
         lambda: [
-            {"id": "nextcloud", "nom": "Nextcloud", "modifiable": True, "conteneurs": [{"nom": "nextcloud"}]},
-            {"id": "jabba-app", "nom": "Appli Jabba", "modifiable": False, "conteneurs": [{"nom": "jabba"}]},
+            {"id": "nextcloud", "name": "Nextcloud", "editable": True, "containers": [{"name": "nextcloud"}]},
+            {"id": "jabba-app", "name": "Appli Jabba", "editable": False, "containers": [{"name": "jabba"}]},
         ],
     )
-    locales = {"empreintes": ["sha256:ancien"]}
+    locales = {"fingerprints": ["sha256:ancien"]}
 
     def host_name(commande, timeout=30, input_text=None):
         if commande[:2] == ["docker", "inspect"]:
             return 0, "nextcloud:32|sha256:" + "a" * 64 + "\n", ""
         if commande[:3] == ["docker", "image", "inspect"]:
-            drops = json.dumps([f"nextcloud@{e}" for e in locales["empreintes"]])
+            drops = json.dumps([f"nextcloud@{e}" for e in locales["fingerprints"]])
             return 0, f"{drops}|32.0.1\n", ""
         return 1, "", ""
 
@@ -104,8 +104,8 @@ def serveur(tmp_path, monkeypatch):
 def test_up_to_date_then_new_version_single_alert(serveur):
     locales, alerts = serveur
     etat = tool_updates.check_all(now=1, get=Registry({"32": "sha256:ancien"}))
-    assert etat["outils"] == {
-        "nextcloud": {"nom": "Nextcloud", "version": "32.0.1", "a_jour": True, "images": [], "lu": 1}
+    assert etat["tools"] == {
+        "nextcloud": {"name": "Nextcloud", "version": "32.0.1", "up_to_date": True, "images": [], "read": 1}
     }
     assert alerts == []
     tool_updates.check_all(now=2, get=Registry({"32": "sha256:neuf"}))
@@ -113,10 +113,10 @@ def test_up_to_date_then_new_version_single_alert(serveur):
     tool_updates.check_all(now=3, get=Registry({"32": "sha256:neuf"}))
     assert len(alerts) == 1
     tool_updates.forget("nextcloud")
-    assert tool_updates.summary()["outils"]["nextcloud"]["a_jour"] is True
-    locales["empreintes"] = ["sha256:neuf"]
+    assert tool_updates.summary()["tools"]["nextcloud"]["up_to_date"] is True
+    locales["fingerprints"] = ["sha256:neuf"]
     etat = tool_updates.check_all(now=4, get=Registry({"32": "sha256:neuf"}))
-    assert etat["outils"]["nextcloud"]["a_jour"] is True and len(alerts) == 1
+    assert etat["tools"]["nextcloud"]["up_to_date"] is True and len(alerts) == 1
 
 
 def test_unreachable_registry_suggests_nothing(serveur):
@@ -127,4 +127,4 @@ def test_unreachable_registry_suggests_nothing(serveur):
         raise httpx.ConnectError("hors ligne")
 
     etat = tool_updates.check_all(now=1, get=failure)
-    assert etat["outils"]["nextcloud"]["a_jour"] is True and alerts == []
+    assert etat["tools"]["nextcloud"]["up_to_date"] is True and alerts == []

@@ -160,27 +160,27 @@ def app_folder():
     return data if code == 0 and re.fullmatch(r"/[\w./-]+", data) else None
 
 
-CURRENT_UPDATE = {"unite": None, "version": None, "debut": 0, "signale": False}
+CURRENT_UPDATE = {"unit": None, "version": None, "start": 0, "reported": False}
 
 
 def update_state():
     """Où en est la dernière installation lancée : en_cours, echec (avec le détail) ou termine."""
-    if not CURRENT_UPDATE["unite"]:
-        return {"statut": "aucune"}
-    unit_name = CURRENT_UPDATE["unite"] + ".service"
-    _, active, _ = commands.run_action("etat_tache", unite=unit_name)
-    _, log, _ = commands.run_action("journal_tache", unite=unit_name)
+    if not CURRENT_UPDATE["unit"]:
+        return {"status": "aucune"}
+    unit_name = CURRENT_UPDATE["unit"] + ".service"
+    _, active, _ = commands.run_action("etat_tache", unit=unit_name)
+    _, log, _ = commands.run_action("journal_tache", unit=unit_name)
     lines = [line for line in log.splitlines() if line.strip()]
     if active.strip() in ("active", "activating", "reloading"):
         return {
-            "statut": "en_cours",
+            "status": "en_cours",
             "version": CURRENT_UPDATE["version"],
-            "depuis": int(time.time() - CURRENT_UPDATE["debut"]),
+            "since": int(time.time() - CURRENT_UPDATE["start"]),
             **update_progress(lines),
         }
     if any(REFUSAL_MARK in line for line in lines):
-        if not CURRENT_UPDATE["signale"]:
-            CURRENT_UPDATE["signale"] = True
+        if not CURRENT_UPDATE["reported"]:
+            CURRENT_UPDATE["reported"] = True
             notifications.send(
                 "securite",
                 "Mise à jour refusée",
@@ -190,7 +190,7 @@ def update_state():
                 family="appli",
             )
         return {
-            "statut": "echec",
+            "status": "echec",
             "version": CURRENT_UPDATE["version"],
             "detail": [
                 "Signature refusée : cette version n'est pas signée par la clé attendue. Rien n'a été installé, l'appli actuelle continue."
@@ -200,8 +200,8 @@ def update_state():
         detail = [line for line in lines if not line.startswith(("Started ", "jabba-maj-")) and "pam_unix" not in line][
             -6:
         ]
-        if not CURRENT_UPDATE["signale"]:
-            CURRENT_UPDATE["signale"] = True
+        if not CURRENT_UPDATE["reported"]:
+            CURRENT_UPDATE["reported"] = True
             notifications.send(
                 "mises_a_jour",
                 "Mise à jour échouée",
@@ -209,24 +209,24 @@ def update_state():
                 "/#/systeme",
                 family="appli",
             )
-        return {"statut": "echec", "version": CURRENT_UPDATE["version"], "detail": detail}
-    return {"statut": "termine", "version": CURRENT_UPDATE["version"]}
+        return {"status": "echec", "version": CURRENT_UPDATE["version"], "detail": detail}
+    return {"status": "termine", "version": CURRENT_UPDATE["version"]}
 
 
 def update_progress(lines):
     """Étape et pourcentage, lus dans ce que la mise à jour écrit au fur et à mesure."""
     text = "\n".join(lines)
     if re.search(r"Container \S+\s+(Recreate|Starting|Started|Running)", text):
-        return {"etape": "Redémarrage de l'appli", "pourcent": 92}
+        return {"step": "Redémarrage de l'appli", "percent": 92}
     steps = re.findall(r"\[(?:[\w-]+ )?(\d+)/(\d+)\]", text)
     if steps:
         done_steps, total_steps = (int(version) for version in steps[-1])
         return {
-            "etape": f"Construction de l'appli (étape {done_steps} sur {total_steps})",
-            "pourcent": 20 + round(65 * done_steps / max(total_steps, 1)),
+            "step": f"Construction de l'appli (étape {done_steps} sur {total_steps})",
+            "percent": 20 + round(65 * done_steps / max(total_steps, 1)),
         }
     if "Signature valable" in text and not re.search(r"Building|building|load build definition", text):
-        return {"etape": "Signature vérifiée", "pourcent": 15}
+        return {"step": "Signature vérifiée", "percent": 15}
     if re.search(r"Building|building|load build definition|resolve image config", text):
-        return {"etape": "Construction de l'appli", "pourcent": 20}
-    return {"etape": "Téléchargement de la nouvelle version", "pourcent": 8}
+        return {"step": "Construction de l'appli", "percent": 20}
+    return {"step": "Téléchargement de la nouvelle version", "percent": 8}

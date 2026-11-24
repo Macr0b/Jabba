@@ -66,13 +66,11 @@ def adguard(tmp_path, monkeypatch):
 
 def test_first_start_does_the_setup_and_turns_off_global_filtering(adguard):
     adguard.first_start = True
-    assert ad_blocker.devices()["pret"]
+    assert ad_blocker.devices()["ready"]
     chemins = [chemin for chemin, _ in adguard.calls]
     assert chemins.index("/control/install/configure") < chemins.index("/control/filtering/config")
     setting = dict(adguard.calls)["/control/install/configure"]
-    assert (
-        setting["username"] == "admin" and setting["password"] == tool_credentials.read("adguard-home")["mot_de_passe"]
-    )
+    assert setting["username"] == "admin" and setting["password"] == tool_credentials.read("adguard-home")["password"]
     assert setting["dns"]["port"] == 53 and setting["web"]["port"] == 3000
     assert dict(adguard.calls)["/control/filtering/config"]["enabled"] is False  # aucun appareil filtré de base
 
@@ -89,12 +87,12 @@ def test_wizard_done_by_hand_global_filtering_turned_off_once(adguard):
 
 
 def test_device_list(adguard):
-    devices_ = {appareil["ip"]: appareil for appareil in ad_blocker.devices()["appareils"]}
-    assert devices_["100.64.0.2"] == {"ip": "100.64.0.2", "nom": "macbook", "protege": True, "tailscale": True}
+    devices_ = {appareil["ip"]: appareil for appareil in ad_blocker.devices()["devices"]}
+    assert devices_["100.64.0.2"] == {"ip": "100.64.0.2", "name": "macbook", "protected": True, "tailscale": True}
     assert devices_["192.168.1.20"] == {
         "ip": "192.168.1.20",
-        "nom": "iphone-de-rob",
-        "protege": False,
+        "name": "iphone-de-rob",
+        "protected": False,
         "tailscale": False,
     }
     assert "192.168.1.9" not in devices_  # un client réglé à la main dans AdGuard n'est pas celui de Jabba
@@ -121,15 +119,15 @@ def test_address_refused(adguard, adresse):
 def test_password_refused_or_unknown(adguard, tmp_path):
     adguard.password_ok = False
     result = ad_blocker.devices()
-    assert not result["pret"] and "Mot de passe d'AdGuard refusé" in result["message"]
+    assert not result["ready"] and "Mot de passe d'AdGuard refusé" in result["message"]
 
 
 def test_first_start_without_a_kept_password(adguard, tmp_path):
     """Rallumé sans réinstallation (ou installé avant la 0.16.2) : Jabba tire le mot de passe au sort à ce moment-là."""
     (tmp_path / "identifiants.json").unlink()
     adguard.first_start = True
-    assert ad_blocker.devices()["pret"]
-    word = tool_credentials.read("adguard-home")["mot_de_passe"]
+    assert ad_blocker.devices()["ready"]
+    word = tool_credentials.read("adguard-home")["password"]
     assert len(word) == 24 and dict(adguard.calls)["/control/install/configure"]["password"] == word
 
 
@@ -141,7 +139,7 @@ def test_adguard_missing(adguard, monkeypatch):
         ad_blocker, "_client", lambda: httpx.Client(base_url=ad_blocker.ADDRESS, transport=httpx.MockTransport(refused))
     )
     result = ad_blocker.devices()
-    assert not result["pret"] and "ne répond pas" in result["message"]
+    assert not result["ready"] and "ne répond pas" in result["message"]
 
 
 def test_enable_without_typing_anything(tmp_path, monkeypatch):

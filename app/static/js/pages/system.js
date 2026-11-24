@@ -26,45 +26,45 @@ pages.systeme = async () => {
   content.innerHTML = t`<div class="entete"><div><h1>Système</h1></div></div>${loadingHtml()}`;
   const [item, entry] = await Promise.all([api("/api/systeme"), api("/api/admin/etat")]);
   content.innerHTML = t`
-    <div class="entete"><div><h1>Système</h1><p class="sous-titre">${escapeHtml(item.nom)} · ${escapeHtml(item.os)}</p></div>
+    <div class="entete"><div><h1>Système</h1><p class="sous-titre">${escapeHtml(item.name)} · ${escapeHtml(item.os)}</p></div>
       <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a><button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
-    ${item.redemarrage_requis ? `<div class="bandeau"><span>${item.redemarrage && item.redemarrage.mode === "manuel" ? t("Une mise à jour attend un redémarrage. Fais-le quand tu es devant le serveur, avec le bouton : si la machine bloque au démarrage, tu pourras agir.") : t("Une mise à jour attend un redémarrage. Il se fera seul à 4 h, ou maintenant avec le bouton.")}</span></div>` : ""}
+    ${item.redemarrage_requis ? `<div class="bandeau"><span>${item.restart && item.restart.mode === "manuel" ? t("Une mise à jour attend un redémarrage. Fais-le quand tu es devant le serveur, avec le bouton : si la machine bloque au démarrage, tu pourras agir.") : t("Une mise à jour attend un redémarrage. Il se fera seul à 4 h, ou maintenant avec le bouton.")}</span></div>` : ""}
     <div class="grille g2">
       <section class="carte pad"><dl class="cles">
-        <dt>Allumé depuis</dt><dd>${formatDuration(item.duree)}</dd>
-        <dt>Mises à jour auto</dt><dd>${item.derniere_maj_auto ? t("Dernier passage le ") + escapeHtml(item.derniere_maj_auto.replace(" ", " à ")) : t("Pas encore de passage")}</dd>
+        <dt>Allumé depuis</dt><dd>${formatDuration(item.duration)}</dd>
+        <dt>Mises à jour auto</dt><dd>${item.last_auto_update ? t("Dernier passage le ") + escapeHtml(item.last_auto_update.replace(" ", " à ")) : t("Pas encore de passage")}</dd>
         <dt>Système</dt><dd>${escapeHtml(item.os)}</dd>
         <dt>Noyau</dt><dd>${escapeHtml(item.noyau)}</dd>
-        <dt>Appli Jabba</dt><dd>version ${escapeHtml(item.version_appli)}</dd>
-        <dt>Courant</dt><dd>${powerText(item.courant)}</dd>
-        ${item.courant && item.courant.batterie != null ? t`<dt>Consommation</dt><dd>${consumptionText(item.courant, item.conso)}</dd>` : ""}
+        <dt>Appli Jabba</dt><dd>version ${escapeHtml(item.app_version)}</dd>
+        <dt>Courant</dt><dd>${powerText(item.power)}</dd>
+        ${item.power && item.power.battery != null ? t`<dt>Consommation</dt><dd>${consumptionText(item.power, item.consumption)}</dd>` : ""}
       </dl></section>
       <section class="carte pad" id="maj"><h2>Appli Jabba</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Admins de Jabba</a></div>
-        <p class="note" id="connecte-admin">${entry.connecte ? t`Connecté en admin : <strong>${escapeHtml(entry.connecte.identifiant)}</strong> · ${entry.connecte.rang === "super" ? t("super admin") : "admin"}` : t("Pas connecté en admin.")}</p>
+        <p class="note" id="connecte-admin">${entry.connected ? t`Connecté en admin : <strong>${escapeHtml(entry.connected.username)}</strong> · ${entry.connected.rank === "super" ? t("super admin") : "admin"}` : t("Pas connecté en admin.")}</p>
         <p class="note" style="margin:8px 0 14px">Le mot de passe du serveur protège les actions sensibles : activer un outil, mettre à jour, redémarrer, régler ou oublier un disque, supprimer un dossier entier, effacer la corbeille.</p>
-        ${entry.code_existe ? "" : t`<div class="bandeau" style="margin-bottom:12px"><span>Aucun code de secours : crée-le maintenant, il sert si tu oublies le mot de passe.</span></div>`}
-        <div class="actions"><button class="btn" id="changer-mdp">${entry.connecte && entry.connecte.identifiant !== entry.serveur ? t("Changer mon mot de passe") : t("Changer le mot de passe du serveur")}</button>
-        <button class="btn" id="code-secours">${entry.code_existe ? t("Nouveau code de secours") : t("Créer le code de secours")}</button></div>
+        ${entry.code_exists ? "" : t`<div class="bandeau" style="margin-bottom:12px"><span>Aucun code de secours : crée-le maintenant, il sert si tu oublies le mot de passe.</span></div>`}
+        <div class="actions"><button class="btn" id="changer-mdp">${entry.connected && entry.connected.username !== entry.server ? t("Changer mon mot de passe") : t("Changer le mot de passe du serveur")}</button>
+        <button class="btn" id="code-secours">${entry.code_exists ? t("Nouveau code de secours") : t("Créer le code de secours")}</button></div>
       </section>
-      ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="mes-codes"><h2>Mes codes</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
-      ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="demenagement"><h2>Déménager vers un nouvel ordinateur</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
+      ${state.admin && state.admin.rank === "super" ? t`<section class="carte pad" id="mes-codes"><h2>Mes codes</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
+      ${state.admin && state.admin.rank === "super" ? t`<section class="carte pad" id="demenagement"><h2>Déménager vers un nouvel ordinateur</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
       <section class="carte pad" id="apparence"><h2>Apparence</h2></section>
       <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="public"><h2>Serveur ouvert au public</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
-      ${state.admin && state.admin.rang === "super" ? t`<section class="carte pad" id="surveillance"><h2>Si le serveur ne répond plus</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
+      ${state.admin && state.admin.rank === "super" ? t`<section class="carte pad" id="surveillance"><h2>Si le serveur ne répond plus</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
       <section class="carte pad" id="redem"><h2>Redémarrage après une mise à jour</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
         <div class="journal" id="journal-court"><div class="squelette"></div></div></section>
       <section class="carte pad"><h2>Appareils Tailscale</h2>
         <div style="margin-top:10px">${
-          item.appareils
+          item.devices
             .map(
               (
                 item,
-              ) => `<div class="appareil"><span>${escapeHtml(item.nom)} <span class="note">· ${escapeHtml(item.os)}</span></span>
-          <span class="pastille ${item.en_ligne ? "p-ok" : "p-gris"}">${item.en_ligne ? t("En ligne") : t("Hors ligne")}</span></div>`,
+              ) => `<div class="appareil"><span>${escapeHtml(item.name)} <span class="note">· ${escapeHtml(item.os)}</span></span>
+          <span class="pastille ${item.online ? "p-ok" : "p-gris"}">${item.online ? t("En ligne") : t("Hors ligne")}</span></div>`,
             )
             .join("") || t('<p class="note">Aucun autre appareil.</p>')
         }</div>
@@ -115,38 +115,37 @@ pages.systeme = async () => {
     })
     .catch(() => {});
   $("#changer-mdp").onclick = async () => {
-    if (entry.connecte && entry.connecte.identifiant !== entry.serveur) {
+    if (entry.connected && entry.connected.username !== entry.server) {
       await chooseMyPassword(false);
       return;
     }
     const answers = await formBody({
-      titre: t("Changer le mot de passe du serveur"),
-      texte: t("C'est aussi le mot de passe de sudo quand tu te connectes en SSH."),
-      champs: [
-        { nom: "identifiant", cache: true, valeur: state.serverAccount, autocomplete: "username" },
-        { nom: "ancien", type: "password", label: t("Mot de passe actuel"), autocomplete: "current-password" },
+      title: t("Changer le mot de passe du serveur"),
+      text: t("C'est aussi le mot de passe de sudo quand tu te connectes en SSH."),
+      fields: [
+        { name: "username", cache: true, value: state.serverAccount, autocomplete: "username" },
+        { name: "old", type: "password", label: t("Mot de passe actuel"), autocomplete: "current-password" },
         {
-          nom: "nouveau",
+          name: "new",
           type: "password",
           label: t("Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)"),
           autocomplete: "new-password",
         },
         {
-          nom: "confirmation",
+          name: "confirmation",
           type: "password",
           label: t("Nouveau mot de passe, encore une fois"),
           autocomplete: "new-password",
         },
       ],
-      valider: t("Changer"),
+      confirmLabel: t("Changer"),
     });
-    if (!answers || answers === "secondaire") return;
-    if (answers.nouveau !== answers.confirmation)
-      return toast(t("Les deux mots de passe ne sont pas identiques."), true);
+    if (!answers || answers === "secondary") return;
+    if (answers.new !== answers.confirmation) return toast(t("Les deux mots de passe ne sont pas identiques."), true);
     try {
       await api("/api/admin/mot-de-passe", {
         method: "POST",
-        json: { ancien: answers.ancien, nouveau: answers.nouveau },
+        json: { old: answers.old, new: answers.new },
       });
       toast(t("Mot de passe changé : reconnecte-toi"));
       setTimeout(() => location.reload(), 1500);
@@ -156,11 +155,11 @@ pages.systeme = async () => {
   };
   $("#code-secours").onclick = async () => {
     if (
-      entry.code_existe &&
+      entry.code_exists &&
       !(await confirmAction({
-        titre: t("Créer un nouveau code de secours ?"),
-        texte: t("L'ancien code ne marchera plus."),
-        valider: t("Créer"),
+        title: t("Créer un nouveau code de secours ?"),
+        text: t("L'ancien code ne marchera plus."),
+        confirmLabel: t("Créer"),
       }))
     )
       return;
@@ -175,9 +174,9 @@ pages.systeme = async () => {
   $("#reboot").onclick = async () => {
     if (
       !(await confirmAction({
-        titre: t("Redémarrer le serveur ?"),
-        texte: t("Tous les outils seront coupés environ 1 minute."),
-        valider: t("Redémarrer"),
+        title: t("Redémarrer le serveur ?"),
+        text: t("Tous les outils seront coupés environ 1 minute."),
+        confirmLabel: t("Redémarrer"),
         danger: true,
       }))
     )
@@ -207,7 +206,7 @@ pages.plus = async () => {
     </section><p class="note" id="qui-mobile"></p>`;
   if (state.me && state.me.admin)
     $("#qui-mobile").textContent =
-      t`Connecté en ${state.me.admin.rang === "super" ? t("super admin") : "admin"} : ${state.me.admin.identifiant} · version ${state.me.version}`;
+      t`Connecté en ${state.me.admin.rank === "super" ? t("super admin") : "admin"} : ${state.me.admin.username} · version ${state.me.version}`;
   $("#sortir-mobile").onclick = (event) => {
     event.preventDefault();
     logOut();
@@ -217,47 +216,47 @@ pages.plus = async () => {
 // Redémarrage après une mise à jour du système : seul à 4 h, ou à la main (machine capricieuse au démarrage).
 // Ligne « Courant » : secteur ou batterie, et la batterie du portable ou de l'onduleur.
 function powerText(power) {
-  if (!power || power.secteur == null) return t("Pas encore mesuré");
+  if (!power || power.mains == null) return t("Pas encore mesuré");
   const onUps = power.source === "onduleur";
-  const where = power.secteur
+  const where = power.mains
     ? t("Sur secteur")
     : onUps
       ? t`<strong style="color:var(--rouge)">Sur l'onduleur</strong>`
       : t`<strong style="color:var(--rouge)">Sur batterie</strong>`;
-  if (power.batterie == null) return where;
-  return where + (onUps ? t` · onduleur ${power.batterie} %` : t` · batterie ${power.batterie} %`);
+  if (power.battery == null) return where;
+  return where + (onUps ? t` · onduleur ${power.battery} %` : t` · batterie ${power.battery} %`);
 }
 
 // Ligne « Consommation » : l'onduleur la mesure tout le temps ; la batterie du portable, seulement sur batterie.
 function consumptionText(power, consumption) {
   const onUps = power.source === "onduleur";
-  if (!consumption || !consumption.derniere)
+  if (!consumption || !consumption.latest)
     return onUps
       ? t`<span class="note">Pas encore mesurée.</span>`
       : t`<span class="note">Se mesure sur batterie : débranche le chargeur 2 minutes pour la voir.</span>`;
   const when =
-    onUps || !power.secteur
+    onUps || !power.mains
       ? t("en ce moment")
-      : t("dernière mesure sur batterie, ") + escapeHtml(timeAgo(consumption.derniere.t));
-  const lowest = consumption.repos
-    ? t`<br><span class="note">Au plus bas : ${String(consumption.repos.w).replace(".", ",")} W, au repos</span>`
+      : t("dernière mesure sur batterie, ") + escapeHtml(timeAgo(consumption.latest.t));
+  const lowest = consumption.idle
+    ? t`<br><span class="note">Au plus bas : ${String(consumption.idle.w).replace(".", ",")} W, au repos</span>`
     : "";
   const box = onUps
     ? t`<br><span class="note">Mesurée par l'onduleur : tout ce qui y est branché (la box aussi).</span>`
     : "";
-  return `${String(consumption.derniere.w).replace(".", ",")} W <span class="note">(${when})</span>${lowest}${box}`;
+  return `${String(consumption.latest.w).replace(".", ",")} W <span class="note">(${when})</span>${lowest}${box}`;
 }
 
 async function restartPolicyCard() {
   const element = $("#redem");
   if (!element) return;
   const data = await api("/api/systeme/redemarrage");
-  const superAdmin = state.admin && state.admin.rang === "super";
+  const superAdmin = state.admin && state.admin.rank === "super";
   const automatic = data.mode === "auto";
   element.innerHTML = t`<h2>Redémarrage après une mise à jour</h2>
     <p class="note" style="margin:8px 0">Certaines mises à jour du système ne prennent effet qu'au redémarrage. Le serveur peut le faire seul la nuit, ou te laisser le faire quand tu es devant : conseillé si la machine a déjà bloqué au démarrage.</p>
     <p style="margin:10px 0"><span class="pastille ${automatic ? "p-ok" : "p-gris"}">${automatic ? t("Seul, à 4 h") : t("À la main")}</span>
-      <span class="note">${automatic ? t("Le serveur redémarre seul à 4 h quand une mise à jour le demande.") : t("Jabba te prévient ; tu redémarres avec le bouton « Redémarrer le serveur ».")}${data.choisi ? "" : t(" (réglage d'origine, pas encore choisi)")}</span></p>
+      <span class="note">${automatic ? t("Le serveur redémarre seul à 4 h quand une mise à jour le demande.") : t("Jabba te prévient ; tu redémarres avec le bouton « Redémarrer le serveur ».")}${data.chosen ? "" : t(" (réglage d'origine, pas encore choisi)")}</span></p>
     ${superAdmin ? `<div class="actions"><button class="btn" id="redem-changer">${automatic ? t("Passer à la main") : t("Redémarrer seul à 4 h")}</button></div>` : ""}`;
   const button = $("#redem-changer");
   if (button)
@@ -266,18 +265,18 @@ async function restartPolicyCard() {
       const ok = await confirmAction(
         to === "auto"
           ? {
-              titre: t("Redémarrer seul à 4 h ?"),
-              texte: t(
+              title: t("Redémarrer seul à 4 h ?"),
+              text: t(
                 "Quand une mise à jour le demande, le serveur redémarrera seul à 4 h du matin. À éviter si la machine a déjà bloqué au démarrage : personne ne serait là pour la relancer.",
               ),
-              valider: t("Redémarrer seul"),
+              confirmLabel: t("Redémarrer seul"),
             }
           : {
-              titre: t("Redémarrer à la main ?"),
-              texte: t(
+              title: t("Redémarrer à la main ?"),
+              text: t(
                 "Le serveur ne redémarrera plus seul. Jabba te préviendra quand une mise à jour attend : redémarre alors quand tu es devant. Les correctifs déjà installés restent actifs, sauf ceux du noyau qui attendent le redémarrage.",
               ),
-              valider: t("À la main"),
+              confirmLabel: t("À la main"),
             },
       );
       if (!ok) return;
@@ -297,16 +296,16 @@ async function appUpdateCard(check = false) {
   if (!element) return;
   const data = await api("/api/appli/maj" + (check ? "?verifier=1" : ""));
   let body;
-  if (!data.depot)
+  if (!data.repository)
     body = t`<p class="note">Pas encore reliée à GitHub : les mises à jour se feront ici en un clic une fois le dépôt réglé.</p>`;
-  else if (!data.pret)
-    body = t`<p class="note">Le dépôt est réglé (${escapeHtml(data.depot)}), mais le dossier de l'appli sur le serveur n'est pas encore relié à GitHub.</p>`;
-  else if (data.disponible)
-    body = t`<div class="bandeau" style="margin-bottom:10px"><span><strong>Version ${escapeHtml(data.derniere.version)} disponible</strong> (tu as la ${escapeHtml(data.actuelle)}).</span></div>
-      ${data.derniere.notes ? `<pre class="notes-version">${escapeHtml(data.derniere.notes)}</pre>` : ""}
-      <div class="actions"><button class="btn btn-p" id="installer">Installer la ${escapeHtml(data.derniere.version)}</button></div>`;
+  else if (!data.ready)
+    body = t`<p class="note">Le dépôt est réglé (${escapeHtml(data.repository)}), mais le dossier de l'appli sur le serveur n'est pas encore relié à GitHub.</p>`;
+  else if (data.available)
+    body = t`<div class="bandeau" style="margin-bottom:10px"><span><strong>Version ${escapeHtml(data.latest.version)} disponible</strong> (tu as la ${escapeHtml(data.current)}).</span></div>
+      ${data.latest.notes ? `<pre class="notes-version">${escapeHtml(data.latest.notes)}</pre>` : ""}
+      <div class="actions"><button class="btn btn-p" id="installer">Installer la ${escapeHtml(data.latest.version)}</button></div>`;
   else
-    body = t`<p class="note" style="margin-bottom:10px">À jour : version ${escapeHtml(data.actuelle)}${data.derniere ? "" : t(" (GitHub n'a pas répondu)")}.</p><div class="actions"><button class="btn" id="verifier">Vérifier maintenant</button></div>`;
+    body = t`<p class="note" style="margin-bottom:10px">À jour : version ${escapeHtml(data.current)}${data.latest ? "" : t(" (GitHub n'a pas répondu)")}.</p><div class="actions"><button class="btn" id="verifier">Vérifier maintenant</button></div>`;
   element.innerHTML = t`<h2>Appli Jabba</h2><div style="margin-top:8px">${body}</div>
     <details class="historique"><summary>Historique des versions</summary><div id="versions"><div class="squelette"></div></div></details>`;
   const details = element.querySelector(".historique");
@@ -319,8 +318,8 @@ async function appUpdateCard(check = false) {
         versions
           .map(
             (item) => t`<div class="version">
-        <div class="entete-version"><strong>Version ${escapeHtml(item.version)}</strong>${item.version === data.actuelle ? t(' <span class="pastille p-ok">Installée</span>') : ""}<span class="note">${escapeHtml(new Date(item.date + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}</span></div>
-        <ul>${item.changements.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`,
+        <div class="entete-version"><strong>Version ${escapeHtml(item.version)}</strong>${item.version === data.current ? t(' <span class="pastille p-ok">Installée</span>') : ""}<span class="note">${escapeHtml(new Date(item.date + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}</span></div>
+        <ul>${item.changes.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`,
           )
           .join("") || t('<p class="note">Pas d\'historique.</p>');
     } catch (error) {
@@ -338,11 +337,11 @@ async function appUpdateCard(check = false) {
     installButton.onclick = async () => {
       if (
         !(await confirmAction({
-          titre: t`Installer la version ${data.derniere.version} ?`,
-          texte: t(
+          title: t`Installer la version ${data.latest.version} ?`,
+          text: t(
             "L'appli se coupe 1 à 3 minutes pendant l'installation, puis se recharge toute seule. Les outils, tes fichiers et tes réglages ne sont pas touchés.",
           ),
-          valider: t("Installer"),
+          confirmLabel: t("Installer"),
         }))
       )
         return;
@@ -350,7 +349,7 @@ async function appUpdateCard(check = false) {
         await api("/api/appli/maj", { method: "POST" });
         const start = Date.now();
         element.innerHTML = t`<h2>Appli Jabba</h2>
-        <p style="margin:8px 0 6px"><strong>Installation de la ${escapeHtml(data.derniere.version)}</strong></p>
+        <p style="margin:8px 0 6px"><strong>Installation de la ${escapeHtml(data.latest.version)}</strong></p>
         <div class="barre-maj" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="3"><span style="width:3%"></span></div>
         <p class="note" id="maj-etape">Préparation…</p>`;
         let percent = 3;
@@ -367,7 +366,7 @@ async function appUpdateCard(check = false) {
           await new Promise((result) => setTimeout(result, 3000));
           try {
             const result = await api("/api/moi");
-            if (result.version === data.derniere.version) {
+            if (result.version === data.latest.version) {
               render(t("Installée ! Rechargement…"), 100);
               percent = 100;
               element.querySelector(".barre-maj span").style.width = "100%";
@@ -375,7 +374,7 @@ async function appUpdateCard(check = false) {
               return;
             }
             const info = await api("/api/appli/maj/etat");
-            if (info.statut === "echec") {
+            if (info.status === "echec") {
               element.innerHTML = t`<h2>Appli Jabba</h2>
               <div class="erreur" style="margin-top:8px"><strong>La version ${escapeHtml(info.version)} ne s'est pas installée.</strong> Ta version actuelle continue de fonctionner normalement.</div>
               ${info.detail && info.detail.length ? `<pre class="notes-version">${escapeHtml(info.detail.join("\n"))}</pre>` : ""}
@@ -385,8 +384,8 @@ async function appUpdateCard(check = false) {
             }
             const minutes = Math.floor((Date.now() - start) / 60000);
             render(
-              t`${info.etape || t("Installation en cours")}${minutes ? ` · ${minutes} min` : ""} — jusqu'à 10 minutes sur un petit serveur. Ne ferme pas cette page.`,
-              info.pourcent,
+              t`${info.step || t("Installation en cours")}${minutes ? ` · ${minutes} min` : ""} — jusqu'à 10 minutes sur un petit serveur. Ne ferme pas cette page.`,
+              info.percent,
             );
           } catch (_) {
             render(t("Redémarrage de l'appli…"), 94);

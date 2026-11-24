@@ -12,7 +12,7 @@ import { t } from "./i18n.js";
 // ------------------------------------------------------------ navigation
 state.me = null;
 export function showError(entry) {
-  if (entry && entry.injoignable) return showUnreachable(entry.injoignable);
+  if (entry && entry.unreachable) return showUnreachable(entry.unreachable);
   content.innerHTML = t`<div class="entete"><div><h1>Oups</h1></div></div>${errorHtml(entry)}`;
 }
 

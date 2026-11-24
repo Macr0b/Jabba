@@ -1,11 +1,13 @@
 """Mises à jour : rien ne s'installe sans une signature faite avec la clé attendue (revue, point 5)."""
 
+import json
 import os
 import subprocess
 
 import pytest
 from conftest import needs_root, outil
 
+import version
 from services import app_update
 
 pytestmark = [outil("git"), outil("ssh-keygen")]
@@ -50,7 +52,7 @@ def drops(tmp_path):
     (bin_dir / "docker").write_text(f'#!/bin/sh\necho "$@" >> {tmp_path}/docker.log\n')
     os.chmod(bin_dir / "docker", 0o755)
     return {
-        "origine": origin,
+        "origin": origin,
         "install": install,
         "sha": sha,
         "bonne": right,
@@ -65,13 +67,13 @@ def drops(tmp_path):
 def publish(d, tag, signature=None, over=None, line=None):
     """Publie `tag` : l'étiquette, et sur main le fichier signatures/<tag>.sig (ligne signée + signature)."""
     over = over or d["sha"]
-    sh(*d["git"], "tag", "-f", tag, over, cwd=d["origine"])
+    sh(*d["git"], "tag", "-f", tag, over, cwd=d["origin"])
     if signature is not None:
-        dossier = d["origine"] / "signatures"
+        dossier = d["origin"] / "signatures"
         dossier.mkdir(exist_ok=True)
         (dossier / f"{tag}.sig").write_text((line or app_update.signed_text(tag, over)) + "\n" + signature + "\n")
-        sh(*d["git"], "add", ".", cwd=d["origine"])
-        sh(*d["git"], "commit", "-qm", f"Signature {tag}", cwd=d["origine"])
+        sh(*d["git"], "add", ".", cwd=d["origin"])
+        sh(*d["git"], "commit", "-qm", f"Signature {tag}", cwd=d["origin"])
 
 
 def install_tool(d, tag):
@@ -115,9 +117,9 @@ def test_modified_signed_line_refused(drops):
     """Un pirate garde la vraie signature, mais change le commit dans la ligne : la signature ne colle plus."""
     d = drops
     signature = sign_with(d["bonne"], "v2.0.0", d["sha"])
-    (d["origine"] / "app.txt").write_text("piège\n")
-    sh(*d["git"], "commit", "-qam", "piège", cwd=d["origine"])
-    trap = sh("git", "rev-parse", "HEAD", cwd=d["origine"])
+    (d["origin"] / "app.txt").write_text("piège\n")
+    sh(*d["git"], "commit", "-qam", "piège", cwd=d["origin"])
+    trap = sh("git", "rev-parse", "HEAD", cwd=d["origin"])
     publish(d, "v2.0.0", signature, trap)
     r, content, rebuilt = install_tool(d, "v2.0.0")
     assert r.returncode != 0 and app_update.REFUSAL_MARK in r.stdout
@@ -129,11 +131,11 @@ def test_moved_tag_has_no_effect(drops):
     """L'étiquette pointe sur un autre code : on installe quand même exactement le commit signé."""
     d = drops
     signature = sign_with(d["bonne"], "v2.0.0", d["sha"])
-    (d["origine"] / "app.txt").write_text("piège\n")
-    sh(*d["git"], "commit", "-qam", "piège", cwd=d["origine"])
-    trap = sh("git", "rev-parse", "HEAD", cwd=d["origine"])
+    (d["origin"] / "app.txt").write_text("piège\n")
+    sh(*d["git"], "commit", "-qam", "piège", cwd=d["origin"])
+    trap = sh("git", "rev-parse", "HEAD", cwd=d["origin"])
     publish(d, "v2.0.0", signature)  # fichier signé : le bon commit
-    sh(*d["git"], "tag", "-f", "v2.0.0", trap, cwd=d["origine"])
+    sh(*d["git"], "tag", "-f", "v2.0.0", trap, cwd=d["origin"])
     r, content, _ = install_tool(d, "v2.0.0")
     assert r.returncode == 0, r.stdout + r.stderr
     assert content == "v2"
@@ -200,3 +202,11 @@ def test_versions():
     assert app_update.is_newer("0.9.0", "0.10.0")
     assert not app_update.is_newer("0.10.0", "0.9.9")
     assert not app_update.is_newer("0.10.0", "pas-une-version")
+
+
+def test_version_journal_matches_the_screen():
+    """Le journal des versions (Système) lit « version », « date » et « changes » ; la publication aussi."""
+    with open(os.path.join(os.path.dirname(__file__), "..", "app", "versions.json")) as file:
+        entries = json.load(file)
+    assert all(set(entry) == {"version", "date", "changes"} and entry["changes"] for entry in entries)
+    assert entries[0]["version"] == version.VERSION

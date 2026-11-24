@@ -542,7 +542,7 @@ fi
 # La clé Tailscale donnée à l'étape 7, pour l'appli (lisible par elle seule).
 if [ -n "$CLE_API" ]; then
   mkdir -p donnees
-  (umask 077 && printf '{"cle": "%s"}\n' "$CLE_API" > "$CLE_API_FICHIER")
+  (umask 077 && printf '{"key": "%s"}\n' "$CLE_API" > "$CLE_API_FICHIER")
   unset CLE_API
 fi
 # Anciennes installations : le lien de Dockge passait par le Wi-Fi.

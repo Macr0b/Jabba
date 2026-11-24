@@ -19,7 +19,7 @@ def _server_name(args):
 
 
 def _disk_space(args):
-    paths = args.get("chemins") or []
+    paths = args.get("paths") or []
     if not isinstance(paths, list) or not 0 < len(paths) <= 32:
         raise ActionError("Liste de disques refusée")
     return ["df", "-B1", "--output=target,size,used", *[df_path(path) for path in paths]], 30
@@ -31,13 +31,13 @@ def _smartctl_installed(args):
 
 def _disk_health(args):
     command = ["smartctl", "-j", "-H", "-A", "-n", "standby"]
-    if args.get("pont_sat"):
+    if args.get("sat_bridge"):
         command += ["-d", "sat"]
-    return command + [device(args.get("appareil"))], 60
+    return command + [device(args.get("device"))], 60
 
 
 def _is_mounted(args):
-    return ["mountpoint", "-q", folder_path(args.get("chemin"))], 10
+    return ["mountpoint", "-q", folder_path(args.get("path"))], 10
 
 
 def _read_fstab(args):
@@ -46,7 +46,7 @@ def _read_fstab(args):
 
 def _eject(args):
     # Le chemin est passé comme argument du shell ($1), jamais collé dans le texte de la commande.
-    return ["sh", "-c", 'sync && umount "$1"', "ejecter", folder_path(args.get("chemin"))], 120
+    return ["sh", "-c", 'sync && umount "$1"', "ejecter", folder_path(args.get("path"))], 120
 
 
 def _partitions(args):
@@ -72,11 +72,11 @@ def _enable_trim(args):
 
 
 def _measure_fragmentation(args):
-    return ["e4defrag", "-c", folder_path(args.get("chemin"))], 3600
+    return ["e4defrag", "-c", folder_path(args.get("path"))], 3600
 
 
 def _defragment(args):
-    return ["e4defrag", folder_path(args.get("chemin"))], 6 * 3600
+    return ["e4defrag", folder_path(args.get("path"))], 6 * 3600
 
 
 # ---------------------------------------------------------------- disques : ajout, réglage, oubli
@@ -148,36 +148,36 @@ def _disk_present(args):
 
 
 def _wake_disk(args):
-    return ["ls", folder_path(args.get("chemin"))], 10
+    return ["ls", folder_path(args.get("path"))], 10
 
 
 def _rearm_disk(args):
-    return ["sh", "-c", script("rearm_disk"), "rearmer", folder_path(args.get("chemin"))], 30
+    return ["sh", "-c", script("rearm_disk"), "rearmer", folder_path(args.get("path"))], 30
 
 
 def _declare_disk(args):
     disk_format = args.get("format")
     if disk_format not in DISK_FORMATS:
         raise ActionError(f"Format refusé : {disk_format!r}")
-    path = _auto_disk_path(f"{AUTO_DISKS_ROOT}/{args.get('dossier')}")
+    path = _auto_disk_path(f"{AUTO_DISKS_ROOT}/{args.get('folder')}")
     line = fstab_line(_uuid(args.get("uuid")), disk_format, path)
-    comment = comment_line(_disk_name(args.get("nom")))
+    comment = comment_line(_disk_name(args.get("name")))
     return ["sh", "-c", script("declare_disk"), "declarer", path, comment, line], 30
 
 
 def _disk_mode(args):
-    path = folder_path(args.get("chemin"))
+    path = folder_path(args.get("path"))
     if path == "/srv/data":
         raise ActionError("Le disque de données reste en écriture.")
-    mode = "rw" if args.get("ecriture") is True else "ro"
+    mode = "rw" if args.get("writable") is True else "ro"
     # Les droits partagés sont remis à chaque réglage : un disque déclaré avant la 0.15.1 (gid=1000)
     # devient inscriptible par Nextcloud la prochaine fois qu'on le règle.
     return ["sh", "-c", script("disk_mode"), "mode", path, mode, SHARED_RIGHTS], 30
 
 
 def _forget_disk(args):
-    path = _auto_disk_path(args.get("chemin"))
-    return ["sh", "-c", script("forget_disk"), "oublier", path, comment_line(_disk_name(args.get("nom")))], 60
+    path = _auto_disk_path(args.get("path"))
+    return ["sh", "-c", script("forget_disk"), "oublier", path, comment_line(_disk_name(args.get("name")))], 60
 
 
 def _install_smartmontools(args):

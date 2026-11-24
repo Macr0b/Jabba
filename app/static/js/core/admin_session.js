@@ -30,9 +30,9 @@ const saveIdentifier = (index) => {
 function rememberLogin(result) {
   const previous = state.admin;
   state.admin = {
-    identifiant: result.identifiant,
-    rang: result.rang,
-    compte_serveur: result.identifiant === state.serverAccount,
+    username: result.username,
+    rank: result.rank,
+    compte_serveur: result.username === state.serverAccount,
   };
   // On passait du mode invité au mode admin : on recharge l'interface complète.
   if (!previous && state.me && state.me.mode === "invite" && !result.changer) setTimeout(() => location.reload(), 300);
@@ -41,22 +41,22 @@ function rememberLogin(result) {
 // Redemander le mot de passe avant une action sensible (déjà connecté).
 export async function confirmPassword() {
   const answers = await formBody({
-    titre: t("Confirme ton mot de passe"),
-    texte: t("Cette action est sensible : ton mot de passe est redemandé (valable ensuite 10 minutes)."),
-    champs: [
+    title: t("Confirme ton mot de passe"),
+    text: t("Cette action est sensible : ton mot de passe est redemandé (valable ensuite 10 minutes)."),
+    fields: [
       {
-        nom: "identifiant",
+        name: "username",
         cache: true,
-        valeur: (state.admin && state.admin.identifiant) || readSavedIdentifier(),
+        value: (state.admin && state.admin.username) || readSavedIdentifier(),
         autocomplete: "username",
       },
-      { nom: "mdp", type: "password", label: t("Mot de passe"), autocomplete: "current-password" },
+      { name: "password", type: "password", label: t("Mot de passe"), autocomplete: "current-password" },
     ],
-    valider: t("Confirmer"),
+    confirmLabel: t("Confirmer"),
   });
-  if (!answers || answers === "secondaire") return false;
+  if (!answers || answers === "secondary") return false;
   try {
-    await api("/api/admin/confirmer", { method: "POST", json: { mot_de_passe: answers.mdp } }, true);
+    await api("/api/admin/confirmer", { method: "POST", json: { password: answers.password } }, true);
     return true;
   } catch (error) {
     toast(error.message, true);
@@ -78,29 +78,29 @@ export async function adminLogin() {
   let identifier = readSavedIdentifier();
   for (let attempt = 0; attempt < 3; attempt++) {
     const answers = await formBody({
-      titre: t("Connexion admin"),
-      texte: t`Identifiant « ${state.serverAccount} » = compte du serveur, avec son mot de passe. La connexion reste mémorisée 30 jours sur cet appareil.`,
-      champs: [
-        { nom: "identifiant", label: t("Identifiant"), valeur: identifier, autocomplete: "username" },
-        { nom: "mdp", type: "password", label: t("Mot de passe"), autocomplete: "current-password" },
+      title: t("Connexion admin"),
+      text: t`Identifiant « ${state.serverAccount} » = compte du serveur, avec son mot de passe. La connexion reste mémorisée 30 jours sur cet appareil.`,
+      fields: [
+        { name: "username", label: t("Identifiant"), value: identifier, autocomplete: "username" },
+        { name: "password", type: "password", label: t("Mot de passe"), autocomplete: "current-password" },
       ],
-      valider: t("Continuer"),
-      secondaire: t("Mot de passe oublié ?"),
+      confirmLabel: t("Continuer"),
+      secondary: t("Mot de passe oublié ?"),
     });
     if (answers === null) return false;
-    if (answers === "secondaire") {
+    if (answers === "secondary") {
       await forgottenPassword(identifier);
       continue;
     }
-    identifier = answers.identifiant.trim().toLowerCase();
+    identifier = answers.username.trim().toLowerCase();
     try {
       const data = await api(
         "/api/admin/connexion",
-        { method: "POST", json: { identifiant: identifier, mot_de_passe: answers.mdp } },
+        { method: "POST", json: { username: identifier, password: answers.password } },
         true,
       );
       saveIdentifier(identifier);
-      if (data.etape) {
+      if (data.step) {
         // Double vérification : Face ID, appli d'authentification ou code de secours.
         const opened = await secondLoginStep(data);
         if (!opened) return false;
@@ -121,41 +121,41 @@ export async function adminLogin() {
 // Un admin (compte de l'appli) choisit son mot de passe : obligatoire après un mot de passe provisoire.
 export async function chooseMyPassword(force = false) {
   const answers = await formBody({
-    titre: force ? t("Choisis ton mot de passe") : t("Changer mon mot de passe"),
-    texte: force
+    title: force ? t("Choisis ton mot de passe") : t("Changer mon mot de passe"),
+    text: force
       ? t(
           "Ton mot de passe actuel est provisoire. Choisis le tien (15 caractères minimum, une phrase de quelques mots convient) : l'app Mots de passe proposera de l'enregistrer.",
         )
       : "",
-    champs: [
+    fields: [
       {
-        nom: "identifiant",
+        name: "username",
         cache: true,
-        valeur: (state.admin && state.admin.identifiant) || readSavedIdentifier(),
+        value: (state.admin && state.admin.username) || readSavedIdentifier(),
         autocomplete: "username",
       },
       ...(force
         ? []
-        : [{ nom: "ancien", type: "password", label: t("Mot de passe actuel"), autocomplete: "current-password" }]),
-      { nom: "nouveau", type: "password", label: t("Nouveau mot de passe"), autocomplete: "new-password" },
+        : [{ name: "old", type: "password", label: t("Mot de passe actuel"), autocomplete: "current-password" }]),
+      { name: "new", type: "password", label: t("Nouveau mot de passe"), autocomplete: "new-password" },
       {
-        nom: "confirmation",
+        name: "confirmation",
         type: "password",
         label: t("Nouveau mot de passe, encore une fois"),
         autocomplete: "new-password",
       },
     ],
-    valider: t("Enregistrer"),
+    confirmLabel: t("Enregistrer"),
   });
-  if (!answers || answers === "secondaire") return false;
-  if (answers.nouveau !== answers.confirmation) {
+  if (!answers || answers === "secondary") return false;
+  if (answers.new !== answers.confirmation) {
     toast(t("Les deux mots de passe ne sont pas identiques."), true);
     return chooseMyPassword(force);
   }
   try {
     const data = await api(
       "/api/comptes-moi/mot-de-passe",
-      { method: "POST", json: { ancien: answers.ancien || "", nouveau: answers.nouveau } },
+      { method: "POST", json: { old: answers.old || "", new: answers.new } },
       true,
     );
     rememberLogin(data);
@@ -169,21 +169,21 @@ export async function chooseMyPassword(force = false) {
 
 async function forgottenPassword(identifier) {
   const answers = await formBody({
-    titre: t("Mot de passe oublié"),
-    texte: t`Pour le compte du serveur (« ${state.serverAccount} »), tu utiliseras ton code de secours. Pour un autre compte, la demande part chez le super admin.`,
-    champs: [{ nom: "identifiant", label: t("Ton identifiant"), valeur: identifier, autocomplete: "username" }],
-    valider: t("Continuer"),
+    title: t("Mot de passe oublié"),
+    text: t`Pour le compte du serveur (« ${state.serverAccount} »), tu utiliseras ton code de secours. Pour un autre compte, la demande part chez le super admin.`,
+    fields: [{ name: "username", label: t("Ton identifiant"), value: identifier, autocomplete: "username" }],
+    confirmLabel: t("Continuer"),
   });
-  if (!answers || answers === "secondaire") return;
+  if (!answers || answers === "secondary") return;
   try {
-    const data = await api("/api/comptes-oubli", { method: "POST", json: { identifiant: answers.identifiant } }, true);
-    if (data.serveur) return recoverPassword();
+    const data = await api("/api/comptes-oubli", { method: "POST", json: { username: answers.username } }, true);
+    if (data.server) return recoverPassword();
     await confirmAction({
-      titre: t("Demande envoyée"),
-      texte: t(
+      title: t("Demande envoyée"),
+      text: t(
         "Si cet identifiant existe et qu'il est relié à ton compte Tailscale, le super admin est prévenu. Dès qu'il accepte, tu reçois une alerte et ton mot de passe provisoire s'affiche ici, sur cet appareil. Sinon, rien n'est envoyé : demande directement à un super admin de te recréer un compte.",
       ),
-      valider: "OK",
+      confirmLabel: "OK",
     });
   } catch (error) {
     toast(error.message, true);
@@ -200,22 +200,22 @@ export async function showPasswordReset() {
   }
   await new Promise((resolve) => {
     dialogForm.innerHTML = t`<h2>Ton mot de passe provisoire</h2>
-      <p>Identifiant : <strong>${escapeHtml(result.identifiant)}</strong>. Ce mot de passe ne sera <strong>plus affiché</strong> : il sert une fois, dans les 24 h, puis tu choisis le tien.</p>
-      <p class="code-secours">${escapeHtml(result.mot_de_passe)}</p>
+      <p>Identifiant : <strong>${escapeHtml(result.username)}</strong>. Ce mot de passe ne sera <strong>plus affiché</strong> : il sert une fois, dans les 24 h, puis tu choisis le tien.</p>
+      <p class="code-secours">${escapeHtml(result.password)}</p>
       <div class="actions"><button class="btn" type="button" id="copier-code">Copier</button><button class="btn btn-p" value="ok" type="submit">Me connecter</button></div>`;
     dialogElement.onclose = () => resolve();
     dialogElement.returnValue = "";
     dialogElement.showModal();
     $("#copier-code").onclick = async () => {
       try {
-        await navigator.clipboard.writeText(result.mot_de_passe);
+        await navigator.clipboard.writeText(result.password);
         toast(t("Copié"));
       } catch (_) {
         toast(t("Copie impossible : sélectionne-le à la main."), true);
       }
     };
   });
-  saveIdentifier(result.identifiant);
+  saveIdentifier(result.username);
   await adminLogin();
 }
 
@@ -240,32 +240,32 @@ export async function showRecoveryCode(code) {
 
 async function recoverPassword() {
   const answers = await formBody({
-    titre: t("Mot de passe oublié"),
-    texte: t("Tape ton code de secours (les 6 mots), puis choisis un nouveau mot de passe pour le serveur."),
-    champs: [
-      { nom: "code", label: t("Code de secours") },
-      { nom: "identifiant", cache: true, valeur: state.serverAccount, autocomplete: "username" },
+    title: t("Mot de passe oublié"),
+    text: t("Tape ton code de secours (les 6 mots), puis choisis un nouveau mot de passe pour le serveur."),
+    fields: [
+      { name: "code", label: t("Code de secours") },
+      { name: "username", cache: true, value: state.serverAccount, autocomplete: "username" },
       {
-        nom: "nouveau",
+        name: "new",
         type: "password",
         label: t("Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)"),
         autocomplete: "new-password",
       },
       {
-        nom: "confirmation",
+        name: "confirmation",
         type: "password",
         label: t("Nouveau mot de passe, encore une fois"),
         autocomplete: "new-password",
       },
     ],
-    valider: t("Changer le mot de passe"),
+    confirmLabel: t("Changer le mot de passe"),
   });
-  if (!answers || answers === "secondaire") return;
-  if (answers.nouveau !== answers.confirmation) return toast(t("Les deux mots de passe ne sont pas identiques."), true);
+  if (!answers || answers === "secondary") return;
+  if (answers.new !== answers.confirmation) return toast(t("Les deux mots de passe ne sont pas identiques."), true);
   try {
     const result = await api(
       "/api/admin/secours",
-      { method: "POST", json: { code: answers.code, nouveau: answers.nouveau } },
+      { method: "POST", json: { code: answers.code, new: answers.new } },
       true,
     );
     toast(t("Mot de passe changé"));

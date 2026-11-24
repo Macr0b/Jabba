@@ -37,18 +37,18 @@ decorateNavigation();
 (async () => {
   try {
     state.me = await api("/api/moi");
-    if (state.me.serveur) state.serverAccount = state.me.serveur.toLowerCase();
-    if (state.me.admin && !state.me.admin.provisoire)
+    if (state.me.server) state.serverAccount = state.me.server.toLowerCase();
+    if (state.me.admin && !state.me.admin.temporary)
       state.admin = {
-        identifiant: state.me.admin.identifiant,
-        rang: state.me.admin.rang,
-        compte_serveur: state.me.admin.identifiant === state.serverAccount,
+        username: state.me.admin.username,
+        rank: state.me.admin.rank,
+        compte_serveur: state.me.admin.username === state.serverAccount,
       };
     document.body.classList.toggle("mode-invite", state.me.mode === "invite");
     $("#qui").innerHTML =
       state.me.mode === "invite"
         ? t`Mode invité · v${escapeHtml(state.me.version)}`
-        : t`${escapeHtml(state.me.admin.identifiant)} · ${state.me.admin.rang === "super" ? t("super admin") : "admin"}<br>v${escapeHtml(state.me.version)} · <a href="#" id="sortir">Se déconnecter</a>`;
+        : t`${escapeHtml(state.me.admin.username)} · ${state.me.admin.rank === "super" ? t("super admin") : "admin"}<br>v${escapeHtml(state.me.version)} · <a href="#" id="sortir">Se déconnecter</a>`;
     const logoutLink = $("#sortir");
     if (logoutLink)
       logoutLink.onclick = (event) => {
@@ -65,8 +65,8 @@ decorateNavigation();
         toast(error.message, true);
       }
     }
-    rememberedServer.ecrire("jabba-serveur", state.me.serveur || "");
-    rememberedServer.ecrire("jabba-dernier-contact", String(Date.now()));
+    rememberedServer.write("jabba-serveur", state.me.server || "");
+    rememberedServer.write("jabba-dernier-contact", String(Date.now()));
   } catch (error) {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
     if (location.hash === "#/aide") await pages.aide();
@@ -74,7 +74,7 @@ decorateNavigation();
     return;
   }
   await router();
-  if (state.me.remise) showPasswordReset();
-  else if (state.me.admin && state.me.admin.provisoire) chooseMyPassword(true).then((ok) => ok && location.reload());
+  if (state.me.password_reset) showPasswordReset();
+  else if (state.me.admin && state.me.admin.temporary) chooseMyPassword(true).then((ok) => ok && location.reload());
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 })();

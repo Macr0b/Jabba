@@ -21,7 +21,7 @@ finish() {
   fi
   [ "$code" = 0 ] || rm -rf "$copy.tmp"
   [ "$reopened" = 1 ] && mount -o remount,ro "$disk" 2>/dev/null
-  printf '{"debut":%s,"fin":%s,"code":%s,"etape":"%s","besoin":%s,"libre":%s}\n' \
+  printf '{"start":%s,"end":%s,"code":%s,"step":"%s","needed":%s,"free":%s}\n' \
     "$started" "$(date +%s)" "$code" "$step" "$needed" "$free" > "$state_file"
 }
 trap finish EXIT

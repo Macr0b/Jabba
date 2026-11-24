@@ -32,11 +32,11 @@ def list_disks():
 async def set_disk_mode(nom: str, request: Request):
     guard.require_admin(request)
     path = files_source.disk_path(nom)
-    writable = bool((await request.json()).get("ecriture"))
+    writable = bool((await request.json()).get("writable"))
     if config.DEMO:
-        return {"ok": True, "ecriture": writable}
+        return {"ok": True, "writable": writable}
     try:
-        code, _, error_output = commands.run_action("mode_disque", chemin=path, ecriture=writable)
+        code, _, error_output = commands.run_action("mode_disque", path=path, writable=writable)
     except actions.ActionError as error:
         raise HTTPException(400, str(error))
     if code == 4:
@@ -47,7 +47,7 @@ async def set_disk_mode(nom: str, request: Request):
     # chaque fichier, et refuserait sinon de supprimer ou de renommer (« lecture seule ? »).
     threading.Thread(target=files_source.rescan_in_nextcloud, args=(path,), daemon=True).start()
     activity_log.record("disque", f"{nom} : {'écriture autorisée' if writable else 'lecture seule'}", request.state.nom)
-    return {"ok": True, "ecriture": writable}
+    return {"ok": True, "writable": writable}
 
 
 @router.post("/api/disques/{nom}/ejecter")
@@ -56,7 +56,7 @@ def eject_disk(nom: str, request: Request):
     if config.DEMO:
         files_source.EJECTED[nom] = time.time()
         return {"ok": True}
-    code, _, error_output = commands.run_action("ejecter", chemin=path)
+    code, _, error_output = commands.run_action("ejecter", path=path)
     if code != 0 and "not mounted" not in error_output:
         raise HTTPException(
             409,
@@ -78,7 +78,7 @@ def forget_disk(nom: str, request: Request):
         raise HTTPException(404, "Seuls les disques ajoutés automatiquement peuvent être oubliés ici.")
     except (RuntimeError, actions.ActionError) as error:
         raise HTTPException(500, "Le serveur n'a pas pu oublier ce disque : " + str(error)[:200])
-    activity_log.record("disque", f"{disk['nom']} oublié : il ne sera plus ajouté tout seul", request.state.nom)
+    activity_log.record("disque", f"{disk['name']} oublié : il ne sera plus ajouté tout seul", request.state.nom)
     return {"ok": True}
 
 

@@ -18,7 +18,7 @@ export const rememberedServer = {
       return null;
     }
   },
-  ecrire: (key, value) => {
+  write: (key, value) => {
     try {
       localStorage.setItem(key, value);
     } catch (_) {

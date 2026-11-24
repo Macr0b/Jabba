@@ -65,7 +65,7 @@ def test_token_kept_after_check(cloudflare, tmp_path):
     cloudflare_dns.save_token("exemple.fr", f"  {TOKEN} ")
     assert cloudflare_dns.is_ready()
     kept = json.loads((tmp_path / "cloudflare.json").read_text())
-    assert kept == {"jeton": TOKEN, "zone": "exemple.fr", "zone_id": "z0"}
+    assert kept == {"token": TOKEN, "zone": "exemple.fr", "zone_id": "z0"}
     assert oct((tmp_path / "cloudflare.json").stat().st_mode)[-3:] == "600"
     assert all(call[4]["Authorization"] == f"Bearer {TOKEN}" for call in cloudflare.calls)
     assert not [a for a in cloudflare.calls if a[0] != "GET"]  # vérifier n'écrit rien
@@ -142,9 +142,9 @@ def test_cloudflare_comes_before_ovh(cloudflare, monkeypatch):
     monkeypatch.setattr(domain_access, "public_ip", lambda: "203.0.113.7")
     ovh_calls = []
     monkeypatch.setattr(ovh_dns, "sync", lambda *a: ovh_calls.append(a))
-    assert dns_update.sync_now({"domaine": "exemple.fr", "prefixe": "cloud", "actif": True}) == "cree"
+    assert dns_update.sync_now({"domain": "exemple.fr", "prefix": "cloud", "active": True}) == "cree"
     assert ovh_calls == []  # l'ancienne mise à jour OVH ne tourne plus
-    assert dns_update.sync_now({"domaine": "exemple.fr", "actif": False}) is None
+    assert dns_update.sync_now({"domain": "exemple.fr", "active": False}) is None
 
 
 def test_saving_the_token_drops_the_ovh_key(cloudflare, monkeypatch):
@@ -158,19 +158,19 @@ def test_saving_the_token_drops_the_ovh_key(cloudflare, monkeypatch):
     ovh_dns.json_files.save(ovh_dns.KEYS_FILE, {"ak": "a", "as": "b", "ck": "c"}, private=True)
     log = []
     monkeypatch.setattr(route.activity_log, "record", lambda famille, texte, *a: log.append(texte))
-    monkeypatch.setattr(guard, "require_super_admin", lambda request: {"identifiant": "serveur-test"})
+    monkeypatch.setattr(guard, "require_super_admin", lambda request: {"username": "serveur-test"})
     monkeypatch.setattr(
-        route.domain_access, "read", lambda: {"domaine": "exemple.fr", "prefixe": "cloud", "actif": True}
+        route.domain_access, "read", lambda: {"domain": "exemple.fr", "prefix": "cloud", "active": True}
     )
     monkeypatch.setattr(route.domain_access, "public_ip", lambda: "203.0.113.7")
     monkeypatch.setattr(route.domain_access, "status", lambda *a: {"dns_auto": dns_update.provider()})
     with TestClient(main.app, base_url="https://testserver") as client:
         client.post(
             "/api/admin/connexion",
-            json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"},
+            json={"username": "serveur-demo", "password": "demo-mot-de-passe"},
             headers={"X-Jabba": "1"},
         )
-        answer = client.post("/api/domaine/cloudflare", json={"jeton": TOKEN}, headers={"X-Jabba": "1"})
+        answer = client.post("/api/domaine/cloudflare", json={"token": TOKEN}, headers={"X-Jabba": "1"})
     assert answer.status_code == 200 and answer.json() == {"dns_auto": "cloudflare"}
     assert not ovh_dns.is_ready() and any("Clé OVH oubliée" in line for line in log)
     assert cloudflare.entries["1"]["name"] == "cloud.exemple.fr"

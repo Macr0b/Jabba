@@ -3,7 +3,7 @@
 //
 // Sommaire :
 //   partagé : toolMenuHtml, bindToolMenus, runToolAction
-//   interne : uninstall
+//   interne : uninstall, removeLeftover
 // AdGuard Home a en plus « Appareils » : le bloqueur de pubs, appareil par appareil (adblock_devices.js).
 // Les outils dont Jabba a créé le compte ont « Identifiants » (tool_login.js).
 // Ceux qui ont une page ont « Installer sur cet appareil » (install_as_app.js) ; Nextcloud a
@@ -22,33 +22,34 @@ import { followTask } from "../core/tasks.js";
 
 export function toolMenuHtml(item) {
   const entries = [];
-  if (item.id === "adguard-home" && item.installe !== false && item.etat)
-    entries.push({ action: "appareils", texte: t("Appareils") });
-  if (item.identifiants && item.etat) entries.push({ action: "identifiants", texte: t("Identifiants") });
-  if (item.id === "nextcloud" && item.etat && item.lien)
-    entries.push({ action: "connecter", texte: t("Connecter un ordinateur ou un téléphone") });
-  if (item.lien && item.etat && !item.systeme && item.id !== "nextcloud")
-    entries.push({ action: "installer-appli", texte: t("Installer sur cet appareil") });
-  if (item.modifiable && item.etat && item.etat !== "arrêté" && !item.systeme)
-    entries.push({ action: "redemarrer", texte: t("Redémarrer") });
-  if (item.modifiable && item.etat) entries.push({ action: "mettre-a-jour", texte: t("Mettre à jour") });
-  entries.push({ action: "aide", texte: t("Aide") }, { action: "infos", texte: t("Informations") });
-  if (item.installable !== false && canUninstall(item.id) && item.installe !== false)
-    entries.push({ action: "desinstaller", texte: t("Désinstaller"), danger: true });
-  return menuHtml(item.id, escapeHtml(t`Plus d'options pour ${item.nom}`), entries);
+  if (item.id === "adguard-home" && item.installed !== false && item.state)
+    entries.push({ action: "appareils", text: t("Appareils") });
+  if (item.credentials && item.state) entries.push({ action: "identifiants", text: t("Identifiants") });
+  if (item.id === "nextcloud" && item.state && item.link)
+    entries.push({ action: "connecter", text: t("Connecter un ordinateur ou un téléphone") });
+  if (item.link && item.state && !item.system && item.id !== "nextcloud")
+    entries.push({ action: "installer-appli", text: t("Installer sur cet appareil") });
+  if (item.editable && item.state && item.state !== "arrêté" && !item.system)
+    entries.push({ action: "redemarrer", text: t("Redémarrer") });
+  if (item.editable && item.state) entries.push({ action: "mettre-a-jour", text: t("Mettre à jour") });
+  entries.push({ action: "aide", text: t("Aide") }, { action: "infos", text: t("Informations") });
+  if (item.installable !== false && canUninstall(item.id) && item.installed !== false)
+    entries.push({ action: "desinstaller", text: t("Désinstaller"), danger: true });
+  if (item.leftover) entries.push({ action: "retirer-ancien", text: t("Désinstaller"), danger: true });
+  return menuHtml(item.id, escapeHtml(t`Plus d'options pour ${item.name}`), entries);
 }
 
 /** Redémarrer ou mettre à jour un outil, après confirmation ; l'écran se recharge ensuite. */
 export async function runToolAction(item, action, reload) {
   const texts = {
-    redemarrer: [t`Redémarrer ${item.nom} ?`, t("Il sera indisponible quelques secondes."), t("Redémarrer")],
+    redemarrer: [t`Redémarrer ${item.name} ?`, t("Il sera indisponible quelques secondes."), t("Redémarrer")],
     "mettre-a-jour": [
-      t`Mettre à jour ${item.nom} ?`,
+      t`Mettre à jour ${item.name} ?`,
       t("Il sera indisponible pendant la mise à jour (1 à 5 minutes). Ses réglages et ses fichiers sont gardés."),
       t("Mettre à jour"),
     ],
   }[action];
-  if (!(await confirmAction({ titre: texts[0], texte: texts[1], valider: texts[2] }))) return;
+  if (!(await confirmAction({ title: texts[0], text: texts[1], confirmLabel: texts[2] }))) return;
   try {
     await followTask(await api(`/api/outils/${encodeURIComponent(item.id)}/${action}`, { method: "POST" }));
   } catch (error) {
@@ -59,18 +60,38 @@ export async function runToolAction(item, action, reload) {
 
 async function uninstall(item, reload) {
   const ok = await confirmAction({
-    titre: t`Désinstaller ${item.nom} ?`,
-    texte: t(
+    title: t`Désinstaller ${item.name} ?`,
+    text: t(
       "L'outil est arrêté et retiré du serveur. Ses données (photos, mots de passe, sauvegardes, carnets) restent : le réinstaller les retrouve.",
     ),
-    valider: t("Désinstaller"),
+    confirmLabel: t("Désinstaller"),
     danger: true,
   });
   if (!ok) return;
   try {
     const task = await api(uninstallUrl(item.id), { method: "POST" });
     if (task && task.id) await followTask(task);
-    toast(t`${item.nom} est désinstallé`);
+    toast(t`${item.name} est désinstallé`);
+    reload();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+// Un outil d'une ancienne version de Jabba (retiré du catalogue, comme ntfy) : retiré en entier.
+async function removeLeftover(item, reload) {
+  const ok = await confirmAction({
+    title: t`Désinstaller ${item.name} ?`,
+    text: t(
+      "Cet outil ne fait plus partie de Jabba. Il est arrêté et retiré du serveur avec ses données et son adresse.",
+    ),
+    confirmLabel: t("Désinstaller"),
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await followTask(await api(`/api/etabli/${encodeURIComponent(item.id)}/retirer-ancien`, { method: "POST" }));
+    toast(t`${item.name} est désinstallé`);
     reload();
   } catch (error) {
     toast(error.message, true);
@@ -83,6 +104,7 @@ export function bindToolMenus(scope, items, versions, reload) {
     const item = items.find((tool) => tool.id === id);
     if (!item) return;
     if (action === "desinstaller") return uninstall(item, reload);
+    if (action === "retirer-ancien") return removeLeftover(item, reload);
     if (action === "redemarrer" || action === "mettre-a-jour") return runToolAction(item, action, reload);
     const panel = scope.querySelector(`[data-panneau="${CSS.escape(id)}"]`);
     if (!panel) return;
@@ -116,7 +138,7 @@ export function bindToolMenus(scope, items, versions, reload) {
         .then((all) => all[id])
         .catch(() => null);
     }
-    const known = (versions.outils || {})[id];
+    const known = (versions.tools || {})[id];
     panel.innerHTML = action === "aide" ? helpHtml(id) : infoHtml(item, known && known.version, usage);
     panel.dataset.contenu = action;
     panel.hidden = false;

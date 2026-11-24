@@ -20,7 +20,7 @@ CONSUMPTION_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "consomma
 
 
 # ---------------------------------------------------------------- surveillance (tourne en fond)
-POWER_STATE = {"secteur": None, "batterie": None, "etat": None, "source": None, "arret_prevu": False}
+POWER_STATE = {"mains": None, "battery": None, "state": None, "source": None, "shutdown_planned": False}
 
 
 def _ups(status, charge, real_power, load, nominal):
@@ -81,9 +81,9 @@ def measure_consumption(watts):
             data = json.load(file)
     except (OSError, ValueError):
         data = {}
-    data["derniere"] = {"w": watts, "t": int(time.time())}
-    if not data.get("repos") or watts < data["repos"]["w"]:
-        data["repos"] = {"w": watts, "t": int(time.time())}
+    data["latest"] = {"w": watts, "t": int(time.time())}
+    if not data.get("idle") or watts < data["idle"]["w"]:
+        data["idle"] = {"w": watts, "t": int(time.time())}
     with open(CONSUMPTION_FILE, "w") as file:
         json.dump(data, file)
 

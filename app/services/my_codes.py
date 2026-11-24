@@ -18,13 +18,13 @@ from services import backups, cloudflare_dns, heartbeat, ovh_dns, tool_addresses
 
 
 def _entry(name, purpose, place, present=True, note=""):
-    return {"nom": name, "sert_a": purpose, "rangement": place, "present": present, "note": note}
+    return {"name": name, "purpose": purpose, "arrangement": place, "present": present, "note": note}
 
 
 def _tool_entries(installed):
     entries = []
     for tool in sorted(installed & tool_credentials.STORABLE - {"nextcloud", "time-machine"}):
-        name = catalog.OPTIONAL_TOOLS.get(tool, {}).get("nom") or {"jellyfin": "Jellyfin", "dockge": "Dockge"}[tool]
+        name = catalog.OPTIONAL_TOOLS.get(tool, {}).get("name") or {"jellyfin": "Jellyfin", "dockge": "Dockge"}[tool]
         login = tool_credentials.read(tool)
         if tool_credentials.created_by_jabba(tool):
             note = "Créé par Jabba." if login else "Installé avant la 0.16.2 : mot de passe tapé à l'activation."
@@ -66,7 +66,7 @@ def _to_keep(installed, identifier):
             "Le second facteur de ta connexion admin (appli de codes, clé d'accès) et ses 10 codes de secours.",
             "trousseau",
             present=passkey["active"],
-            note=f"{passkey['codes_restants']} codes de secours restants." if passkey["active"] else "Pas activée.",
+            note=f"{passkey['codes_left']} codes de secours restants." if passkey["active"] else "Pas activée.",
         ),
     ]
     return codes + _tools_to_keep(installed)
@@ -83,7 +83,7 @@ def _tools_to_keep(installed):
                 "trousseau",
             )
         )
-    if backups.read().get("chemin"):
+    if backups.read().get("path"):
         codes.append(
             _entry(
                 "Phrase de passe des sauvegardes",
@@ -118,7 +118,7 @@ def _service_keys():
                 note="Révocable dans Nextcloud → Paramètres personnels → Sécurité.",
             )
         )
-    if heartbeat.status()["pret"]:
+    if heartbeat.status()["ready"]:
         codes.append(
             _entry(
                 "Adresse de signal (healthchecks.io)",
@@ -145,7 +145,7 @@ def _service_keys():
                 note="Révocable dans Jabba (Accès depuis Internet → Oublier la clé) et chez OVH.",
             )
         )
-    if tool_addresses.status(set())["cle_prete"]:
+    if tool_addresses.status(set())["key_ready"]:
         codes.append(
             _entry(
                 "Clé d'accès Tailscale (tskey-api-…)",

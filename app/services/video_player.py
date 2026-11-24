@@ -45,7 +45,7 @@ IDLE_TIMEOUT = 120  # s sans demande de morceau : la conversion s'arrête
 TEXT_SUBTITLE_CODECS = {"subrip", "ass", "ssa", "webvtt", "mov_text", "text"}
 _SESSIONS = {}
 _LOCK = threading.Lock()
-_HARDWARE = {"teste": False, "options": None}
+_HARDWARE = {"tested": False, "options": None}
 
 
 # ---------------------------------------------------------------- analyse du fichier
@@ -98,8 +98,8 @@ def _video_track(streams):
         if not (stream.get("disposition") or {}).get("attached_pic"):
             return {
                 "codec": stream.get("codec_name"),
-                "largeur": stream.get("width"),
-                "hauteur": stream.get("height"),
+                "width": stream.get("width"),
+                "height": stream.get("height"),
                 "pix_fmt": stream.get("pix_fmt"),
                 "index": stream["index"],
             }
@@ -113,9 +113,9 @@ def probe(source):
         {
             "index": stream["index"],
             "codec": stream.get("codec_name"),
-            "canaux": stream.get("channels"),
-            "nom": _track_label(stream, number),
-            "defaut": bool((stream.get("disposition") or {}).get("default")),
+            "channel_count": stream.get("channels"),
+            "name": _track_label(stream, number),
+            "default": bool((stream.get("disposition") or {}).get("default")),
         }
         for number, stream in enumerate(_tracks(streams, "audio"), start=1)
     ]
@@ -123,18 +123,18 @@ def probe(source):
         {
             "index": stream["index"],
             "codec": stream.get("codec_name"),
-            "nom": _track_label(stream, number),
-            "texte": stream.get("codec_name") in TEXT_SUBTITLE_CODECS,
+            "name": _track_label(stream, number),
+            "text": stream.get("codec_name") in TEXT_SUBTITLE_CODECS,
         }
         for number, stream in enumerate(_tracks(streams, "subtitle"), start=1)
     ]
     container = probe_data.get("format", {})
     return {
-        "duree": float(container.get("duration") or 0),
-        "conteneur": container.get("format_name", ""),
+        "duration": float(container.get("duration") or 0),
+        "container": container.get("format_name", ""),
         "video": _video_track(streams),
         "audios": audio_tracks,
-        "soustitres": subtitle_tracks,
+        "subtitles": subtitle_tracks,
     }
 
 
@@ -142,7 +142,7 @@ def plays_directly(media):
     """Le navigateur sait-il lire le fichier tel quel ?"""
     video_stream, first = media["video"], media["audios"]
     container_ok = any(
-        container_format in media["conteneur"] for container_format in ("mp4", "mov")
+        container_format in media["container"] for container_format in ("mp4", "mov")
     )  # MKV (même « matroska,webm ») : converti
     video_ok = (
         video_stream is not None
@@ -156,9 +156,9 @@ def plays_directly(media):
 # ---------------------------------------------------------------- conversion
 def _hardware_options():
     """Conversion par la puce graphique (VAAPI) si elle marche sur ce serveur, sinon None."""
-    if _HARDWARE["teste"]:
+    if _HARDWARE["tested"]:
         return _HARDWARE["options"]
-    _HARDWARE["teste"] = True
+    _HARDWARE["tested"] = True
     if not os.path.exists("/dev/dri/renderD128") or not shutil.which("ffmpeg"):
         return None
     for driver in (None, "i965", "iHD"):
@@ -186,7 +186,7 @@ def _hardware_options():
         ]
         try:
             if sandbox.run(attempt, gpu=True, capture_output=True, env=env, timeout=30).returncode == 0:
-                _HARDWARE["options"] = {"pilote": driver}
+                _HARDWARE["options"] = {"driver": driver}
                 return _HARDWARE["options"]
         except (OSError, subprocess.TimeoutExpired):
             pass
@@ -202,7 +202,7 @@ def _video(media):
     scale = "scale=-2:'min(1080,ih)'"
     hardware = _hardware_options()
     if hardware is not None:
-        env = {"LIBVA_DRIVER_NAME": hardware["pilote"]} if hardware["pilote"] else {}
+        env = {"LIBVA_DRIVER_NAME": hardware["driver"]} if hardware["driver"] else {}
         return (
             [
                 "-vaapi_device",
@@ -317,7 +317,7 @@ def start(source, media, start_time=0.0, audio=None):
     start_time = keyframe(source, media, max(0.0, float(start_time)))
     with _LOCK:
         while len(_SESSIONS) >= MAX_SESSIONS:  # trop de films en même temps : on arrête le plus ancien
-            stop(min(_SESSIONS, key=lambda key: _SESSIONS[key]["vu"]), lock=False)
+            stop(min(_SESSIONS, key=lambda key: _SESSIONS[key]["seen"]), lock=False)
     session_id = secrets.token_urlsafe(18)
     folder = os.path.join(WORK_DIR, session_id)
     os.makedirs(WORK_DIR, exist_ok=True)
@@ -341,10 +341,10 @@ def start(source, media, start_time=0.0, audio=None):
     with _LOCK:
         _SESSIONS[session_id] = {
             "p": process,
-            "dossier": folder,
-            "vu": time.time(),
-            "cree": time.time(),
-            "debut": float(start_time),
+            "folder": folder,
+            "seen": time.time(),
+            "created": time.time(),
+            "start": float(start_time),
         }
     return session_id, start_time
 
@@ -356,8 +356,8 @@ def session_file(session_id, name, wait=20):
         name == "index.m3u8" or (name.startswith("m") and name.endswith(".ts") and name[1:-3].isdigit())
     ):
         return None
-    stream["vu"] = time.time()
-    path = os.path.join(stream["dossier"], name)
+    stream["seen"] = time.time()
+    path = os.path.join(stream["folder"], name)
     end = time.time() + wait
     while time.time() < end:
         if name == "index.m3u8":
@@ -366,13 +366,13 @@ def session_file(session_id, name, wait=20):
             try:
                 text = open(path).read()
                 count = text.count(".ts")
-                age = time.time() - stream["cree"]
+                age = time.time() - stream["created"]
                 if count >= 6 or "#EXT-X-ENDLIST" in text or (count >= 2 and age > 3) or (count >= 1 and age > 8):
                     return path
             except OSError:
                 pass
         elif os.path.exists(path):
-            next_value = os.path.join(stream["dossier"], f"m{int(name[1:-3]) + 1:05d}.ts")
+            next_value = os.path.join(stream["folder"], f"m{int(name[1:-3]) + 1:05d}.ts")
             if os.path.exists(next_value) or stream["p"].poll() is not None:  # morceau terminé
                 return path
         if stream["p"].poll() not in (None, 0) and not os.path.exists(path):
@@ -388,7 +388,7 @@ def session_error(session_id):
     if stream["p"].poll() not in (None, 0):
         try:
             return (
-                open(os.path.join(stream["dossier"], "erreurs.txt")).read().strip()[-300:]
+                open(os.path.join(stream["folder"], "erreurs.txt")).read().strip()[-300:]
                 or "La conversion s'est arrêtée."
             )
         except OSError:
@@ -407,7 +407,7 @@ def stop(session_id, lock=True):
                 stream["p"].wait(timeout=5)
             except subprocess.TimeoutExpired:
                 stream["p"].kill()
-        shutil.rmtree(stream["dossier"], ignore_errors=True)
+        shutil.rmtree(stream["folder"], ignore_errors=True)
 
     if lock:
         with _LOCK:
@@ -419,7 +419,7 @@ def stop(session_id, lock=True):
 def clean_up():
     """Arrête les lectures abandonnées (onglet fermé, téléphone en veille…)."""
     cutoff = time.time() - IDLE_TIMEOUT
-    for session_id in [key for key, stream in list(_SESSIONS.items()) if stream["vu"] < cutoff]:
+    for session_id in [key for key, stream in list(_SESSIONS.items()) if stream["seen"] < cutoff]:
         stop(session_id)
 
 

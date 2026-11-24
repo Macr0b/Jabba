@@ -20,8 +20,8 @@ function diskOptions(disks) {
   return disks
     .map(
       (disk) =>
-        `<option value="${escapeHtml(disk.chemin)}">${escapeHtml(disk.nom)} — ${
-          disk.fichiers ? t("copie complète") : t("à déplacer dans le nouvel ordinateur")
+        `<option value="${escapeHtml(disk.path)}">${escapeHtml(disk.name)} — ${
+          disk.files ? t("copie complète") : t("à déplacer dans le nouvel ordinateur")
         }</option>`,
     )
     .join("");
@@ -36,7 +36,7 @@ async function watchCopy(card) {
     for (;;) {
       await new Promise((done) => setTimeout(done, 5000));
       const data = await api("/api/demenagement");
-      if (data.etat !== "en cours" || !document.body.contains(card)) {
+      if (data.state !== "en cours" || !document.body.contains(card)) {
         render(card, data);
         return;
       }
@@ -48,12 +48,12 @@ async function watchCopy(card) {
 
 function render(card, data) {
   const head = t`<h2>Déménager vers un nouvel ordinateur</h2>`;
-  if (data.etat === "en cours") {
+  if (data.state === "en cours") {
     card.innerHTML = t`${head}<p class="note">Copie en cours. Les outils sont arrêtés pour que rien ne change pendant la copie. Selon la taille des fichiers, de quelques minutes à quelques heures : tu peux fermer cette page.</p><div class="squelette" style="margin-top:10px"></div>`;
     watchCopy(card);
     return;
   }
-  if (data.etat === "pret") {
+  if (data.state === "pret") {
     card.innerHTML = t`${head}<p><strong>La copie est prête.</strong> Les outils restent arrêtés sur ce serveur.</p>
       <ol class="note">${STEPS_AFTER.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
       <p class="note">Avant d'installer le nouveau, éteins celui-ci : il libère ses noms dans Tailscale, et le nouveau reprend les mêmes adresses. Tu ne pourras plus l'ouvrir à distance.</p>
@@ -77,15 +77,15 @@ function render(card, data) {
     return;
   }
   const failed =
-    data.etat === "rate"
-      ? t`<p class="erreur">La copie n'a pas abouti : ${escapeHtml(data.erreur)} Les outils sont repartis.</p>`
+    data.state === "rate"
+      ? t`<p class="erreur">La copie n'a pas abouti : ${escapeHtml(data.error)} Les outils sont repartis.</p>`
       : "";
   card.innerHTML = t`${head}${failed}<p class="note">Pour passer sur un autre ordinateur sans rien perdre : comptes, outils, réglages de Jabba, Nextcloud et ses fichiers, Jellyfin… Jabba copie tout sur un disque, puis le script d'installation du nouvel ordinateur remet tout en place.</p>
     ${
-      data.disques.length
-        ? t`<label class="champ"><span>Copier sur</span><select data-disque>${diskOptions(data.disques)}</select></label>
+      data.disks.length
+        ? t`<label class="champ"><span>Copier sur</span><select data-disque>${diskOptions(data.disks)}</select></label>
       <p class="note">Le plus simple : le disque de données, que tu mets dans le nouvel ordinateur (seuls les réglages y sont ajoutés). Sinon, un disque USB qui a la place pour tout.</p>
-      <div class="actions">${data.etat === "rate" ? t`<button class="btn" type="button" data-annuler>Effacer la copie ratée</button>` : ""}<button class="btn btn-p" type="button" data-lancer>Préparer le déménagement</button></div>`
+      <div class="actions">${data.state === "rate" ? t`<button class="btn" type="button" data-annuler>Effacer la copie ratée</button>` : ""}<button class="btn btn-p" type="button" data-lancer>Préparer le déménagement</button></div>`
         : t`<p class="note">Branche un disque USB pour y copier le serveur.</p>`
     }`;
   const start = card.querySelector("[data-lancer]");
@@ -102,7 +102,7 @@ function render(card, data) {
         card,
         await api("/api/demenagement/lancer", {
           method: "POST",
-          json: { chemin: card.querySelector("[data-disque]").value },
+          json: { path: card.querySelector("[data-disque]").value },
         }),
       );
     };

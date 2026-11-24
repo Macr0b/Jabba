@@ -78,14 +78,14 @@ def _entry(virtual_path, real_path, writable, external):
     stat = os.stat(real_path)
     folder = os.path.isdir(real_path)
     return {
-        "nom": virtual_path.rsplit("/", 1)[-1],
-        "chemin": virtual_path,
-        "dossier": folder,
-        "taille": None if folder else stat.st_size,
-        "modifie": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "name": virtual_path.rsplit("/", 1)[-1],
+        "path": virtual_path,
+        "folder": folder,
+        "size": None if folder else stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
         "type": None,
-        "ecriture": writable,
-        "externe": external,
+        "writable": writable,
+        "external": external,
     }
 
 
@@ -98,7 +98,7 @@ def list_folder(path, disks, read_only):
                 _give_to_server_user(real_path)
             if os.path.isdir(real_path):
                 entries.append(_entry("/" + name, real_path, name not in read_only, name in disks))
-        return {"chemin": "/", "elements": entries, "ecriture": False, "lien_nextcloud": None, "source": "disque"}
+        return {"path": "/", "items": entries, "writable": False, "nextcloud_link": None, "source": "disque"}
     real_path, writable = resolve(path, disks, read_only)
     if not os.path.isdir(real_path):
         raise Refusal(404, "Dossier introuvable")
@@ -110,8 +110,8 @@ def list_folder(path, disks, read_only):
             entries.append(_entry(path.rstrip("/") + "/" + name, os.path.join(real_path, name), writable, False))
         except OSError:
             continue
-    entries.sort(key=lambda entry: (not entry["dossier"], entry["nom"].lower()))
-    return {"chemin": path, "elements": entries, "ecriture": writable, "lien_nextcloud": None, "source": "disque"}
+    entries.sort(key=lambda entry: (not entry["folder"], entry["name"].lower()))
+    return {"path": path, "items": entries, "writable": writable, "nextcloud_link": None, "source": "disque"}
 
 
 def _give_to_server_user(path):
@@ -184,7 +184,7 @@ def delete(path, disks, read_only):
     size = None if folder else os.path.getsize(real_path)
     shutil.move(real_path, os.path.join(trash_dir, os.path.basename(real_path)))
     with open(os.path.join(trash_dir, ".jabba.json"), "w") as file:
-        json.dump({"chemin": path, "t": int(time.time()), "dossier": folder, "taille": size}, file, ensure_ascii=False)
+        json.dump({"path": path, "t": int(time.time()), "folder": folder, "size": size}, file, ensure_ascii=False)
 
 
 def _trash_dirs():
@@ -212,15 +212,15 @@ def list_trash():
     result = []
     for identifier, trash_dir, name, metadata in _trash_dirs():
         real_path = os.path.join(trash_dir, name)
-        origin = metadata.get("chemin")
+        origin = metadata.get("path")
         result.append(
             {
                 "id": identifier,
-                "nom": name,
-                "origine": (origin.rsplit("/", 1)[0] or "/") if origin else None,
-                "supprime": metadata["t"],
-                "dossier": os.path.isdir(real_path),
-                "taille": metadata.get("taille"),
+                "name": name,
+                "origin": (origin.rsplit("/", 1)[0] or "/") if origin else None,
+                "deleted": metadata["t"],
+                "folder": os.path.isdir(real_path),
+                "size": metadata.get("size"),
                 "source": "disque",
             }
         )
@@ -238,7 +238,7 @@ def _trash_dir(identifier):
 
 def restore(identifier, disks, read_only):
     trash_dir, name, metadata = _trash_dir(identifier)
-    origin = metadata.get("chemin")
+    origin = metadata.get("path")
     if not origin:
         raise Refusal(409, "On ne sait plus d'où vient cet élément.")
     parent = origin.rsplit("/", 1)[0] or "/"

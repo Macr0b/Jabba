@@ -18,7 +18,7 @@ from services import cloudflare_dns, notifications, ovh_dns
 WATCH_SECONDS = 3600
 ERRORS = (cloudflare_dns.CloudflareError, ovh_dns.OvhError)
 NAMES = {"cloudflare": "Cloudflare", "ovh": "OVH"}
-_STATE = {"dernier": 0.0}
+_STATE = {"last": 0.0}
 
 
 def provider():
@@ -33,10 +33,10 @@ def sync_now(settings):
     from services import domain_access  # évite l'import circulaire (domain_access se sert de ce module)
 
     chosen = provider()
-    if not chosen or not settings.get("actif") or not settings.get("domaine"):
+    if not chosen or not settings.get("active") or not settings.get("domain"):
         return None
     module = cloudflare_dns if chosen == "cloudflare" else ovh_dns
-    return module.sync(settings["domaine"], settings.get("prefixe") or "cloud", domain_access.public_ip())
+    return module.sync(settings["domain"], settings.get("prefix") or "cloud", domain_access.public_ip())
 
 
 def watch(now=None):
@@ -44,9 +44,9 @@ def watch(now=None):
     from services import domain_access
 
     now = now or time.time()
-    if now - _STATE["dernier"] < WATCH_SECONDS or not provider():
+    if now - _STATE["last"] < WATCH_SECONDS or not provider():
         return None
-    _STATE["dernier"] = now
+    _STATE["last"] = now
     try:
         result = sync_now(domain_access.read())
     except ERRORS as error:

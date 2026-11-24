@@ -18,61 +18,61 @@ const ROLE_NAMES = { super: t("Super admin"), admin: t("Admin") };
 pages.utilisateurs = async () => {
   content.innerHTML = t`<div class="entete"><div><h1>Admins de Jabba</h1></div></div>${loadingHtml(4)}`;
   const data = await api("/api/comptes");
-  const superAdmin = data.moi.rang === "super";
+  const superAdmin = data.me.rank === "super";
   const byLogin = Object.fromEntries(
-    data.comptes.filter((item) => item.tailscale).map((item) => [item.tailscale, item]),
+    data.accounts.filter((item) => item.tailscale).map((item) => [item.tailscale, item]),
   );
   content.innerHTML = t`
-    <div class="entete"><div><h1>Admins de Jabba</h1><p class="sous-titre">Les admins de l'appli, et qui se connecte. Tu es <strong>${escapeHtml(data.moi.identifiant)}</strong> · ${ROLE_NAMES[data.moi.rang]}.</p></div>
+    <div class="entete"><div><h1>Admins de Jabba</h1><p class="sous-titre">Les admins de l'appli, et qui se connecte. Tu es <strong>${escapeHtml(data.me.username)}</strong> · ${ROLE_NAMES[data.me.rank]}.</p></div>
       <div class="actions"><a class="btn" href="#/nuage">Comptes Nextcloud</a><button class="btn btn-p" id="ajouter">Ajouter un admin</button></div></div>
-    ${data.demandes
+    ${data.requests
       .map(
         (
           item,
-        ) => t`<div class="bandeau demande"><span><strong>${escapeHtml(item.nom)}</strong> (${escapeHtml(item.identifiant)}) a oublié son mot de passe · demandé par ${escapeHtml(item.demandeur)}, ${escapeHtml(timeAgo(item.t))}.${item.autre_personne ? t(" <strong>Attention : demandé depuis le compte Tailscale de quelqu'un d'autre.</strong> Le mot de passe provisoire n'ira qu'à son compte à lui.") : ""}</span>
+        ) => t`<div class="bandeau demande"><span><strong>${escapeHtml(item.name)}</strong> (${escapeHtml(item.username)}) a oublié son mot de passe · demandé par ${escapeHtml(item.requester)}, ${escapeHtml(timeAgo(item.t))}.${item.other_person ? t(" <strong>Attention : demandé depuis le compte Tailscale de quelqu'un d'autre.</strong> Le mot de passe provisoire n'ira qu'à son compte à lui.") : ""}</span>
       <span class="actions"><button class="btn btn-petit btn-p" data-accepter="${escapeHtml(item.id)}">Accepter</button><button class="btn btn-petit" data-refuser="${escapeHtml(item.id)}">Refuser</button></span></div>`,
       )
       .join("")}
-    ${!superAdmin && data.demandes_n ? t`<div class="bandeau"><span>${data.demandes_n} demande${data.demandes_n > 1 ? "s" : ""} de mot de passe en attente : seul un super admin peut y répondre.</span></div>` : ""}
+    ${!superAdmin && data.request_count ? t`<div class="bandeau"><span>${data.request_count} demande${data.request_count > 1 ? "s" : ""} de mot de passe en attente : seul un super admin peut y répondre.</span></div>` : ""}
     <section class="carte tableau" aria-label="Comptes admin">
       <div class="ligne titres"><span>Compte</span><span class="col-l">Rang</span><span class="col-l">Dernière connexion</span><span></span></div>
-      ${data.comptes
+      ${data.accounts
         .map(
           (item, index) => `
         <div class="ligne">
-          <span class="nom"><span class="avatar" aria-hidden="true">${escapeHtml((item.nom || item.identifiant)[0].toUpperCase())}</span>
-            <span>${escapeHtml(item.nom)}<span class="detail-chemin">${escapeHtml(item.identifiant)}${item.systeme ? t(" · mot de passe du serveur") : item.tailscale ? t(" · Tailscale : ") + escapeHtml(item.tailscale) : t(" · sans compte Tailscale")}${item.provisoire ? t(" · mot de passe provisoire") : ""}</span>
-            <span class="mobile-detail">${ROLE_NAMES[item.rang]}</span></span></span>
-          <span class="col-l"><span class="pastille ${item.rang === "super" ? "p-alerte" : "p-gris"}">${ROLE_NAMES[item.rang]}</span></span>
-          <span class="gris col-l">${item.systeme ? "—" : escapeHtml(timeAgo(item.derniere_connexion))}</span>
-          ${item.systeme ? "<span></span>" : t`<button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.nom)}">•••</button>`}
+          <span class="nom"><span class="avatar" aria-hidden="true">${escapeHtml((item.name || item.username)[0].toUpperCase())}</span>
+            <span>${escapeHtml(item.name)}<span class="detail-chemin">${escapeHtml(item.username)}${item.system ? t(" · mot de passe du serveur") : item.tailscale ? t(" · Tailscale : ") + escapeHtml(item.tailscale) : t(" · sans compte Tailscale")}${item.temporary ? t(" · mot de passe provisoire") : ""}</span>
+            <span class="mobile-detail">${ROLE_NAMES[item.rank]}</span></span></span>
+          <span class="col-l"><span class="pastille ${item.rank === "super" ? "p-alerte" : "p-gris"}">${ROLE_NAMES[item.rank]}</span></span>
+          <span class="gris col-l">${item.system ? "—" : escapeHtml(timeAgo(item.last_login))}</span>
+          ${item.system ? "<span></span>" : t`<button class="btn-menu" data-i="${index}" aria-label="Actions pour ${escapeHtml(item.name)}">•••</button>`}
         </div>`,
         )
         .join("")}
     </section>
     <section class="carte pad">
-      <label class="ligne-reglage"><span><strong>Espace ouvert à tous les admins</strong><br><span class="note">${data.reglages.espace_admins ? t("Tous les admins peuvent ajouter des comptes. Seul un super admin peut nommer ou retirer un super admin.") : t("Seul un super admin peut ouvrir cet espace.")}${superAdmin ? "" : t(" Réglé par le super admin.")}</span></span>
-        <button class="interrupteur" role="switch" aria-checked="${data.reglages.espace_admins}" id="espace"${superAdmin ? "" : " disabled"}><span></span></button></label>
+      <label class="ligne-reglage"><span><strong>Espace ouvert à tous les admins</strong><br><span class="note">${data.settings.admin_space ? t("Tous les admins peuvent ajouter des comptes. Seul un super admin peut nommer ou retirer un super admin.") : t("Seul un super admin peut ouvrir cet espace.")}${superAdmin ? "" : t(" Réglé par le super admin.")}</span></span>
+        <button class="interrupteur" role="switch" aria-checked="${data.settings.admin_space}" id="espace"${superAdmin ? "" : " disabled"}><span></span></button></label>
     </section>
     <section class="carte pad">
       <h2>Qui se connecte</h2>
       <p class="note" style="margin:6px 0 10px">Rempli tout seul par Tailscale : chaque personne qui ouvre l'appli, depuis quel appareil.</p>
       <div class="journal">${
-        data.visites
+        data.visits
           .map(
             (item) => `<div class="evenement">
-          <span class="famille">${data.proprietaires.includes(item.login) ? t("Propriétaire") : byLogin[item.login] ? ROLE_NAMES[byLogin[item.login].rang] : t("Accès")}</span>
-          <span class="texte-ev">${escapeHtml(item.nom)} <span class="note">· ${escapeHtml(item.login)}${item.appareil ? " · " + escapeHtml(item.appareil) : ""} · ${item.n || 1} visite${(item.n || 1) > 1 ? "s" : ""}</span></span>
-          <span class="note quand-ev">${escapeHtml(timeAgo(item.derniere))}</span></div>`,
+          <span class="famille">${data.owners.includes(item.login) ? t("Propriétaire") : byLogin[item.login] ? ROLE_NAMES[byLogin[item.login].rank] : t("Accès")}</span>
+          <span class="texte-ev">${escapeHtml(item.name)} <span class="note">· ${escapeHtml(item.login)}${item.device ? " · " + escapeHtml(item.device) : ""} · ${item.n || 1} visite${(item.n || 1) > 1 ? "s" : ""}</span></span>
+          <span class="note quand-ev">${escapeHtml(timeAgo(item.latest))}</span></div>`,
           )
           .join("") || t('<p class="note">Personne pour l\'instant.</p>')
       }</div>
       ${
-        data.refus.length
-          ? t`<h2 style="margin-top:16px">Accès refusés</h2><div class="journal">${data.refus
+        data.refusals.length
+          ? t`<h2 style="margin-top:16px">Accès refusés</h2><div class="journal">${data.refusals
               .map(
                 (item) => t`<div class="evenement f-admin"><span class="famille">Refusé</span>
-          <span class="texte-ev">${escapeHtml(item.login)}${item.appareil ? ` <span class="note">· ${escapeHtml(item.appareil)}</span>` : ""}</span><span class="note quand-ev">${escapeHtml(timeAgo(item.t))}</span></div>`,
+          <span class="texte-ev">${escapeHtml(item.login)}${item.device ? ` <span class="note">· ${escapeHtml(item.device)}</span>` : ""}</span><span class="note quand-ev">${escapeHtml(timeAgo(item.t))}</span></div>`,
               )
               .join("")}</div>`
           : ""
@@ -89,9 +89,9 @@ pages.utilisateurs = async () => {
       element.innerHTML =
         seconds
           .map(
-            (item) => t`<div class="evenement"><span class="famille">${escapeHtml(item.identifiant)}</span>
-      <span class="texte-ev">${escapeHtml(item.appareil || t("Appareil inconnu"))} <span class="note">· connecté ${escapeHtml(timeAgo(item.cree))} · vu ${escapeHtml(timeAgo(item.vu))}</span></span>
-      <span>${item.actuelle ? t('<span class="pastille p-ok">Cet appareil</span>') : t`<button class="btn btn-petit" data-session="${escapeHtml(item.id)}">Déconnecter</button>`}</span></div>`,
+            (item) => t`<div class="evenement"><span class="famille">${escapeHtml(item.username)}</span>
+      <span class="texte-ev">${escapeHtml(item.device || t("Appareil inconnu"))} <span class="note">· connecté ${escapeHtml(timeAgo(item.created))} · vu ${escapeHtml(timeAgo(item.seen))}</span></span>
+      <span>${item.current ? t('<span class="pastille p-ok">Cet appareil</span>') : t`<button class="btn btn-petit" data-session="${escapeHtml(item.id)}">Déconnecter</button>`}</span></div>`,
           )
           .join("") || t('<p class="note">Aucun.</p>');
       element.querySelectorAll("[data-session]").forEach((element) =>
@@ -129,7 +129,7 @@ pages.utilisateurs = async () => {
     space.onclick = async () => {
       const opened = space.getAttribute("aria-checked") !== "true";
       try {
-        await api("/api/comptes-reglages", { method: "POST", json: { espace_admins: opened } });
+        await api("/api/comptes-reglages", { method: "POST", json: { admin_space: opened } });
       } catch (error) {
         toast(error.message, true);
       }
@@ -137,47 +137,47 @@ pages.utilisateurs = async () => {
     };
   $("#ajouter").onclick = async () => {
     const answers = await formBody({
-      titre: t("Ajouter un admin"),
-      texte: t(
+      title: t("Ajouter un admin"),
+      text: t(
         "Un mot de passe provisoire est créé. Avec son compte Tailscale, il s'affiche sur l'appli de la personne ; sinon, ici, pour que tu le lui donnes.",
       ),
-      champs: [
-        { nom: "nom", label: t("Nom affiché"), indice: t("Camille") },
-        { nom: "identifiant", label: t("Identifiant de connexion"), indice: "camille" },
+      fields: [
+        { name: "name", label: t("Nom affiché"), hint: t("Camille") },
+        { name: "username", label: t("Identifiant de connexion"), hint: "camille" },
         {
-          nom: "tailscale",
+          name: "tailscale",
           label: t("Compte Tailscale (facultatif)"),
-          indice: t("adresse avec laquelle elle se connecte à Tailscale"),
+          hint: t("adresse avec laquelle elle se connecte à Tailscale"),
         },
         ...(superAdmin
           ? [
               {
-                nom: "rang",
+                name: "rank",
                 label: t("Rang"),
                 options: [
                   ["admin", t("Admin")],
                   ["super", t("Super admin")],
                 ],
-                valeur: "admin",
+                value: "admin",
               },
             ]
           : []),
       ],
-      valider: t("Ajouter"),
+      confirmLabel: t("Ajouter"),
     });
-    if (!answers || answers === "secondaire") return;
+    if (!answers || answers === "secondary") return;
     try {
       const data = await api("/api/comptes", {
         method: "POST",
         json: {
-          nom: answers.nom,
-          identifiant: answers.identifiant,
+          name: answers.name,
+          username: answers.username,
           tailscale: answers.tailscale,
-          rang: answers.rang || "admin",
+          rank: answers.rank || "admin",
         },
       });
-      if (data.mot_de_passe) await showTemporaryPassword(data.compte, data.mot_de_passe);
-      else toast(t`${data.compte.nom} ajouté : son mot de passe provisoire s'affichera sur son appli`);
+      if (data.password) await showTemporaryPassword(data.account, data.password);
+      else toast(t`${data.account.name} ajouté : son mot de passe provisoire s'affichera sur son appli`);
     } catch (error) {
       toast(error.message, true);
     }
@@ -185,7 +185,7 @@ pages.utilisateurs = async () => {
   };
   content.querySelectorAll(".btn-menu").forEach((element) =>
     element.addEventListener("click", async () => {
-      const item = data.comptes[+element.dataset.i];
+      const item = data.accounts[+element.dataset.i];
       const action = async (body, ok) => {
         try {
           await api(`/api/comptes/${encodeURIComponent(item.id)}`, { method: "POST", json: body });
@@ -197,22 +197,26 @@ pages.utilisateurs = async () => {
       };
       const choices = [
         {
-          texte: t("Renommer"),
+          text: t("Renommer"),
           f: async () => {
-            const name = await confirmAction({ titre: t("Nom affiché"), champ: item.nom, valider: t("Renommer") });
-            if (name) action({ action: "nom", nom: name }, t("Renommé"));
+            const name = await confirmAction({
+              title: t("Nom affiché"),
+              field: item.name,
+              confirmLabel: t("Renommer"),
+            });
+            if (name) action({ action: "nom", name }, t("Renommé"));
           },
         },
         {
-          texte: item.tailscale ? t("Changer le compte Tailscale") : t("Relier un compte Tailscale"),
+          text: item.tailscale ? t("Changer le compte Tailscale") : t("Relier un compte Tailscale"),
           f: async () => {
             const value = await confirmAction({
-              titre: t("Compte Tailscale"),
-              texte: t(
+              title: t("Compte Tailscale"),
+              text: t(
                 "L'adresse avec laquelle la personne se connecte à Tailscale. Vide = plus d'accès à l'appli par ce compte.",
               ),
-              champ: item.tailscale || "",
-              valider: t("Enregistrer"),
+              field: item.tailscale || "",
+              confirmLabel: t("Enregistrer"),
             });
             if (value !== null) action({ action: "tailscale", tailscale: value }, t("Enregistré"));
           },
@@ -220,27 +224,26 @@ pages.utilisateurs = async () => {
       ];
       if (superAdmin)
         choices.push({
-          texte: item.rang === "super" ? t("Passer admin") : t("Nommer super admin"),
-          f: () => action({ action: "rang", rang: item.rang === "super" ? "admin" : "super" }, t("Rang changé")),
+          text: item.rank === "super" ? t("Passer admin") : t("Nommer super admin"),
+          f: () => action({ action: "rang", rank: item.rank === "super" ? "admin" : "super" }, t("Rang changé")),
         });
 
       choices.push({
-        texte: t("Retirer ce compte"),
+        text: t("Retirer ce compte"),
         danger: true,
         f: async () => {
           if (
             await confirmAction({
-              titre: t`Retirer ${item.nom} ?`,
-              texte:
-                t("Il ne pourra plus faire d'action admin") + (item.tailscale ? t(" ni ouvrir l'appli") : "") + ".",
-              valider: t("Retirer"),
+              title: t`Retirer ${item.name} ?`,
+              text: t("Il ne pourra plus faire d'action admin") + (item.tailscale ? t(" ni ouvrir l'appli") : "") + ".",
+              confirmLabel: t("Retirer"),
               danger: true,
             })
           )
             action({ action: "supprimer" }, t("Compte retiré"));
         },
       });
-      const entry = await chooseFromMenu(`${item.nom} · ${ROLE_NAMES[item.rang]}`, choices);
+      const entry = await chooseFromMenu(`${item.name} · ${ROLE_NAMES[item.rank]}`, choices);
       if (entry) setTimeout(entry.f, 50);
     }),
   );
@@ -249,7 +252,7 @@ pages.utilisateurs = async () => {
 async function showTemporaryPassword(account, password) {
   await new Promise((resolve) => {
     dialogForm.innerHTML = t`<h2>Mot de passe provisoire</h2>
-      <p>Donne-le à <strong>${escapeHtml(account.nom)}</strong> (identifiant <strong>${escapeHtml(account.identifiant)}</strong>). Il ne sera plus affiché, il sert une fois dans les 24 h, puis la personne choisit le sien.</p>
+      <p>Donne-le à <strong>${escapeHtml(account.name)}</strong> (identifiant <strong>${escapeHtml(account.username)}</strong>). Il ne sera plus affiché, il sert une fois dans les 24 h, puis la personne choisit le sien.</p>
       <p class="code-secours">${escapeHtml(password)}</p>
       <div class="actions"><button class="btn btn-p" value="ok" type="submit">C'est noté</button></div>`;
     dialogElement.onclose = () => resolve();

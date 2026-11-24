@@ -48,8 +48,8 @@ def read_nextcloud_link():
     return link if isinstance(link, dict) else {}
 
 
-NC_USER = os.environ.get("NC_USER", "") or read_nextcloud_link().get("utilisateur", "")
-NC_APP_PASSWORD = os.environ.get("NC_APP_PASSWORD", "") or read_nextcloud_link().get("mot_de_passe_appli", "")
+NC_USER = os.environ.get("NC_USER", "") or read_nextcloud_link().get("user", "")
+NC_APP_PASSWORD = os.environ.get("NC_APP_PASSWORD", "") or read_nextcloud_link().get("app_password", "")
 NC_PUBLIC = os.environ.get("NC_PUBLIC_URL", "").rstrip("/")
 
 # ---------------------------------------------------------------- 5. dépôt GitHub

@@ -21,9 +21,9 @@ const LOW_MEMORY = 0.5 * 1024 ** 3; // en dessous, le serveur risque de ramer
 /** La barre de mémoire : la part des outils, le reste du système, puis ce qui est libre. */
 export function memoryBarHtml(memory) {
   const percent = (bytes) => Math.max(0, Math.min(100, (bytes / (memory.total || 1)) * 100)).toFixed(1);
-  const system = Math.max(memory.utilise - memory.outils, 0);
-  return `<div class="barre-memoire" role="img" aria-label="${escapeHtml(t`${formatBytes(memory.utilise)} utilisés sur ${formatBytes(memory.total)}`)}">
-      <span class="part-outils" style="width:${percent(memory.outils)}%"></span><span class="part-systeme" style="width:${percent(system)}%"></span>
+  const system = Math.max(memory.used - memory.tools, 0);
+  return `<div class="barre-memoire" role="img" aria-label="${escapeHtml(t`${formatBytes(memory.used)} utilisés sur ${formatBytes(memory.total)}`)}">
+      <span class="part-outils" style="width:${percent(memory.tools)}%"></span><span class="part-systeme" style="width:${percent(system)}%"></span>
     </div>
     <div class="legende-memoire"><span><i class="part-outils"></i>${escapeHtml(t("Outils"))}</span><span><i class="part-systeme"></i>${escapeHtml(t("Système"))}</span><span><i></i>${escapeHtml(t("Libre"))}</span></div>`;
 }
@@ -44,18 +44,18 @@ const GROUPS = [
 
 /** Un outil pas encore installé : ce qu'il fait, ce qu'il prendrait en mémoire, et « Installer ». */
 function offerCardHtml(tool, memory) {
-  const remaining = memory.libre - tool.memoire;
-  const tooMuch = !tool.integre && remaining < LOW_MEMORY;
-  const cost = tool.integre
+  const remaining = memory.free - tool.memory;
+  const tooMuch = !tool.built_in && remaining < LOW_MEMORY;
+  const cost = tool.built_in
     ? t("Fait partie de Jabba : ne prend rien de plus.")
     : tooMuch
-      ? t`Prend environ ${formatBytes(tool.memoire)} : il n'en resterait que ${formatBytes(Math.max(remaining, 0))}. Mets d'abord un autre outil en pause.`
-      : t`Prend environ ${formatBytes(tool.memoire)} de mémoire : il en resterait ${formatBytes(remaining)}.`;
+      ? t`Prend environ ${formatBytes(tool.memory)} : il n'en resterait que ${formatBytes(Math.max(remaining, 0))}. Mets d'abord un autre outil en pause.`
+      : t`Prend environ ${formatBytes(tool.memory)} de mémoire : il en resterait ${formatBytes(remaining)}.`;
   return `<article class="carte pad outil offre" data-offre="${escapeHtml(tool.id)}">
-      <div class="haut"><div class="titre-outil">${toolIcon({ id: tool.id, nom: tool.nom })}<div><h2>${escapeHtml(tool.nom)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
+      <div class="haut"><div class="titre-outil">${toolIcon({ id: tool.id, name: tool.name })}<div><h2>${escapeHtml(tool.name)}</h2><div class="role">${escapeHtml(tool.role)}</div></div></div>
       <div class="haut-droite">${toolMenuHtml(tool)}</div></div>
       <div class="pied-offre"><p class="note${tooMuch ? " alerte-memoire" : ""}">${cost}</p>
-      <button class="btn btn-p" type="button" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}>${escapeHtml(tool.integre ? t("Ajouter") : t("Installer"))}</button></div>
+      <button class="btn btn-p" type="button" data-activer="${escapeHtml(tool.id)}"${tooMuch ? " disabled" : ""}>${escapeHtml(tool.built_in ? t("Ajouter") : t("Installer"))}</button></div>
       <div class="panneau-outil" data-panneau="${escapeHtml(tool.id)}" hidden></div>
     </article>`;
 }
@@ -86,12 +86,12 @@ async function enable(tool, scope, reload) {
       json: {},
     });
     if (task) await followTask(task); // un outil de l'appli s'ajoute tout de suite
-    toast(t`${tool.nom} est installé`);
+    toast(t`${tool.name} est installé`);
     reload();
   } catch (error) {
     toast(error.message, true);
     button.disabled = false;
-    button.textContent = tool.integre ? t("Ajouter") : t("Installer");
+    button.textContent = tool.built_in ? t("Ajouter") : t("Installer");
   }
 }
 
@@ -100,17 +100,17 @@ async function enable(tool, scope, reload) {
 export function bindCatalog({ grid, offers, extras = {} }, reload, onCards) {
   api("/api/etabli/catalogue")
     .then((result) => {
-      const memory = result.memoire;
+      const memory = result.memory;
       const banner = $("#etabli-memoire");
       if (banner)
         banner.innerHTML =
-          t`Mémoire du serveur : <strong>${formatBytes(memory.utilise)}</strong> utilisés sur ${formatBytes(memory.total)}, dont ${formatBytes(memory.outils)} pour les outils. Libre : <strong>${formatBytes(memory.libre)}</strong>.` +
+          t`Mémoire du serveur : <strong>${formatBytes(memory.used)}</strong> utilisés sur ${formatBytes(memory.total)}, dont ${formatBytes(memory.tools)} pour les outils. Libre : <strong>${formatBytes(memory.free)}</strong>.` +
           memoryBarHtml(memory);
       if (!grid || !offers) return;
-      const builtInOn = result.outils
-        .filter((tool) => tool.integre && tool.installe)
-        .map((tool) => ({ ...tool, etat: "actif", modifiable: false }));
-      const off = result.outils.filter((tool) => !tool.installe);
+      const builtInOn = result.tools
+        .filter((tool) => tool.built_in && tool.installed)
+        .map((tool) => ({ ...tool, state: "actif", editable: false }));
+      const off = result.tools.filter((tool) => !tool.installed);
       grid.insertAdjacentHTML("beforeend", builtInOn.map((tool) => toolCardHtml(tool)).join(""));
       offers.innerHTML = offersHtml(off, memory, extras);
       offers.querySelectorAll("[data-activer]").forEach((button) => {

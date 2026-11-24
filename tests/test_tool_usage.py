@@ -30,11 +30,11 @@ def test_sum_per_tool():
     )
     stats = tool_usage.parse_stats(output)
     tools = [
-        {"id": "nextcloud", "conteneurs": [{"nom": "nextcloud"}, {"nom": "nextcloud-db"}]},
-        {"id": "jellyfin", "conteneurs": [{"nom": "jellyfin"}]},
-        {"id": "dockge", "conteneurs": [{"nom": "dockge"}]},  # arrêté : pas mesuré
+        {"id": "nextcloud", "containers": [{"name": "nextcloud"}, {"name": "nextcloud-db"}]},
+        {"id": "jellyfin", "containers": [{"name": "jellyfin"}]},
+        {"id": "dockge", "containers": [{"name": "dockge"}]},  # arrêté : pas mesuré
     ]
     assert tool_usage.usage_by_tool(tools, stats) == {
-        "nextcloud": {"processeur": 3.2, "memoire": 600 * 1024**2},
-        "jellyfin": {"processeur": 120.0, "memoire": 1024**3},
+        "nextcloud": {"cpu": 3.2, "memory": 600 * 1024**2},
+        "jellyfin": {"cpu": 120.0, "memory": 1024**3},
     }

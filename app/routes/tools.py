@@ -56,12 +56,12 @@ def _tool_task(request, pid, gesture):
     """Un geste sur un outil, par la liste fermée (action « outil »), suivi comme tâche longue."""
     guard.require_admin(request)
     tool = tools.find_tool(pid)
-    args = {"dossier": tool["dossier"], "geste": gesture, "adresse": tools.ADRESSES.get(pid, "")}
+    args = {"folder": tool["folder"], "gesture": gesture, "address": tools.ADRESSES.get(pid, "")}
     try:
         actions.build("outil", args)  # refusé tout de suite si le dossier n'est pas celui d'un outil
     except actions.ActionError as error:
         raise HTTPException(400, str(error))
-    return background_tasks.start_task(TOOL_TASKS[gesture].format(tool["nom"]), "outil", args, request.state.nom, pid)
+    return background_tasks.start_task(TOOL_TASKS[gesture].format(tool["name"]), "outil", args, request.state.nom, pid)
 
 
 @router.post("/api/outils/{pid}/redemarrer")

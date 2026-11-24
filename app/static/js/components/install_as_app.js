@@ -29,7 +29,7 @@ function browserSteps() {
 }
 
 export function renderInstallAsApp(panel, item) {
-  panel.innerHTML = `<p class="note">${escapeHtml(t`${item.nom} devient une appli à part, avec sa propre fenêtre et son icône. Ouvre-le dans le navigateur, puis :`)}</p>
+  panel.innerHTML = `<p class="note">${escapeHtml(t`${item.name} devient une appli à part, avec sa propre fenêtre et son icône. Ouvre-le dans le navigateur, puis :`)}</p>
     <p><strong>${escapeHtml(browserSteps())}</strong></p>
-    <div class="actions"><a class="btn btn-p" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">${escapeHtml(t`Ouvrir ${item.nom} dans le navigateur`)}</a></div>`;
+    <div class="actions"><a class="btn btn-p" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">${escapeHtml(t`Ouvrir ${item.name} dans le navigateur`)}</a></div>`;
 }

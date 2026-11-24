@@ -31,11 +31,11 @@ DATA_DISK = "/srv/data"
 WEEK = 7 * 24 * 3600
 NIGHT_HOURS = range(2, 6)
 NEW_FILES_EVERY = 3600
-RUNNING = {"nouveaux": False}
+RUNNING = {"new_items": False}
 
 
 def _settings(state):
-    return state.setdefault("disques", {DATA_DISK: {"chaque_semaine": True}})
+    return state.setdefault("disks", {DATA_DISK: {"weekly": True}})
 
 
 def available_disks():
@@ -51,10 +51,10 @@ def disks(state):
     settings = _settings(state)
     return [
         {
-            "chemin": path,
-            "nom": name,
-            "chaque_semaine": bool(settings.get(path, {}).get("chaque_semaine")),
-            "analyse": settings.get(path, {}).get("analyse"),
+            "path": path,
+            "name": name,
+            "weekly": bool(settings.get(path, {}).get("weekly")),
+            "scan": settings.get(path, {}).get("scan"),
         }
         for path, name in available_disks().items()
     ]
@@ -63,12 +63,12 @@ def disks(state):
 def set_weekly(path, enabled):
     if path not in available_disks():
         raise KeyError(path)
-    antivirus.update_state(lambda state: _settings(state).setdefault(path, {}).update(chaque_semaine=bool(enabled)))
+    antivirus.update_state(lambda state: _settings(state).setdefault(path, {}).update(weekly=bool(enabled)))
 
 
 def _running(state):
     return next(
-        (path for path, value in _settings(state).items() if (value.get("analyse") or {}).get("etat") == "en_cours"),
+        (path for path, value in _settings(state).items() if (value.get("scan") or {}).get("state") == "en_cours"),
         None,
     )
 
@@ -86,12 +86,12 @@ def start_scan(path, now=None):
         if config.DEMO:
             code, error_output = 0, ""
         else:
-            code, _, error_output = commands.run_action("analyser_disque", chemin=path, unite=unit)
+            code, _, error_output = commands.run_action("analyser_disque", path=path, unit=unit)
         entry = _settings(state).setdefault(path, {})
         if code != 0:
-            entry["analyse"] = {"etat": "erreur", "debut": int(now), "fin": int(now), "erreur": error_output[-200:]}
+            entry["scan"] = {"state": "erreur", "start": int(now), "end": int(now), "error": error_output[-200:]}
         else:
-            entry["analyse"] = {"etat": "en_cours", "debut": int(now), "unite": unit}
+            entry["scan"] = {"state": "en_cours", "start": int(now), "unit": unit}
         antivirus.write_state(state)
         return code == 0
 
@@ -102,27 +102,27 @@ def _follow(state, now):
     if not path:
         return
     if config.DEMO:
-        _settings(state)[path]["analyse"] = {"etat": "fini", "debut": int(now), "fin": int(now), "menaces": 0}
+        _settings(state)[path]["scan"] = {"state": "fini", "start": int(now), "end": int(now), "threats": 0}
         return
-    scan = _settings(state)[path]["analyse"]
-    _, active, _ = commands.run_action("etat_tache", unite=scan["unite"])
+    scan = _settings(state)[path]["scan"]
+    _, active, _ = commands.run_action("etat_tache", unit=scan["unit"])
     if active.strip() in ("active", "activating", "reloading"):
         return
-    _, log_text, _ = commands.run_action("journal_tache", unite=scan["unite"])
+    _, log_text, _ = commands.run_action("journal_tache", unit=scan["unit"])
     infected = antivirus.parse_report(log_text)
     for infected_path, threat_name in infected.items():
         if infected_path.startswith(path + "/") and os.path.exists(infected_path):
             antivirus.record_threat(state, infected_path, threat_name, f"trouvé en analysant {path}", now)
-    scan.update({"etat": "fini", "fin": int(now), "menaces": len(infected)})
-    scan.pop("unite", None)
+    scan.update({"state": "fini", "end": int(now), "threats": len(infected)})
+    scan.pop("unit", None)
 
 
 def _weekly_due(state, now):
     if time.localtime(now).tm_hour not in NIGHT_HOURS or _running(state):
         return None
     for path, value in _settings(state).items():
-        last = (value.get("analyse") or {}).get("debut") or 0
-        if value.get("chaque_semaine") and path in available_disks() and now - last > WEEK - 12 * 3600:
+        last = (value.get("scan") or {}).get("start") or 0
+        if value.get("weekly") and path in available_disks() and now - last > WEEK - 12 * 3600:
             return path
     return None
 
@@ -159,9 +159,9 @@ def new_files(folder, since, now, skip=()):
 def scan_new_files(now=None):
     """Les nouveaux fichiers du disque de données (les dépôts des invités ont leur propre suivi)."""
     now = time.time() if now is None else now
-    since = antivirus.read_state().get("nouveaux_depuis")
+    since = antivirus.read_state().get("new_since")
     if since is None:  # premier passage : on part de maintenant (l'analyse de la semaine voit le reste)
-        return antivirus.update_state(lambda state: state.update(nouveaux_depuis=now))
+        return antivirus.update_state(lambda state: state.update(new_since=now))
     pending = new_files(DATA_DISK, since, now, skip=set(antivirus.deposit_folders()))
     infected, done = antivirus.scan_files(pending)
 
@@ -169,10 +169,10 @@ def scan_new_files(now=None):
         for path, threat_name in infected.items():
             antivirus.record_threat(state, path, threat_name, "arrivé sur le disque de données", now)
         if done:
-            state["analyses"] = state.get("analyses", 0) + len(done)
-            state["derniere_analyse"] = int(now)
+            state["scans"] = state.get("scans", 0) + len(done)
+            state["last_scan"] = int(now)
         if len(done) == len(pending):  # tout est vu ; sinon on garde la date et on réessaiera
-            state["nouveaux_depuis"] = now - antivirus.SETTLE_SECONDS
+            state["new_since"] = now - antivirus.SETTLE_SECONDS
 
     return antivirus.update_state(apply)
 
@@ -181,7 +181,7 @@ def _new_files_in_background():
     try:
         scan_new_files()
     finally:
-        RUNNING["nouveaux"] = False
+        RUNNING["new_items"] = False
 
 
 def watch(now=None):
@@ -193,7 +193,7 @@ def watch(now=None):
         due = _weekly_due(state, now)
     if due:
         start_scan(due, now)
-    last = antivirus.read_state().get("nouveaux_depuis") or 0
-    if now - last >= NEW_FILES_EVERY and not RUNNING["nouveaux"]:
-        RUNNING["nouveaux"] = True
+    last = antivirus.read_state().get("new_since") or 0
+    if now - last >= NEW_FILES_EVERY and not RUNNING["new_items"]:
+        RUNNING["new_items"] = True
         threading.Thread(target=_new_files_in_background, daemon=True).start()

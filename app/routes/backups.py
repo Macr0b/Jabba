@@ -28,25 +28,25 @@ def backup_state(request: Request):
     guard.require_admin(request)
     settings = backups.follow_backup()
     running = backups.is_running(settings)
-    disks = [{"nom": name, "chemin": disk_path} for name, disk_path in sorted(files_source.known_disks().items())]
+    disks = [{"name": name, "path": disk_path} for name, disk_path in sorted(files_source.known_disks().items())]
     return {
-        "actif": settings["actif"],
-        "pret": bool(settings["chemin"] and backups.passphrase()),
-        "disque": settings["disque"],
-        "chemin": settings["chemin"],
-        "branche": backups.disk_is_present(settings) if settings["chemin"] else None,
-        "heure": settings["heure"],
-        "prochaine": backups.next_run(settings) if settings["actif"] else None,
+        "active": settings["active"],
+        "ready": bool(settings["path"] and backups.passphrase()),
+        "disk": settings["disk"],
+        "path": settings["path"],
+        "plugged": backups.disk_is_present(settings) if settings["path"] else None,
+        "hour": settings["hour"],
+        "next": backups.next_run(settings) if settings["active"] else None,
         "sources": [
-            {"id": key, "nom": name, "detail": label, "actif": settings["sources"].get(key, True)}
+            {"id": key, "name": name, "detail": label, "active": settings["sources"].get(key, True)}
             for key, (name, label) in backups.SOURCES.items()
         ],
         "garder": backups.KEEP,
-        "en_cours": running,
-        "depuis": settings["lancee"] if running else None,
-        "dernier": settings.get("dernier"),
-        "derniere_reussie": settings.get("derniere_reussie"),
-        "disques": disks,
+        "in_progress": running,
+        "since": settings["launched"] if running else None,
+        "last": settings.get("last"),
+        "last_success": settings.get("last_success"),
+        "disks": disks,
     }
 
 
@@ -55,7 +55,7 @@ async def enable_backups(request: Request):
     """Met en route les sauvegardes vers un disque : installe restic si besoin et crée la phrase de passe (montrée une fois)."""
     session = guard.require_admin(request, "super", strong=True)
     body = await request.json()
-    name = body.get("disque")
+    name = body.get("disk")
     path = files_source.known_disks().get(name)
     if not path:
         raise HTTPException(400, "Disque inconnu.")
@@ -72,10 +72,10 @@ async def enable_backups(request: Request):
     if not backups.passphrase():
         new_value = backups.new_passphrase()
         backups.set_passphrase(new_value)
-    settings.update(actif=True, disque=name, chemin=path)
+    settings.update(active=True, disk=name, path=path)
     backups.write(settings)
     activity_log.record("sauvegardes", f"Sauvegardes mises en route vers {name}", request.state.nom)
-    return {"ok": True, "phrase": new_value, "qui": session["identifiant"]}
+    return {"ok": True, "phrase": new_value, "who": session["username"]}
 
 
 @router.post("/api/sauvegardes/reglages")
@@ -84,14 +84,14 @@ async def backup_settings(request: Request):
     body = await request.json()
     settings = backups.read()
     changed = []
-    if "actif" in body:
-        settings["actif"] = bool(body["actif"]) and bool(settings["chemin"])
-        changed.append("activées" if settings["actif"] else "mises en pause")
-    if "heure" in body:
-        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(body["heure"])):
+    if "active" in body:
+        settings["active"] = bool(body["active"]) and bool(settings["path"])
+        changed.append("activées" if settings["active"] else "mises en pause")
+    if "hour" in body:
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(body["hour"])):
             raise HTTPException(400, "Heure invalide.")
-        settings["heure"] = body["heure"]
-        changed.append(f"chaque nuit à {settings['heure']}")
+        settings["hour"] = body["hour"]
+        changed.append(f"chaque nuit à {settings['hour']}")
     if isinstance(body.get("sources"), dict):
         for key, value in body["sources"].items():
             if key in backups.SOURCES:
@@ -135,7 +135,7 @@ def browse_backup(request: Request, id: str, chemin: str = "/"):
     settings = backups.read()
     backups.require_readable(settings)
     try:
-        return {"elements": backups.browse(settings, backups.host_data_dir(), id, chemin)}
+        return {"items": backups.browse(settings, backups.host_data_dir(), id, chemin)}
     except RuntimeError as error:
         raise HTTPException(500, str(error))
 
@@ -145,7 +145,7 @@ async def restore_from_backup(request: Request):
     """Remet un fichier ou un dossier tel qu'il était, à côté (Restaurations), sans rien écraser."""
     guard.require_admin(request, strong=True)
     body = await request.json()
-    identifier, path = str(body.get("id", "")), str(body.get("chemin", ""))
+    identifier, path = str(body.get("id", "")), str(body.get("path", ""))
     if not re.fullmatch(r"[0-9a-f]{8,64}", identifier) or not path.strip("/") or ".." in path.split("/"):
         raise HTTPException(400, "Demande invalide.")
     settings = backups.read()
@@ -155,7 +155,7 @@ async def restore_from_backup(request: Request):
     except RuntimeError as error:
         raise HTTPException(500, str(error))
     activity_log.record("sauvegardes", f"Restauré : {path} (copie {identifier}) → {target}", request.state.nom)
-    return {"ok": True, "cible": target}
+    return {"ok": True, "target": target}
 
 
 @router.post("/api/sauvegardes/phrase")

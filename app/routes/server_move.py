@@ -27,7 +27,7 @@ async def move_state(request: Request):
 async def start_move(request: Request):
     guard.require_admin(request, "super", strong=True)
     body = await request.json()
-    return await asyncio.to_thread(server_move.start, str(body.get("chemin") or ""), request.state.nom)
+    return await asyncio.to_thread(server_move.start, str(body.get("path") or ""), request.state.nom)
 
 
 @router.post("/api/demenagement/terminer")

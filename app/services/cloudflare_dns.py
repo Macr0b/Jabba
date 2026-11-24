@@ -44,11 +44,11 @@ def _keys():
 
 
 def is_ready():
-    return bool(_keys().get("jeton"))
+    return bool(_keys().get("token"))
 
 
 def _call(method, path, payload=None, params=None, token=None):
-    token = token or _keys().get("jeton")
+    token = token or _keys().get("token")
     if not token:
         raise CloudflareError("Pas de jeton Cloudflare enregistré.")
     try:
@@ -95,7 +95,7 @@ def save_token(zone, token):
         )
     zone_id = next(item["id"] for item in zones if item.get("name") == zone)
     _records(zone_id, f"cloud.{zone}", "A", token=token)  # le jeton doit pouvoir lire les entrées DNS
-    json_files.save(KEYS_FILE, {"jeton": token, "zone": zone, "zone_id": zone_id}, private=True)
+    json_files.save(KEYS_FILE, {"token": token, "zone": zone, "zone_id": zone_id}, private=True)
 
 
 def forget():

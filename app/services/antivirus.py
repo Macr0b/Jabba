@@ -41,11 +41,11 @@ MEMORY_NEEDED = 4 * 1000**3 * 0.95  # « 4 Go » : une machine de 4 Go en annonc
 FOUND = re.compile(r"^(.*): (.+) FOUND$")
 _lock = threading.Lock()
 STATE_LOCK = threading.RLock()
-RUNNING = {"analyse": False, "installation": False}
+RUNNING = {"scan": False, "installation": False}
 
 
 def _read():
-    return json_files.load(STATE_FILE, {"vus": {}, "derniere_analyse": None, "analyses": 0, "menaces": []})
+    return json_files.load(STATE_FILE, {"seen_items": {}, "last_scan": None, "scans": 0, "threats": []})
 
 
 def read_state():
@@ -65,7 +65,7 @@ def _write(state):
 def installed():
     if config.DEMO:
         return True
-    code, output, _ = commands.run_action("conteneur_actif", nom="antivirus")
+    code, output, _ = commands.run_action("conteneur_actif", name="antivirus")
     return code == 0 and output.strip() == "true"
 
 
@@ -100,7 +100,7 @@ def remove():
     removed = commands.run_action("retirer_antivirus")[0] == 0
     if removed:
         state = _read()
-        state["retire"] = True  # retiré par un admin : jamais réinstallé tout seul
+        state["removed"] = True  # retiré par un admin : jamais réinstallé tout seul
         _write(state)
     return removed
 
@@ -109,30 +109,30 @@ def install_by_default(total_memory=None):
     """Installé de base, une seule fois, si le serveur a la mémoire (environ 1 Go pour ClamAV).
     Ensuite, c'est l'admin qui décide (Établi : Installer / Retirer)."""
     state = _read()
-    if state.get("de_base") or config.DEMO:
-        return state.get("de_base")
+    if state.get("basic") or config.DEMO:
+        return state.get("basic")
     if total_memory is None:
         total_memory = measurements.memory()["total"]
     if total_memory < MEMORY_NEEDED:
-        state["de_base"] = "memoire_insuffisante"
-    elif state.get("retire") or installed():
-        state["de_base"] = "deja_decide"
+        state["basic"] = "memoire_insuffisante"
+    elif state.get("removed") or installed():
+        state["basic"] = "deja_decide"
     else:
-        state["de_base"] = "installe"
+        state["basic"] = "installe"
         install()
         activity_log.record("outil", "Antivirus installé de base (mémoire suffisante)")
     _write(state)
-    return state["de_base"]
+    return state["basic"]
 
 
 # ---------------------------------------------------------------- analyse
 def deposit_folders():
-    return [folder["chemin"] for folder in guests.read().get("dossiers", []) if folder.get("mode") == "depot"]
+    return [folder["path"] for folder in guests.read().get("folders", []) if folder.get("mode") == "depot"]
 
 
 def pending_files(state, now):
     found = []
-    seen = state.setdefault("vus", {})
+    seen = state.setdefault("seen_items", {})
     for folder in deposit_folders():
         for root, subfolders, names in os.walk(folder):
             subfolders[:] = [
@@ -178,13 +178,13 @@ def record_threat(state, path, threat_name, origin, now):
         moved = None  # disque en lecture seule : on ne peut pas le déplacer, on prévient
         where = "Il n'a pas pu être déplacé (disque en lecture seule ?) : à supprimer ou isoler à la main."
     threat = {
-        "fichier": os.path.basename(path),
-        "origine": path,
-        "menace": threat_name,
+        "file": os.path.basename(path),
+        "origin": path,
+        "threat": threat_name,
         "date": int(now),
-        "ecart": moved,
+        "quarantined": moved,
     }
-    state["menaces"] = ([threat] + state.get("menaces", []))[:50]
+    state["threats"] = ([threat] + state.get("threats", []))[:50]
     activity_log.record("securite", f"Antivirus : {threat_name} dans {path}" + (", mis à l'écart" if moved else ""))
     notifications.send(
         "securite",
@@ -200,7 +200,7 @@ def scan_files(paths):
     infected, done = {}, []
     for start in range(0, len(paths), actions_tools.MAX_SCAN_FILES):
         batch = paths[start : start + actions_tools.MAX_SCAN_FILES]
-        code, output, _ = commands.run_action("analyser_fichiers", chemins=batch)
+        code, output, _ = commands.run_action("analyser_fichiers", paths=batch)
         if code not in (0, 1):
             break  # antivirus pas prêt (signatures en cours de chargement) : on réessaiera
         infected.update(parse_report(output))
@@ -228,11 +228,13 @@ def scan_pending(now=None):
             if path in infected:
                 record_threat(state, path, infected[path], "déposé par un invité", now)
             else:
-                state.setdefault("vus", {})[path] = signatures[path]
+                state.setdefault("seen_items", {})[path] = signatures[path]
         if done:
-            state["analyses"] = state.get("analyses", 0) + len(done)
-            state["derniere_analyse"] = int(now)
-        state["vus"] = {path: value for path, value in state.get("vus", {}).items() if os.path.exists(path)}
+            state["scans"] = state.get("scans", 0) + len(done)
+            state["last_scan"] = int(now)
+        state["seen_items"] = {
+            path: value for path, value in state.get("seen_items", {}).items() if os.path.exists(path)
+        }
 
     return update_state(apply)
 
@@ -241,23 +243,23 @@ def _scan_in_background():
     try:
         scan_pending()
     finally:
-        RUNNING["analyse"] = False
+        RUNNING["scan"] = False
 
 
 def watch_deposits():
-    if RUNNING["analyse"] or not installed():
+    if RUNNING["scan"] or not installed():
         return
-    RUNNING["analyse"] = True
+    RUNNING["scan"] = True
     threading.Thread(target=_scan_in_background, daemon=True).start()
 
 
 def summary():
     state = _read()
     return {
-        "installe": installed(),
+        "installed": installed(),
         "installation": RUNNING["installation"],
-        "derniere_analyse": state.get("derniere_analyse"),
-        "analyses": state.get("analyses", 0),
-        "menaces": state.get("menaces", [])[:10],
-        "de_base": state.get("de_base"),
+        "last_scan": state.get("last_scan"),
+        "scans": state.get("scans", 0),
+        "threats": state.get("threats", [])[:10],
+        "basic": state.get("basic"),
     }

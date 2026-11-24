@@ -20,14 +20,13 @@ const guestFileUrl = (data, path, view = 0) =>
 
 pages.invite = async (params) => {
   const data = await api("/api/invite/etat");
-  const title =
-    state.me && state.me.serveur ? state.me.serveur[0].toUpperCase() + state.me.serveur.slice(1) : t("Jabba");
+  const title = state.me && state.me.server ? state.me.server[0].toUpperCase() + state.me.server.slice(1) : t("Jabba");
   const adminFooter = data.lan
     ? t`<p class="note centre">Administration : depuis l'appli Jabba, par Tailscale.</p>`
     : t`<div class="centre"><button class="btn btn-p" id="connexion">Connexion admin</button></div>`;
-  if (!data.actif) {
+  if (!data.active) {
     content.innerHTML = t`<div class="invite-accueil"><span class="logo grand">J</span><h1>${escapeHtml(title)}</h1><p class="sous-titre">L'accès invités est fermé pour le moment.</p></div>${adminFooter}`;
-  } else if (!data.entre) {
+  } else if (!data.between) {
     content.innerHTML = t`<div class="invite-accueil"><span class="logo grand">J</span><h1>Bienvenue chez ${escapeHtml(title)}</h1>
         <p class="sous-titre">Tape le code d'accès à 4 chiffres (ou scanne le QR code).</p>
         <form id="form-code" class="form-code"><input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" aria-label="Code d'accès" placeholder="••••"><button class="btn btn-p" type="submit">Entrer</button></form></div>${adminFooter}`;
@@ -46,8 +45,8 @@ pages.invite = async (params) => {
   } else {
     content.innerHTML = t`<div class="entete"><div><h1>${escapeHtml(title)}</h1><p class="sous-titre">${data.lan ? t("Bienvenue ! Voici ce qui est partagé avec toi.") : t("Mode invité : ce que voient les invités. Connecte-toi pour tout le reste.")}</p></div></div>
       <section aria-label="Dossiers partagés"><h2 class="titre-section">Dossiers</h2>
-        <div class="tuiles">${data.dossiers.map((item) => `<a class="carte tuile" href="#/invite?d=${encodeURIComponent(item.id)}"><span class="ic-tuile dossier" aria-hidden="true"></span><span class="nom-tuile">${escapeHtml(item.nom)}</span><span class="note">${item.mode === "depot" ? t("Lire et déposer") : t("Lecture seule")}</span></a>`).join("") || t('<p class="note">Aucun dossier partagé.</p>')}</div></section>
-      ${data.outils.length ? t`<section aria-label="Outils"><h2 class="titre-section">Outils</h2><section class="carte liste-raccourcis">${data.outils.map((item) => `<a href="${escapeHtml(item.lien)}" target="_blank" rel="noopener"><span>${escapeHtml(item.nom)} <span class="note">· ${escapeHtml(item.role)}</span></span><span>↗</span></a>`).join("")}</section></section>` : ""}
+        <div class="tuiles">${data.folders.map((item) => `<a class="carte tuile" href="#/invite?d=${encodeURIComponent(item.id)}"><span class="ic-tuile dossier" aria-hidden="true"></span><span class="nom-tuile">${escapeHtml(item.name)}</span><span class="note">${item.mode === "depot" ? t("Lire et déposer") : t("Lecture seule")}</span></a>`).join("") || t('<p class="note">Aucun dossier partagé.</p>')}</div></section>
+      ${data.tools.length ? t`<section aria-label="Outils"><h2 class="titre-section">Outils</h2><section class="carte liste-raccourcis">${data.tools.map((item) => `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener"><span>${escapeHtml(item.name)} <span class="note">· ${escapeHtml(item.role)}</span></span><span>↗</span></a>`).join("")}</section></section>` : ""}
       ${adminFooter}`;
   }
   const button = $("#connexion");
@@ -61,8 +60,8 @@ async function showGuestFolder(folderId, path) {
   const thread = [
     t`<a href="#/invite">Accueil</a>`,
     parts.length
-      ? `<a href="${link("/")}">${escapeHtml(data.dossier.nom)}</a>`
-      : `<strong>${escapeHtml(data.dossier.nom)}</strong>`,
+      ? `<a href="${link("/")}">${escapeHtml(data.folder.name)}</a>`
+      : `<strong>${escapeHtml(data.folder.name)}</strong>`,
   ]
     .concat(
       parts.map((value, index) =>
@@ -72,21 +71,21 @@ async function showGuestFolder(folderId, path) {
       ),
     )
     .join('<span class="sep">/</span>');
-  const dropZone = data.dossier.mode === "depot";
+  const dropZone = data.folder.mode === "depot";
   content.innerHTML = t`
-    <div class="entete"><div><h1>${escapeHtml(parts.length ? parts[parts.length - 1] : data.dossier.nom)}${dropZone ? "" : t('<span class="lecture-seule">Lecture seule</span>')}</h1></div>
+    <div class="entete"><div><h1>${escapeHtml(parts.length ? parts[parts.length - 1] : data.folder.name)}${dropZone ? "" : t('<span class="lecture-seule">Lecture seule</span>')}</h1></div>
       ${dropZone ? t`<div class="actions"><button class="btn btn-p" id="envoyer">Déposer des fichiers</button></div>` : ""}</div>
     <nav class="fil" aria-label="Emplacement">${thread}</nav>
     <section class="carte tableau">
       ${
-        data.elements.length
-          ? data.elements
+        data.items.length
+          ? data.items
               .map(
                 (item) => `<div class="ligne">
-        <span class="nom">${item.dossier ? '<span class="ic-dossier" aria-hidden="true"></span>' : THUMBNAIL_EXTENSIONS.includes(extensionOf(item.nom)) ? `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="${guestFileUrl(folderId, item.chemin, 1)}"></span>` : `<span class="ic-fichier${kindOf(item.nom) ? " " + kindOf(item.nom) : ""}" aria-hidden="true"></span>`}
-          <span>${item.dossier ? `<a href="${link(item.chemin)}">${escapeHtml(item.nom)}</a>` : `<a href="${guestFileUrl(folderId, item.chemin)}">${escapeHtml(item.nom)}</a>`}<span class="mobile-detail">${item.dossier ? "" : formatBytes(item.taille)}</span></span></span>
-        <span class="gris col-l">${item.dossier ? "" : formatBytes(item.taille)}</span><span class="gris col-l">${formatWhen(item.modifie)}</span>
-        ${item.dossier ? "<span></span>" : t`<a class="btn btn-petit" href="${guestFileUrl(folderId, item.chemin)}" aria-label="Télécharger ${escapeHtml(item.nom)}">↓</a>`}</div>`,
+        <span class="nom">${item.folder ? '<span class="ic-dossier" aria-hidden="true"></span>' : THUMBNAIL_EXTENSIONS.includes(extensionOf(item.name)) ? `<span class="vignette" aria-hidden="true"><img alt="" loading="lazy" src="${guestFileUrl(folderId, item.path, 1)}"></span>` : `<span class="ic-fichier${kindOf(item.name) ? " " + kindOf(item.name) : ""}" aria-hidden="true"></span>`}
+          <span>${item.folder ? `<a href="${link(item.path)}">${escapeHtml(item.name)}</a>` : `<a href="${guestFileUrl(folderId, item.path)}">${escapeHtml(item.name)}</a>`}<span class="mobile-detail">${item.folder ? "" : formatBytes(item.size)}</span></span></span>
+        <span class="gris col-l">${item.folder ? "" : formatBytes(item.size)}</span><span class="gris col-l">${formatWhen(item.modified)}</span>
+        ${item.folder ? "<span></span>" : t`<a class="btn btn-petit" href="${guestFileUrl(folderId, item.path)}" aria-label="Télécharger ${escapeHtml(item.name)}">↓</a>`}</div>`,
               )
               .join("")
           : t('<div class="vide">Ce dossier est vide.</div>')
@@ -108,7 +107,7 @@ async function showGuestFolder(folderId, path) {
           body: formData,
         },
       );
-      toast(`${data.envoyes.length} fichier${data.envoyes.length > 1 ? t("s déposés") : t(" déposé")}, merci !`);
+      toast(`${data.sent.length} fichier${data.sent.length > 1 ? t("s déposés") : t(" déposé")}, merci !`);
     } catch (error) {
       toast(error.message, true);
     }

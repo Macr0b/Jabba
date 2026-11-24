@@ -67,7 +67,7 @@ function deviceName() {
 // ------------------------------------------------------------ connexion : 2e étape
 // data = {etape, methodes} renvoyé par /api/admin/connexion. Renvoie la session ouverte, ou null.
 export function secondLoginStep(data) {
-  const methods = data.methodes;
+  const methods = data.methods;
   let codeMethod = methods.includes("appli") ? "appli" : "secours";
   return new Promise((resolve) => {
     let result = null;
@@ -82,7 +82,7 @@ export function secondLoginStep(data) {
       <button class="btn${withKey ? "" : " btn-p"}" value="oui" type="submit">Valider le code</button></div>`;
     const send = async (json) => {
       try {
-        result = await api("/api/admin/verification", { method: "POST", json: { etape: data.etape, ...json } }, true);
+        result = await api("/api/admin/verification", { method: "POST", json: { step: data.step, ...json } }, true);
         dialogElement.close("fini");
       } catch (error) {
         toast(error.message, true);
@@ -103,9 +103,9 @@ export function secondLoginStep(data) {
     if (keyButton)
       keyButton.onclick = async () => {
         try {
-          const options = await api("/api/admin/cle/options", { method: "POST", json: { etape: data.etape } }, true);
+          const options = await api("/api/admin/cle/options", { method: "POST", json: { step: data.step } }, true);
           const credential = await navigator.credentials.get({ publicKey: requestOptions(options) });
-          await send({ methode: "cle", credential: credentialJson(credential) });
+          await send({ method: "cle", credential: credentialJson(credential) });
         } catch (error) {
           toast(error.name === "NotAllowedError" ? t("Vérification annulée.") : error.message, true);
         }
@@ -113,7 +113,7 @@ export function secondLoginStep(data) {
     dialogForm.onsubmit = (event) => {
       if (event.submitter && event.submitter.value === "oui") {
         event.preventDefault();
-        send({ methode: codeMethod, code: $("#code-double").value });
+        send({ method: codeMethod, code: $("#code-double").value });
       }
     };
     dialogElement.onclose = () => {
@@ -150,20 +150,20 @@ async function showRecoveryCodes(codes) {
 
 async function addPasskey() {
   const name = await formBody({
-    titre: t("Ajouter Face ID ou Touch ID"),
-    texte: t(
+    title: t("Ajouter Face ID ou Touch ID"),
+    text: t(
       "Ton appareil va te demander ton visage, ton doigt ou son code. Seule une clé publique est envoyée au serveur : ton visage et ton empreinte ne quittent jamais l'appareil.",
     ),
-    champs: [{ nom: "nom", label: t("Nom de cet appareil"), valeur: deviceName() }],
-    valider: t("Continuer"),
+    fields: [{ name: "name", label: t("Nom de cet appareil"), value: deviceName() }],
+    confirmLabel: t("Continuer"),
   });
-  if (!name || name === "secondaire") return;
+  if (!name || name === "secondary") return;
   try {
     const options = await api("/api/double/cle/debut", { method: "POST" });
     const credential = await navigator.credentials.create({ publicKey: creationOptions(options) });
     const result = await api("/api/double/cle/fin", {
       method: "POST",
-      json: { credential: credentialJson(credential), nom: name.nom },
+      json: { credential: credentialJson(credential), name: name.name },
     });
     toast(t("Clé d'accès ajoutée"));
     await showRecoveryCodes(result.codes);
@@ -227,16 +227,16 @@ async function addAuthenticatorApp() {
 
 async function clearForOtherAccount() {
   const answers = await formBody({
-    titre: t("Retirer la double vérification d'un compte"),
-    texte: t(
+    title: t("Retirer la double vérification d'un compte"),
+    text: t(
       "Pour quelqu'un qui a perdu son téléphone et ses codes de secours. Il se connectera avec son seul mot de passe, puis pourra en ajouter une nouvelle.",
     ),
-    champs: [{ nom: "identifiant", label: t("Identifiant du compte") }],
-    valider: t("Retirer"),
+    fields: [{ name: "username", label: t("Identifiant du compte") }],
+    confirmLabel: t("Retirer"),
   });
-  if (!answers || answers === "secondaire") return;
+  if (!answers || answers === "secondary") return;
   try {
-    await api("/api/double/effacer", { method: "POST", json: { identifiant: answers.identifiant } });
+    await api("/api/double/effacer", { method: "POST", json: { username: answers.username } });
     toast(t("Double vérification retirée"));
   } catch (error) {
     toast(error.message, true);
@@ -249,17 +249,17 @@ export async function secondFactorCard() {
   if (!element) return;
   const summary = await api("/api/double");
   const lines = [
-    ...summary.cles.map(
+    ...summary.keys.map(
       (
         key,
-      ) => t`<div class="appareil"><span>${escapeHtml(key.nom)} <span class="note">· Face ID, Touch ID ou clé</span></span>
+      ) => t`<div class="appareil"><span>${escapeHtml(key.name)} <span class="note">· Face ID, Touch ID ou clé</span></span>
         <button class="btn btn-petit" type="button" data-retirer-cle="${escapeHtml(key.id)}">Retirer</button></div>`,
     ),
-    summary.appli
+    summary.app
       ? t`<div class="appareil"><span>Appli d'authentification</span><button class="btn btn-petit" type="button" id="retirer-appli">Retirer</button></div>`
       : "",
     summary.active
-      ? t`<div class="appareil"><span>Codes de secours <span class="note">· ${summary.codes_restants} restant${summary.codes_restants > 1 ? "s" : ""}</span></span>
+      ? t`<div class="appareil"><span>Codes de secours <span class="note">· ${summary.codes_left} restant${summary.codes_left > 1 ? "s" : ""}</span></span>
         <button class="btn btn-petit" type="button" id="nouveaux-codes">Nouveaux codes</button></div>`
       : "",
   ].join("");
@@ -271,12 +271,12 @@ export async function secondFactorCard() {
             "Après ton mot de passe, Jabba demandera une deuxième preuve : Face ID, Touch ID, ou le code d'une appli d'authentification. Un mot de passe volé ne suffira plus.",
           )
     }</p>
-    ${summary.active && summary.codes_restants < 3 ? t('<div class="bandeau" style="margin-bottom:12px"><span>Il te reste peu de codes de secours : crées-en de nouveaux.</span></div>') : ""}
+    ${summary.active && summary.codes_left < 3 ? t('<div class="bandeau" style="margin-bottom:12px"><span>Il te reste peu de codes de secours : crées-en de nouveaux.</span></div>') : ""}
     <div class="liste-appareils">${lines}</div>
     <div class="actions" style="margin-top:12px">
       ${passkeysAvailable() ? t('<button class="btn" type="button" id="ajouter-cle">Ajouter Face ID ou Touch ID</button>') : ""}
-      ${summary.appli ? "" : t('<button class="btn" type="button" id="ajouter-appli">Ajouter une appli d\'authentification</button>')}
-      ${state.admin && state.admin.rang === "super" ? t('<button class="lien" type="button" id="effacer-autre">Téléphone perdu (autre compte)</button>') : ""}
+      ${summary.app ? "" : t('<button class="btn" type="button" id="ajouter-appli">Ajouter une appli d\'authentification</button>')}
+      ${state.admin && state.admin.rank === "super" ? t('<button class="lien" type="button" id="effacer-autre">Téléphone perdu (autre compte)</button>') : ""}
     </div>`;
   const refresh = () => secondFactorCard().catch((error) => toast(error.message, true));
   const bind = (selector, action) => {
@@ -288,9 +288,9 @@ export async function secondFactorCard() {
   bind("#effacer-autre", clearForOtherAccount);
   bind("#nouveaux-codes", async () => {
     const ok = await confirmAction({
-      titre: t("Créer de nouveaux codes de secours ?"),
-      texte: t("Les anciens codes ne marcheront plus."),
-      valider: t("Créer"),
+      title: t("Créer de nouveaux codes de secours ?"),
+      text: t("Les anciens codes ne marcheront plus."),
+      confirmLabel: t("Créer"),
     });
     if (!ok) return;
     try {
@@ -302,7 +302,11 @@ export async function secondFactorCard() {
   });
   bind("#retirer-appli", async () => {
     if (
-      !(await confirmAction({ titre: t("Retirer l'appli d'authentification ?"), valider: t("Retirer"), danger: true }))
+      !(await confirmAction({
+        title: t("Retirer l'appli d'authentification ?"),
+        confirmLabel: t("Retirer"),
+        danger: true,
+      }))
     )
       return;
     try {
@@ -313,7 +317,7 @@ export async function secondFactorCard() {
   });
   element.querySelectorAll("[data-retirer-cle]").forEach((button) => {
     button.onclick = async () => {
-      if (!(await confirmAction({ titre: t("Retirer cette clé d'accès ?"), valider: t("Retirer"), danger: true })))
+      if (!(await confirmAction({ title: t("Retirer cette clé d'accès ?"), confirmLabel: t("Retirer"), danger: true })))
         return;
       try {
         await api(`/api/double/cle/${encodeURIComponent(button.dataset.retirerCle)}/retirer`, { method: "POST" });

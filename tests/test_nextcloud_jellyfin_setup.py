@@ -57,16 +57,16 @@ def test_install_writes_the_settings(tmp_path):
 def test_catalog():
     for outil in ("nextcloud", "jellyfin"):
         entry = catalog.OPTIONAL_TOOLS[outil]
-        assert entry["mot_de_passe"] and entry["identifiant"] == catalog.SERVER_USER_MARK
+        assert entry["password"] and entry["username"] == catalog.SERVER_USER_MARK
         assert entry["port_https"] is None  # leur adresse à part, comme avant (nextcloud.…, jellyfin.…)
-        assert "mkdir -p /srv/data/media/films" in entry["preparer"]
-    assert "cron.php" in catalog.OPTIONAL_TOOLS["nextcloud"]["preparer"]
+        assert "mkdir -p /srv/data/media/films" in entry["prepare"]
+    assert "cron.php" in catalog.OPTIONAL_TOOLS["nextcloud"]["prepare"]
     assert catalog.NEXTCLOUD_CRON.count("crontab") == 2  # relue puis réécrite : une seule ligne, jamais en double
 
 
 def test_login_named_after_the_server_account(vault):
     tool_credentials.password_for("nextcloud")
-    assert tool_credentials.read("nextcloud")["identifiant"] == "rob"
+    assert tool_credentials.read("nextcloud")["username"] == "rob"
 
 
 class FakeJellyfin:
@@ -156,7 +156,7 @@ def test_nextcloud_set_up_and_linked_to_jabba(vault, monkeypatch):
     assert ["config:system:set", "trusted_proxies", "0", "--value=172.16.0.0/12"] in occ
     assert requests[0][1] == ("rob", word) and requests[0][2] == {"OCS-APIRequest": "true"}
     link = json.loads((vault / "nextcloud-jabba.json").read_text())
-    assert link == {"utilisateur": "rob", "mot_de_passe_appli": "appli-123"}
+    assert link == {"user": "rob", "app_password": "appli-123"}
     assert (vault / "nextcloud-jabba.json").stat().st_mode & 0o077 == 0
     assert tool_setup.config.NC_APP_PASSWORD == "appli-123"  # l'écran Fichiers marche sans redémarrer
 
@@ -220,7 +220,7 @@ def test_unneeded_drawn_password_forgotten(vault, monkeypatch):
     # Première installation (rien de gardé) : le mot de passe reste.
     monkeypatch.setattr(background_tasks.commands, "run_action", lambda *a, **k: (0, "installé\n", ""))
     optional_tools.install("jellyfin", "rob")
-    assert tool_credentials.read("jellyfin")["identifiant"] == "rob"
+    assert tool_credentials.read("jellyfin")["username"] == "rob"
 
 
 def test_without_a_jabba_account_nothing_is_set_up(vault, monkeypatch):

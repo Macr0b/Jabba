@@ -22,13 +22,15 @@ NO_SERVICE = "Le service du serveur (jabba-hote) ne répond pas."
 
 
 # ---------------------------------------------------------------- liste fermée
-def run_action(name, input_text=None, **args):
+def run_action(action_name, /, input_text=None, **args):
     """Demande une action de la liste fermée. Un paramètre refusé lève ActionError tout de suite,
     avant même d'écrire au service (qui vérifie de nouveau de son côté)."""
-    _, timeout = actions.build(name, args)
-    actions.host_input(name, args, actions.check_input(name, input_text))
-    reply = _ask_service({"action": name, "args": args, "entree": input_text}, timeout)
-    return reply.get("code", 1), reply.get("sortie", ""), reply.get("erreur", "")
+    _, timeout = actions.build(action_name, args)
+    actions.host_input(action_name, args, actions.check_input(action_name, input_text))
+    reply = _ask_service({"action": action_name, "args": args, "entry": input_text}, timeout)
+    # « sortie » et « erreur » : réponse d'un service resté en 0.16 pendant la mise à jour.
+    output = reply.get("output", reply.get("sortie", ""))
+    return reply.get("code", 1), output, reply.get("error", reply.get("erreur", ""))
 
 
 def _ask_service(request, timeout):
@@ -46,7 +48,7 @@ def _ask_service(request, timeout):
                 answer += chunk
         return json.loads(answer)
     except (OSError, ValueError):
-        return {"code": 1, "sortie": "", "erreur": NO_SERVICE}
+        return {"code": 1, "output": "", "error": NO_SERVICE}
 
 
 # ---------------------------------------------------------------- comptes Nextcloud
@@ -74,10 +76,10 @@ def occ(args, input_text=None, is_password=False, timeout=60):
         return run_action(
             "nextcloud",
             input_text=input_text if is_password else None,
-            commande=args[0],
+            command=args[0],
             arguments=list(args[1:]),
-            delai=int(timeout),
-            mot_de_passe=bool(is_password),
+            delay=int(timeout),
+            password=bool(is_password),
         )
     except actions.ActionError as error:
         return 1, "", str(error)

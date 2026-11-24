@@ -56,7 +56,7 @@ def launch(tmp_path, with_files, **k):
 
 def test_full_copy(tmp_path):
     dossier, etat, calls = launch(tmp_path, with_files=True)
-    assert etat["code"] == 0 and etat["etape"] == "fini"
+    assert etat["code"] == 0 and etat["step"] == "fini"
     assert {f.name for f in dossier.iterdir()} == {
         "outils.tar",
         "fichiers.tar",
@@ -81,7 +81,7 @@ def test_on_the_data_disk_files_are_not_copied_again(tmp_path):
 
 def test_not_enough_room_nothing_is_stopped(tmp_path):
     dossier, etat, calls = launch(tmp_path, with_files=True, place=50)
-    assert etat["code"] == 12 and etat["besoin"] >= 100 and etat["libre"] == 50
+    assert etat["code"] == 12 and etat["needed"] >= 100 and etat["free"] == 50
     assert " stop" not in calls and not dossier.exists()
 
 
@@ -94,20 +94,20 @@ def test_failed_copy_tools_restart(tmp_path):
 def test_move_actions():
     commande, _ = actions.build(
         "demenager",
-        {"disque": "/srv/data", "fichiers": False, "unite": "jabba-demenage-1", "donnees": "/opt/stacks/j/donnees"},
+        {"disk": "/srv/data", "files": False, "unit": "jabba-demenage-1", "data": "/opt/stacks/j/donnees"},
     )
     assert "jabba-demenage-1" in commande and "outils.tar" in commande[6]
-    for bad in ({"disque": "/etc", "fichiers": False}, {"disque": "/srv/data", "fichiers": "oui"}):
+    for bad in ({"disk": "/etc", "files": False}, {"disk": "/srv/data", "files": "oui"}):
         with pytest.raises(actions.ActionError):
-            actions.build("demenager", {"unite": "jabba-demenage-1", "donnees": "/opt/stacks/j/donnees", **bad})
+            actions.build("demenager", {"unit": "jabba-demenage-1", "data": "/opt/stacks/j/donnees", **bad})
     end = actions.build("fin_demenagement", {})[0]
     script = end[6]
     assert script.index("tailscale logout") < script.index("systemctl poweroff") and "sleep 30" in script
-    cancel_ = actions.build("annuler_demenagement", {"disque": "/srv/disques/R2"})[0]
+    cancel_ = actions.build("annuler_demenagement", {"disk": "/srv/disques/R2"})[0]
     assert cancel_[-1] == "/srv/disques/R2" and "compose --project-directory" in cancel_[2]
     assert 'rm -rf "$copy" "$copy.tmp"' in cancel_[2]
     with pytest.raises(actions.ActionError):
-        actions.build("annuler_demenagement", {"disque": "/"})
+        actions.build("annuler_demenagement", {"disk": "/"})
 
 
 @pytest.fixture
@@ -130,28 +130,28 @@ def card(tmp_path, monkeypatch):
 def test_disk_choice_and_states(card):
     dossier, started_ones = card
     etat = server_move.state()
-    assert etat["etat"] == "rien" and [d["fichiers"] for d in etat["disques"]] == [False, True]
+    assert etat["state"] == "rien" and [d["files"] for d in etat["disks"]] == [False, True]
     with pytest.raises(server_move.ServiceError):
         server_move.start("/srv/disques/inconnu")
     server_move.start("/srv/disques/R2")
-    assert started_ones[0][0] == "demenager" and started_ones[0][1]["fichiers"] is True
-    started = json.loads((dossier / "demenagement.json").read_text())["lance"]
+    assert started_ones[0][0] == "demenager" and started_ones[0][1]["files"] is True
+    started = json.loads((dossier / "demenagement.json").read_text())["started"]
     (dossier / "demenagement-etat.json").write_text(
-        json.dumps({"debut": started, "code": 12, "besoin": 3 * 1024**3, "libre": 0})
+        json.dumps({"start": started, "code": 12, "needed": 3 * 1024**3, "free": 0})
     )
-    assert server_move.state()["etat"] == "rate" and "Il faut 4 Go" in server_move.state()["erreur"]
-    (dossier / "demenagement-etat.json").write_text(json.dumps({"debut": started, "fin": started + 60, "code": 0}))
-    assert server_move.state()["etat"] == "pret"
+    assert server_move.state()["state"] == "rate" and "Il faut 4 Go" in server_move.state()["error"]
+    (dossier / "demenagement-etat.json").write_text(json.dumps({"start": started, "end": started + 60, "code": 0}))
+    assert server_move.state()["state"] == "pret"
     server_move.cancel()
-    assert started_ones[-1] == ("annuler_demenagement", {"disque": "/srv/disques/R2"})
-    assert server_move.state()["etat"] == "rien"  # l'ancien résultat ne revient pas
+    assert started_ones[-1] == ("annuler_demenagement", {"disk": "/srv/disques/R2"})
+    assert server_move.state()["state"] == "rien"  # l'ancien résultat ne revient pas
 
 
 def test_shutdown_frees_the_tailscale_names(card, monkeypatch):
     dossier, started_ones = card
     with pytest.raises(server_move.ServiceError):
         server_move.finish()  # pas de copie prête
-    monkeypatch.setattr(server_move, "state", lambda: {"etat": "pret"})
+    monkeypatch.setattr(server_move, "state", lambda: {"state": "pret"})
     monkeypatch.setattr(
         server_move.json_files,
         "load",
@@ -181,16 +181,16 @@ def test_shutdown_frees_the_tailscale_names(card, monkeypatch):
         deleted.append(chemin)
 
     monkeypatch.setattr(tool_addresses, "_api", api)
-    assert server_move.finish() == {"ok": True, "noms_liberes": 2}
+    assert server_move.finish() == {"ok": True, "freed_names": 2}
     assert started_ones[0][0] == "fin_demenagement"  # l'arrêt est programmé avant de couper Tailscale
     assert deleted == ["/device/1", "/device/2"]  # le serveur en dernier, jamais les autres appareils
 
 
 def test_without_tailscale_key_shutdown_still_happens(card, monkeypatch):
     _, started_ones = card
-    monkeypatch.setattr(server_move, "state", lambda: {"etat": "pret"})
+    monkeypatch.setattr(server_move, "state", lambda: {"state": "pret"})
     monkeypatch.setattr(tool_addresses, "_token", lambda: None)
-    assert server_move.finish()["noms_liberes"] == 0 and started_ones[-1][0] == "fin_demenagement"
+    assert server_move.finish()["freed_names"] == 0 and started_ones[-1][0] == "fin_demenagement"
 
 
 def test_addresses_rebuilt_on_their_own(monkeypatch):

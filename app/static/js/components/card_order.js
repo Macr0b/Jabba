@@ -22,7 +22,7 @@ function cards(grid) {
 
 /** Le rangement enregistré d'un écran (« etabli », « accueil-mesures », « accueil-tuiles »). */
 export function loadArrangement(screen) {
-  return api(`/api/rangement/${screen}`).catch(() => ({ ordre: [], masques: [] }));
+  return api(`/api/rangement/${screen}`).catch(() => ({ order: [], hidden_items: [] }));
 }
 
 /**
@@ -30,16 +30,16 @@ export function loadArrangement(screen) {
  * `pausedLast` (Établi) : les outils en pause passent après ceux en marche, chacun dans l'ordre rangé.
  */
 export function applyArrangement(grid, arrangement, { pausedLast = false } = {}) {
-  const rank = new Map(arrangement.ordre.map((id, index) => [id, index]));
+  const rank = new Map(arrangement.order.map((id, index) => [id, index]));
   const paused = (card) => (pausedLast && card.classList.contains("eteint") ? 1 : 0);
   cards(grid)
     .map((card, index) => ({
       card,
-      key: rank.has(cardId(card)) ? rank.get(cardId(card)) : arrangement.ordre.length + index,
+      key: rank.has(cardId(card)) ? rank.get(cardId(card)) : arrangement.order.length + index,
     }))
     .sort((a, b) => paused(a.card) - paused(b.card) || a.key - b.key)
     .forEach(({ card }) => {
-      card.classList.toggle("carte-masquee", arrangement.masques.includes(cardId(card)));
+      card.classList.toggle("carte-masquee", arrangement.hidden_items.includes(cardId(card)));
       grid.appendChild(card);
     });
 }
@@ -57,8 +57,8 @@ function controlsHtml(card) {
 async function save(screen, grid) {
   const all = cards(grid);
   const body = {
-    ordre: all.map(cardId),
-    masques: all.filter((card) => card.classList.contains("carte-masquee")).map(cardId),
+    order: all.map(cardId),
+    hidden_items: all.filter((card) => card.classList.contains("carte-masquee")).map(cardId),
   };
   try {
     await api(`/api/rangement/${screen}`, { method: "PUT", json: body });

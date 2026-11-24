@@ -45,14 +45,15 @@ def handle(raw, runner=None):
         request = json.loads(raw)
         name = request["action"]
         command, timeout = actions.build(name, request.get("args"))
-        input_text = actions.check_input(name, request.get("entree"))
+        # « entree » : demande d'une appli restée en 0.16 pendant la mise à jour.
+        input_text = actions.check_input(name, request.get("entry", request.get("entree")))
         to_host = actions.host_input(name, request.get("args"), input_text)
     except (ValueError, KeyError, TypeError) as error:
-        return {"code": REFUSED, "sortie": "", "erreur": f"Refusé : {error}"}
+        return {"code": REFUSED, "output": "", "error": f"Refusé : {error}"}
     print("action:", name, flush=True)
     result = runner(command, timeout, to_host)
     code, output, error_output = actions.finish(name, result, input_text)
-    return {"code": code, "sortie": output, "erreur": error_output}
+    return {"code": code, "output": output, "error": error_output}
 
 
 async def _client(reader, writer):
@@ -62,7 +63,7 @@ async def _client(reader, writer):
         except ValueError:  # ligne plus longue que la limite
             raw = b""
         if not raw or len(raw) > MAX_REQUEST_BYTES:
-            answer = {"code": REFUSED, "sortie": "", "erreur": "Demande vide ou trop longue"}
+            answer = {"code": REFUSED, "output": "", "error": "Demande vide ou trop longue"}
         else:
             answer = await asyncio.to_thread(handle, raw.decode("utf-8", "replace"))
         writer.write((json.dumps(answer) + "\n").encode())

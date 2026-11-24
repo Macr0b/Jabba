@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ .
 # Lisible par tous : ffmpeg et Pillow tournent sous « nobody » (bac_a_sable.py), la porte du Wi-Fi sous le compte du serveur.
 RUN chmod -R a+rX /app
+# Avant l'appli : les données d'avant la 0.17 passent en anglais (data_migration.py, sans effet ensuite).
 # L'appli complète (127.0.0.1:8090, publiée seulement par Tailscale). La porte du Wi-Fi
 # (page invités) est un autre service de compose.yaml, dans son propre conteneur sans pouvoirs.
-CMD ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8090", "--proxy-headers", "--no-server-header"]
+CMD ["sh", "-c", "python -m data_migration; exec uvicorn main:app --host 127.0.0.1 --port 8090 --proxy-headers --no-server-header"]

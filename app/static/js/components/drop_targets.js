@@ -17,8 +17,8 @@ const accepts = (event) => event.dataTransfer.types.includes("Files") || event.d
 export function startDrag(event, entries) {
   dragged = entries;
   event.dataTransfer.effectAllowed = "move";
-  event.dataTransfer.setData(JABBA_DRAG, entries.map((entry) => entry.chemin).join("\n"));
-  event.dataTransfer.setData("text/plain", entries.map((entry) => entry.nom).join(", "));
+  event.dataTransfer.setData(JABBA_DRAG, entries.map((entry) => entry.path).join("\n"));
+  event.dataTransfer.setData("text/plain", entries.map((entry) => entry.name).join(", "));
 }
 
 export function enableDrop(element, path, after) {
@@ -47,7 +47,7 @@ export function enableDrop(element, path, after) {
     counter = 0;
     element.classList.remove("cible");
     if (event.dataTransfer.types.includes(JABBA_DRAG)) {
-      const entries = dragged.filter((entry) => entry.chemin !== path);
+      const entries = dragged.filter((entry) => entry.path !== path);
       dragged = [];
       if (entries.length) moveEntries(entries, after, path);
       return;

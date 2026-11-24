@@ -67,10 +67,10 @@ async def wifi_guard(request: Request, call_next):
     except ValueError:
         is_local = False
     if not is_local:
-        return JSONResponse({"erreur": "Réservé au réseau local."}, status_code=403)
+        return JSONResponse({"error": "Réservé au réseau local."}, status_code=403)
     request.state.via = "lan"
     if request.method not in ("GET", "HEAD") and request.headers.get("x-jabba") != "1":
-        return JSONResponse({"erreur": "Requête refusée."}, status_code=403)
+        return JSONResponse({"error": "Requête refusée."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Content-Security-Policy", guard_policy())
@@ -90,7 +90,7 @@ def who_am_i_on_wifi():
 
     return {
         "mode": "invite",
-        "serveur": guests.read().get("serveur") or socket.gethostname(),
+        "server": guests.read().get("server") or socket.gethostname(),
         "version": VERSION,
         "admin": None,
     }

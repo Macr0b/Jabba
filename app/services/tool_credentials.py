@@ -43,7 +43,7 @@ PASSWORD_TEXT = re.compile(r"[^\x00-\x1f\x7f]{1,500}")
 def _login_name(tool):
     """L'identifiant du compte créé par Jabba : fixé dans le catalogue, ou le compte du serveur
     (Nextcloud, Jellyfin : l'admin y porte le nom de ton compte sur le serveur)."""
-    name = catalog.OPTIONAL_TOOLS[tool].get("identifiant", "admin")
+    name = catalog.OPTIONAL_TOOLS[tool].get("username", "admin")
     if name != catalog.SERVER_USER_MARK:
         return name
     if config.DEMO or config.ADMIN_USER:
@@ -53,7 +53,7 @@ def _login_name(tool):
 
 
 def created_by_jabba(tool):
-    return bool(catalog.OPTIONAL_TOOLS.get(tool, {}).get("mot_de_passe"))
+    return bool(catalog.OPTIONAL_TOOLS.get(tool, {}).get("password"))
 
 
 def password_for(tool):
@@ -71,11 +71,11 @@ def read(tool):
         password = "demo-" + tool if config.DEMO else json_files.load(CREDENTIALS_FILE, {}).get(tool)
         if not isinstance(password, str) or not password:
             return None
-        return {"identifiant": identifiant, "mot_de_passe": password, "cree_par_jabba": True}
+        return {"username": identifiant, "password": password, "created_by_jabba": True}
     noted = json_files.load(CREDENTIALS_FILE, {}).get(tool) if tool in STORABLE else None
     if not isinstance(noted, dict):
         return None
-    return {"identifiant": noted["identifiant"], "mot_de_passe": noted["mot_de_passe"], "cree_par_jabba": False}
+    return {"username": noted["username"], "password": noted["password"], "created_by_jabba": False}
 
 
 def _check_storable(tool):
@@ -95,7 +95,7 @@ def save(tool, identifiant, mot_de_passe):
         raise ValueError("Mot de passe manquant ou trop long (500 caractères au plus).")
     with _LOCK:
         saved = json_files.load(CREDENTIALS_FILE, {})
-        saved[tool] = {"identifiant": identifiant, "mot_de_passe": mot_de_passe}
+        saved[tool] = {"username": identifiant, "password": mot_de_passe}
         json_files.save(CREDENTIALS_FILE, saved, private=True)
 
 

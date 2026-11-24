@@ -51,7 +51,7 @@ ERRORS = {
 
 
 def _settings():
-    return json_files.load(SETTINGS_FILE, {"unite": None, "chemin": None, "lance": 0})
+    return json_files.load(SETTINGS_FILE, {"unit": None, "path": None, "started": 0})
 
 
 def _write_settings(settings):
@@ -62,9 +62,9 @@ def choices():
     """Le disque de données (s'il est à part : il ira dans le nouvel ordinateur), puis les disques branchés."""
     result = []
     if config.DEMO or files_source.is_mounted("/srv/data"):
-        result.append({"nom": "Disque de données", "chemin": "/srv/data", "fichiers": False})
+        result.append({"name": "Disque de données", "path": "/srv/data", "files": False})
     for name, path in sorted(files_source.known_disks().items()):
-        result.append({"nom": name, "chemin": path, "fichiers": True})
+        result.append({"name": name, "path": path, "files": True})
     return result
 
 
@@ -85,52 +85,52 @@ def move_script(path, with_files, data_dir):
 def state():
     """Où en est le déménagement : rien, en cours, réussi (outils arrêtés) ou raté (et pourquoi)."""
     settings = _settings()
-    running = backups.is_running(settings) if settings.get("unite") else False
+    running = backups.is_running(settings) if settings.get("unit") else False
     result = json_files.load(STATE_FILE, {})
-    finished = bool(settings.get("lance")) and result.get("debut", 0) >= settings["lance"] - 5
-    payload = {"disques": choices(), "en_cours": running, "chemin": settings.get("chemin")}
+    finished = bool(settings.get("started")) and result.get("start", 0) >= settings["started"] - 5
+    payload = {"disks": choices(), "in_progress": running, "path": settings.get("path")}
     if running or not finished:
-        return {**payload, "etat": "en cours" if running else "rien"}
+        return {**payload, "state": "en cours" if running else "rien"}
     if result.get("code") == 0:
-        return {**payload, "etat": "pret", "fin": result.get("fin")}
-    message = ERRORS.get(result.get("code"), f"Arrêt à l'étape « {result.get('etape')} ».")
+        return {**payload, "state": "pret", "end": result.get("end")}
+    message = ERRORS.get(result.get("code"), f"Arrêt à l'étape « {result.get('step')} ».")
     if result.get("code") == 12:
         message += (
-            f" Il faut {result.get('besoin', 0) // 1024**3 + 1} Go, il en reste {result.get('libre', 0) // 1024**3}."
+            f" Il faut {result.get('needed', 0) // 1024**3 + 1} Go, il en reste {result.get('free', 0) // 1024**3}."
         )
-    return {**payload, "etat": "rate", "erreur": message}
+    return {**payload, "state": "rate", "error": message}
 
 
 def start(path, who=None):
     """Lance la copie vers ce disque (un de ceux de choices()). Les outils s'arrêtent pendant et après."""
-    choice = next((disk for disk in choices() if disk["chemin"] == path), None)
+    choice = next((disk for disk in choices() if disk["path"] == path), None)
     if not choice:
         raise ServiceError(400, "Choisis un des disques proposés.")
     settings = _settings()
-    if settings.get("unite") and backups.is_running(settings):
+    if settings.get("unit") and backups.is_running(settings):
         raise ServiceError(409, "Le déménagement est déjà en cours.")
     unit = f"jabba-demenage-{int(time.time())}"
     if not config.DEMO:
         code, _, error_output = commands.run_action(
-            "demenager", disque=path, fichiers=choice["fichiers"], unite=unit, donnees=backups.host_data_dir()
+            "demenager", disk=path, files=choice["files"], unit=unit, data=backups.host_data_dir()
         )
         if code != 0:
             raise ServiceError(500, "Lancement impossible : " + error_output[:200])
-    _write_settings({"unite": unit, "chemin": path, "lance": int(time.time())})
-    activity_log.record("systeme", f"Déménagement du serveur : copie vers {choice['nom']}", who)
+    _write_settings({"unit": unit, "path": path, "started": int(time.time())})
+    activity_log.record("systeme", f"Déménagement du serveur : copie vers {choice['name']}", who)
     return state()
 
 
 def cancel(who=None):
     """Changement d'avis (ou copie ratée) : les outils arrêtés repartent, et la copie est effacée."""
     settings = _settings()
-    if not settings.get("chemin"):
+    if not settings.get("path"):
         raise ServiceError(409, "Pas de déménagement en cours.")
-    if settings.get("unite") and backups.is_running(settings):
+    if settings.get("unit") and backups.is_running(settings):
         raise ServiceError(409, "Attends la fin de la copie.")
     if not config.DEMO:
-        commands.run_action("annuler_demenagement", disque=settings["chemin"])
-    _write_settings({"unite": None, "chemin": None, "lance": 0})
+        commands.run_action("annuler_demenagement", disk=settings["path"])
+    _write_settings({"unit": None, "path": None, "started": 0})
     activity_log.record("systeme", "Déménagement annulé : les outils repartent", who)
     return state()
 
@@ -147,11 +147,11 @@ def _tailscale_names():
 
 def finish(who=None):
     """Après une copie réussie : libère les noms dans Tailscale (si la clé est là), puis éteint le serveur."""
-    if state()["etat"] != "pret":
+    if state()["state"] != "pret":
         raise ServiceError(409, "Fais d'abord la copie du déménagement.")
     activity_log.record("systeme", "Déménagement : l'ancien serveur libère ses noms Tailscale et s'éteint", who)
     if config.DEMO:
-        return {"ok": True, "noms_liberes": 0}
+        return {"ok": True, "freed_names": 0}
     commands.run_action("fin_demenagement")  # dans 30 secondes : déconnexion de Tailscale, puis arrêt
     freed = 0
     try:
@@ -163,4 +163,4 @@ def finish(who=None):
                     freed += 1
     except (tool_addresses.AddressError, KeyError, TypeError):
         pass  # sans clé valable, la déconnexion suffit le plus souvent (le guide dit quoi vérifier)
-    return {"ok": True, "noms_liberes": freed}
+    return {"ok": True, "freed_names": freed}

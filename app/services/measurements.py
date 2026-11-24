@@ -35,7 +35,7 @@ def memory():
         for line in file:
             key, value = line.split(":")
             info[key] = int(value.split()[0]) * 1024
-    return {"total": info["MemTotal"], "utilise": info["MemTotal"] - info["MemAvailable"]}
+    return {"total": info["MemTotal"], "used": info["MemTotal"] - info["MemAvailable"]}
 
 
 def temperature():
@@ -61,14 +61,14 @@ def temperature():
 
 def disk_space(paths):
     try:
-        code, output, _ = commands.run_action("espace_disques", chemins=paths)
+        code, output, _ = commands.run_action("espace_disques", paths=paths)
     except actions.ActionError:
         return {}
     result = {}
     for line in output.splitlines()[1:]:
         shares = line.split()
         if len(shares) == 3:
-            result[shares[0]] = {"total": int(shares[1]), "utilise": int(shares[2])}
+            result[shares[0]] = {"total": int(shares[1]), "used": int(shares[2])}
     return result
 
 

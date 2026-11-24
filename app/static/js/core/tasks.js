@@ -8,13 +8,13 @@ import { escapeHtml } from "./dom.js";
 import { t } from "./i18n.js";
 
 export async function followTask(item) {
-  toast(`${item.titre}…`);
+  toast(`${item.title}…`);
   for (;;) {
     await new Promise((result) => setTimeout(result, 2000));
     const data = await api(`/api/taches/${item.id}`);
-    if (data.etat !== "en cours") {
-      if (data.etat === "terminé") toast(t`${data.titre} : terminé`);
-      else toast(`${data.titre} : erreur. ${data.journal.slice(-200)}`, true);
+    if (data.state !== "en cours") {
+      if (data.state === "terminé") toast(t`${data.title} : terminé`);
+      else toast(`${data.title} : erreur. ${data.log.slice(-200)}`, true);
       return data;
     }
   }

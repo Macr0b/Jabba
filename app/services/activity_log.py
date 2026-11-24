@@ -35,9 +35,9 @@ FAMILIES = {
 
 
 def record(family, text, who=None):
-    event = {"t": int(time.time()), "famille": family if family in FAMILIES else "systeme", "texte": text}
+    event = {"t": int(time.time()), "family": family if family in FAMILIES else "systeme", "text": text}
     if who:
-        event["qui"] = who
+        event["who"] = who
     with _LOCK:
         os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
         with open(LOG_FILE, "a") as file:
@@ -67,15 +67,15 @@ def read(count=100, family=None):
                 entry = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(entry, dict) and isinstance(entry.get("t"), int) and isinstance(entry.get("texte"), str):
+            if isinstance(entry, dict) and isinstance(entry.get("t"), int) and isinstance(entry.get("text"), str):
                 if path != LOG_FILE:
                     # Écrit par la porte du Wi-Fi : on ne la croit que pour des événements d'invités.
-                    entry = {"t": entry["t"], "famille": "invite", "texte": entry["texte"][:300]}
+                    entry = {"t": entry["t"], "family": "invite", "text": entry["text"][:300]}
                 events.append(entry)
     events.sort(key=lambda event: event["t"])
     result = []
     for entry in reversed(events):
-        if family and entry.get("famille") != family:
+        if family and entry.get("family") != family:
             continue
         result.append(entry)
         if len(result) >= count:

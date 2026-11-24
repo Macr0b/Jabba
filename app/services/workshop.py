@@ -28,19 +28,19 @@ DATA_DIR = os.environ.get("JABBA_DATA", "/data")
 STATE_FILE = os.path.join(DATA_DIR, "atelier.json")
 ENTRY_TYPES = ("intervention", "panne", "entretien", "reglage", "note")
 TEXT_LIMITS = {
-    "nom": 80,
-    "modele": 120,
-    "emplacement": 80,
-    "reglages": 20000,
-    "dossier": 1000,
-    "titre": 200,
-    "pieces": 1000,
+    "name": 80,
+    "model": 120,
+    "location": 80,
+    "settings": 20000,
+    "folder": 1000,
+    "title": 200,
+    "parts": 1000,
 }
 _lock = threading.Lock()
 
 
 def _read():
-    return json_files.load(STATE_FILE, {"actif": False, "machines": [], "journal": [], "rappels": []})
+    return json_files.load(STATE_FILE, {"active": False, "machines": [], "log": [], "reminders": []})
 
 
 def _write(state):
@@ -82,30 +82,30 @@ def _find(items, item_id, what):
 
 # ---------------------------------------------------------------- activation
 def is_enabled():
-    return bool(_read().get("actif"))
+    return bool(_read().get("active"))
 
 
 def set_enabled(enabled):
     with _lock:
         state = _read()
-        state["actif"] = bool(enabled)
+        state["active"] = bool(enabled)
         _write(state)
 
 
 # ---------------------------------------------------------------- rappels
 def next_due(reminder):
-    last = datetime.date.fromisoformat(reminder["dernier"])
-    return (last + datetime.timedelta(days=reminder["tous_les_jours"])).isoformat()
+    last = datetime.date.fromisoformat(reminder["last"])
+    return (last + datetime.timedelta(days=reminder["every_days"])).isoformat()
 
 
 def _reminder_view(reminder, today):
     due = next_due(reminder)
-    return {**reminder, "echeance": due, "du": due <= today}
+    return {**reminder, "due_date": due, "due": due <= today}
 
 
 def due_reminders(today=None):
     today = today or _today()
-    return [_reminder_view(item, today) for item in _read()["rappels"] if next_due(item) <= today]
+    return [_reminder_view(item, today) for item in _read()["reminders"] if next_due(item) <= today]
 
 
 # ---------------------------------------------------------------- machines
@@ -113,18 +113,18 @@ def machines(today=None):
     today = today or _today()
     state = _read()
     result = []
-    for item in sorted(state["machines"], key=lambda machine: machine["nom"].lower()):
-        entries = [entry for entry in state["journal"] if entry["machine"] == item["id"]]
+    for item in sorted(state["machines"], key=lambda machine: machine["name"].lower()):
+        entries = [entry for entry in state["log"] if entry["machine"] == item["id"]]
         last = max(reversed(entries), key=lambda entry: entry["date"], default=None)
         reminders = [
-            _reminder_view(reminder, today) for reminder in state["rappels"] if reminder["machine"] == item["id"]
+            _reminder_view(reminder, today) for reminder in state["reminders"] if reminder["machine"] == item["id"]
         ]
         result.append(
             {
                 **item,
-                "derniere": last,
-                "entrees": len(entries),
-                "rappels_dus": sum(1 for reminder in reminders if reminder["du"]),
+                "latest": last,
+                "entries": len(entries),
+                "reminders_due": sum(1 for reminder in reminders if reminder["due"]),
             }
         )
     return result
@@ -135,27 +135,29 @@ def machine(machine_id, today=None):
     state = _read()
     item = _find(state["machines"], machine_id, "machine")
     # Le plus récent d'abord ; à date égale, le dernier noté d'abord (ordre d'écriture).
-    entries = [entry for entry in state["journal"] if entry["machine"] == machine_id][::-1]
+    entries = [entry for entry in state["log"] if entry["machine"] == machine_id][::-1]
     entries.sort(key=lambda entry: entry["date"], reverse=True)
-    reminders = [_reminder_view(reminder, today) for reminder in state["rappels"] if reminder["machine"] == machine_id]
-    reminders.sort(key=lambda reminder: reminder["echeance"])
-    return {**item, "journal": entries, "rappels": reminders}
+    reminders = [
+        _reminder_view(reminder, today) for reminder in state["reminders"] if reminder["machine"] == machine_id
+    ]
+    reminders.sort(key=lambda reminder: reminder["due_date"])
+    return {**item, "log": entries, "reminders": reminders}
 
 
 def add_machine(fields, who=None):
     item = {
         "id": _new_id(),
-        "nom": _text(fields.get("nom"), "nom", required=True),
-        "modele": _text(fields.get("modele"), "modele"),
-        "emplacement": _text(fields.get("emplacement"), "emplacement"),
-        "reglages": _text(fields.get("reglages"), "reglages"),
-        "dossier": _text(fields.get("dossier"), "dossier"),
-        "cree": _today(),
-        "par": who,
+        "name": _text(fields.get("name"), "name", required=True),
+        "model": _text(fields.get("model"), "model"),
+        "location": _text(fields.get("location"), "location"),
+        "settings": _text(fields.get("settings"), "settings"),
+        "folder": _text(fields.get("folder"), "folder"),
+        "created": _today(),
+        "by": who,
     }
     with _lock:
         state = _read()
-        if any(machine_item["nom"].lower() == item["nom"].lower() for machine_item in state["machines"]):
+        if any(machine_item["name"].lower() == item["name"].lower() for machine_item in state["machines"]):
             raise ValueError("Une machine porte déjà ce nom.")
         state["machines"].append(item)
         _write(state)
@@ -166,9 +168,9 @@ def update_machine(machine_id, fields):
     with _lock:
         state = _read()
         item = _find(state["machines"], machine_id, "machine")
-        for field in ("nom", "modele", "emplacement", "reglages", "dossier"):
+        for field in ("name", "model", "location", "settings", "folder"):
             if field in fields:
-                item[field] = _text(fields[field], field, required=field == "nom")
+                item[field] = _text(fields[field], field, required=field == "name")
         _write(state)
     return item
 
@@ -179,8 +181,8 @@ def delete_machine(machine_id):
         state = _read()
         _find(state["machines"], machine_id, "machine")
         state["machines"] = [item for item in state["machines"] if item["id"] != machine_id]
-        state["journal"] = [item for item in state["journal"] if item["machine"] != machine_id]
-        state["rappels"] = [item for item in state["rappels"] if item["machine"] != machine_id]
+        state["log"] = [item for item in state["log"] if item["machine"] != machine_id]
+        state["reminders"] = [item for item in state["reminders"] if item["machine"] != machine_id]
         _write(state)
 
 
@@ -194,16 +196,16 @@ def add_entry(machine_id, fields, who=None):
         "machine": machine_id,
         "type": kind,
         "date": _date(fields.get("date")),
-        "titre": _text(fields.get("titre"), "titre", required=True),
-        "texte": _text(fields.get("texte"), "texte"),
-        "pieces": _text(fields.get("pieces"), "pieces"),
-        "par": who,
-        "cree": datetime.datetime.now().isoformat(timespec="seconds"),
+        "title": _text(fields.get("title"), "title", required=True),
+        "text": _text(fields.get("text"), "text"),
+        "parts": _text(fields.get("parts"), "parts"),
+        "by": who,
+        "created": datetime.datetime.now().isoformat(timespec="seconds"),
     }
     with _lock:
         state = _read()
         _find(state["machines"], machine_id, "machine")
-        state["journal"].append(entry)
+        state["log"].append(entry)
         _write(state)
     return entry
 
@@ -214,19 +216,19 @@ def update_entry(machine_id, entry_id, fields):
         raise ValueError("Type inconnu.")
     with _lock:
         state = _read()
-        entry = _find([item for item in state["journal"] if item["machine"] == machine_id], entry_id, "entrée")
+        entry = _find([item for item in state["log"] if item["machine"] == machine_id], entry_id, "entrée")
         changes = {}
         if "type" in fields:
             changes["type"] = fields["type"]
         if "date" in fields:
             changes["date"] = _date(fields["date"])
-        if "titre" in fields:
-            changes["titre"] = _text(fields["titre"], "titre", required=True)
-        for field in ("texte", "pieces"):
+        if "title" in fields:
+            changes["title"] = _text(fields["title"], "title", required=True)
+        for field in ("text", "parts"):
             if field in fields:
                 changes[field] = _text(fields[field], field)
         entry.update(changes)
-        entry["modifie"] = datetime.datetime.now().isoformat(timespec="seconds")
+        entry["modified"] = datetime.datetime.now().isoformat(timespec="seconds")
         _write(state)
     return entry
 
@@ -234,15 +236,15 @@ def update_entry(machine_id, entry_id, fields):
 def delete_entry(machine_id, entry_id):
     with _lock:
         state = _read()
-        _find([item for item in state["journal"] if item["machine"] == machine_id], entry_id, "entrée")
-        state["journal"] = [item for item in state["journal"] if item["id"] != entry_id]
+        _find([item for item in state["log"] if item["machine"] == machine_id], entry_id, "entrée")
+        state["log"] = [item for item in state["log"] if item["id"] != entry_id]
         _write(state)
 
 
 # ---------------------------------------------------------------- rappels d'entretien
 def add_reminder(machine_id, fields):
     try:
-        days = int(fields.get("tous_les_jours"))
+        days = int(fields.get("every_days"))
     except (TypeError, ValueError):
         days = 0
     if not 1 <= days <= 3650:
@@ -250,15 +252,15 @@ def add_reminder(machine_id, fields):
     reminder = {
         "id": _new_id(),
         "machine": machine_id,
-        "titre": _text(fields.get("titre"), "titre", required=True),
-        "tous_les_jours": days,
-        "dernier": _date(fields.get("dernier")),
+        "title": _text(fields.get("title"), "title", required=True),
+        "every_days": days,
+        "last": _date(fields.get("last")),
         "alerte": None,
     }
     with _lock:
         state = _read()
         _find(state["machines"], machine_id, "machine")
-        state["rappels"].append(reminder)
+        state["reminders"].append(reminder)
         _write(state)
     return reminder
 
@@ -268,19 +270,19 @@ def reminder_done(reminder_id, who=None, today=None):
     today = today or _today()
     with _lock:
         state = _read()
-        reminder = _find(state["rappels"], reminder_id, "rappel")
-        reminder["dernier"] = today
+        reminder = _find(state["reminders"], reminder_id, "rappel")
+        reminder["last"] = today
         reminder["alerte"] = None
         _write(state)
-    add_entry(reminder["machine"], {"type": "entretien", "titre": reminder["titre"], "date": today}, who)
+    add_entry(reminder["machine"], {"type": "entretien", "title": reminder["title"], "date": today}, who)
     return reminder
 
 
 def delete_reminder(reminder_id):
     with _lock:
         state = _read()
-        _find(state["rappels"], reminder_id, "rappel")
-        state["rappels"] = [item for item in state["rappels"] if item["id"] != reminder_id]
+        _find(state["reminders"], reminder_id, "rappel")
+        state["reminders"] = [item for item in state["reminders"] if item["id"] != reminder_id]
         _write(state)
 
 
@@ -289,11 +291,11 @@ def watch_reminders(today=None):
     today = today or _today()
     with _lock:
         state = _read()
-        if not state.get("actif"):
+        if not state.get("active"):
             return []
-        names = {item["id"]: item["nom"] for item in state["machines"]}
+        names = {item["id"]: item["name"] for item in state["machines"]}
         sent = []
-        for reminder in state["rappels"]:
+        for reminder in state["reminders"]:
             due = next_due(reminder)
             if due <= today and reminder.get("alerte") != due:
                 reminder["alerte"] = due
@@ -304,7 +306,7 @@ def watch_reminders(today=None):
         notifications.send(
             "atelier",
             f"Entretien à faire : {names.get(reminder['machine'], '?')}",
-            reminder["titre"],
+            reminder["title"],
             f"/#/atelier?machine={reminder['machine']}",
             family="atelier",
         )

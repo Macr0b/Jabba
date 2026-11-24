@@ -75,8 +75,8 @@ def measure_fragmentation(request: Request):
 @router.post("/api/disques/entretien/defragmenter")
 async def defragment_disk(request: Request):
     guard.require_admin(request, strong=True)
-    path = str((await request.json()).get("chemin", ""))
-    known = {disk["chemin"] for disk in disk_maintenance.summary()["disques"]}
+    path = str((await request.json()).get("path", ""))
+    known = {disk["path"] for disk in disk_maintenance.summary()["disks"]}
     if path not in known:
         raise HTTPException(400, "Disque inconnu ou pas en ext4 à plateaux.")
     try:

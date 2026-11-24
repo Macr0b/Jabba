@@ -30,7 +30,7 @@ def disque(tmp_path, monkeypatch):
     with TestClient(main.app, base_url="https://testserver") as client:
         client.cookies.clear()
         r = client.post(
-            "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"}, headers=H
+            "/api/admin/connexion", json={"username": "serveur-demo", "password": "demo-mot-de-passe"}, headers=H
         )
         assert r.status_code == 200, r.text
         yield client, root
@@ -97,46 +97,42 @@ def test_undo_a_deletion(disque):
         ("/Partage/Photos/Été", True),
     ):
         assert (
-            client.post("/api/fichiers/supprimer", json={"chemin": chemin, "dossier": dossier}, headers=H).status_code
+            client.post("/api/fichiers/supprimer", json={"path": chemin, "folder": dossier}, headers=H).status_code
             == 200
         )
     assert not (root / "notes.txt").exists()
     r = client.post(
         "/api/fichiers/annuler-suppression",
-        json={"chemins": ["/Partage/notes.txt", "/Partage/Photos/Été", "/Partage/jamais-supprime"]},
+        json={"paths": ["/Partage/notes.txt", "/Partage/Photos/Été", "/Partage/jamais-supprime"]},
         headers=H,
     )
-    assert r.status_code == 200 and sorted(r.json()["restaures"]) == ["/Partage/Photos/Été", "/Partage/notes.txt"]
+    assert r.status_code == 200 and sorted(r.json()["restored"]) == ["/Partage/Photos/Été", "/Partage/notes.txt"]
     assert (root / "notes.txt").read_text() == "bonjour" and (root / "Photos" / "Été" / "b.jpg").exists()
     assert not (root / "Photos" / "a.jpg").exists()  # pas demandé : reste à la corbeille
     assert (
-        client.post(
-            "/api/fichiers/annuler-suppression", json={"chemins": ["/Partage/notes.txt"]}, headers=H
-        ).status_code
+        client.post("/api/fichiers/annuler-suppression", json={"paths": ["/Partage/notes.txt"]}, headers=H).status_code
         == 404
     )
-    assert client.post("/api/fichiers/annuler-suppression", json={"chemins": []}, headers=H).status_code == 400
+    assert client.post("/api/fichiers/annuler-suppression", json={"paths": []}, headers=H).status_code == 400
 
 
 def test_undo_takes_back_the_last_deletion(disque, monkeypatch):
     client, root = disque
-    client.post("/api/fichiers/supprimer", json={"chemin": "/Partage/notes.txt"}, headers=H)
+    client.post("/api/fichiers/supprimer", json={"path": "/Partage/notes.txt"}, headers=H)
     (root / "notes.txt").write_text("deuxième")
-    client.post("/api/fichiers/supprimer", json={"chemin": "/Partage/notes.txt"}, headers=H)
-    client.post("/api/fichiers/annuler-suppression", json={"chemins": ["/Partage/notes.txt"]}, headers=H)
+    client.post("/api/fichiers/supprimer", json={"path": "/Partage/notes.txt"}, headers=H)
+    client.post("/api/fichiers/annuler-suppression", json={"paths": ["/Partage/notes.txt"]}, headers=H)
     assert (root / "notes.txt").read_text() == "deuxième"
     # au-delà de 10 minutes, l'annulation ne retrouve plus rien
     monkeypatch.setattr(trash, "UNDO_WINDOW_SECONDS", -1)
     assert (
-        client.post(
-            "/api/fichiers/annuler-suppression", json={"chemins": ["/Partage/notes.txt"]}, headers=H
-        ).status_code
+        client.post("/api/fichiers/annuler-suppression", json={"paths": ["/Partage/notes.txt"]}, headers=H).status_code
         == 404
     )
 
 
 def test_original_path_depends_on_the_source():
-    assert trash.original_path({"source": "disque", "origine": "/A/B", "nom": "c.txt"}) == "/A/B/c.txt"
-    assert trash.original_path({"source": "disque", "origine": "/", "nom": "c.txt"}) == "/c.txt"
-    assert trash.original_path({"source": "disque", "origine": None, "nom": "c.txt"}) == ""
-    assert trash.original_path({"source": "nextcloud", "origine": "/A/c.txt", "nom": "c.txt"}) == "/A/c.txt"
+    assert trash.original_path({"source": "disque", "origin": "/A/B", "name": "c.txt"}) == "/A/B/c.txt"
+    assert trash.original_path({"source": "disque", "origin": "/", "name": "c.txt"}) == "/c.txt"
+    assert trash.original_path({"source": "disque", "origin": None, "name": "c.txt"}) == ""
+    assert trash.original_path({"source": "nextcloud", "origin": "/A/c.txt", "name": "c.txt"}) == "/A/c.txt"

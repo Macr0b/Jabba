@@ -36,7 +36,7 @@ def playback_source(path):
     path = nextcloud_files.clean_path(path)
     if files_source.files_source() == "disque":
         return {
-            "entree": files_source.run_disk_action(lambda: disk_browser.read_path(path, *files_source.disk_params()))
+            "entry": files_source.run_disk_action(lambda: disk_browser.read_path(path, *files_source.disk_params()))
         }
     first, _, rest = path.strip("/").partition("/")
     known = files_source.known_disks()
@@ -44,10 +44,10 @@ def playback_source(path):
         base = os.path.realpath(known[first])
         real_path = os.path.realpath(os.path.join(base, rest))
         if (real_path == base or real_path.startswith(base + os.sep)) and os.path.isfile(real_path):
-            return {"entree": real_path}
+            return {"entry": real_path}
     nextcloud_files.require_nextcloud()
     token = base64.b64encode(f"{config.NC_USER}:{config.NC_APP_PASSWORD}".encode()).decode()
-    return {"entree": nextcloud_files.dav_url(path), "entetes": f"Authorization: Basic {token}\r\n"}
+    return {"entry": nextcloud_files.dav_url(path), "headers": f"Authorization: Basic {token}\r\n"}
 
 
 _MEDIA_INFO_CACHE = {}  # chemin -> (moment, infos) : l'analyse n'est refaite qu'une fois par film (10 min)
@@ -76,7 +76,7 @@ JELLYFIN_KEY_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "jellyfi
 def jellyfin_key():
     try:
         with open(JELLYFIN_KEY_FILE) as file:
-            return json.load(file).get("cle") or ""
+            return json.load(file).get("key") or ""
     except (OSError, ValueError):
         return ""
 
@@ -98,7 +98,7 @@ def jellyfin_index(key):
         },
     )
     if response.status_code in (401, 403):
-        raise HTTPException(409, {"cle_jellyfin": True, "message": "La clé Jellyfin n'est plus valable."})
+        raise HTTPException(409, {"jellyfin_key": True, "message": "La clé Jellyfin n'est plus valable."})
     response.raise_for_status()
     JELLYFIN_URL["index"] = {
         os.path.basename(item.get("Path") or ""): item["Id"]
@@ -116,7 +116,7 @@ def find_in_jellyfin(chemin: str):
         raise HTTPException(404, "Jellyfin n'a pas d'adresse dans les réglages de l'appli (LIENS).")
     key = jellyfin_key()
     if not key:
-        raise HTTPException(409, {"cle_jellyfin": True, "message": "Jabba n'est pas encore relié à Jellyfin."})
+        raise HTTPException(409, {"jellyfin_key": True, "message": "Jabba n'est pas encore relié à Jellyfin."})
     try:
         identifier = jellyfin_index(key).get(chemin.rsplit("/", 1)[-1])
     except httpx.HTTPError:
@@ -125,13 +125,13 @@ def find_in_jellyfin(chemin: str):
         raise HTTPException(
             404, "Ce fichier n'est pas dans une médiathèque Jellyfin (ou Jellyfin ne l'a pas encore analysé)."
         )
-    return {"lien": f"{link.rstrip('/')}/web/#/details?id={identifier}"}
+    return {"link": f"{link.rstrip('/')}/web/#/details?id={identifier}"}
 
 
 @router.post("/api/jellyfin/cle")
 async def save_jellyfin_key(request: Request):
     session = guard.require_admin(request, strong=True)
-    key = str((await request.json()).get("cle", "")).strip()
+    key = str((await request.json()).get("key", "")).strip()
     if not re.fullmatch(r"[0-9a-fA-F]{32}", key):
         raise HTTPException(400, "Une clé Jellyfin fait 32 caractères (chiffres et lettres de a à f).")
     try:
@@ -142,32 +142,37 @@ async def save_jellyfin_key(request: Request):
     except httpx.HTTPError:
         raise HTTPException(502, "Jellyfin ne répond pas : vérifie qu'il est activé dans l'Établi.")
     with open(JELLYFIN_KEY_FILE, "w") as file:
-        json.dump({"cle": key}, file)
+        json.dump({"key": key}, file)
     os.chmod(JELLYFIN_KEY_FILE, 0o600)
-    activity_log.record("admin", f"Jabba relié à Jellyfin, par {session['identifiant']}", request.state.nom)
+    activity_log.record("admin", f"Jabba relié à Jellyfin, par {session['username']}", request.state.nom)
     return {"ok": True}
 
 
 @router.get("/api/lecture/infos")
 def playback_info(chemin: str):
     media = media_info(chemin)
-    media["directe"] = video_player.plays_directly(media)
+    media["direct"] = video_player.plays_directly(media)
     return media
 
 
 @router.post("/api/lecture/demarrer")
 async def start_playback(request: Request):
     body = await request.json()
-    path = body.get("chemin", "")
+    path = body.get("path", "")
     media = await asyncio.to_thread(media_info, path)
     if not media["video"]:
         raise HTTPException(415, "Pas d'image dans ce fichier.")
-    if body.get("remplace"):
-        video_player.stop(str(body["remplace"]))
+    if body.get("replaces"):
+        video_player.stop(str(body["replaces"]))
     session_id, start = await asyncio.to_thread(
-        video_player.start, playback_source(path), media, float(body.get("debut") or 0), body.get("audio")
+        video_player.start, playback_source(path), media, float(body.get("start") or 0), body.get("audio")
     )
-    return {"id": session_id, "url": f"/api/lecture/{session_id}/index.m3u8", "duree": media["duree"], "debut": start}
+    return {
+        "id": session_id,
+        "url": f"/api/lecture/{session_id}/index.m3u8",
+        "duration": media["duration"],
+        "start": start,
+    }
 
 
 @router.get("/api/lecture/soustitres")

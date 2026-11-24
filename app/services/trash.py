@@ -27,7 +27,7 @@ async def list_entries():
     if files_source.files_source() == "nextcloud":
         nextcloud_files.require_nextcloud()
         entries = await nextcloud_files.nextcloud_trash() + entries
-    entries.sort(key=lambda entry: -entry["supprime"])
+    entries.sort(key=lambda entry: -entry["deleted"])
     return entries
 
 
@@ -55,9 +55,9 @@ async def restore_entry(identifier, source, origin):
 def original_path(entry):
     """Disque : « origine » est le dossier parent. Nextcloud : c'est déjà le chemin complet."""
     if entry.get("source") == "nextcloud":
-        return entry.get("origine") or ""
-    parent = (entry.get("origine") or "").rstrip("/")
-    return f"{parent}/{entry['nom']}" if entry.get("origine") else ""
+        return entry.get("origin") or ""
+    parent = (entry.get("origin") or "").rstrip("/")
+    return f"{parent}/{entry['name']}" if entry.get("origin") else ""
 
 
 async def undo_delete(paths, now=None):
@@ -68,8 +68,8 @@ async def undo_delete(paths, now=None):
     restored = []
     for entry in entries:  # le plus récent d'abord : en cas de doublon, on reprend la dernière suppression
         path = original_path(entry)
-        if path not in wanted or now - entry["supprime"] > UNDO_WINDOW_SECONDS:
+        if path not in wanted or now - entry["deleted"] > UNDO_WINDOW_SECONDS:
             continue
         wanted.discard(path)
-        restored.append(await restore_entry(entry["id"], entry["source"], entry.get("origine")))
+        restored.append(await restore_entry(entry["id"], entry["source"], entry.get("origin")))
     return restored

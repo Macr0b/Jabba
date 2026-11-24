@@ -8,12 +8,12 @@ from services import backups
 
 def settings(**k):
     d = {
-        "actif": True,
-        "chemin": "/srv/disques/D",
-        "disque": "D",
-        "heure": "03:30",
-        "lancee": 0,
-        "derniere_reussie": None,
+        "active": True,
+        "path": "/srv/disques/D",
+        "disk": "D",
+        "hour": "03:30",
+        "launched": 0,
+        "last_success": None,
         "sources": {"fichiers": True, "outils": True, "systeme": True},
     }
     d.update(k)
@@ -23,12 +23,12 @@ def settings(**k):
 def test_when_to_start():
     n = datetime(2026, 11, 10, 4, 0)
     assert backups.is_due(settings(), n)
-    assert not backups.is_due(settings(derniere_reussie={"fin": n.timestamp() - 600}), n)
-    assert not backups.is_due(settings(lancee=n.timestamp() - 600), n)  # essai il y a 10 min : on attend
-    assert backups.is_due(settings(lancee=n.timestamp() - 4000), n)  # plus d'une heure : on réessaie
+    assert not backups.is_due(settings(last_success={"end": n.timestamp() - 600}), n)
+    assert not backups.is_due(settings(launched=n.timestamp() - 600), n)  # essai il y a 10 min : on attend
+    assert backups.is_due(settings(launched=n.timestamp() - 4000), n)  # plus d'une heure : on réessaie
     before = datetime(2026, 11, 10, 2, 0)
-    assert not backups.is_due(settings(derniere_reussie={"fin": datetime(2026, 11, 9, 3, 40).timestamp()}), before)
-    assert not backups.is_due(settings(actif=False), n)
+    assert not backups.is_due(settings(last_success={"end": datetime(2026, 11, 9, 3, 40).timestamp()}), before)
+    assert not backups.is_due(settings(active=False), n)
 
 
 def test_passphrase():
@@ -47,13 +47,13 @@ def test_script_excludes_and_restores_read_only():
 
 
 def test_script_without_the_system():
-    s = backups.backup_script(settings(sources={"fichiers": True, "outils": True, "systeme": False}), "/d")
+    s = backups.backup_script(settings(sources={"files": True, "tools": True, "system": False}), "/d")
     assert " '/etc'" not in s and "/etc " not in s.split("restic backup")[1].split("\n")[0]
 
 
 def test_result():
     assert backups.result({}) is None
-    r = backups.result({"code": 0, "debut": 10, "fin": 70, "resume": {"data_added": 5, "snapshot_id": "ab"}})
-    assert r["ok"] and r["duree"] == 60 and r["ajoute"] == 5
-    r = backups.result({"code": 13, "etape": "init", "debut": 1, "fin": 2})
-    assert not r["ok"] and "phrase de passe" in r["erreur"]
+    r = backups.result({"code": 0, "start": 10, "end": 70, "summary": {"data_added": 5, "snapshot_id": "ab"}})
+    assert r["ok"] and r["duration"] == 60 and r["added"] == 5
+    r = backups.result({"code": 13, "step": "init", "start": 1, "end": 2})
+    assert not r["ok"] and "phrase de passe" in r["error"]

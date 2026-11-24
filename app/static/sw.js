@@ -34,15 +34,15 @@ self.addEventListener("push", (e) => {
   try {
     d = e.data ? e.data.json() : {};
   } catch (_) {
-    d = { titre: e.data ? e.data.text() : "" };
+    d = { title: e.data ? e.data.text() : "" };
   }
   e.waitUntil(
-    self.registration.showNotification(d.titre || "Jabba", {
-      body: d.texte || "",
+    self.registration.showNotification(d.title || "Jabba", {
+      body: d.text || "",
       icon: "/static/icone-192.png",
       badge: "/static/icone-192.png",
       data: { url: d.url || "/" },
-      tag: d.titre || undefined,
+      tag: d.title || undefined,
     }),
   );
 });

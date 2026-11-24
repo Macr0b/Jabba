@@ -45,9 +45,9 @@ UNREADABLE = {"apfs": "APFS (format Mac récent)", "hfsplus": "Mac OS étendu (H
 
 def read():
     data = json_files.load(DISKS_FILE)
-    data.setdefault("disques", [])  # {nom, chemin, uuid, format, ajoute}
-    data.setdefault("oublies", [])  # uuid
-    data.setdefault("signales", [])  # uuid illisibles déjà signalés
+    data.setdefault("disks", [])  # {nom, chemin, uuid, format, ajoute}
+    data.setdefault("forgotten_items", [])  # uuid
+    data.setdefault("reported_items", [])  # uuid illisibles déjà signalés
     return data
 
 
@@ -57,7 +57,7 @@ def write(data):
 
 def known_disks():
     """nom -> chemin pour les disques ajoutés automatiquement."""
-    return {disk["nom"]: disk["chemin"] for disk in read()["disques"]}
+    return {disk["name"]: disk["path"] for disk in read()["disks"]}
 
 
 def fstab_uuids(fstab):
@@ -115,39 +115,39 @@ def candidates():
                     {
                         "uuid": uuid,
                         "format": filesystem,
-                        "etiquette": partition.get("label"),
-                        "chemin_dev": partition.get("path"),
+                        "label": partition.get("label"),
+                        "dev_path": partition.get("path"),
                     }
                 )
             elif filesystem in UNREADABLE:
-                bad.append({"uuid": uuid, "format": filesystem, "etiquette": partition.get("label")})
+                bad.append({"uuid": uuid, "format": filesystem, "label": partition.get("label")})
     return good, bad
 
 
 def add(share, taken):
     """Déclare le disque sur le serveur (action « declarer_disque »). Renvoie l'entrée créée."""
-    name, folder = clean_name(share["etiquette"], share["uuid"], taken)
+    name, folder = clean_name(share["label"], share["uuid"], taken)
     path = f"{MOUNT_ROOT}/{folder}"
     try:
         code, _, error_output = commands.run_action(
-            "declarer_disque", uuid=share["uuid"], format=share["format"], dossier=folder, nom=name
+            "declarer_disque", uuid=share["uuid"], format=share["format"], folder=folder, name=name
         )
     except actions.ActionError as error:
         raise RuntimeError(str(error))
     if code != 0:
         raise RuntimeError(error_output[:200])
     input_path = {
-        "nom": name,
-        "chemin": path,
-        "dossier": folder,
+        "name": name,
+        "path": path,
+        "folder": folder,
         "uuid": share["uuid"],
         "format": share["format"],
-        "ajoute": int(time.time()),
+        "added": int(time.time()),
         "nextcloud": None,
     }
     with _LOCK:
         data = read()
-        data["disques"].append(input_path)
+        data["disks"].append(input_path)
         write(data)
     return input_path
 
@@ -155,8 +155,8 @@ def add(share, taken):
 def link_to_nextcloud(occ, input_path):
     """Ajoute le disque à Nextcloud (lecture seule). Sans effet si Nextcloud est arrêté.
     `occ(args)` : la commande d'administration de Nextcloud (host.commands.occ)."""
-    datadir = f"datadir=/mnt/disques/{input_path['dossier']}"
-    code, output, _ = occ(["files_external:create", input_path["nom"], "local", "null::null", "-c", datadir])
+    datadir = f"datadir=/mnt/disques/{input_path['folder']}"
+    code, output, _ = occ(["files_external:create", input_path["name"], "local", "null::null", "-c", datadir])
     match = re.search(r"(\d+)\s*$", output.strip()) if code == 0 else None
     if not match:
         return False
@@ -165,7 +165,7 @@ def link_to_nextcloud(occ, input_path):
     occ(["files_external:option", match.group(1), "readonly", "true"])
     with _LOCK:
         data = read()
-        for disk in data["disques"]:
+        for disk in data["disks"]:
             if disk["uuid"] == input_path["uuid"]:
                 disk["nextcloud"] = int(match.group(1))
         write(data)
@@ -176,19 +176,19 @@ def forget(name):
     """Retire le disque du serveur et de Nextcloud. Il ne sera plus ajouté tout seul."""
     with _LOCK:
         data = read()
-        disk = next((disk for disk in data["disques"] if disk["nom"] == name), None)
+        disk = next((disk for disk in data["disks"] if disk["name"] == name), None)
     if not disk:
         raise KeyError(name)
-    code, _, error_output = commands.run_action("oublier_disque", chemin=disk["chemin"], nom=name)
+    code, _, error_output = commands.run_action("oublier_disque", path=disk["path"], name=name)
     if code != 0:
         raise RuntimeError(error_output[:200])
     if disk.get("nextcloud"):
         commands.occ(["files_external:delete", "-y", str(disk["nextcloud"])])
     with _LOCK:
         data = read()
-        data["disques"] = [other for other in data["disques"] if other["nom"] != name]
-        if disk["uuid"] not in data["oublies"]:
-            data["oublies"].append(disk["uuid"])
+        data["disks"] = [other for other in data["disks"] if other["name"] != name]
+        if disk["uuid"] not in data["forgotten_items"]:
+            data["forgotten_items"].append(disk["uuid"])
         write(data)
     return disk
 
@@ -197,7 +197,9 @@ def resume(uuid):
     """Un disque oublié redevient un disque à ajouter automatiquement."""
     with _LOCK:
         data = read()
-        data["oublies"] = [forgotten_uuid for forgotten_uuid in data["oublies"] if forgotten_uuid != uuid.lower()]
+        data["forgotten_items"] = [
+            forgotten_uuid for forgotten_uuid in data["forgotten_items"] if forgotten_uuid != uuid.lower()
+        ]
         write(data)
 
 
@@ -216,37 +218,37 @@ def scan(nextcloud_running, notify, other_names):
     good, bad = candidates()
     data = read()
     for match in bad:
-        if match["uuid"] not in data["signales"]:
-            data["signales"].append(match["uuid"])
+        if match["uuid"] not in data["reported_items"]:
+            data["reported_items"].append(match["uuid"])
             write(data)
             notify(
                 "nouveau_disque",
                 "Disque illisible",
-                f"« {match['etiquette'] or 'Sans nom'} » est en {UNREADABLE[match['format']]}. Le serveur ne sait pas le lire : "
+                f"« {match['label'] or 'Sans nom'} » est en {UNREADABLE[match['format']]}. Le serveur ne sait pas le lire : "
                 "reformate-le en exFAT depuis le Mac (Utilitaire de disque) pour qu'il soit lisible partout.",
                 "/#/disques",
             )
     for good_disk in good:
-        if good_disk["uuid"] in data["oublies"]:
+        if good_disk["uuid"] in data["forgotten_items"]:
             continue
-        taken = {names.lower() for names in other_names()} | {disk["nom"].lower() for disk in read()["disques"]}
+        taken = {names.lower() for names in other_names()} | {disk["name"].lower() for disk in read()["disks"]}
         try:
             input_path = add(good_disk, taken)
         except RuntimeError as error:
             notify(
                 "nouveau_disque",
                 "Disque non ajouté",
-                f"« {good_disk['etiquette'] or 'Sans nom'} » : {error}",
+                f"« {good_disk['label'] or 'Sans nom'} » : {error}",
                 "/#/disques",
             )
             continue
         linked = nextcloud_running() and link_to_nextcloud(commands.occ, input_path)
         notify(
             "nouveau_disque",
-            f"Nouveau disque : {input_path['nom']}",
+            f"Nouveau disque : {input_path['name']}",
             "Prêt, en lecture seule"
             + (", visible dans Nextcloud" if linked else "")
-            + f". Jellyfin le voit dans /disques/{input_path['dossier']}.",
+            + f". Jellyfin le voit dans /disques/{input_path['folder']}.",
             "/#/disques",
         )
 
@@ -269,6 +271,6 @@ def scan_disks():
 def link_disks_to_nextcloud():
     if files_source.files_source() != "nextcloud":
         return
-    for disk in read()["disques"]:
+    for disk in read()["disks"]:
         if not disk.get("nextcloud"):
             link_to_nextcloud(commands.occ, disk)

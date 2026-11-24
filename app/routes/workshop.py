@@ -48,7 +48,7 @@ def workshop_list(request: Request):
 async def add_machine(request: Request):
     _ready(request)
     item = _run(workshop.add_machine, await request.json(), request.state.nom)
-    activity_log.record("atelier", f"Machine ajoutée : {item['nom']}", request.state.nom)
+    activity_log.record("atelier", f"Machine ajoutée : {item['name']}", request.state.nom)
     return item
 
 
@@ -67,7 +67,7 @@ async def edit_machine(machine_id: str, request: Request):
 @router.delete("/api/atelier/machines/{machine_id}")
 def remove_machine(machine_id: str, request: Request):
     _ready(request)
-    name = _run(workshop.machine, machine_id)["nom"]
+    name = _run(workshop.machine, machine_id)["name"]
     _run(workshop.delete_machine, machine_id)
     activity_log.record("atelier", f"Machine retirée : {name}", request.state.nom)
     return {"ok": True}

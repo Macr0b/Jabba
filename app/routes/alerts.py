@@ -30,7 +30,7 @@ async def subscribe(request: Request):
     origin = request.headers.get("origin") or ""
     contact = origin if origin.startswith("https://") else "mailto:jabba@example.org"
     try:
-        notifications.subscribe(body.get("abonnement"), contact, str(body.get("appareil", "")), request.state.user)
+        notifications.subscribe(body.get("subscription"), contact, str(body.get("device", "")), request.state.user)
     except ValueError as error:
         raise HTTPException(400, str(error))
     activity_log.record("alerte", "Alertes activées sur un appareil", request.state.nom)
@@ -46,14 +46,14 @@ async def unsubscribe(request: Request):
 @router.post("/api/alertes/abonnement/etat")
 async def this_device_state(request: Request):
     endpoint = str((await request.json()).get("endpoint", ""))
-    return {"abonne": endpoint in notifications.settings()["endpoints"]}
+    return {"subscribed": endpoint in notifications.settings()["endpoints"]}
 
 
 @router.post("/api/alertes/types")
 async def set_alert_types(request: Request):
     body = await request.json()
     try:
-        notifications.set_types(body.get("type"), body.get("actif"))
+        notifications.set_types(body.get("type"), body.get("active"))
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {"ok": True}
@@ -68,4 +68,4 @@ def send_test_alert(request: Request):
         "/#/systeme",
         force=True,
     )
-    return {"ok": True, "appareils": sent_count}
+    return {"ok": True, "devices": sent_count}

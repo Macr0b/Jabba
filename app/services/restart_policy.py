@@ -12,7 +12,7 @@ Sommaire :
   interpret     : le mode en vigueur. Sans choix enregistré (installation d'avant 0.13), le minuteur décide
   apply_command : la commande root qui enregistre le choix et remet le minuteur à jour (host/scripts/restart_policy.sh)
   message       : texte de la notification quand une mise à jour attend un redémarrage
-  current_mode  : {"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main
+  current_mode  : {"mode": "auto"|"manuel", "chosen": bool} : redémarrage seul à 4 h, ou à la main
 """
 
 import os
@@ -55,8 +55,8 @@ def interpret(content, timer_enabled):
     """Le mode en vigueur. Sans choix enregistré (installation d'avant 0.13), le minuteur décide."""
     mode = (content or "").strip()
     if mode in MODES:
-        return {"mode": mode, "choisi": True}
-    return {"mode": "auto" if timer_enabled else "manuel", "choisi": False}
+        return {"mode": mode, "chosen": True}
+    return {"mode": "auto" if timer_enabled else "manuel", "chosen": False}
 
 
 def apply_command(mode):
@@ -81,7 +81,7 @@ DEMO_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "redemarrage-dem
 
 
 def current_mode():
-    """{"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main."""
+    """{"mode": "auto"|"manuel", "chosen": bool} : redémarrage seul à 4 h, ou à la main."""
     if config.DEMO:
         try:
             return interpret(open(DEMO_FILE).read(), True)

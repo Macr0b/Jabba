@@ -26,26 +26,26 @@ router = APIRouter()
 def update_info(verifier: int = 0):
     if config.DEMO:
         return {
-            "actuelle": VERSION,
-            "depot": "exemple/jabba",
-            "pret": True,
-            "derniere": {
+            "current": VERSION,
+            "repository": "exemple/jabba",
+            "ready": True,
+            "latest": {
                 "version": "0.7.0",
                 "tag": "v0.7.0",
                 "notes": "- Correctifs\n- Aperçus plus rapides",
                 "date": "2026-11-20T10:00:00Z",
             },
-            "disponible": True,
+            "available": True,
         }
     folder = app_update.app_folder()
-    ready = bool(config.REPOSITORY and folder and commands.run_action("appli_prete", dossier=folder)[0] == 0)
+    ready = bool(config.REPOSITORY and folder and commands.run_action("appli_prete", folder=folder)[0] == 0)
     latest = app_update.latest_release(config.REPOSITORY, force=bool(verifier)) if config.REPOSITORY else None
     return {
-        "actuelle": VERSION,
-        "depot": config.REPOSITORY or None,
-        "pret": ready,
-        "derniere": latest,
-        "disponible": bool(latest and app_update.is_newer(VERSION, latest["version"])),
+        "current": VERSION,
+        "repository": config.REPOSITORY or None,
+        "ready": ready,
+        "latest": latest,
+        "available": bool(latest and app_update.is_newer(VERSION, latest["version"])),
     }
 
 
@@ -78,12 +78,12 @@ def install_update(request: Request):
     # Lancée par le serveur lui-même : elle continue pendant que l'appli redémarre.
     unit = f"jabba-maj-{int(time.time())}"
     try:
-        code, _, error_output = commands.run_action("installer_appli", dossier=folder, tag=latest["tag"], unite=unit)
+        code, _, error_output = commands.run_action("installer_appli", folder=folder, tag=latest["tag"], unit=unit)
     except actions.ActionError as error:
         raise HTTPException(409, str(error))
     if code != 0:
         raise HTTPException(500, "Lancement impossible : " + error_output[:200])
-    app_update.CURRENT_UPDATE.update(unite=unit, version=latest["version"], debut=time.time(), signale=False)
+    app_update.CURRENT_UPDATE.update(unit=unit, version=latest["version"], start=time.time(), reported=False)
     return {"ok": True, "version": latest["version"]}
 
 
@@ -94,15 +94,15 @@ def update_progress(request: Request):
         if os.environ.get("JABBA_DEMO_MAJ", "en_cours") == "en_cours":
             seconds = int(time.time()) % 60
             return {
-                "statut": "en_cours",
+                "status": "en_cours",
                 "version": "0.7.0",
-                "depuis": seconds,
+                "since": seconds,
                 **app_update.update_progress(
                     [f"#9 [jabba {1 + seconds // 10}/6] RUN pip install"] if seconds > 5 else []
                 ),
             }
         return {
-            "statut": os.environ.get("JABBA_DEMO_MAJ"),
+            "status": os.environ.get("JABBA_DEMO_MAJ"),
             "version": "0.7.0",
             "detail": [
                 "erreur : droits insuffisants pour ajouter un objet à la base de données .git/objects du dépôt",

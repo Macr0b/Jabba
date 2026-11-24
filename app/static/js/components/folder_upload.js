@@ -66,7 +66,7 @@ export async function uploadItems(path, items, after) {
   needed.sort((a, b) => a.split("/").length - b.split("/").length);
   for (const dir of needed) {
     try {
-      await api("/api/fichiers/dossier", { method: "POST", json: { chemin: `${base}/${dir}` } });
+      await api("/api/fichiers/dossier", { method: "POST", json: { path: `${base}/${dir}` } });
     } catch (error) {
       if (!/existe|déjà/i.test(error.message)) {
         toast(t`Dossier « ${dir} » : ${error.message}`, true);

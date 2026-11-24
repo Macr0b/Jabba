@@ -26,7 +26,7 @@ let cloudTab = "comptes";
 pages.nuage = async () => {
   content.innerHTML = t`<div class="entete"><div><h1>Comptes Nextcloud</h1></div></div>${loadingHtml(4)}`;
   const cloud = await api("/api/nuage");
-  const superAdmin = cloud.rang === "super";
+  const superAdmin = cloud.rank === "super";
   const reload = () => pages.nuage().catch(showError);
   const act = async (url, json, ok) => {
     try {
@@ -38,12 +38,12 @@ pages.nuage = async () => {
       return null;
     }
   };
-  if (!cloud.etat.present) {
+  if (!cloud.state.present) {
     content.innerHTML = t`<div class="entete"><div><h1>Comptes Nextcloud</h1></div></div>
       <section class="carte pad"><p>Nextcloud n'est pas allumé. Active-le dans l'<a href="#/outils">Établi</a>, puis reviens ici.</p></section>`;
     return;
   }
-  if (!cloud.etat.pret) {
+  if (!cloud.state.ready) {
     content.innerHTML = t`<div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">Pas encore en route.</p></div></div>
       <section class="carte pad"><h2>Mettre en route</h2>
         <p class="note" style="margin:8px 0">Comme Dropbox : chacun peut demander un compte, et un super admin le valide ici. Chaque compte a <strong>5 Go</strong> par défaut, que les admins peuvent changer sans dépasser le plafond. Des <strong>dossiers communs</strong> peuvent être partagés avec tous les membres ou avec un groupe.</p>
@@ -60,28 +60,28 @@ pages.nuage = async () => {
       };
     return;
   }
-  const pending = cloud.comptes.filter((item) => item.etat === "attente");
-  const others = cloud.comptes.filter((item) => item.etat !== "attente");
+  const pending = cloud.accounts.filter((item) => item.state === "attente");
+  const others = cloud.accounts.filter((item) => item.state !== "attente");
   const accountRow = (item) => {
-    const value = item.quota && item.utilise != null ? Math.min(100, Math.round((100 * item.utilise) / item.quota)) : 0;
+    const value = item.quota && item.used != null ? Math.min(100, Math.round((100 * item.used) / item.quota)) : 0;
     return `<button class="nuage-compte" data-compte="${escapeHtml(item.id)}">
-      <span class="nuage-qui"><strong>${escapeHtml(item.nom)}</strong> <span class="note">${escapeHtml(item.id)}${item.email ? " · " + escapeHtml(item.email) : ""}</span>
-        <span class="nuage-badges">${item.rang_nuage ? `<span class="pastille p-ok">${escapeHtml((cloud.rangs.find((rank) => rank.id === item.rang_nuage) || {}).nom || "")}</span>` : ""}${item.etat === "suspendu" ? t('<span class="pastille p-rouge">Suspendu</span>') : ""}${item.admin ? t('<span class="pastille p-gris">Admin Nextcloud</span>') : ""}${item.groupes
-          .filter((item) => item !== cloud.tous && item !== "admin" && !item.startsWith("rang-"))
+      <span class="nuage-qui"><strong>${escapeHtml(item.name)}</strong> <span class="note">${escapeHtml(item.id)}${item.email ? " · " + escapeHtml(item.email) : ""}</span>
+        <span class="nuage-badges">${item.cloud_rank ? `<span class="pastille p-ok">${escapeHtml((cloud.ranks.find((rank) => rank.id === item.cloud_rank) || {}).name || "")}</span>` : ""}${item.state === "suspendu" ? t('<span class="pastille p-rouge">Suspendu</span>') : ""}${item.admin ? t('<span class="pastille p-gris">Admin Nextcloud</span>') : ""}${item.groups
+          .filter((item) => item !== cloud.all && item !== "admin" && !item.startsWith("rang-"))
           .map((item) => `<span class="pastille p-gris">${escapeHtml(item)}</span>`)
           .join("")}</span></span>
-      <span class="nuage-espace"><span>${item.utilise != null ? formatBytes(item.utilise) + " / " : ""}${formatGigabytes(item.quota)}</span>${item.quota ? `<span class="jauge"><span style="width:${value}%;${value >= 90 ? "background:var(--rouge)" : ""}"></span></span>` : ""}</span>
+      <span class="nuage-espace"><span>${item.used != null ? formatBytes(item.used) + " / " : ""}${formatGigabytes(item.quota)}</span>${item.quota ? `<span class="jauge"><span style="width:${value}%;${value >= 90 ? "background:var(--rouge)" : ""}"></span></span>` : ""}</span>
     </button>`;
   };
   const access = (item) =>
-    item.acces
+    item.access
       .map(
         (currentAccess) =>
-          `${escapeHtml(groupLabel(currentAccess.groupe, cloud))} : ${escapeHtml(cloud.modes[currentAccess.mode].nom.toLowerCase())}`,
+          `${escapeHtml(groupLabel(currentAccess.group, cloud))} : ${escapeHtml(cloud.modes[currentAccess.mode].name.toLowerCase())}`,
       )
       .join(" · ") || t("Personne");
   content.innerHTML = t`
-    <div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">${others.length} compte${others.length > 1 ? "s" : ""} · ${formatGigabytes(cloud.promis)} promis${cloud.espace ? t` · ${formatGigabytes(cloud.espace.total - cloud.espace.utilise)} libres sur le disque de données` : ""}</p></div>
+    <div class="entete"><div><h1>Comptes Nextcloud</h1><p class="sous-titre">${others.length} compte${others.length > 1 ? "s" : ""} · ${formatGigabytes(cloud.promised)} promis${cloud.space ? t` · ${formatGigabytes(cloud.space.total - cloud.space.used)} libres sur le disque de données` : ""}</p></div>
       <div class="actions"><a class="btn" href="#/utilisateurs">Admins de Jabba</a>${superAdmin ? t('<button class="btn btn-p" id="nuage-ajouter">Ajouter un compte</button>') : ""}</div></div>
     ${
       pending.length
@@ -90,7 +90,7 @@ pages.nuage = async () => {
         .map(
           (
             item,
-          ) => `<div class="sauv-ligne"><span><strong>${escapeHtml(item.nom)}</strong> <span class="note">${escapeHtml(item.id)}${item.email ? " · " + escapeHtml(item.email) : ""}</span></span>
+          ) => `<div class="sauv-ligne"><span><strong>${escapeHtml(item.name)}</strong> <span class="note">${escapeHtml(item.id)}${item.email ? " · " + escapeHtml(item.email) : ""}</span></span>
         ${superAdmin ? t`<span class="actions"><button class="btn btn-petit" data-refuser="${escapeHtml(item.id)}">Refuser</button><button class="btn btn-p btn-petit" data-valider="${escapeHtml(item.id)}">Valider</button></span>` : t('<span class="note">Un super admin doit valider</span>')}</div>`,
         )
         .join("")}
@@ -110,50 +110,50 @@ pages.nuage = async () => {
     <div class="grille g2" data-onglet="partage">
       <section class="carte pad"><div class="entete-carte"><h2>Dossiers communs</h2><button class="btn btn-petit" id="nuage-dossier">Nouveau</button></div>
         <p class="note" style="margin:6px 0 8px">Ils apparaissent dans le Nextcloud de chaque personne qui y a accès.</p>
-        <div class="sauv-liste">${cloud.dossiers.map((item) => `<button class="sauv-ligne" data-dossier="${item.id}"><span><strong>${escapeHtml(item.nom)}</strong><br><span class="note">${access(item)}</span></span><span class="note">${formatBytes(item.taille)}${item.quota ? " / " + formatGigabytes(item.quota) : ""}</span></button>`).join("") || t('<p class="note">Aucun pour l\'instant.</p>')}</div></section>
+        <div class="sauv-liste">${cloud.folders.map((item) => `<button class="sauv-ligne" data-dossier="${item.id}"><span><strong>${escapeHtml(item.name)}</strong><br><span class="note">${access(item)}</span></span><span class="note">${formatBytes(item.size)}${item.quota ? " / " + formatGigabytes(item.quota) : ""}</span></button>`).join("") || t('<p class="note">Aucun pour l\'instant.</p>')}</div></section>
       <section class="carte pad" id="partages"><div class="entete-carte"><h2>Dossiers partagés</h2></div>
         <p class="note" style="margin:6px 0 8px">Un dossier existant (même sur un disque), donné à voir à un rang ou un groupe. Pour en ajouter : Fichiers, menu du dossier, « Partager avec… ».</p>
         <div class="sauv-liste" id="partages-liste"><p class="note">Chargement…</p></div></section>
-      <section class="carte pad"><div class="entete-carte"><h2>Rangs</h2>${cloud.createur ? t`<button class="interrupteur" role="switch" aria-checked="${cloud.rangs_actif}" id="rangs-actif" aria-label="Utiliser des rangs"><span></span></button>` : ""}</div>
+      <section class="carte pad"><div class="entete-carte"><h2>Rangs</h2>${cloud.creator ? t`<button class="interrupteur" role="switch" aria-checked="${cloud.ranks_enabled}" id="rangs-actif" aria-label="Utiliser des rangs"><span></span></button>` : ""}</div>
         <p class="note" style="margin:6px 0 8px">${
-          cloud.rangs_actif
+          cloud.ranks_enabled
             ? t(
                 "Du plus haut au plus bas. Un dossier commun donné à un rang est vu par ce rang et ceux au-dessus, pas par ceux en dessous.",
               )
             : t(
                 "Désactivés. Avec les rangs (par exemple Adhérent, Employé, Gérant), on donne des dossiers communs à un rang et à ceux au-dessus.",
               )
-        }${cloud.createur ? "" : t(" Seul le compte du serveur règle les rangs.")}</p>
+        }${cloud.creator ? "" : t(" Seul le compte du serveur règle les rangs.")}</p>
         ${
-          cloud.rangs_actif
+          cloud.ranks_enabled
             ? `<div class="sauv-liste">${
-                [...cloud.rangs]
+                [...cloud.ranks]
                   .reverse()
                   .map(
                     (rank) =>
-                      `<button class="sauv-ligne" data-rang="${escapeHtml(rank.id)}"${cloud.createur ? "" : " disabled"}><span><strong>${escapeHtml(rank.nom)}</strong></span><span class="note">${rank.membres} personne${rank.membres > 1 ? "s" : ""}</span></button>`,
+                      `<button class="sauv-ligne" data-rang="${escapeHtml(rank.id)}"${cloud.creator ? "" : " disabled"}><span><strong>${escapeHtml(rank.name)}</strong></span><span class="note">${rank.members} personne${rank.members > 1 ? "s" : ""}</span></button>`,
                   )
                   .join("") || t('<p class="note">Aucun rang pour l\'instant.</p>')
               }</div>
-        ${cloud.createur ? t('<div class="actions" style="margin-top:10px"><button class="btn btn-petit" id="rang-nouveau">Nouveau rang</button></div>') : ""}`
+        ${cloud.creator ? t('<div class="actions" style="margin-top:10px"><button class="btn btn-petit" id="rang-nouveau">Nouveau rang</button></div>') : ""}`
             : ""
         }
       </section>
       <section class="carte pad"><div class="entete-carte"><h2>Groupes</h2><button class="btn btn-petit" id="nuage-groupe">Nouveau</button></div>
         <p class="note" style="margin:6px 0 8px">Pour donner un dossier commun à quelques personnes (le fablab, la famille…). Chaque compte validé fait partie de « Tous les membres ».</p>
-        <div class="sauv-liste">${cloud.groupes.map((item) => `<button class="sauv-ligne" data-groupe="${escapeHtml(item.id)}"><span><strong>${escapeHtml(groupLabel(item.id, cloud))}</strong></span><span class="note">${item.membres.length} membre${item.membres.length > 1 ? "s" : ""}</span></button>`).join("")}</div></section>
+        <div class="sauv-liste">${cloud.groups.map((item) => `<button class="sauv-ligne" data-groupe="${escapeHtml(item.id)}"><span><strong>${escapeHtml(groupLabel(item.id, cloud))}</strong></span><span class="note">${item.members.length} membre${item.members.length > 1 ? "s" : ""}</span></button>`).join("")}</div></section>
     </div>
     <div class="grille g2" data-onglet="reglages">
       ${
         superAdmin
           ? t`<section class="carte pad"><h2>Charte d'inscription</h2>
         <p class="note" style="margin:6px 0 10px">Affichée sur le formulaire « S'inscrire » de Nextcloud : ce que la personne accepte en créant son compte.</p>
-        <textarea id="nuage-charte" rows="9" maxlength="${cloud.charte_max}" style="width:100%">${escapeHtml(cloud.charte)}</textarea>
+        <textarea id="nuage-charte" rows="9" maxlength="${cloud.charter_max}" style="width:100%">${escapeHtml(cloud.charter)}</textarea>
         <div class="actions" style="margin-top:10px"><button class="btn" id="charte-modele">Reprendre le modèle</button><button class="btn btn-p" id="charte-enregistrer">Enregistrer</button></div>
       </section>
       <section class="carte pad"><h2>Réglages</h2>
-        <label class="ligne-reglage"><span><strong>Espace des nouveaux comptes</strong></span><button class="btn btn-petit" id="nuage-defaut">${escapeHtml(cloud.etat.quota_defaut.replace(" GB", " Go").replace(" MB", " Mo"))}</button></label>
-        <label class="ligne-reglage"><span><strong>Plafond par compte</strong><br><span class="note">Un admin ne peut pas donner plus. Un super admin, si.</span></span><button class="btn btn-petit" id="nuage-plafond">${cloud.plafond_go} Go</button></label>
+        <label class="ligne-reglage"><span><strong>Espace des nouveaux comptes</strong></span><button class="btn btn-petit" id="nuage-defaut">${escapeHtml(cloud.state.default_quota.replace(" GB", " Go").replace(" MB", " Mo"))}</button></label>
+        <label class="ligne-reglage"><span><strong>Plafond par compte</strong><br><span class="note">Un admin ne peut pas donner plus. Un super admin, si.</span></span><button class="btn btn-petit" id="nuage-plafond">${cloud.cap_gb} Go</button></label>
         <p class="note" style="margin-top:10px">Inscription : lien « S'inscrire » sur la page de connexion de Nextcloud. Tant que Nextcloud n'a pas d'adresse publique, seuls ceux qui ont accès au serveur peuvent l'ouvrir. L'adresse e-mail n'est pas vérifiée (pas encore de serveur d'e-mails).</p>
       </section>`
           : ""
@@ -176,10 +176,10 @@ pages.nuage = async () => {
   const choice = $("#charte-enregistrer");
   if (choice) {
     choice.onclick = async () => {
-      if (await act("/api/nuage/charte", { texte: $("#nuage-charte").value }, t("Charte enregistrée"))) reload();
+      if (await act("/api/nuage/charte", { text: $("#nuage-charte").value }, t("Charte enregistrée"))) reload();
     };
     $("#charte-modele").onclick = () => {
-      $("#nuage-charte").value = cloud.charte_defaut;
+      $("#nuage-charte").value = cloud.default_charter;
     };
   }
 

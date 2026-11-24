@@ -72,13 +72,13 @@ def test_the_screen_keeps_the_setting_while_the_disk_reopens(monkeypatch):
     monkeypatch.setattr(files_source, "disk_uuid", lambda path: "ab12-cd34")
     monkeypatch.setattr(files_source, "is_writable", lambda path: True)
     monkeypatch.setattr(
-        disk_inventory.auto_disks, "read", lambda: {"disques": [{"chemin": "/srv/disques/R2-D2"}], "oublies": []}
+        disk_inventory.auto_disks, "read", lambda: {"disks": [{"path": "/srv/disques/R2-D2"}], "forgotten_items": []}
     )
     monkeypatch.setattr(disk_inventory.commands, "run_action", lambda nom, **a: (0, json.dumps(tree), ""))
     disque = disk_inventory.list_disks()[0]
-    assert disque["titre"] == "R2-D2" and disque["genre"] == "Disque externe USB"
+    assert disque["title"] == "R2-D2" and disque["genre"] == "Disque externe USB"
     part_ = disque["partitions"][0]
-    assert part_["disque_jabba"] == {"nom": "R2-D2", "ecriture": True, "auto": True}
+    assert part_["jabba_disk"] == {"name": "R2-D2", "writable": True, "auto": True}
     assert part_["role"] == "Disque externe (en cours d'ouverture)"
 
 

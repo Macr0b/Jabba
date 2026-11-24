@@ -13,17 +13,17 @@ import { chooseFromMenu, confirmAction, dialogElement, dialogForm, toast } from 
 import { chooseRank } from "./cloud_sharing.js";
 
 export async function chooseQuota(title, current, cloud, superAdmin, unlimited = true) {
-  const sizes = [1, 2, 5, 10, 20, 50, 100, 200].filter((value) => superAdmin || value <= cloud.plafond_go);
+  const sizes = [1, 2, 5, 10, 20, 50, 100, 200].filter((value) => superAdmin || value <= cloud.cap_gb);
   const choices = sizes.map((value) => ({
-    texte: `${value} Go${current === value * 1073741824 ? t(" (actuel)") : ""}`,
+    text: `${value} Go${current === value * 1073741824 ? t(" (actuel)") : ""}`,
     go: value,
   }));
-  choices.push({ texte: t("Autre…"), autre: true });
-  if (superAdmin && unlimited) choices.push({ texte: t("Illimité"), go: null });
-  const item = await chooseFromMenu(title + (superAdmin ? "" : t` (plafond : ${cloud.plafond_go} Go)`), choices);
+  choices.push({ text: t("Autre…"), other: true });
+  if (superAdmin && unlimited) choices.push({ text: t("Illimité"), go: null });
+  const item = await chooseFromMenu(title + (superAdmin ? "" : t` (plafond : ${cloud.cap_gb} Go)`), choices);
   if (!item) return undefined;
-  if (!item.autre) return item.go;
-  const value = await confirmAction({ titre: title, texte: t("En Go (par exemple 7,5)."), champ: "" });
+  if (!item.other) return item.go;
+  const value = await confirmAction({ title, text: t("En Go (par exemple 7,5)."), field: "" });
   const entry = value && parseFloat(value.replace(",", "."));
   return entry > 0 ? entry : undefined;
 }
@@ -34,7 +34,7 @@ export function bindAccounts(context) {
   content.querySelectorAll("[data-valider]").forEach((element) =>
     element.addEventListener("click", async () => {
       let rank = null;
-      if (cloud.rangs_actif && cloud.rangs.length) {
+      if (cloud.ranks_enabled && cloud.ranks.length) {
         const chosen = await chooseRank(cloud, t`Rang de ${element.dataset.valider}`, null);
         if (!chosen) return;
         rank = chosen.id;
@@ -42,7 +42,7 @@ export function bindAccounts(context) {
       if (
         await act(
           `/api/nuage/comptes/${encodeURIComponent(element.dataset.valider)}`,
-          { action: "valider", rang: rank },
+          { action: "valider", rank },
           t("Compte validé"),
         )
       )
@@ -53,9 +53,9 @@ export function bindAccounts(context) {
     element.addEventListener("click", async () => {
       if (
         !(await confirmAction({
-          titre: t`Refuser ${element.dataset.refuser} ?`,
-          texte: t("La demande est supprimée. La personne pourra en refaire une."),
-          valider: t("Refuser"),
+          title: t`Refuser ${element.dataset.refuser} ?`,
+          text: t("La demande est supprimée. La personne pourra en refaire une."),
+          confirmLabel: t("Refuser"),
           danger: true,
         }))
       )
@@ -74,100 +74,98 @@ export function bindAccounts(context) {
   // un compte
   content.querySelectorAll("[data-compte]").forEach((element) =>
     element.addEventListener("click", async () => {
-      const item = cloud.comptes.find((item) => item.id === element.dataset.compte);
+      const item = cloud.accounts.find((item) => item.id === element.dataset.compte);
       const url = `/api/nuage/comptes/${encodeURIComponent(item.id)}`;
       const choices = [
-        { texte: t`Changer l'espace (${formatGigabytes(item.quota)})`, f: "espace" },
-        { texte: t("Groupes"), f: "groupes" },
+        { text: t`Changer l'espace (${formatGigabytes(item.quota)})`, f: "espace" },
+        { text: t("Groupes"), f: "groupes" },
       ];
-      if (superAdmin && cloud.rangs_actif && cloud.rangs.length)
+      if (superAdmin && cloud.ranks_enabled && cloud.ranks.length)
         choices.unshift({
-          texte: t`Rang (${(cloud.rangs.find((rank) => rank.id === item.rang_nuage) || { nom: "aucun" }).nom})`,
+          text: t`Rang (${(cloud.ranks.find((rank) => rank.id === item.cloud_rank) || { name: "aucun" }).name})`,
           f: "rang",
         });
       if (superAdmin) {
-        choices.push({ texte: t("Nouveau mot de passe"), f: "mdp" });
+        choices.push({ text: t("Nouveau mot de passe"), f: "mdp" });
         if (!item.admin)
           choices.push(
-            { texte: item.etat === "suspendu" ? t("Réactiver") : t("Suspendre"), f: "suspendre" },
-            { texte: t("Supprimer le compte"), f: "supprimer", danger: true },
+            { text: item.state === "suspendu" ? t("Réactiver") : t("Suspendre"), f: "suspendre" },
+            { text: t("Supprimer le compte"), f: "supprimer", danger: true },
           );
       }
-      const choice = await chooseFromMenu(`${item.nom} (${item.id})`, choices);
+      const choice = await chooseFromMenu(`${item.name} (${item.id})`, choices);
       if (!choice) return;
       if (choice.f === "rang") {
-        const rank = await chooseRank(cloud, t`Rang de ${item.nom}`, item.rang_nuage);
+        const rank = await chooseRank(cloud, t`Rang de ${item.name}`, item.cloud_rank);
         if (
           rank &&
-          rank.id !== item.rang_nuage &&
+          rank.id !== item.cloud_rank &&
           (await act(
             url,
-            { action: "rang", rang: rank.id },
-            `${item.nom} : ${rank.id ? rank.texte.replace(" (actuel)", "") : t("aucun rang")}`,
+            { action: "rang", rank: rank.id },
+            `${item.name} : ${rank.id ? rank.text.replace(" (actuel)", "") : t("aucun rang")}`,
           ))
         )
           reload();
       } else if (choice.f === "espace") {
-        const value = await chooseQuota(t`Espace de ${item.nom}`, item.quota, cloud, superAdmin);
+        const value = await chooseQuota(t`Espace de ${item.name}`, item.quota, cloud, superAdmin);
         if (
           value !== undefined &&
           (await act(
             url,
             { action: "quota", go: value },
-            t`Espace de ${item.nom} : ${value == null ? t("illimité") : String(value).replace(".", ",") + " Go"}`,
+            t`Espace de ${item.name} : ${value == null ? t("illimité") : String(value).replace(".", ",") + " Go"}`,
           ))
         )
           reload();
       } else if (choice.f === "groupes") {
         const entry = await chooseFromMenu(
-          t`Groupes de ${item.nom}`,
-          cloud.groupes
-            .filter((item) => item.id !== cloud.tous)
-            .map((entry) => ({ texte: (item.groupes.includes(entry.id) ? "✓ " : "") + entry.id, id: entry.id })),
+          t`Groupes de ${item.name}`,
+          cloud.groups
+            .filter((item) => item.id !== cloud.all)
+            .map((entry) => ({ text: (item.groups.includes(entry.id) ? "✓ " : "") + entry.id, id: entry.id })),
         );
         if (!entry) return;
-        const member = !item.groupes.includes(entry.id);
+        const member = !item.groups.includes(entry.id);
         if (
           await act(
             url,
-            { action: "groupe", groupe: entry.id, dedans: member },
-            member ? t`${item.nom} ajouté à ${entry.id}` : t`${item.nom} retiré de ${entry.id}`,
+            { action: "groupe", group: entry.id, inside: member },
+            member ? t`${item.name} ajouté à ${entry.id}` : t`${item.name} retiré de ${entry.id}`,
           )
         )
           reload();
       } else if (choice.f === "mdp") {
         if (
           !(await confirmAction({
-            titre: t`Nouveau mot de passe pour ${item.nom} ?`,
-            texte: t("L'ancien ne marchera plus. Les applis Nextcloud de la personne devront se reconnecter."),
-            valider: t("Changer"),
+            title: t`Nouveau mot de passe pour ${item.name} ?`,
+            text: t("L'ancien ne marchera plus. Les applis Nextcloud de la personne devront se reconnecter."),
+            confirmLabel: t("Changer"),
           }))
         )
           return;
         const result = await act(url, { action: "mdp" });
-        if (result) await showCloudPassword(item, result.mdp);
+        if (result) await showCloudPassword(item, result.password);
       } else if (choice.f === "suspendre") {
-        const active = item.etat === "suspendu";
+        const active = item.state === "suspendu";
         if (
           !active &&
           !(await confirmAction({
-            titre: t`Suspendre ${item.nom} ?`,
-            texte: t("La personne ne peut plus se connecter. Ses fichiers sont gardés."),
-            valider: t("Suspendre"),
+            title: t`Suspendre ${item.name} ?`,
+            text: t("La personne ne peut plus se connecter. Ses fichiers sont gardés."),
+            confirmLabel: t("Suspendre"),
             danger: true,
           }))
         )
           return;
-        if (
-          await act(url, { action: "suspendre", actif: active }, active ? t("Compte réactivé") : t("Compte suspendu"))
-        )
+        if (await act(url, { action: "suspendre", active }, active ? t("Compte réactivé") : t("Compte suspendu")))
           reload();
       } else if (choice.f === "supprimer") {
         const value = await confirmAction({
-          titre: t`Supprimer ${item.nom} ?`,
-          texte: t`Le compte et TOUS ses fichiers sont effacés. Pour confirmer, tape ${item.id}.`,
-          champ: "",
-          valider: t("Supprimer"),
+          title: t`Supprimer ${item.name} ?`,
+          text: t`Le compte et TOUS ses fichiers sont effacés. Pour confirmer, tape ${item.id}.`,
+          field: "",
+          confirmLabel: t("Supprimer"),
           danger: true,
         });
         if (value !== item.id) {
@@ -184,34 +182,37 @@ export function bindAccounts(context) {
   if (addButton)
     addButton.onclick = async () => {
       const answers = await formBody({
-        titre: t("Ajouter un compte"),
-        texte: t("Pour quelqu'un qui ne passe pas par l'inscription. Un mot de passe provisoire s'affichera."),
-        champs: [
-          { nom: "nom", label: t("Prénom et nom") },
-          { nom: "id", label: t("Identifiant (minuscules, sans espace)") },
-          { nom: "email", label: t("E-mail (facultatif)"), type: "email" },
-          ...(cloud.rangs_actif && cloud.rangs.length
+        title: t("Ajouter un compte"),
+        text: t("Pour quelqu'un qui ne passe pas par l'inscription. Un mot de passe provisoire s'affichera."),
+        fields: [
+          { name: "name", label: t("Prénom et nom") },
+          { name: "id", label: t("Identifiant (minuscules, sans espace)") },
+          { name: "email", label: t("E-mail (facultatif)"), type: "email" },
+          ...(cloud.ranks_enabled && cloud.ranks.length
             ? [
                 {
-                  nom: "rang",
+                  name: "rank",
                   label: t("Rang"),
-                  valeur: cloud.rangs[0].id,
-                  options: [...[...cloud.rangs].reverse().map((item) => [item.id, item.nom]), ["", t("Aucun rang")]],
+                  value: cloud.ranks[0].id,
+                  options: [...[...cloud.ranks].reverse().map((item) => [item.id, item.name]), ["", t("Aucun rang")]],
                 },
               ]
             : []),
         ],
-        valider: t("Créer"),
+        confirmLabel: t("Créer"),
       });
-      if (!answers || answers === "secondaire") return;
+      if (!answers || answers === "secondary") return;
       const result = await act("/api/nuage/comptes", {
         id: answers.id.trim().toLowerCase(),
-        nom: answers.nom,
+        name: answers.name,
         email: answers.email,
-        rang: answers.rang || null,
+        rank: answers.rank || null,
       });
       if (result) {
-        await showCloudPassword({ nom: answers.nom || answers.id, id: answers.id.trim().toLowerCase() }, result.mdp);
+        await showCloudPassword(
+          { name: answers.name || answers.id, id: answers.id.trim().toLowerCase() },
+          result.password,
+        );
         reload();
       }
     };
@@ -226,7 +227,7 @@ export function bindCloudSettings(context) {
       value != null &&
       (await act(
         "/api/nuage/reglages",
-        { quota_defaut_go: value },
+        { default_quota_gb: value },
         t`Nouveaux comptes : ${String(value).replace(".", ",")} Go`,
       ))
     )
@@ -234,20 +235,20 @@ export function bindCloudSettings(context) {
   };
   $("#nuage-plafond").onclick = async () => {
     const value = await confirmAction({
-      titre: t("Plafond par compte"),
-      texte: t("En Go. Un admin ne pourra pas donner plus à un compte."),
-      champ: String(cloud.plafond_go),
-      valider: t("Changer"),
+      title: t("Plafond par compte"),
+      text: t("En Go. Un admin ne pourra pas donner plus à un compte."),
+      field: String(cloud.cap_gb),
+      confirmLabel: t("Changer"),
     });
     const item = value && parseFloat(value.replace(",", "."));
-    if (item > 0 && (await act("/api/nuage/reglages", { plafond_go: item }, t`Plafond : ${value} Go`))) reload();
+    if (item > 0 && (await act("/api/nuage/reglages", { cap_gb: item }, t`Plafond : ${value} Go`))) reload();
   };
 }
 
 async function showCloudPassword(item, password) {
   await new Promise((resolve) => {
     dialogForm.innerHTML = t`<h2>Mot de passe Nextcloud</h2>
-      <p>Donne-le à <strong>${escapeHtml(item.nom)}</strong> (identifiant <strong>${escapeHtml(item.id)}</strong>). Il ne sera plus affiché. Conseille-lui de le changer dans Nextcloud (Paramètres personnels, Sécurité).</p>
+      <p>Donne-le à <strong>${escapeHtml(item.name)}</strong> (identifiant <strong>${escapeHtml(item.id)}</strong>). Il ne sera plus affiché. Conseille-lui de le changer dans Nextcloud (Paramètres personnels, Sécurité).</p>
       <p class="code-secours">${escapeHtml(password)}</p>
       <div class="actions"><button class="btn" type="button" id="copier-mdp">Copier</button><button class="btn btn-p" value="ok" type="submit">C'est noté</button></div>`;
     dialogElement.onclose = () => resolve();

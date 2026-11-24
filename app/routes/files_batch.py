@@ -30,7 +30,7 @@ async def download_zip(request: Request, chemin: list[str] = Query(default=[])):
 
 @router.post("/api/fichiers/annuler-suppression")
 async def undo_delete(request: Request):
-    paths = (await request.json()).get("chemins") or []
+    paths = (await request.json()).get("paths") or []
     if not isinstance(paths, list) or not paths:
         raise HTTPException(400, "Rien à annuler.")
     restored = await trash.undo_delete([str(path) for path in paths])
@@ -41,4 +41,4 @@ async def undo_delete(request: Request):
         f"Suppression annulée : {len(restored)} élément{'s' if len(restored) > 1 else ''} remis en place",
         request.state.nom,
     )
-    return {"restaures": restored}
+    return {"restored": restored}

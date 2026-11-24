@@ -94,8 +94,8 @@ class CloudError(Exception):
 # ---------------------------------------------------------------- réglages de Jabba
 def read():
     state = json_files.load(STATE_FILE)
-    state.setdefault("plafond_go", 50)
-    state.setdefault("en_attente_vus", [])  # inscriptions déjà signalées
+    state.setdefault("cap_gb", 50)
+    state.setdefault("pending_seen", [])  # inscriptions déjà signalées
     return state
 
 
@@ -157,9 +157,9 @@ def overview(occ):
     return {
         "present": True,
         "version": status.get("versionstring"),
-        "applis": {app: app in apps for app in APPS},
-        "pret": all(app in apps for app in APPS) and settings.get("admin_approval_required") == "yes",
-        "quota_defaut": default,
+        "apps": {app: app in apps for app in APPS},
+        "ready": all(app in apps for app in APPS) and settings.get("admin_approval_required") == "yes",
+        "default_quota": default,
     }
 
 
@@ -176,20 +176,20 @@ def accounts(occ):
         result.append(
             {
                 "id": user_id,
-                "nom": user.get("display_name") or user_id,
+                "name": user.get("display_name") or user_id,
                 "email": user.get("email") or "",
-                "etat": "actif" if user.get("enabled") else ("attente" if pending else "suspendu"),
-                "groupes": user.get("groups") or [],
+                "state": "actif" if user.get("enabled") else ("attente" if pending else "suspendu"),
+                "groups": user.get("groups") or [],
                 "admin": "admin" in (user.get("groups") or []),
                 "quota": quota,
-                "illimite": quota is None,
-                "quota_texte": user.get("quota"),
-                "utilise": USAGE_CACHE["v"].get(user_id),
-                "vu": None if user.get("last_seen") in (None, "never") else user.get("last_seen"),
-                "cree": None if user.get("first_seen") in (None, "never") else user.get("first_seen"),
+                "unlimited": quota is None,
+                "quota_text": user.get("quota"),
+                "used": USAGE_CACHE["v"].get(user_id),
+                "seen": None if user.get("last_seen") in (None, "never") else user.get("last_seen"),
+                "created": None if user.get("first_seen") in (None, "never") else user.get("first_seen"),
             }
         )
-    result.sort(key=lambda item: ({"attente": 0, "actif": 1, "suspendu": 2}[item["etat"]], item["nom"].lower()))
+    result.sort(key=lambda item: ({"attente": 0, "actif": 1, "suspendu": 2}[item["state"]], item["name"].lower()))
     return result
 
 
@@ -209,7 +209,7 @@ def refresh_usage(occ, user_ids=None):
 
 def groups(occ):
     raw = _occ_json(occ, ["group:list", "--limit=0"]) or {}
-    return [{"id": group, "membres": match} for group, match in sorted(raw.items()) if group != "admin"]
+    return [{"id": group, "members": match} for group, match in sorted(raw.items()) if group != "admin"]
 
 
 def team_folders(occ):
@@ -225,12 +225,12 @@ def team_folders(occ):
         result.append(
             {
                 "id": folder["id"],
-                "nom": folder.get("mountPoint") or folder.get("mount_point"),
+                "name": folder.get("mountPoint") or folder.get("mount_point"),
                 "quota": None if (folder.get("quota") or -3) < 0 else folder["quota"],
-                "taille": folder.get("size") or 0,
-                "acces": [
+                "size": folder.get("size") or 0,
+                "access": [
                     {
-                        "groupe": group,
+                        "group": group,
                         "mode": MODES_BY_PERMISSIONS.get(
                             int(permissions),
                             "complet" if int(permissions) & 8 else "depot" if int(permissions) & 4 else "lecture",
@@ -240,7 +240,7 @@ def team_folders(occ):
                 ],
             }
         )
-    result.sort(key=lambda folder: folder["nom"].lower())
+    result.sort(key=lambda folder: folder["name"].lower())
     return result
 
 
@@ -420,18 +420,18 @@ RANK_PREFIX = "rang-"
 
 def ranks_of(state):
     """Les rangs, du plus bas au plus haut : [{id, nom}]."""
-    return state.setdefault("rangs", [])
+    return state.setdefault("ranks", [])
 
 
 def rank_name(state, rank_id):
-    return next((rank["nom"] for rank in ranks_of(state) if rank["id"] == rank_id), None)
+    return next((rank["name"] for rank in ranks_of(state) if rank["id"] == rank_id), None)
 
 
 def wanted_groups(state, user_id):
     """Groupes de rang dont `uid` doit faire partie (son rang et ceux en dessous)."""
-    if not state.get("rangs_actif"):
+    if not state.get("ranks_enabled"):
         return set()
-    rank_id = state.setdefault("rang_de", {}).get(user_id)
+    rank_id = state.setdefault("rank_of", {}).get(user_id)
     ids = [rank["id"] for rank in ranks_of(state)]
     if rank_id not in ids:
         return set()
@@ -443,7 +443,7 @@ def sync_ranks(occ, state, user_ids=None):
     members = _occ_json(occ, ["group:list", "--limit=0"]) or {}
     all_ranks = {group for group in members if group.startswith(RANK_PREFIX)}
     if user_ids is None:
-        user_ids = set(state.get("rang_de", {})) | {user for group in all_ranks for user in members.get(group, [])}
+        user_ids = set(state.get("rank_of", {})) | {user for group in all_ranks for user in members.get(group, [])}
     for user_id in user_ids:
         wanted = wanted_groups(state, user_id)
         for group in all_ranks | wanted:
@@ -460,11 +460,11 @@ def create_rank(occ, state, name):
     name = name.strip()
     if not name or len(name) > 40:
         raise CloudError("Nom de rang : 1 à 40 caractères.")
-    if any(rank["nom"].lower() == name.lower() for rank in ranks_of(state)):
+    if any(rank["name"].lower() == name.lower() for rank in ranks_of(state)):
         raise CloudError("Ce rang existe déjà.")
     rank_id = RANK_PREFIX + secrets.token_hex(3)
     occ_or_fail(occ, ["group:add", "--display-name", name, rank_id])
-    ranks_of(state).append({"id": rank_id, "nom": name})  # tout en haut ; on le déplace ensuite si besoin
+    ranks_of(state).append({"id": rank_id, "name": name})  # tout en haut ; on le déplace ensuite si besoin
     return rank_id
 
 
@@ -473,13 +473,13 @@ def delete_rank(occ, state, rank_id):
     index = ids.index(rank_id)
     below = ids[index - 1] if index > 0 else None
     # Les personnes de ce rang descendent d'un cran (ou n'ont plus de rang).
-    for user_id, rank in list(state.setdefault("rang_de", {}).items()):
+    for user_id, rank in list(state.setdefault("rank_of", {}).items()):
         if rank == rank_id:
             if below:
-                state["rang_de"][user_id] = below
+                state["rank_of"][user_id] = below
             else:
-                del state["rang_de"][user_id]
-    state["rangs"] = [rank for rank in ranks_of(state) if rank["id"] != rank_id]
+                del state["rank_of"][user_id]
+    state["ranks"] = [rank for rank in ranks_of(state) if rank["id"] != rank_id]
     occ(["group:delete", rank_id])
 
 
@@ -508,7 +508,7 @@ def watch_signups():
     except ValueError:
         return
     state = read()
-    seen = set(state["en_attente_vus"])
+    seen = set(state["pending_seen"])
     pending = set()
     for user_id, name in disabled_accounts.items():
         item, setting, _ = commands.occ(["user:setting", user_id, "registration", "send_welcome_mail_on_enable"])
@@ -524,7 +524,7 @@ def watch_signups():
                     recipients=guard.super_admin_logins(),
                 )
     if pending != seen:
-        state["en_attente_vus"] = sorted(pending)
+        state["pending_seen"] = sorted(pending)
         write(state)
     # Un disque ajouté à la main dans Nextcloud (ou avant cette version) serait vu par tous les comptes.
     try:

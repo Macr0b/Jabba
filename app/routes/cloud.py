@@ -61,17 +61,17 @@ async def cloud_settings(request: Request):
     guard.require_super_admin(request)
     body = await request.json()
     cloud_state = nextcloud_accounts.read()
-    if "plafond_go" in body:
-        gigabytes = body["plafond_go"]
+    if "cap_gb" in body:
+        gigabytes = body["cap_gb"]
         if not isinstance(gigabytes, (int, float)) or not 1 <= gigabytes <= 100000:
             raise HTTPException(400, "Plafond invalide.")
-        cloud_state["plafond_go"] = gigabytes
+        cloud_state["cap_gb"] = gigabytes
         nextcloud_accounts.write(cloud_state)
         activity_log.record("nuage", f"Plafond d'espace par compte : {format_gigabytes(gigabytes)}", request.state.nom)
-    if "quota_defaut_go" in body:
-        gigabytes = body["quota_defaut_go"]
-        if not isinstance(gigabytes, (int, float)) or not 0 < gigabytes <= cloud_state["plafond_go"]:
-            raise HTTPException(400, f"Espace par défaut : entre 0 et {cloud_state['plafond_go']} Go (le plafond).")
+    if "default_quota_gb" in body:
+        gigabytes = body["default_quota_gb"]
+        if not isinstance(gigabytes, (int, float)) or not 0 < gigabytes <= cloud_state["cap_gb"]:
+            raise HTTPException(400, f"Espace par défaut : entre 0 et {cloud_state['cap_gb']} Go (le plafond).")
         run_cloud_action(nextcloud_accounts.set_default_quota, gigabytes)
         activity_log.record(
             "nuage", f"Espace par défaut des nouveaux comptes : {format_gigabytes(gigabytes)}", request.state.nom
@@ -83,7 +83,7 @@ async def cloud_settings(request: Request):
 async def cloud_charter(request: Request):
     """La charte affichée sur le formulaire d'inscription (super admin)."""
     guard.require_super_admin(request)
-    text = (await request.json()).get("texte", "")
+    text = (await request.json()).get("text", "")
     run_cloud_action(nextcloud_accounts.set_charter, text)
     activity_log.record(
         "nuage", "Charte d'inscription " + ("modifiée" if str(text).strip() else "retirée"), request.state.nom
@@ -95,7 +95,7 @@ async def cloud_charter(request: Request):
 def pending_signups(request: Request):
     """Nombre d'inscriptions qui attendent (léger : pour la pastille de l'Établi)."""
     guard.require_admin(request)
-    return {"attente": len(nextcloud_accounts.read()["en_attente_vus"])}
+    return {"pending": len(nextcloud_accounts.read()["pending_seen"])}
 
 
 @router.post("/api/nuage/comptes")
@@ -108,83 +108,83 @@ async def add_cloud_account(request: Request):
     run_cloud_action(
         nextcloud_accounts.add,
         user_id,
-        str(body.get("nom", "")).strip()[:60],
+        str(body.get("name", "")).strip()[:60],
         str(body.get("email", "")).strip()[:120],
         password,
     )
-    text = set_rank(user_id, body.get("rang")) if body.get("rang") else ""
+    text = set_rank(user_id, body.get("rank")) if body.get("rank") else ""
     activity_log.record("nuage", f"Compte Nextcloud créé : {user_id}{text}", request.state.nom)
     nextcloud_accounts.refresh_usage_in_background([user_id])
-    return {"ok": True, "mdp": password}
+    return {"ok": True, "password": password}
 
 
 # ---------------------------------------------------------------- un geste sur un compte
 # Chaque geste : (account, body, session, who) -> réponse ; le Journal note ce qui a été fait.
 def _approve(account, body, session, who):
     run_cloud_action(nextcloud_accounts.approve, account["id"])
-    text = set_rank(account["id"], body["rang"]) if body.get("rang") else ""
-    activity_log.record("nuage", f"Inscription validée : {account['nom']} ({account['id']}){text}", who)
+    text = set_rank(account["id"], body["rank"]) if body.get("rank") else ""
+    activity_log.record("nuage", f"Inscription validée : {account['name']} ({account['id']}){text}", who)
 
 
 def _refuse(account, body, session, who):
     run_cloud_action(nextcloud_accounts.delete, account["id"])
-    activity_log.record("nuage", f"Inscription refusée : {account['nom']} ({account['id']}), compte supprimé", who)
+    activity_log.record("nuage", f"Inscription refusée : {account['name']} ({account['id']}), compte supprimé", who)
 
 
 def _suspend(account, body, session, who):
-    active = bool(body.get("actif"))
+    active = bool(body.get("active"))
     run_cloud_action(nextcloud_accounts.suspend, account["id"], active)
     word = "réactivé" if active else "suspendu"
-    activity_log.record("nuage", f"Compte {word} : {account['nom']} ({account['id']})", who)
+    activity_log.record("nuage", f"Compte {word} : {account['name']} ({account['id']})", who)
 
 
 def _change_rank(account, body, session, who):
     cloud_state = nextcloud_accounts.read()
-    before = nextcloud_accounts.rank_name(cloud_state, cloud_state.get("rang_de", {}).get(account["id"]))
-    set_rank(account["id"], body.get("rang"))
-    after = nextcloud_accounts.rank_name(nextcloud_accounts.read(), body.get("rang"))
-    text = f"Rang de {account['nom']} ({account['id']}) : {before or 'aucun'} → {after or 'aucun'}"
+    before = nextcloud_accounts.rank_name(cloud_state, cloud_state.get("rank_of", {}).get(account["id"]))
+    set_rank(account["id"], body.get("rank"))
+    after = nextcloud_accounts.rank_name(nextcloud_accounts.read(), body.get("rank"))
+    text = f"Rang de {account['name']} ({account['id']}) : {before or 'aucun'} → {after or 'aucun'}"
     activity_log.record("nuage", text, who)
 
 
 def _delete(account, body, session, who):
     run_cloud_action(nextcloud_accounts.delete, account["id"])
     cloud_state = nextcloud_accounts.read()
-    if cloud_state.get("rang_de", {}).pop(account["id"], None):
+    if cloud_state.get("rank_of", {}).pop(account["id"], None):
         nextcloud_accounts.write(cloud_state)
-    activity_log.record("nuage", f"Compte supprimé avec ses fichiers : {account['nom']} ({account['id']})", who)
+    activity_log.record("nuage", f"Compte supprimé avec ses fichiers : {account['name']} ({account['id']})", who)
 
 
 def _set_quota(account, body, session, who):
     gigabytes = body.get("go")
-    limit = nextcloud_accounts.read()["plafond_go"]
+    limit = nextcloud_accounts.read()["cap_gb"]
     if gigabytes is None:
-        if session["rang"] != "super":
+        if session["rank"] != "super":
             raise HTTPException(403, "Seul un super admin peut donner un espace illimité.")
     elif not isinstance(gigabytes, (int, float)) or gigabytes <= 0:
         raise HTTPException(400, "Espace invalide.")
-    elif gigabytes > limit and session["rang"] != "super":
+    elif gigabytes > limit and session["rank"] != "super":
         raise HTTPException(403, f"Au-delà du plafond ({limit} Go) : seul un super admin peut le faire.")
-    before = "illimité" if account["illimite"] else format_gigabytes(account["quota"] / nextcloud_accounts.GIGABYTE)
+    before = "illimité" if account["unlimited"] else format_gigabytes(account["quota"] / nextcloud_accounts.GIGABYTE)
     run_cloud_action(nextcloud_accounts.set_quota, account["id"], gigabytes)
-    text = f"Espace de {account['nom']} ({account['id']}) : {before} → {format_gigabytes(gigabytes)}"
+    text = f"Espace de {account['name']} ({account['id']}) : {before} → {format_gigabytes(gigabytes)}"
     activity_log.record("nuage", text, who)
 
 
 def _set_group(account, body, session, who):
-    group, member = str(body.get("groupe", "")), bool(body.get("dedans"))
+    group, member = str(body.get("group", "")), bool(body.get("inside"))
     if group.startswith(nextcloud_accounts.RANK_PREFIX):
         raise HTTPException(400, "Pour les rangs, change le rang de la personne.")
     run_cloud_action(nextcloud_accounts.set_group_member, group, account["id"], member)
     word = "ajouté au" if member else "retiré du"
-    activity_log.record("nuage", f"{account['nom']} ({account['id']}) {word} groupe {group}", who)
+    activity_log.record("nuage", f"{account['name']} ({account['id']}) {word} groupe {group}", who)
 
 
 def _new_password(account, body, session, who):
     password = accounts.temporary_password()
     run_cloud_action(nextcloud_accounts.set_password, account["id"], password)
-    activity_log.record("nuage", f"Nouveau mot de passe Nextcloud pour {account['nom']} ({account['id']})", who)
-    return {"ok": True, "mdp": password}
+    activity_log.record("nuage", f"Nouveau mot de passe Nextcloud pour {account['name']} ({account['id']})", who)
+    return {"ok": True, "password": password}
 
 
 ACCOUNT_ACTIONS = {
@@ -222,9 +222,9 @@ def set_rank(user_id, rank_id):
         if rank_id and rank_id not in [rank["id"] for rank in nextcloud_accounts.ranks_of(cloud_state)]:
             raise HTTPException(400, "Rang inconnu.")
         if rank_id:
-            cloud_state.setdefault("rang_de", {})[user_id] = rank_id
+            cloud_state.setdefault("rank_of", {})[user_id] = rank_id
         else:
-            cloud_state.setdefault("rang_de", {}).pop(user_id, None)
+            cloud_state.setdefault("rank_of", {}).pop(user_id, None)
         nextcloud_accounts.write(cloud_state)
     run_cloud_action(nextcloud_accounts.sync_ranks, cloud_state, {user_id})
     return f", rang {nextcloud_accounts.rank_name(cloud_state, rank_id)}" if rank_id else ""

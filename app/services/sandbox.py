@@ -72,7 +72,7 @@ def prefix(gpu=False):
 
 
 def local_command(source):
-    return not str(source.get("entree", "")).startswith(("http://", "https://"))
+    return not str(source.get("entry", "")).startswith(("http://", "https://"))
 
 
 @contextmanager
@@ -83,7 +83,7 @@ def open_input(source):
     appel avec le sien (sa position de lecture lui est propre). Adresse : telle quelle.
     """
     if local_command(source) and is_active():
-        descriptor = os.open(source["entree"], os.O_RDONLY)
+        descriptor = os.open(source["entry"], os.O_RDONLY)
         try:
             if not stat.S_ISREG(os.fstat(descriptor).st_mode):
                 raise RuntimeError("Ce n'est pas un fichier.")
@@ -91,8 +91,8 @@ def open_input(source):
         finally:
             os.close(descriptor)
     else:
-        arguments = ["-headers", source["entetes"]] if source.get("entetes") else []
-        yield arguments + ["-i", source["entree"]], ()
+        arguments = ["-headers", source["headers"]] if source.get("headers") else []
+        yield arguments + ["-i", source["entry"]], ()
 
 
 def without_input_option(args):

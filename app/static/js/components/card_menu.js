@@ -10,7 +10,7 @@ export function menuHtml(id, label, items) {
   const entries = items
     .map(
       (item) =>
-        `<li role="none"><button type="button" role="menuitem" class="${item.danger ? "danger" : ""}" data-menu-action="${item.action}">${item.texte}</button></li>`,
+        `<li role="none"><button type="button" role="menuitem" class="${item.danger ? "danger" : ""}" data-menu-action="${item.action}">${item.text}</button></li>`,
     )
     .join("");
   return `<span class="menu-carte">

@@ -23,7 +23,7 @@ router = APIRouter()
 async def antivirus_summary(request: Request):
     guard.require_admin(request)
     summary = await asyncio.to_thread(antivirus.summary)
-    summary["disques"] = await asyncio.to_thread(lambda: antivirus_disks.disks(antivirus.read_state()))
+    summary["disks"] = await asyncio.to_thread(lambda: antivirus_disks.disks(antivirus.read_state()))
     return summary
 
 
@@ -46,7 +46,7 @@ async def remove_antivirus(request: Request):
 
 
 def _disk_path(body):
-    path = str(body.get("chemin") or "")
+    path = str(body.get("path") or "")
     if path not in antivirus_disks.available_disks():
         raise HTTPException(404, "Disque inconnu.")
     return path
@@ -57,7 +57,7 @@ async def weekly_disk_scan(request: Request):
     guard.require_admin(request)
     body = await request.json()
     path = _disk_path(body)
-    enabled = body.get("chaque_semaine") is True
+    enabled = body.get("weekly") is True
     await asyncio.to_thread(antivirus_disks.set_weekly, path, enabled)
     activity_log.record(
         "outil", f"Antivirus : {path} {'analysé' if enabled else 'plus analysé'} chaque semaine", request.state.nom

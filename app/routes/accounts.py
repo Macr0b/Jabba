@@ -27,19 +27,19 @@ def list_accounts(request: Request):
     accounts_list = accounts.list_accounts()
     server = {
         "id": "serveur",
-        "identifiant": guard.hostname(),
-        "nom": "Compte du serveur",
-        "rang": "super",
+        "username": guard.hostname(),
+        "name": "Compte du serveur",
+        "rank": "super",
         "tailscale": None,
-        "systeme": True,
+        "system": True,
     }
     return {
-        "moi": {"identifiant": session["identifiant"], "rang": session["rang"]},
-        "comptes": [server] + accounts_list["comptes"],
-        "reglages": accounts_list["reglages"],
-        "demandes": accounts_list["demandes"] if session["rang"] == "super" else [],
-        "demandes_n": len(accounts_list["demandes"]),
-        "proprietaires": sorted(config.TAILSCALE_USERS),
+        "me": {"username": session["username"], "rank": session["rank"]},
+        "accounts": [server] + accounts_list["accounts"],
+        "settings": accounts_list["settings"],
+        "requests": accounts_list["requests"] if session["rank"] == "super" else [],
+        "request_count": len(accounts_list["requests"]),
+        "owners": sorted(config.TAILSCALE_USERS),
         **accounts.recent_logins(),
     }
 
@@ -50,24 +50,24 @@ async def create_account(request: Request):
     body = await request.json()
     account, password = guard.translate_account_refusal(
         lambda: accounts.create(
-            body.get("identifiant"),
-            body.get("nom"),
-            body.get("rang", "admin"),
+            body.get("username"),
+            body.get("name"),
+            body.get("rank", "admin"),
             body.get("tailscale"),
-            session["identifiant"],
-            session["rang"],
+            session["username"],
+            session["rank"],
             guard.server_identifiers(),
         )
     )
     activity_log.record(
         "admin",
-        f"Compte ajouté : {account['identifiant']} ({'super admin' if account['rang'] == 'super' else 'admin'}), par {session['identifiant']}",
+        f"Compte ajouté : {account['username']} ({'super admin' if account['rank'] == 'super' else 'admin'}), par {session['username']}",
         request.state.nom,
     )
     notifications.send(
         "comptes",
         "Compte ajouté",
-        f"{account['nom']} ({account['identifiant']}), par {session['identifiant']}.",
+        f"{account['name']} ({account['username']}), par {session['username']}.",
         "/#/utilisateurs",
         family="admin",
         recipients=guard.super_admin_logins(),
@@ -83,8 +83,8 @@ async def create_account(request: Request):
             log=False,
             force=True,
         )
-        return {"compte": account, "remis": True}
-    return {"compte": account, "mot_de_passe": password}
+        return {"account": account, "reset": True}
+    return {"account": account, "password": password}
 
 
 @router.post("/api/comptes/{cid}")
@@ -95,48 +95,48 @@ async def update_account(cid: str, request: Request):
     if action in ("supprimer", "rang"):
         guard.require_admin(request, strong=True)
     if action == "supprimer":
-        account = guard.translate_account_refusal(lambda: accounts.delete(cid, session["rang"]))
-        sessions.close_account(account["identifiant"])
-        second_factor.clear(account["identifiant"])
-        text = f"Compte retiré : {account['identifiant']}"
+        account = guard.translate_account_refusal(lambda: accounts.delete(cid, session["rank"]))
+        sessions.close_account(account["username"])
+        second_factor.clear(account["username"])
+        text = f"Compte retiré : {account['username']}"
     elif action == "rang":
-        account = guard.translate_account_refusal(lambda: accounts.update(cid, session["rang"], role=body.get("rang")))
-        sessions.close_account(account["identifiant"])
-        text = f"{account['identifiant']} est maintenant {'super admin' if account['rang'] == 'super' else 'admin'}"
+        account = guard.translate_account_refusal(lambda: accounts.update(cid, session["rank"], role=body.get("rank")))
+        sessions.close_account(account["username"])
+        text = f"{account['username']} est maintenant {'super admin' if account['rank'] == 'super' else 'admin'}"
     elif action == "tailscale":
         account = guard.translate_account_refusal(
-            lambda: accounts.update(cid, session["rang"], tailscale=body.get("tailscale") or None)
+            lambda: accounts.update(cid, session["rank"], tailscale=body.get("tailscale") or None)
         )
-        text = f"{account['identifiant']} : compte Tailscale {account['tailscale'] or 'retiré'}"
+        text = f"{account['username']} : compte Tailscale {account['tailscale'] or 'retiré'}"
     elif action == "nom":
         account = guard.translate_account_refusal(
-            lambda: accounts.update(cid, session["rang"], display_name=body.get("nom") or "")
+            lambda: accounts.update(cid, session["rank"], display_name=body.get("name") or "")
         )
-        text = f"{account['identifiant']} renommé « {account['nom']} »"
+        text = f"{account['username']} renommé « {account['name']} »"
     else:
         raise HTTPException(400, "Action inconnue.")
-    activity_log.record("admin", f"{text}, par {session['identifiant']}", request.state.nom)
+    activity_log.record("admin", f"{text}, par {session['username']}", request.state.nom)
     if action in ("supprimer", "rang"):
         notifications.send(
             "comptes",
             "Comptes modifiés",
-            f"{text}, par {session['identifiant']}.",
+            f"{text}, par {session['username']}.",
             "/#/utilisateurs",
             family="admin",
             recipients=guard.super_admin_logins(),
             log=False,
         )
-    return {"ok": True, "compte": account}
+    return {"ok": True, "account": account}
 
 
 @router.post("/api/comptes-reglages")
 async def update_account_settings(request: Request):
     session = guard.require_super_admin(request, strong=True)
-    opened = bool((await request.json()).get("espace_admins"))
+    opened = bool((await request.json()).get("admin_space"))
     accounts.set_settings(opened)
     activity_log.record(
         "admin",
-        f"Espace Utilisateurs {'ouvert à tous les admins' if opened else 'réservé au super admin'}, par {session['identifiant']}",
+        f"Espace Utilisateurs {'ouvert à tous les admins' if opened else 'réservé au super admin'}, par {session['username']}",
         request.state.nom,
     )
     return {"ok": True}
@@ -146,19 +146,17 @@ async def update_account_settings(request: Request):
 async def change_my_password(request: Request):
     """Un admin (compte de l'appli) change son propre mot de passe. Accepté avec une session provisoire."""
     session = request.state.session
-    if not session or session["identifiant"] == guard.hostname():
+    if not session or session["username"] == guard.hostname():
         raise HTTPException(401, {"admin": True, "message": "Connexion admin demandée."})
     body = await request.json()
-    if not session.get("provisoire") and not accounts.check_credentials(session["identifiant"], body.get("ancien", "")):
+    if not session.get("temporary") and not accounts.check_credentials(session["username"], body.get("old", "")):
         raise HTTPException(403, "L'ancien mot de passe est incorrect.")
-    guard.translate_account_refusal(
-        lambda: accounts.change_own_password(session["identifiant"], body.get("nouveau", ""))
-    )
-    sessions.close_account(session["identifiant"])  # déconnecte ses autres appareils
-    account = accounts.find(session["identifiant"])
-    activity_log.record("admin", f"{session['identifiant']} a choisi un nouveau mot de passe", request.state.nom)
-    response = JSONResponse(guard.session_info({**account, "provisoire": False}))
-    guard.open_session(response, request, {**account, "provisoire": False})
+    guard.translate_account_refusal(lambda: accounts.change_own_password(session["username"], body.get("new", "")))
+    sessions.close_account(session["username"])  # déconnecte ses autres appareils
+    account = accounts.find(session["username"])
+    activity_log.record("admin", f"{session['username']} a choisi un nouveau mot de passe", request.state.nom)
+    response = JSONResponse(guard.session_info({**account, "temporary": False}))
+    guard.open_session(response, request, {**account, "temporary": False})
     return response
 
 
@@ -168,16 +166,16 @@ async def forgotten_password(request: Request):
     body = await request.json()
     if server_password.is_locked():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
-    identifier = (body.get("identifiant") or "").strip().lower()
+    identifier = (body.get("username") or "").strip().lower()
     if identifier in guard.server_identifiers():
-        return {"ok": True, "serveur": True}
+        return {"ok": True, "server": True}
     account = accounts.request_reset(identifier, request.state.user, request.state.nom)
     if account:
-        activity_log.record("admin", f"Mot de passe oublié : demande pour {account['identifiant']}", request.state.nom)
+        activity_log.record("admin", f"Mot de passe oublié : demande pour {account['username']}", request.state.nom)
         notifications.send(
             "comptes",
             "Demande de mot de passe",
-            f"{account['nom']} ({account['identifiant']}) a oublié son mot de passe. Ouvre l'appli pour accepter ou refuser.",
+            f"{account['name']} ({account['username']}) a oublié son mot de passe. Ouvre l'appli pour accepter ou refuser.",
             "/#/utilisateurs",
             family="admin",
             recipients=guard.super_admin_logins(),
@@ -193,13 +191,11 @@ async def forgotten_password(request: Request):
 async def answer_reset_request(did: str, request: Request):
     session = guard.require_super_admin(request, strong=True)
     accept = bool((await request.json()).get("accepter"))
-    reset_request, _ = guard.translate_account_refusal(
-        lambda: accounts.answer_reset(did, accept, session["identifiant"])
-    )
-    sessions.close_account(reset_request["identifiant"])
+    reset_request, _ = guard.translate_account_refusal(lambda: accounts.answer_reset(did, accept, session["username"]))
+    sessions.close_account(reset_request["username"])
     activity_log.record(
         "admin",
-        f"Demande de {reset_request['identifiant']} {'acceptée' if accept else 'refusée'}, par {session['identifiant']}",
+        f"Demande de {reset_request['username']} {'acceptée' if accept else 'refusée'}, par {session['username']}",
         request.state.nom,
     )
     if accept:
@@ -208,7 +204,7 @@ async def answer_reset_request(did: str, request: Request):
             "Demande acceptée",
             "Ouvre l'appli Jabba : ton mot de passe provisoire s'affiche.",
             "/",
-            recipients={reset_request.get("remis_a") or reset_request["login"]},
+            recipients={reset_request.get("reset_to") or reset_request["login"]},
             log=False,
             force=True,
         )
@@ -231,5 +227,5 @@ def collect_reset(request: Request):
     response = accounts.collect_reset(request.state.user)
     if not response:
         raise HTTPException(404, "Rien à récupérer.")
-    activity_log.record("admin", f"Mot de passe provisoire affiché pour {response['identifiant']}", request.state.nom)
+    activity_log.record("admin", f"Mot de passe provisoire affiché pour {response['username']}", request.state.nom)
     return response

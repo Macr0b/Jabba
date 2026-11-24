@@ -16,7 +16,7 @@ from services import measurements, notifications
 HOT = 85
 COOL = 75
 LASTING = 10 * 60
-STATE = {"depuis": None, "alerte": False}
+STATE = {"since": None, "alerte": False}
 
 
 def watch(now=None, degrees=None):
@@ -25,9 +25,9 @@ def watch(now=None, degrees=None):
     if degrees is None:  # pas de sonde lisible (machine virtuelle…)
         return None
     if degrees >= HOT:
-        if STATE["depuis"] is None:
-            STATE["depuis"] = now
-        if not STATE["alerte"] and now - STATE["depuis"] >= LASTING:
+        if STATE["since"] is None:
+            STATE["since"] = now
+        if not STATE["alerte"] and now - STATE["since"] >= LASTING:
             STATE["alerte"] = True
             notifications.send(
                 "temperature",
@@ -40,7 +40,7 @@ def watch(now=None, degrees=None):
             return "chaud"
         return None
     if degrees < COOL:
-        STATE["depuis"] = None
+        STATE["since"] = None
         if STATE["alerte"]:
             STATE["alerte"] = False
             notifications.send(

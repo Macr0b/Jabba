@@ -12,9 +12,9 @@ import { confirmAction, toast } from "./dialogs.js";
 import { toolIcon } from "../pages/home.js";
 
 export function antivirusOfferHtml() {
-  const isSuper = state.admin && state.admin.rang === "super";
+  const isSuper = state.admin && state.admin.rank === "super";
   return t`<article class="carte pad outil" id="offre-antivirus">
-      <div class="haut"><div class="titre-outil">${toolIcon({ id: "antivirus", nom: t("Antivirus") })}<div><h2>Antivirus</h2><div class="role">Analyse les fichiers qui arrivent et les disques choisis (ClamAV)</div></div></div></div>
+      <div class="haut"><div class="titre-outil">${toolIcon({ id: "antivirus", name: t("Antivirus") })}<div><h2>Antivirus</h2><div class="role">Analyse les fichiers qui arrivent et les disques choisis (ClamAV)</div></div></div></div>
       <p class="note">Les dépôts des invités sont analysés dans la minute, les nouveaux fichiers du disque de données chaque heure, et les disques que tu coches chaque semaine, la nuit. Un fichier infecté est mis à l'écart (jamais supprimé) et tu reçois une alerte. Il utilise environ 1 Go de mémoire et télécharge environ 300 Mo à l'installation.</p>
       ${isSuper ? '<div class="actions"><button class="btn btn-p" type="button" id="installer-antivirus">' + t("Installer") + "</button></div>" : ""}
     </article>`;
@@ -23,27 +23,27 @@ export function antivirusOfferHtml() {
 /** Les disques : cochés pour l'analyse de la semaine, dernière analyse, « Analyser maintenant ». */
 function disksHtml(disks) {
   if (!disks || !disks.length) return "";
-  const busy = disks.some((disk) => disk.analyse && disk.analyse.etat === "en_cours");
+  const busy = disks.some((disk) => disk.scan && disk.scan.state === "en_cours");
   const lastScan = (scan) => {
     if (!scan) return t("Jamais analysé");
-    if (scan.etat === "en_cours")
-      return t`Analyse en cours depuis ${escapeHtml(formatWhen(new Date(scan.debut * 1000).toISOString()))}`;
-    if (scan.etat === "erreur") return t`L'analyse n'a pas pu démarrer : ${escapeHtml(scan.erreur || "")}`;
-    const found = scan.menaces
-      ? t`${scan.menaces} fichier${scan.menaces > 1 ? "s" : ""} infecté${scan.menaces > 1 ? "s" : ""}`
+    if (scan.state === "en_cours")
+      return t`Analyse en cours depuis ${escapeHtml(formatWhen(new Date(scan.start * 1000).toISOString()))}`;
+    if (scan.state === "erreur") return t`L'analyse n'a pas pu démarrer : ${escapeHtml(scan.error || "")}`;
+    const found = scan.threats
+      ? t`${scan.threats} fichier${scan.threats > 1 ? "s" : ""} infecté${scan.threats > 1 ? "s" : ""}`
       : t("rien trouvé");
-    return t`Analysé ${escapeHtml(formatWhen(new Date(scan.fin * 1000).toISOString()))} : ${found}`;
+    return t`Analysé ${escapeHtml(formatWhen(new Date(scan.end * 1000).toISOString()))} : ${found}`;
   };
   return t`<h3 class="petit-titre">Analyse des disques</h3>
     <p class="note">Les disques cochés sont analysés en entier chaque semaine, la nuit, un à la fois et sans ralentir le serveur.</p>
     ${disks
       .map(
         (disk) => `<div class="ligne-reglage disque-antivirus">
-      <span><strong>${escapeHtml(disk.nom)}</strong><br><span class="note">${lastScan(disk.analyse)}</span></span>
+      <span><strong>${escapeHtml(disk.name)}</strong><br><span class="note">${lastScan(disk.scan)}</span></span>
       <span class="actions">
         <span class="note">${t("Chaque semaine")}</span>
-        <button class="interrupteur" type="button" role="switch" aria-label="${escapeHtml(t`Analyser ${disk.nom} chaque semaine`)}" aria-checked="${disk.chaque_semaine}" data-chaque-semaine="${escapeHtml(disk.chemin)}"><span></span></button>
-        <button class="btn" type="button" data-analyser="${escapeHtml(disk.chemin)}" ${busy ? "disabled" : ""}>${t("Analyser maintenant")}</button>
+        <button class="interrupteur" type="button" role="switch" aria-label="${escapeHtml(t`Analyser ${disk.name} chaque semaine`)}" aria-checked="${disk.weekly}" data-chaque-semaine="${escapeHtml(disk.path)}"><span></span></button>
+        <button class="btn" type="button" data-analyser="${escapeHtml(disk.path)}" ${busy ? "disabled" : ""}>${t("Analyser maintenant")}</button>
       </span></div>`,
       )
       .join("")}`;
@@ -56,7 +56,7 @@ function bindDisks(detail, refresh) {
       try {
         await api("/api/antivirus/disques", {
           method: "POST",
-          json: { chemin: toggle.dataset.chaqueSemaine, chaque_semaine: enabled },
+          json: { path: toggle.dataset.chaqueSemaine, weekly: enabled },
         });
         toggle.setAttribute("aria-checked", String(enabled));
         toast(enabled ? t("Analysé chaque semaine") : t("Plus analysé chaque semaine"));
@@ -69,7 +69,7 @@ function bindDisks(detail, refresh) {
     button.onclick = async () => {
       button.disabled = true;
       try {
-        await api("/api/antivirus/analyser", { method: "POST", json: { chemin: button.dataset.analyser } });
+        await api("/api/antivirus/analyser", { method: "POST", json: { path: button.dataset.analyser } });
         toast(t("Analyse lancée : elle peut durer plusieurs heures sur un gros disque."));
         refresh();
       } catch (error) {
@@ -81,23 +81,23 @@ function bindDisks(detail, refresh) {
 }
 
 function detailHtml(summary) {
-  const threats = summary.menaces.length
-    ? t`<p class="note" style="color:var(--rouge)"><strong>${summary.menaces.length} fichier${summary.menaces.length > 1 ? "s" : ""} mis à l'écart :</strong></p><ul class="liste-inactifs">${summary.menaces
+  const threats = summary.threats.length
+    ? t`<p class="note" style="color:var(--rouge)"><strong>${summary.threats.length} fichier${summary.threats.length > 1 ? "s" : ""} mis à l'écart :</strong></p><ul class="liste-inactifs">${summary.threats
         .map(
           (item) =>
-            t`<li>${escapeHtml(item.fichier)} <span class="note">· ${escapeHtml(item.menace)} · ${escapeHtml(formatWhen(new Date(item.date * 1000).toISOString()))}</span></li>`,
+            t`<li>${escapeHtml(item.file)} <span class="note">· ${escapeHtml(item.threat)} · ${escapeHtml(formatWhen(new Date(item.date * 1000).toISOString()))}</span></li>`,
         )
         .join("")}</ul><p class="note">Ils sont dans le dossier caché .quarantaine-antivirus du disque de données.</p>`
     : t`<p class="note">Aucune menace trouvée.</p>`;
   return t`<p class="note">${
-    summary.derniere_analyse
-      ? t`Dernière analyse : ${escapeHtml(formatWhen(new Date(summary.derniere_analyse * 1000).toISOString()))} · ${summary.analyses} fichier${summary.analyses > 1 ? "s" : ""} analysé${summary.analyses > 1 ? "s" : ""} en tout.`
+    summary.last_scan
+      ? t`Dernière analyse : ${escapeHtml(formatWhen(new Date(summary.last_scan * 1000).toISOString()))} · ${summary.scans} fichier${summary.scans > 1 ? "s" : ""} analysé${summary.scans > 1 ? "s" : ""} en tout.`
       : t(
           "Pas encore d'analyse : les nouveaux fichiers sont analysés chaque heure (le premier démarrage prend quelques minutes).",
         )
   } Les fichiers de plus de 100 Mo (vidéos) ne sont pas analysés.</p>${threats}
-    ${disksHtml(summary.disques)}
-    ${state.admin && state.admin.rang === "super" ? t`<button class="lien" type="button" id="retirer-antivirus">Retirer l'antivirus</button>` : ""}`;
+    ${disksHtml(summary.disks)}
+    ${state.admin && state.admin.rank === "super" ? t`<button class="lien" type="button" id="retirer-antivirus">Retirer l'antivirus</button>` : ""}`;
 }
 
 export function bindAntivirus(refresh) {
@@ -123,9 +123,9 @@ export function bindAntivirus(refresh) {
       if (remove)
         remove.onclick = async () => {
           const ok = await confirmAction({
-            titre: t("Retirer l'antivirus ?"),
-            texte: t("Les dépôts des invités ne seront plus analysés. Les fichiers mis à l'écart restent où ils sont."),
-            valider: t("Retirer"),
+            title: t("Retirer l'antivirus ?"),
+            text: t("Les dépôts des invités ne seront plus analysés. Les fichiers mis à l'écart restent où ils sont."),
+            confirmLabel: t("Retirer"),
             danger: true,
           });
           if (!ok) return;

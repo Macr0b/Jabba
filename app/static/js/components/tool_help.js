@@ -105,13 +105,13 @@ export function helpHtml(id) {
 /** Ce qu'on sait de l'outil : état, version, mémoire, dossier, conteneurs. */
 export function infoHtml(item, version, usage) {
   const lines = [
-    [t("État"), item.etat || t("pas installé")],
+    [t("État"), item.state || t("pas installé")],
     [t("Version"), version || "—"],
-    [t("Mémoire"), usage ? formatBytes(usage.memoire) : item.memoire ? t`environ ${formatBytes(item.memoire)}` : "—"],
-    [t("Dossier"), item.dossier || "—"],
+    [t("Mémoire"), usage ? formatBytes(usage.memory) : item.memory ? t`environ ${formatBytes(item.memory)}` : "—"],
+    [t("Dossier"), item.folder || "—"],
     [
       t("Conteneurs"),
-      (item.conteneurs || []).map((container) => `${container.nom} (${container.etat})`).join(", ") || "—",
+      (item.containers || []).map((container) => `${container.name} (${container.state})`).join(", ") || "—",
     ],
   ];
   return `<dl class="infos-outil">${lines.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("")}</dl>`;

@@ -36,7 +36,7 @@ class FakeOcc:
 
 def test_links_protected_then_previous_settings_restored():
     occ = FakeOcc()
-    settings = dict(public_mode.DEFAULTS, expiration_jours=14)
+    settings = dict(public_mode.DEFAULTS, expiry_days=14)
     settings = public_mode.apply_link_policy(occ, True, settings)
     core = occ.config["core"]
     assert core["shareapi_enforce_links_password"] == "yes"
@@ -44,12 +44,12 @@ def test_links_protected_then_previous_settings_restored():
     public_mode.apply_link_policy(occ, True, settings)  # deux fois : on garde les réglages d'origine
     public_mode.apply_link_policy(occ, False, settings)
     assert occ.config["core"] == {"shareapi_enforce_links_password": "no"}
-    assert settings["avant"] == {}
+    assert settings["before"] == {}
 
 
 def test_gdpr_notices():
     texte = public_mode.privacy_notice(
-        {"organisme": "Le Fablab", "contact": "bureau@fablab.exemple", "inactif_mois": 18}
+        {"organisation": "Le Fablab", "contact": "bureau@fablab.exemple", "inactive_months": 18}
     )
     for expected in [
         "Le Fablab",
@@ -67,27 +67,27 @@ def test_gdpr_notices():
 def test_inactive_accounts():
     right_now = time.mktime((2026, 11, 16, 12, 0, 0, 0, 0, 0))
     accounts = [
-        {"id": "recent", "etat": "actif", "vu": "2026-10-01T10:00:00+00:00"},
-        {"id": "ancien", "etat": "actif", "vu": "2025-06-01T10:00:00+00:00"},
-        {"id": "admin", "etat": "actif", "admin": True, "vu": "2020-01-01T00:00:00+00:00"},
-        {"id": "suspendu", "etat": "suspendu", "vu": "2020-01-01T00:00:00+00:00"},
-        {"id": "jamais-vieux", "etat": "actif", "vu": None, "cree": "2024-01-01T00:00:00+00:00"},
-        {"id": "jamais-neuf", "etat": "actif", "vu": None, "cree": "2026-11-01T00:00:00+00:00"},
-        {"id": "illisible", "etat": "actif", "vu": "hier"},
+        {"id": "recent", "state": "actif", "seen": "2026-10-01T10:00:00+00:00"},
+        {"id": "ancien", "state": "actif", "seen": "2025-06-01T10:00:00+00:00"},
+        {"id": "admin", "state": "actif", "admin": True, "seen": "2020-01-01T00:00:00+00:00"},
+        {"id": "suspendu", "state": "suspendu", "seen": "2020-01-01T00:00:00+00:00"},
+        {"id": "jamais-vieux", "state": "actif", "seen": None, "created": "2024-01-01T00:00:00+00:00"},
+        {"id": "jamais-neuf", "state": "actif", "seen": None, "created": "2026-11-01T00:00:00+00:00"},
+        {"id": "illisible", "state": "actif", "seen": "hier"},
     ]
     found_items = public_mode.inactive_accounts(accounts, 12, right_now)
     assert [c["id"] for c in found_items] == ["ancien", "jamais-vieux"]
-    assert found_items[0]["inactif_depuis"] > 500 and found_items[1]["inactif_depuis"] is None
+    assert found_items[0]["inactive_since"] > 500 and found_items[1]["inactive_since"] is None
 
 
 def test_monthly_alert(tmp_path, monkeypatch):
     monkeypatch.setattr(public_mode, "SETTINGS_FILE", str(tmp_path / "public.json"))
     alerts = []
     monkeypatch.setattr(public_mode.notifications, "send", lambda *a, **k: alerts.append(a))
-    accounts = lambda occ: [{"id": "x", "etat": "actif", "vu": "2020-01-01T00:00:00+00:00"}]  # noqa: E731
+    accounts = lambda occ: [{"id": "x", "state": "actif", "seen": "2020-01-01T00:00:00+00:00"}]  # noqa: E731
     public_mode.watch_inactive_accounts(None, accounts, now=2_000_000_000)
     assert alerts == []  # mode public fermé : rien
-    public_mode.write({**public_mode.read(), "actif": True})
+    public_mode.write({**public_mode.read(), "active": True})
     public_mode.watch_inactive_accounts(None, accounts, now=2_000_000_000)
     public_mode.watch_inactive_accounts(None, accounts, now=2_000_000_000 + 86400)
     assert len(alerts) == 1 and "1 compte inactif" == alerts[0][1]
@@ -123,9 +123,7 @@ def client(monkeypatch):
     second_factor.clear("serveur-demo")
     with TestClient(main.app, base_url="https://testserver") as c:
         c.cookies.clear()
-        c.post(
-            "/api/admin/connexion", json={"identifiant": "serveur-demo", "mot_de_passe": "demo-mot-de-passe"}, headers=H
-        )
+        c.post("/api/admin/connexion", json={"username": "serveur-demo", "password": "demo-mot-de-passe"}, headers=H)
         c.occ = occ
         yield c
     second_factor.clear("serveur-demo")
@@ -136,31 +134,31 @@ def client(monkeypatch):
 
 
 def test_opening_requires_two_factor(client):
-    r = client.post("/api/public/ouvrir", json={"actif": True}, headers=H)
+    r = client.post("/api/public/ouvrir", json={"active": True}, headers=H)
     assert r.status_code == 400 and "double vérification" in r.json()["detail"]
     secret, _ = second_factor.start_app_enrolment("serveur-demo")
     second_factor.finish_app_enrolment("serveur-demo", totp.code_at(secret, time.time()))
     preview = client.get("/api/public").json()
-    assert {p["id"]: p["ok"] for p in preview["pret"]}["double"] is True
-    r = client.post("/api/public/ouvrir", json={"actif": True}, headers=H)
-    assert r.status_code == 200 and r.json()["actif"] is True and "avant" not in r.json()
+    assert {p["id"]: p["ok"] for p in preview["ready"]}["double"] is True
+    r = client.post("/api/public/ouvrir", json={"active": True}, headers=H)
+    assert r.status_code == 200 and r.json()["active"] is True and "before" not in r.json()
     assert client.occ.config["core"]["shareapi_enforce_links_password"] == "yes"
-    client.post("/api/public/ouvrir", json={"actif": False}, headers=H)
+    client.post("/api/public/ouvrir", json={"active": False}, headers=H)
     assert client.occ.config["core"]["shareapi_enforce_links_password"] == "no"
 
 
 def test_bounded_settings(client):
     r = client.post(
         "/api/public/reglages",
-        json={"organisme": "  Le   Fablab  ", "contact": "x" * 500, "inactif_mois": 1, "expiration_jours": 9999},
+        json={"organisation": "  Le   Fablab  ", "contact": "x" * 500, "inactive_months": 1, "expiry_days": 9999},
         headers=H,
     )
-    assert r.json()["organisme"] == "Le Fablab" and len(r.json()["contact"]) == 120
-    assert r.json()["inactif_mois"] == 3 and r.json()["expiration_jours"] == 365
+    assert r.json()["organisation"] == "Le Fablab" and len(r.json()["contact"]) == 120
+    assert r.json()["inactive_months"] == 3 and r.json()["expiry_days"] == 365
 
 
 def test_notices_added_only_once(client):
-    client.post("/api/public/reglages", json={"organisme": "Le Fablab", "contact": "bureau@exemple"}, headers=H)
+    client.post("/api/public/reglages", json={"organisation": "Le Fablab", "contact": "bureau@exemple"}, headers=H)
     client.post("/api/public/mentions", headers=H)
     client.post("/api/public/reglages", json={"contact": "contact@exemple"}, headers=H)
     client.post("/api/public/mentions", headers=H)
@@ -170,5 +168,5 @@ def test_notices_added_only_once(client):
 
 
 def test_file_request_refused_when_closed(client):
-    r = client.post("/api/demandes-fichiers", json={"chemin": "/Photos"}, headers=H)
+    r = client.post("/api/demandes-fichiers", json={"path": "/Photos"}, headers=H)
     assert r.status_code == 400 and "ouvert au public" in r.json()["detail"]

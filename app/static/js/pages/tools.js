@@ -26,18 +26,18 @@ pages.outils = async () => {
   content.innerHTML = t`<div class="entete"><div><h1>Établi</h1></div></div>${loadingHtml()}`;
   const [tools, versions, savedOrder] = await Promise.all([
     api("/api/outils"),
-    api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
+    api("/api/outils-versions").catch(() => ({ tools: {}, read: 0 })),
     loadArrangement("etabli"),
   ]);
   // Un outil sans adresse à lui est publié sur Tailscale au même nom que Jabba, sur son propre port.
   tools.forEach((item) => {
-    if (!item.lien && item.port_https) item.lien = `https://${location.hostname}:${item.port_https}`;
+    if (!item.link && item.port_https) item.link = `https://${location.hostname}:${item.port_https}`;
   });
-  const mine = tools.filter((item) => !item.systeme);
-  const system = tools.filter((item) => item.systeme);
-  const updateAvailable = (pid) => Boolean(versions.outils[pid] && !versions.outils[pid].a_jour);
-  const lastCheck = versions.lu
-    ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.lu * 1000).toISOString()))})`
+  const mine = tools.filter((item) => !item.system);
+  const system = tools.filter((item) => item.system);
+  const updateAvailable = (pid) => Boolean(versions.tools[pid] && !versions.tools[pid].up_to_date);
+  const lastCheck = versions.read
+    ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.read * 1000).toISOString()))})`
     : "";
   content.innerHTML = t`
     <div class="entete"><div><div class="titre-avec-action"><h1>Établi</h1><button class="btn btn-petit" type="button" id="ranger-etabli" aria-pressed="false">Ranger</button></div><p class="sous-titre">Tes outils. Le curseur les met en pause : en pause, un outil ne consomme rien et garde tout.</p>${memoryBannerHtml()}</div></div>
@@ -58,7 +58,7 @@ pages.outils = async () => {
       content.querySelectorAll("[data-conso]").forEach((element) => {
         const measured = usage[element.dataset.conso];
         if (!measured) return;
-        element.textContent = t`Mémoire ${formatBytes(measured.memoire)} · processeur ${String(measured.processeur).replace(".", ",")} %`;
+        element.textContent = t`Mémoire ${formatBytes(measured.memory)} · processeur ${String(measured.cpu).replace(".", ",")} %`;
       });
     })
     .catch(() => {});
@@ -91,8 +91,8 @@ pages.outils = async () => {
     api("/api/nuage/attente")
       .then((result) => {
         const element = $("#attente-nuage");
-        if (element && result.attente) {
-          element.textContent = result.attente;
+        if (element && result.pending) {
+          element.textContent = result.pending;
           element.hidden = false;
         }
       })
@@ -115,15 +115,15 @@ pages.outils = async () => {
 
 /** Le curseur : en pause (après confirmation) ou de nouveau en marche. */
 async function toggleTool(item) {
-  const resume = item.etat === "arrêté";
+  const resume = item.state === "arrêté";
   if (
     !resume &&
     !(await confirmAction({
-      titre: t`Mettre ${item.nom} en pause ?`,
-      texte: t(
+      title: t`Mettre ${item.name} en pause ?`,
+      text: t(
         "Il ne sera plus accessible, sur aucun appareil, jusqu'à ce que tu le remettes en marche. Il ne consomme plus rien, et ses réglages et ses données sont gardés.",
       ),
-      valider: t("Mettre en pause"),
+      confirmLabel: t("Mettre en pause"),
     }))
   )
     return;
@@ -142,18 +142,18 @@ async function toggleTool(item) {
 pages.ouvrir = async (params) => {
   const [tools, versions] = await Promise.all([
     api("/api/outils"),
-    api("/api/outils-versions").catch(() => ({ outils: {}, lu: 0 })),
+    api("/api/outils-versions").catch(() => ({ tools: {}, read: 0 })),
   ]);
   const item = tools.find((item) => item.id === params.get("outil"));
-  if (item && !item.lien && item.port_https) item.lien = `https://${location.hostname}:${item.port_https}`;
-  if (!item || !item.lien) throw new Error(t("Outil introuvable ou désactivé."));
+  if (item && !item.link && item.port_https) item.link = `https://${location.hostname}:${item.port_https}`;
+  if (!item || !item.link) throw new Error(t("Outil introuvable ou désactivé."));
   document.body.classList.add("plein-ecran");
   content.innerHTML = t`
     <div class="barre-outil">
       <a class="btn btn-petit" href="#/outils">← Établi</a>
-      <span class="titre-outil">${toolIcon(item, 24)}<strong>${escapeHtml(item.nom)}</strong></span>
-      <a class="btn btn-petit" href="${escapeHtml(item.lien)}" target="_blank" rel="noopener">Navigateur ↗</a>
+      <span class="titre-outil">${toolIcon(item, 24)}<strong>${escapeHtml(item.name)}</strong></span>
+      <a class="btn btn-petit" href="${escapeHtml(item.link)}" target="_blank" rel="noopener">Navigateur ↗</a>
     </div>
-    <iframe class="cadre-outil" src="${escapeHtml(item.lien)}" title="${escapeHtml(item.nom)}" allow="fullscreen; autoplay; clipboard-write" allowfullscreen></iframe>
+    <iframe class="cadre-outil" src="${escapeHtml(item.link)}" title="${escapeHtml(item.name)}" allow="fullscreen; autoplay; clipboard-write" allowfullscreen></iframe>
     <p class="note aide-cadre">Page blanche ? Utilise « Navigateur ↗ » en haut à droite.</p>`;
 };

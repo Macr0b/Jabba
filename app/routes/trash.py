@@ -19,15 +19,15 @@ router = APIRouter()
 
 @router.get("/api/corbeille")
 async def list_trash():
-    return {"elements": await trash.list_entries(), "garde": 30}
+    return {"items": await trash.list_entries(), "kept": 30}
 
 
 @router.post("/api/corbeille/restaurer")
 async def restore_from_trash(request: Request):
     body = await request.json()
-    path = await trash.restore_entry(str(body.get("id", "")), body.get("source"), body.get("origine"))
+    path = await trash.restore_entry(str(body.get("id", "")), body.get("source"), body.get("origin"))
     activity_log.record("fichier", f"{path} restauré depuis la corbeille", request.state.nom)
-    return {"ok": True, "chemin": path}
+    return {"ok": True, "path": path}
 
 
 @router.post("/api/corbeille/effacer")
@@ -35,7 +35,7 @@ async def erase_from_trash(request: Request):
     """Effacer pour de bon : un élément, ou toute la corbeille. Demande le mot de passe du serveur."""
     guard.require_admin(request, strong=True)
     body = await request.json()
-    identifier, source_path, everything = str(body.get("id", "")), body.get("source"), bool(body.get("tout"))
+    identifier, source_path, everything = str(body.get("id", "")), body.get("source"), bool(body.get("everything"))
     if config.DEMO and files_source.files_source() != "disque":
         return {"ok": True}
     if everything:
@@ -54,5 +54,5 @@ async def erase_from_trash(request: Request):
         async with nextcloud_files.client() as dav_client:
             response = await dav_client.delete(nextcloud_files.trash_url(identifier))
         await nextcloud_files.check_response(response, "Effacement")
-    activity_log.record("fichier", f"« {body.get('nom', identifier)} » effacé définitivement", request.state.nom)
+    activity_log.record("fichier", f"« {body.get('name', identifier)} » effacé définitivement", request.state.nom)
     return {"ok": True}

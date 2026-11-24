@@ -8,12 +8,12 @@ from services import restart_policy
 
 
 def test_read_the_choice():
-    assert restart_policy.interpret("auto\n", False) == {"mode": "auto", "choisi": True}
-    assert restart_policy.interpret("manuel\n", True) == {"mode": "manuel", "choisi": True}
+    assert restart_policy.interpret("auto\n", False) == {"mode": "auto", "chosen": True}
+    assert restart_policy.interpret("manuel\n", True) == {"mode": "manuel", "chosen": True}
     # Pas encore de choix (installation d'avant 0.13) : le minuteur en place décide.
-    assert restart_policy.interpret("", True) == {"mode": "auto", "choisi": False}
-    assert restart_policy.interpret(None, False) == {"mode": "manuel", "choisi": False}
-    assert restart_policy.interpret("n'importe quoi", True)["choisi"] is False
+    assert restart_policy.interpret("", True) == {"mode": "auto", "chosen": False}
+    assert restart_policy.interpret(None, False) == {"mode": "manuel", "chosen": False}
+    assert restart_policy.interpret("n'importe quoi", True)["chosen"] is False
 
 
 def test_command_valid_and_bounded():

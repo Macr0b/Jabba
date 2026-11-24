@@ -25,10 +25,10 @@ def etat(tmp_path, monkeypatch):
     guests.prepare_state()
     guests.update(
         lambda d: d.update(
-            actif=True,
+            active=True,
             code="1234",
-            serveur="serveur-test",
-            dossiers=[{"id": "p", "nom": "Partage", "chemin": str(share), "mode": "depot"}],
+            server="serveur-test",
+            folders=[{"id": "p", "name": "Partage", "path": str(share), "mode": "depot"}],
         )
     )
     return f, share
@@ -64,13 +64,13 @@ def test_old_location_taken_over(tmp_path, monkeypatch):
 
 def test_guest_journey(etat):
     c = wifi()
-    assert c.get("/api/moi").json()["serveur"] == "serveur-test"
+    assert c.get("/api/moi").json()["server"] == "serveur-test"
     assert c.post("/api/invite/entrer", json={"code": "0000"}, headers=H).status_code == 403
     assert c.post("/api/invite/entrer", json={"code": "1234"}, headers=H).status_code == 200
     r = c.get("/api/invite/fichiers", params={"d": "p", "chemin": "/"})
-    assert [e["nom"] for e in r.json()["elements"]] == ["menu.txt"]
+    assert [e["name"] for e in r.json()["items"]] == ["menu.txt"]
     r = c.post("/api/invite/envoyer", params={"d": "p"}, files={"fichiers": ("../../evil.txt", b"x")}, headers=H)
-    assert r.json()["envoyes"] == ["evil.txt"]
+    assert r.json()["sent"] == ["evil.txt"]
 
 
 def test_no_way_out_of_the_folder(etat):
@@ -104,14 +104,14 @@ def test_door_log_cannot_pass_itself_off_as_the_app(tmp_path, monkeypatch):
     monkeypatch.setattr(activity_log, "OTHER_LOGS", [str(other)])
     activity_log.record("admin", "vrai événement", "Rob")
     other.write_text(
-        json.dumps({"t": 1, "famille": "admin", "texte": "Faux : mot de passe changé", "qui": "Rob"})
+        json.dumps({"t": 1, "family": "admin", "text": "Faux : mot de passe changé", "who": "Rob"})
         + "\n"
         + "pas du json\n"
     )
     events = activity_log.read()
-    fake = [e for e in events if e["texte"].startswith("Faux")][0]
-    assert fake["famille"] == "invite" and "qui" not in fake
-    assert events[0]["texte"] == "vrai événement"
+    fake = [e for e in events if e["text"].startswith("Faux")][0]
+    assert fake["family"] == "invite" and "who" not in fake
+    assert events[0]["text"] == "vrai événement"
 
 
 def test_door_container_without_powers():
@@ -172,7 +172,7 @@ def test_drop_never_follows_a_link(etat, tmp_path):
     outside = tmp_path / "dehors.txt"
     (share / "photo.jpg").symlink_to(outside)
     r = _enter().post("/api/invite/envoyer", params={"d": "p"}, files={"fichiers": ("photo.jpg", b"x")}, headers=H)
-    assert r.json()["envoyes"] == ["photo (2).jpg"] and not outside.exists()
+    assert r.json()["sent"] == ["photo (2).jpg"] and not outside.exists()
 
 
 def test_drop_too_big_refused(etat, monkeypatch):

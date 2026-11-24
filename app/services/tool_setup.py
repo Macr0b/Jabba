@@ -63,7 +63,7 @@ def _jellyfin(who):
                 "/Startup/Configuration",
                 {"UICulture": "fr", "MetadataCountryCode": "FR", "PreferredMetadataLanguage": "fr"},
             ),
-            ("/Startup/User", {"Name": login["identifiant"], "Password": login["mot_de_passe"]}),
+            ("/Startup/User", {"Name": login["username"], "Password": login["password"]}),
             ("/Startup/RemoteAccess", {"EnableRemoteAccess": True, "EnableAutomaticPortMapping": False}),
         ]
         httpx.get(JELLYFIN + "/Startup/User", headers=headers, timeout=10)  # crée le premier compte, vide
@@ -72,7 +72,7 @@ def _jellyfin(who):
         httpx.post(JELLYFIN + "/Startup/Complete", headers=headers, timeout=20).raise_for_status()
     session = httpx.post(
         JELLYFIN + "/Users/AuthenticateByName",
-        json={"Username": login["identifiant"], "Pw": login["mot_de_passe"]},
+        json={"Username": login["username"], "Pw": login["password"]},
         headers=headers,
         timeout=20,
     )
@@ -121,15 +121,13 @@ def _link_jabba(login):
         NEXTCLOUD + "/ocs/v2.php/core/getapppassword",
         params={"format": "json"},
         headers={"OCS-APIRequest": "true"},
-        auth=(login["identifiant"], login["mot_de_passe"]),
+        auth=(login["username"], login["password"]),
         timeout=30,
     )
     response.raise_for_status()
     app_password = response.json()["ocs"]["data"]["apppassword"]
-    json_files.save(
-        config.NC_LINK_FILE, {"utilisateur": login["identifiant"], "mot_de_passe_appli": app_password}, private=True
-    )
-    config.NC_USER = login["identifiant"]  # pris en compte tout de suite, sans redémarrer l'appli
+    json_files.save(config.NC_LINK_FILE, {"user": login["username"], "app_password": app_password}, private=True)
+    config.NC_USER = login["username"]  # pris en compte tout de suite, sans redémarrer l'appli
     config.NC_APP_PASSWORD = app_password
 
 

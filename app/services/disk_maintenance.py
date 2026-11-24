@@ -36,16 +36,16 @@ MEASURE_EVERY_SECONDS = 30 * 86400
 NEEDS_DEFRAG = 56  # e4defrag : 0-30 rien à faire, 31-55 un peu fragmenté, 56 et plus : à défragmenter
 LITTLE = 31
 _lock = threading.Lock()
-RUNNING = {"tache": None}  # « mesure » ou « defragmentation : <chemin> » pendant que ça tourne
+RUNNING = {"task": None}  # « mesure » ou « defragmentation : <chemin> » pendant que ça tourne
 
 DEMO = {
-    "trim": {"actif": True, "dernier": "lundi dernier", "ssd": True},
-    "disques": {"/srv/disques/R2-D2": {"nom": "R2-D2", "score": 12, "lu": 0}},
+    "trim": {"active": True, "last": "lundi dernier", "ssd": True},
+    "disks": {"/srv/disques/R2-D2": {"name": "R2-D2", "score": 12, "read": 0}},
 }
 
 
 def _read():
-    return json_files.load(STATE_FILE, {"disques": {}, "lu": 0})
+    return json_files.load(STATE_FILE, {"disks": {}, "read": 0})
 
 
 def _write(state):
@@ -78,8 +78,8 @@ def trim_state(devices=None):
     last = fields.get("LastTriggerUSec", "").strip()
     return {
         "ssd": _has_ssd(devices),
-        "actif": fields.get("UnitFileState") == "enabled" and fields.get("ActiveState") == "active",
-        "dernier": None if last in ("", "n/a", "0") else last,
+        "active": fields.get("UnitFileState") == "enabled" and fields.get("ActiveState") == "active",
+        "last": None if last in ("", "n/a", "0") else last,
     }
 
 
@@ -99,11 +99,11 @@ def spinning_ext4_mounts(devices):
         mount_point = device.get("mountpoint") or ""
         if device.get("fstype") == "ext4" and rotational and mount_point:
             try:
-                actions.build("mesurer_fragmentation", {"chemin": mount_point})
+                actions.build("mesurer_fragmentation", {"path": mount_point})
             except actions.ActionError:
                 pass  # ni sous /srv, /mnt, /media : pas un disque de données
             else:
-                found.append({"nom": mount_point.rstrip("/").rsplit("/", 1)[-1], "chemin": mount_point})
+                found.append({"name": mount_point.rstrip("/").rsplit("/", 1)[-1], "path": mount_point})
         for child in device.get("children") or []:
             walk(child, rotational)
 
@@ -128,28 +128,28 @@ def level(score):
 def measure_all(now=None):
     now = time.time() if now is None else now
     state = _read()
-    previous = state.get("disques", {})
+    previous = state.get("disks", {})
     current = {}
     for disk in spinning_ext4_mounts(_partitions()):
-        code, output, _ = commands.run_action("mesurer_fragmentation", chemin=disk["chemin"])
+        code, output, _ = commands.run_action("mesurer_fragmentation", path=disk["path"])
         score = parse_score(output) if code == 0 else None
-        current[disk["chemin"]] = {"nom": disk["nom"], "score": score, "lu": int(now)}
-        before = (previous.get(disk["chemin"]) or {}).get("score")
+        current[disk["path"]] = {"name": disk["name"], "score": score, "read": int(now)}
+        before = (previous.get(disk["path"]) or {}).get("score")
         if score is not None and score >= NEEDS_DEFRAG and (before is None or before < NEEDS_DEFRAG):
             notifications.send(
                 "sante_disques",
-                f"{disk['nom']} est fragmenté",
+                f"{disk['name']} est fragmenté",
                 f"Score {score}. Disques → Santé des disques → Défragmenter (à lancer quand le disque sert peu).",
                 "/#/disques",
                 family="disque",
             )
-    state = {"disques": current, "lu": int(now)}
+    state = {"disks": current, "read": int(now)}
     _write(state)
     return state
 
 
 def defragment(path, by=""):
-    code, _, error_output = commands.run_action("defragmenter", chemin=path)
+    code, _, error_output = commands.run_action("defragmenter", path=path)
     activity_log.record("disque", f"Défragmentation de {path} " + ("terminée" if code == 0 else "échouée"), by)
     measure_all()
     return code == 0
@@ -158,15 +158,15 @@ def defragment(path, by=""):
 def _start(label, function):
     """Lance une tâche longue à part ; une seule à la fois."""
     with _lock:
-        if RUNNING["tache"]:
+        if RUNNING["task"]:
             return False
-        RUNNING["tache"] = label
+        RUNNING["task"] = label
 
     def run():
         try:
             function()
         finally:
-            RUNNING["tache"] = None
+            RUNNING["task"] = None
 
     threading.Thread(target=run, daemon=True).start()
     return True
@@ -177,24 +177,28 @@ def start_measure():
 
 
 def start_defragment(path, by=""):
-    actions.build("defragmenter", {"chemin": path})  # refuse un chemin hors liste avant de lancer
+    actions.build("defragmenter", {"path": path})  # refuse un chemin hors liste avant de lancer
     return _start(f"defragmentation : {path}", lambda: defragment(path, by))
 
 
 def summary():
     if config.DEMO:
-        disks = [{"chemin": path, **value, "niveau": level(value["score"])} for path, value in DEMO["disques"].items()]
-        return {"trim": trim_state(), "disques": disks, "lu": None, "en_cours": RUNNING["tache"]}
+        disks = [{"path": path, **value, "level": level(value["score"])} for path, value in DEMO["disks"].items()]
+        return {"trim": trim_state(), "disks": disks, "read": None, "in_progress": RUNNING["task"]}
     devices = _partitions()
     state = _read()
     disks = [
-        {"chemin": path, **value, "niveau": level(value.get("score"))}
-        for path, value in state.get("disques", {}).items()
+        {"path": path, **value, "level": level(value.get("score"))} for path, value in state.get("disks", {}).items()
     ]
-    return {"trim": trim_state(devices), "disques": disks, "lu": state.get("lu") or None, "en_cours": RUNNING["tache"]}
+    return {
+        "trim": trim_state(devices),
+        "disks": disks,
+        "read": state.get("read") or None,
+        "in_progress": RUNNING["task"],
+    }
 
 
 def watch_fragmentation():
-    if config.DEMO or time.time() - (_read().get("lu") or 0) < MEASURE_EVERY_SECONDS:
+    if config.DEMO or time.time() - (_read().get("read") or 0) < MEASURE_EVERY_SECONDS:
         return
     start_measure()

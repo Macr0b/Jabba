@@ -24,20 +24,20 @@ router = APIRouter()
 @router.post("/api/admin/connexion")
 async def log_in(request: Request):
     body = await request.json()
-    account = guard.check_login(request, body.get("identifiant"), body.get("mot_de_passe", ""))
-    methods = second_factor.methods(account["identifiant"])
+    account = guard.check_login(request, body.get("username"), body.get("password", ""))
+    methods = second_factor.methods(account["username"])
     if methods:
         # Mot de passe bon : il reste la deuxième preuve (routes/second_factor.py).
-        return {"etape": second_factor.start_login_step(account), "methodes": methods}
+        return {"step": second_factor.start_login_step(account), "methods": methods}
     return open_admin_session(request, account)
 
 
 def open_admin_session(request, account):
     """Ouvre la session une fois toutes les preuves données."""
-    temporary = bool(account.get("provisoire"))
+    temporary = bool(account.get("temporary"))
     activity_log.record(
         "admin",
-        f"Connexion admin : {account['identifiant']}" + (" (mot de passe provisoire)" if temporary else ""),
+        f"Connexion admin : {account['username']}" + (" (mot de passe provisoire)" if temporary else ""),
         request.state.nom,
     )
     sessions.close(request.state.jeton)
@@ -50,7 +50,7 @@ def open_admin_session(request, account):
 async def confirm_password(request: Request):
     """Redemander le mot de passe avant une action sensible."""
     session = guard.require_admin(request)
-    guard.check_login(request, session["identifiant"], (await request.json()).get("mot_de_passe", ""))
+    guard.check_login(request, session["username"], (await request.json()).get("password", ""))
     sessions.confirm(request.state.jeton)
     return {"ok": True}
 
@@ -68,11 +68,11 @@ def list_sessions(request: Request):
     session = guard.require_admin(request)
     current = session["id"]
     all_entries = sessions.list_sessions()
-    if session["rang"] != "super":
+    if session["rank"] != "super":
         all_entries = [
-            session_entry for session_entry in all_entries if session_entry["identifiant"] == session["identifiant"]
+            session_entry for session_entry in all_entries if session_entry["username"] == session["username"]
         ]
-    return [{**session_entry, "actuelle": session_entry["id"] == current} for session_entry in all_entries]
+    return [{**session_entry, "current": session_entry["id"] == current} for session_entry in all_entries]
 
 
 @router.post("/api/sessions/{sid}/fermer")
@@ -81,12 +81,12 @@ def close_session(sid: str, request: Request):
     target = next((session_entry for session_entry in sessions.list_sessions() if session_entry["id"] == sid), None)
     if not target:
         raise HTTPException(404, "Appareil introuvable.")
-    if target["identifiant"] != session["identifiant"] and session["rang"] != "super":
+    if target["username"] != session["username"] and session["rank"] != "super":
         raise HTTPException(403, "Tu ne peux déconnecter que tes propres appareils.")
     sessions.close_by_id(sid)
     activity_log.record(
         "admin",
-        f"Appareil déconnecté : {target['identifiant']}{' (' + target['appareil'] + ')' if target.get('appareil') else ''}, par {session['identifiant']}",
+        f"Appareil déconnecté : {target['username']}{' (' + target['device'] + ')' if target.get('device') else ''}, par {session['username']}",
         request.state.nom,
     )
     return {"ok": True}
@@ -96,10 +96,10 @@ def close_session(sid: str, request: Request):
 def admin_state(request: Request):
     session = request.state.session
     return {
-        "code_existe": server_password.recovery_code_exists(),
-        "utilisateur": guard.server_user(),
-        "serveur": guard.hostname(),
-        "connecte": {"identifiant": session["identifiant"], "rang": session["rang"]} if session else None,
+        "code_exists": server_password.recovery_code_exists(),
+        "user": guard.server_user(),
+        "server": guard.hostname(),
+        "connected": {"username": session["username"], "rank": session["rank"]} if session else None,
     }
 
 
@@ -109,10 +109,10 @@ async def change_server_password(request: Request):
     body = await request.json()
     if server_password.is_locked():
         raise HTTPException(429, "Trop d'essais. Réessaie dans 10 minutes.")
-    if not guard.check_server_password(body.get("ancien", "")):
+    if not guard.check_server_password(body.get("old", "")):
         guard.log_failed_login(request, guard.hostname())
         raise HTTPException(403, "L'ancien mot de passe est incorrect.")
-    guard._change_server_password(body.get("nouveau", ""))
+    guard._change_server_password(body.get("new", ""))
     sessions.close_account(guard.hostname())  # ses appareils devront se reconnecter avec le nouveau
     notifications.send(
         "securite",
@@ -140,7 +140,7 @@ async def use_recovery_code(request: Request):
     if not server_password.check_recovery_code(body.get("code", "")):
         guard.log_failed_login(request, "code de secours")
         raise HTTPException(403, "Code de secours incorrect.")
-    guard._change_server_password(body.get("nouveau", ""))
+    guard._change_server_password(body.get("new", ""))
     sessions.close_account(guard.hostname())
     notifications.send(
         "securite",

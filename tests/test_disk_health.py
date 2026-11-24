@@ -51,7 +51,7 @@ def test_verdict(report, etat, reason):
 
 def test_details():
     _, _, details = disk_health.assess(HEALTHY_SATA)
-    assert details == {"temperature": 34, "heures": 4800, "usure": None, "compteurs": {"5": 0, "197": 0}}
+    assert details == {"temperature": 34, "hours": 4800, "wear": None, "counters": {"5": 0, "197": 0}}
 
 
 class FakeServer:
@@ -101,7 +101,7 @@ def serveur(tmp_path, monkeypatch):
 
 def test_read_without_waking_and_alert_once(serveur):
     etat = disk_health.check_all(now=1000)
-    assert set(etat["disques"]) == {"S1", "U2"}
+    assert set(etat["disks"]) == {"S1", "U2"}
     assert all("-n" in c and "standby" in c for c in serveur.commands_seen if c[0] == "smartctl")
     assert not any("/dev/zram0" in c or "/dev/loop0" in c for c in serveur.commands_seen)
     assert serveur.alerts == []
@@ -123,26 +123,26 @@ def test_sleeping_disk_keeps_its_last_reading(serveur):
     disk_health.check_all(now=1000)
     serveur.asleep.add("/dev/sdb")
     etat = disk_health.check_all(now=2000)
-    assert etat["disques"]["U2"]["endormi"] is True and etat["disques"]["U2"]["etat"] == "bon"
-    assert etat["disques"]["U2"]["lu"] == 1000
+    assert etat["disks"]["U2"]["asleep"] is True and etat["disks"]["U2"]["state"] == "bon"
+    assert etat["disks"]["U2"]["read"] == 1000
 
 
 def test_sleeping_disk_takes_the_new_name(serveur):
     """Un nom enregistré avant la 0.15.1 (« modèle /dev/sdb ») est remplacé même si le disque dort."""
     disk_health.check_all(now=1000)
     etat = disk_health._read_state()
-    etat["disques"]["U2"]["nom"] = "R2 /dev/sdb"
+    etat["disks"]["U2"]["name"] = "R2 /dev/sdb"
     disk_health._write_state(etat)
     serveur.asleep.add("/dev/sdb")
-    assert disk_health.check_all(now=2000)["disques"]["U2"]["nom"] == "Disque externe"
+    assert disk_health.check_all(now=2000)["disks"]["U2"]["name"] == "Disque externe"
 
 
 def test_disk_never_read(serveur):
     serveur.asleep.add("/dev/sdb")
     etat = disk_health.check_all(now=1000)
-    assert etat["disques"]["U2"]["etat"] == "inconnu"
+    assert etat["disks"]["U2"]["state"] == "inconnu"
     resume = disk_health.summary()
-    assert {d["libelle"] for d in resume["disques"]} == {"En bonne santé", "Pas lu"}
+    assert {d["label_text"] for d in resume["disks"]} == {"En bonne santé", "Pas lu"}
 
 
 def test_usb_also_tries_the_sat_bridge(serveur):
@@ -170,9 +170,9 @@ def test_mass_deletion_alert(monkeypatch):
 
     alerts = []
     monkeypatch.setattr(mass_deletion.notifications, "send", lambda *a, **k: alerts.append(a))
-    monkeypatch.setitem(mass_deletion.STATE, "derniere_alerte", 0)
+    monkeypatch.setitem(mass_deletion.STATE, "last_alert", 0)
     right_now = 1_000_000
-    trash_ = [{"supprime": right_now - 60} for _ in range(199)] + [{"supprime": right_now - 7200} for _ in range(50)]
+    trash_ = [{"deleted": right_now - 60} for _ in range(199)] + [{"deleted": right_now - 7200} for _ in range(50)]
 
     async def list_items():
         return trash_
@@ -180,7 +180,7 @@ def test_mass_deletion_alert(monkeypatch):
     monkeypatch.setattr(mass_deletion.trash, "list_entries", list_items)
     mass_deletion.watch_mass_deletion(now=right_now)
     assert alerts == []  # 199 dans l'heure : sous le seuil
-    trash_.append({"supprime": right_now - 10})
+    trash_.append({"deleted": right_now - 10})
     mass_deletion.watch_mass_deletion(now=right_now)
     assert len(alerts) == 1 and "200 éléments" in alerts[0][2]
     mass_deletion.watch_mass_deletion(now=right_now + 600)

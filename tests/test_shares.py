@@ -85,7 +85,7 @@ def test_disk_folder_shared_alone(nc):
     assert created["configuration"]["datadir"] == "/mnt/disques/R2-D2/Projets/Bois"
     assert created["mount_point"] == "/Bois" and created["applicable_groups"] == ["rang-abc123"]
     assert created["options"] == {"readonly": "true", "enable_sharing": "false"}
-    assert share["type"] == "stockage" and state["partages"] == [share]
+    assert share["type"] == "stockage" and state["shares"] == [share]
     assert nc.mounts[0]["applicable_groups"] == ["admin"]  # le disque entier reste aux admins
 
 
@@ -112,14 +112,14 @@ def test_nextcloud_folder_plain_share(nc):
         "permissions": 15,
     }
     nextcloud_shares.stop_sharing(nc.occ, nc.ocs, state, share["id"])
-    assert nc.shares == {} and state["partages"] == []
+    assert nc.shares == {} and state["shares"] == []
 
 
 def test_stop_a_disk_share(nc):
     state = {}
     share = nextcloud_shares.share_folder(nc.occ, nc.ocs, state, "/R2-D2/Projets", "membres", "lecture")
     nextcloud_shares.stop_sharing(nc.occ, nc.ocs, state, share["id"])
-    assert [m["mount_id"] for m in nc.mounts] == [1] and state["partages"] == []
+    assert [m["mount_id"] for m in nc.mounts] == [1] and state["shares"] == []
 
 
 def test_share_never_half_done(nc):

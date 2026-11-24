@@ -137,7 +137,7 @@ def watcher(tmp_path, monkeypatch):
     from services import cloudflare_dns, dns_update
 
     monkeypatch.setattr(cloudflare_dns, "KEYS_FILE", str(tmp_path / "cloudflare.json"))  # pas de jeton Cloudflare
-    dns_update._STATE["dernier"] = 0.0
+    dns_update._STATE["last"] = 0.0
     return dns_update
 
 
@@ -145,7 +145,7 @@ def test_hourly_watch(ovh, watcher, monkeypatch):
     from services import domain_access
 
     ovh_dns.save_keys("exemple.fr", *KEYS)
-    monkeypatch.setattr(domain_access, "read", lambda: {"domaine": "exemple.fr", "prefixe": "cloud", "actif": True})
+    monkeypatch.setattr(domain_access, "read", lambda: {"domain": "exemple.fr", "prefix": "cloud", "active": True})
     adresse = {"ip": "203.0.113.7"}
     monkeypatch.setattr(domain_access, "public_ip", lambda: adresse["ip"])
     alerts = []
@@ -162,8 +162,8 @@ def test_no_key_or_inactive_domain_nothing(ovh, watcher, monkeypatch):
 
     assert watcher.watch(now=10_000) is None  # pas de clé
     ovh_dns.save_keys("exemple.fr", *KEYS)
-    monkeypatch.setattr(domain_access, "read", lambda: {"domaine": "exemple.fr", "prefixe": "cloud", "actif": False})
-    watcher._STATE["dernier"] = 0.0
+    monkeypatch.setattr(domain_access, "read", lambda: {"domain": "exemple.fr", "prefix": "cloud", "active": False})
+    watcher._STATE["last"] = 0.0
     assert watcher.watch(now=10_000) is None
     assert not [a for a in ovh.calls if a[0] != "GET"]
 

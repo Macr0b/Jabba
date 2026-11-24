@@ -39,15 +39,15 @@ def who_am_i(request: Request):
     session = request.state.session
     return {
         "login": request.state.user,
-        "nom": request.state.nom,
+        "name": request.state.nom,
         "version": VERSION,
-        "serveur": server,
-        "remise": accounts.pending_reset(request.state.user),
-        "mode": "admin" if session and not session.get("provisoire") else "invite",
+        "server": server,
+        "password_reset": accounts.pending_reset(request.state.user),
+        "mode": "admin" if session and not session.get("temporary") else "invite",
         "admin": {
-            "identifiant": session["identifiant"],
-            "rang": session["rang"],
-            "provisoire": session.get("provisoire", False),
+            "username": session["username"],
+            "rank": session["rank"],
+            "temporary": session.get("temporary", False),
         }
         if session
         else None,
@@ -65,22 +65,22 @@ def home_state():
     tools_list = tools.list_tools()
     code, _, _ = commands.run_action("redemarrage_requis")
     problems = [
-        tool["nom"]
+        tool["name"]
         for tool in tools_list
-        if tool["etat"] in ("arrêté", "en panne", "partiel") and tool["id"] != "jabba-app"
+        if tool["state"] in ("arrêté", "en panne", "partiel") and tool["id"] != "jabba-app"
     ]
     return {
         "cpu": measurements.cpu_percent(),
-        "memoire": measurements.memory(),
+        "memory": measurements.memory(),
         "temperature": measurements.temperature(),
-        "systeme": disks.get("/"),
-        "donnees": disks.get("/srv/data"),
-        "duree": measurements.uptime(),
+        "system": disks.get("/"),
+        "data": disks.get("/srv/data"),
+        "duration": measurements.uptime(),
         "redemarrage_requis": code == 0,
-        "redemarrage_auto": restart_policy.current_mode()["mode"] == "auto" if code == 0 else None,
-        "outils_actifs": sum(1 for tool in tools_list if tool["etat"] == "actif"),
-        "outils_total": len(tools_list),
-        "soucis": problems,
+        "auto_restart": restart_policy.current_mode()["mode"] == "auto" if code == 0 else None,
+        "active_tools": sum(1 for tool in tools_list if tool["state"] == "actif"),
+        "tools_total": len(tools_list),
+        "issues": problems,
     }
 
 
@@ -108,22 +108,22 @@ def system_state():
             status_data = json.loads(tailscale_output)
             for peer in (status_data.get("Peer") or {}).values():
                 devices.append(
-                    {"nom": peer.get("HostName"), "os": peer.get("OS"), "en_ligne": peer.get("Online", False)}
+                    {"name": peer.get("HostName"), "os": peer.get("OS"), "online": peer.get("Online", False)}
                 )
         except ValueError:
             pass
     return {
-        "nom": name.strip(),
+        "name": name.strip(),
         "os": pretty.group(1) if pretty else "",
         "noyau": kernel.strip(),
-        "duree": measurements.uptime(),
+        "duration": measurements.uptime(),
         "redemarrage_requis": code == 0,
-        "redemarrage": restart_policy.current_mode(),
-        "derniere_maj_auto": latest,
-        "appareils": sorted(devices, key=lambda account: (not account["en_ligne"], account["nom"] or "")),
-        "version_appli": VERSION,
-        "courant": power.POWER_STATE,
-        "conso": power.read_consumption(),
+        "restart": restart_policy.current_mode(),
+        "last_auto_update": latest,
+        "devices": sorted(devices, key=lambda account: (not account["online"], account["name"] or "")),
+        "app_version": VERSION,
+        "power": power.POWER_STATE,
+        "consumption": power.read_consumption(),
     }
 
 
@@ -173,5 +173,5 @@ def activity(n: int = 100, famille: str = ""):
     if config.DEMO:
         from services.demo_data import ACTIVITY
 
-        result += [events for events in ACTIVITY if not famille or events["famille"] == famille]
+        result += [events for events in ACTIVITY if not famille or events["family"] == famille]
     return result

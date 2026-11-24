@@ -68,7 +68,7 @@ LSBLK = {
 def test_only_mounted_ext4_spinning_disks():
     # jamais le SSD, jamais l'exFAT, jamais un disque démonté ou hors des disques de données
     assert disk_maintenance.spinning_ext4_mounts(LSBLK["blockdevices"]) == [
-        {"nom": "R2-D2", "chemin": "/srv/disques/R2-D2"}
+        {"name": "R2-D2", "path": "/srv/disques/R2-D2"}
     ]
 
 
@@ -120,9 +120,9 @@ def serveur(tmp_path, monkeypatch):
 
 def test_trim(serveur):
     etat, runs, _ = serveur
-    assert disk_maintenance.trim_state() == {"ssd": True, "actif": True, "dernier": "Mon 2026-11-16 00:01:02 CET"}
+    assert disk_maintenance.trim_state() == {"ssd": True, "active": True, "last": "Mon 2026-11-16 00:01:02 CET"}
     etat["trim"] = "UnitFileState=disabled\nActiveState=inactive\nLastTriggerUSec=n/a\n"
-    assert disk_maintenance.trim_state() == {"ssd": True, "actif": False, "dernier": None}
+    assert disk_maintenance.trim_state() == {"ssd": True, "active": False, "last": None}
     assert disk_maintenance.enable_trim() is True
     assert ("activer_trim", {}) in runs
 
@@ -130,7 +130,7 @@ def test_trim(serveur):
 def test_measure_and_alert_once(serveur):
     etat, runs, alerts = serveur
     result = disk_maintenance.measure_all(now=1000)
-    assert result["disques"] == {"/srv/disques/R2-D2": {"nom": "R2-D2", "score": 12, "lu": 1000}}
+    assert result["disks"] == {"/srv/disques/R2-D2": {"name": "R2-D2", "score": 12, "read": 1000}}
     assert [n for n, a in runs if n == "mesurer_fragmentation"] == [
         "mesurer_fragmentation"
     ]  # le SSD n'est jamais mesuré
@@ -149,7 +149,7 @@ def test_defragment_refused_outside_the_list(serveur):
 
 
 def test_one_task_at_a_time(serveur, monkeypatch):
-    monkeypatch.setitem(disk_maintenance.RUNNING, "tache", "mesure")
+    monkeypatch.setitem(disk_maintenance.RUNNING, "task", "mesure")
     assert disk_maintenance.start_measure() is False
     assert disk_maintenance.start_defragment("/srv/disques/R2-D2") is False
 
