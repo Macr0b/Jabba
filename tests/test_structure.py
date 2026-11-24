@@ -9,7 +9,7 @@ import sys
 from conftest import APP
 
 
-def _existe(module):
+def _exists(module):
     """Le module existe-t-il ? (un module déjà chargé sans __spec__ compte comme existant)."""
     if module in sys.modules:
         return True
@@ -30,27 +30,27 @@ def _imports(path):
                 yield node.lineno, node.module, alias.name
 
 
-def test_tous_les_imports_existent():
-    manquants = []
+def test_every_import_exists():
+    missing_ones = []
     for path in glob.glob(os.path.join(APP, "**", "*.py"), recursive=True):
         for line, module, name in _imports(path):
-            if not _existe(module):
-                manquants.append(f"{os.path.relpath(path, APP)}:{line} {module}")
+            if not _exists(module):
+                missing_ones.append(f"{os.path.relpath(path, APP)}:{line} {module}")
                 continue
             # « from module import nom » : nom est un sous-module ou un objet du module.
-            if name and not _existe(f"{module}.{name}") and not hasattr(importlib.import_module(module), name):
-                manquants.append(f"{os.path.relpath(path, APP)}:{line} {module}.{name}")
-    assert not manquants, manquants
+            if name and not _exists(f"{module}.{name}") and not hasattr(importlib.import_module(module), name):
+                missing_ones.append(f"{os.path.relpath(path, APP)}:{line} {module}.{name}")
+    assert not missing_ones, missing_ones
 
 
-def _modules_du_projet(tree):
+def _project_modules(tree):
     """Noms locaux -> modules de l'appli importés dans ce fichier (« from services import backups »)."""
     project = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             for alias in node.names:
                 full = f"{node.module}.{alias.name}"
-                if _existe(full) and os.path.exists(os.path.join(APP, *full.split(".")) + ".py"):
+                if _exists(full) and os.path.exists(os.path.join(APP, *full.split(".")) + ".py"):
                     project[alias.asname or alias.name] = full
         elif isinstance(node, ast.Import):
             for alias in node.names:
@@ -59,26 +59,26 @@ def _modules_du_projet(tree):
     return project
 
 
-def test_chaque_module_point_nom_existe():
+def test_every_module_dot_name_exists():
     """« backups.lire(...) » : la fonction lire existe bien dans le module backups (même hors démo)."""
-    absents = []
+    missing = []
     for path in glob.glob(os.path.join(APP, "**", "*.py"), recursive=True):
         tree = ast.parse(open(path, encoding="utf-8").read())
-        project = _modules_du_projet(tree)
+        project = _project_modules(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in project:
                 module = importlib.import_module(project[node.value.id])
                 if not hasattr(module, node.attr):
-                    absents.append(f"{os.path.relpath(path, APP)}:{node.lineno} {node.value.id}.{node.attr}")
-    assert not absents, absents
+                    missing.append(f"{os.path.relpath(path, APP)}:{node.lineno} {node.value.id}.{node.attr}")
+    assert not missing, missing
 
 
-def test_parametres_nommes_existent():
+def test_keyword_parameters_exist():
     """« guard.require_admin(request, strong=True) » : le paramètre strong existe bien dans la fonction appelée."""
-    erreurs = []
+    errors = []
     for path in glob.glob(os.path.join(APP, "**", "*.py"), recursive=True):
         tree = ast.parse(open(path, encoding="utf-8").read())
-        project = _modules_du_projet(tree)
+        project = _project_modules(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -103,8 +103,8 @@ def test_parametres_nommes_existent():
             )
             if function is None or function.args.kwarg:
                 continue
-            noms = {a.arg for a in function.args.args + function.args.kwonlyargs}
+            names_ = {a.arg for a in function.args.args + function.args.kwonlyargs}
             for keyword in node.keywords:
-                if keyword.arg and keyword.arg not in noms:
-                    erreurs.append(f"{os.path.relpath(path, APP)}:{node.lineno} {name}({keyword.arg}=…)")
-    assert not erreurs, erreurs
+                if keyword.arg and keyword.arg not in names_:
+                    errors.append(f"{os.path.relpath(path, APP)}:{node.lineno} {name}({keyword.arg}=…)")
+    assert not errors, errors

@@ -8,68 +8,66 @@ import subprocess
 import pytest
 from conftest import APP
 
-OUTILS = os.path.join(os.path.dirname(__file__), "outils_js")
+TOOLS = os.path.join(os.path.dirname(__file__), "outils_js")
 
 
 @pytest.mark.skipif(
-    not shutil.which("node") or not os.path.isdir(os.path.join(OUTILS, "node_modules")),
+    not shutil.which("node") or not os.path.isdir(os.path.join(TOOLS, "node_modules")),
     reason="node ou les outils (npm ci --prefix tests/outils_js) absents",
 )
-def test_aucun_nom_inconnu_dans_l_interface():
+def test_no_unknown_name_in_the_interface():
     modules = glob.glob(os.path.join(APP, "static", "js", "**", "*.js"), recursive=True)
     assert modules
-    r = subprocess.run(["node", os.path.join(OUTILS, "noms_inconnus.cjs"), *modules], capture_output=True, text=True)
+    r = subprocess.run(["node", os.path.join(TOOLS, "noms_inconnus.cjs"), *modules], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 @pytest.mark.skipif(
-    not shutil.which("node") or not os.path.isdir(os.path.join(OUTILS, "node_modules")), reason="outils absents"
+    not shutil.which("node") or not os.path.isdir(os.path.join(TOOLS, "node_modules")), reason="outils absents"
 )
-def test_la_verification_voit_un_nom_inconnu(tmp_path):
-    fautif = tmp_path / "fautif.js"
-    fautif.write_text('import { toast } from "./dialogs.js";\nexport function f() { toast(messageInconnu); }\n')
-    r = subprocess.run(["node", os.path.join(OUTILS, "noms_inconnus.cjs"), str(fautif)], capture_output=True, text=True)
+def test_the_check_sees_an_unknown_name(tmp_path):
+    culprit = tmp_path / "fautif.js"
+    culprit.write_text('import { toast } from "./dialogs.js";\nexport function f() { toast(messageInconnu); }\n')
+    r = subprocess.run(["node", os.path.join(TOOLS, "noms_inconnus.cjs"), str(culprit)], capture_output=True, text=True)
     assert r.returncode == 1 and "messageInconnu" in r.stdout
 
 
-def test_catalogue_des_textes_a_jour():
+def test_text_catalog_up_to_date():
     """Tous les textes de l'interface sont rassemblés dans app/static/locales/fr.json."""
-    resultat = subprocess.run(
-        ["node", os.path.join(OUTILS, "extraire_textes.cjs"), "--verifier"], capture_output=True, text=True
+    result = subprocess.run(
+        ["node", os.path.join(TOOLS, "extraire_textes.cjs"), "--verifier"], capture_output=True, text=True
     )
-    assert resultat.returncode == 0, resultat.stderr
+    assert result.returncode == 0, result.stderr
 
 
-def test_icones_a_jour():
+def test_icons_up_to_date():
     """app/static/vendor/icons.js contient exactement les icônes Tabler listées dans tests/outils_js/icones.cjs."""
-    resultat = subprocess.run(
-        ["node", os.path.join(OUTILS, "icones.cjs"), "--verifier"], capture_output=True, text=True
-    )
-    assert resultat.returncode == 0, resultat.stderr
+    result = subprocess.run(["node", os.path.join(TOOLS, "icones.cjs"), "--verifier"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
-def test_chaque_icone_demandee_existe():
+def test_every_requested_icon_exists():
     """Chaque outil et chaque écran de core/icons.js pointe vers une icône présente dans vendor/icons.js."""
-    icones = open(os.path.join(APP, "static", "vendor", "icons.js")).read()
-    demandees = open(os.path.join(APP, "static", "js", "core", "icons.js")).read()
+    icons = open(os.path.join(APP, "static", "vendor", "icons.js")).read()
+    requested = open(os.path.join(APP, "static", "js", "core", "icons.js")).read()
     import re
 
-    noms = re.findall(r'^\s+"?[\w-]+"?: "([\w-]+)",$', demandees, re.M)
-    assert len(noms) > 20
-    for nom in noms:
-        assert f'"{nom}":' in icones, nom
+    names = re.findall(r'^\s+"?[\w-]+"?: "([\w-]+)",$', requested, re.M)
+    assert len(names) > 20
+    for nom in names:
+        assert f'"{nom}":' in icons, nom
 
 
-def test_tous_les_textes_passent_par_la_traduction():
-    resultat = subprocess.run(
-        ["node", os.path.join(OUTILS, "baliser_textes.cjs"), os.path.join(APP, "static", "js"), "--verifier"],
+def test_every_text_goes_through_translation():
+    result = subprocess.run(
+        ["node", os.path.join(TOOLS, "baliser_textes.cjs"), os.path.join(APP, "static", "js"), "--verifier"],
         capture_output=True,
         text=True,
     )
-    assert resultat.returncode == 0, resultat.stdout + resultat.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_la_traduction_remplace_et_garde_les_valeurs(tmp_path):
+def test_translation_replaces_and_keeps_values(tmp_path):
     """Avec un catalogue « xx » : texte traduit, valeurs remises à leur place, texte absent laissé en français."""
     essai = tmp_path / "essai.mjs"
     module = os.path.join(APP, "static", "js", "core", "i18n.js")
@@ -90,11 +88,11 @@ console.log(JSON.stringify([t("Annuler"), t`Bonjour ${{nom}}, tu as ${{n}} fichi
    ${{nom}},   tu as ${{n}} fichiers`, t("Pas traduit"), t`Rien ${{n}}`]));
 """
     )
-    sortie = subprocess.run(["node", str(essai)], capture_output=True, text=True)
-    assert sortie.returncode == 0, sortie.stderr
+    output = subprocess.run(["node", str(essai)], capture_output=True, text=True)
+    assert output.returncode == 0, output.stderr
     import json
 
-    assert json.loads(sortie.stdout) == [
+    assert json.loads(output.stdout) == [
         "Cancel",
         "3 files for you, Rob",
         "3 files for you, Rob",

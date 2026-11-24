@@ -10,27 +10,27 @@ import time
 import urllib.request
 
 import pytest
-from outils_ui import attendre
+from ui_tools import wait_until
 
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "app")
 playwright = pytest.importorskip("playwright.sync_api")
 
 
-def port_libre():
+def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
 @pytest.fixture(scope="session")
-def appli():
+def jabba_app():
     """Démarre Jabba en démo avec un dossier « Films » contenant une petite vidéo."""
     if not shutil.which("ffmpeg"):
         pytest.skip("ffmpeg absent")
     d = tempfile.mkdtemp(prefix="jabba-ui-")
     os.chmod(d, 0o711)
-    films = os.path.join(d, "films", "Films")
-    os.makedirs(films)
+    movies = os.path.join(d, "films", "Films")
+    os.makedirs(movies)
     srt = os.path.join(d, "st.srt")
     with open(srt, "w") as f:
         f.write("1\n00:00:01,000 --> 00:00:05,000\nBonjour\n")
@@ -76,12 +76,12 @@ def appli():
             "language=fre",
             "-metadata:s:a:1",
             "language=eng",
-            os.path.join(films, "Film test.mkv"),
+            os.path.join(movies, "Film test.mkv"),
         ],
         check=True,
     )
     os.makedirs(os.path.join(d, "invites"))
-    port = port_libre()
+    port = free_port()
     env = dict(
         os.environ,
         JABBA_DEMO="1",
@@ -121,41 +121,41 @@ def appli():
 
 
 @pytest.fixture(scope="session")
-def navigateur():
+def browser():
     with playwright.sync_playwright() as pw:
         # Google Chrome sur GitHub (le Chromium de Playwright ne lit pas le H.264) ; ailleurs, celui qui est là.
-        canal = os.environ.get("JABBA_UI_NAVIGATEUR")
-        b = pw.chromium.launch(**({"channel": canal} if canal else {}))
+        channel = os.environ.get("JABBA_UI_NAVIGATEUR")
+        b = pw.chromium.launch(**({"channel": channel} if channel else {}))
         yield pw, b
         b.close()
 
 
-APPAREILS = {"ordinateur": {"viewport": {"width": 1280, "height": 800}}, "iphone": "iPhone 13"}
+DEVICES = {"ordinateur": {"viewport": {"width": 1280, "height": 800}}, "iphone": "iPhone 13"}
 
 
-@pytest.fixture(params=list(APPAREILS))
-def page(request, navigateur, appli):
+@pytest.fixture(params=list(DEVICES))
+def page(request, browser, jabba_app):
     """Une page connectée en admin, sur ordinateur puis sur iPhone. Toute erreur JavaScript fait échouer le test."""
-    pw, b = navigateur
-    opts = APPAREILS[request.param]
+    pw, b = browser
+    opts = DEVICES[request.param]
     ctx = b.new_context(
         **(pw.devices[opts] if isinstance(opts, str) else opts), permissions=["clipboard-read", "clipboard-write"]
     )
     p = ctx.new_page()
-    erreurs = []
-    p.on("pageerror", lambda e: erreurs.append(str(e)))
+    errors = []
+    p.on("pageerror", lambda e: errors.append(str(e)))
     # Tout ce que la politique de sécurité de la page bloque est une erreur aussi.
-    p.on("console", lambda m: erreurs.append(m.text) if "Content Security Policy" in m.text else None)
+    p.on("console", lambda m: errors.append(m.text) if "Content Security Policy" in m.text else None)
     p.appareil = request.param
-    p.goto(appli + "/")
+    p.goto(jabba_app + "/")
     p.wait_for_selector("#connexion", state="attached")
     p.evaluate("document.querySelector('#connexion').click()")
     p.fill("input[name=identifiant]", "serveur-demo")
     p.fill("input[name=mdp]", "demo-mot-de-passe")
     p.press("input[name=mdp]", "Enter")
-    attendre(p, "!document.querySelector('dialog[open]')")
+    wait_until(p, "!document.querySelector('dialog[open]')")
     p.wait_for_timeout(500)
-    p.racine = appli
+    p.root = jabba_app
     yield p
     ctx.close()
-    assert not erreurs, "Erreurs JavaScript : " + " | ".join(erreurs)
+    assert not errors, "Erreurs JavaScript : " + " | ".join(errors)

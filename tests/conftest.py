@@ -8,30 +8,30 @@ import tempfile
 
 import pytest
 
-RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = os.path.join(RACINE, "app")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP = os.path.join(ROOT, "app")
 sys.path.insert(0, APP)
 
-DONNEES = tempfile.mkdtemp(prefix="jabba-tests-")
-os.chmod(DONNEES, 0o711)  # comme /tmp sur le serveur : traversable par le bac à sable
+DATA = tempfile.mkdtemp(prefix="jabba-tests-")
+os.chmod(DATA, 0o711)  # comme /tmp sur le serveur : traversable par le bac à sable
 os.environ.update(
     {
         "JABBA_DEMO": "1",
         "JABBA_VERIF_FUITES": "0",  # pas d'appel à Internet pendant les tests
         "TS_USERS": "rob@exemple.fr",
-        "JABBA_DATA": DONNEES,
-        "JABBA_ADMIN": os.path.join(DONNEES, "admin.json"),
-        "JABBA_JOURNAL": os.path.join(DONNEES, "journal.jsonl"),
-        "JABBA_JOURNAUX_AUTRES": os.path.join(DONNEES, "porte-wifi", "journal.jsonl"),
-        "JABBA_DONNEES": os.path.join(DONNEES, "accueil.json"),
-        "JABBA_DOSSIER_INVITES": os.path.join(DONNEES, "dossier-invites"),
-        "JABBA_LECTURE": os.path.join(DONNEES, "lecture"),
-        "JABBA_VIGNETTES": os.path.join(DONNEES, "vignettes"),
+        "JABBA_DATA": DATA,
+        "JABBA_ADMIN": os.path.join(DATA, "admin.json"),
+        "JABBA_JOURNAL": os.path.join(DATA, "journal.jsonl"),
+        "JABBA_JOURNAUX_AUTRES": os.path.join(DATA, "porte-wifi", "journal.jsonl"),
+        "JABBA_DONNEES": os.path.join(DATA, "accueil.json"),
+        "JABBA_DOSSIER_INVITES": os.path.join(DATA, "dossier-invites"),
+        "JABBA_LECTURE": os.path.join(DATA, "lecture"),
+        "JABBA_VIGNETTES": os.path.join(DATA, "vignettes"),
     }
 )
 
-EN_ROOT = os.geteuid() == 0
-exige_root = pytest.mark.skipif(not EN_ROOT, reason="nécessite root (bac à sable, runuser)")
+AS_ROOT = os.geteuid() == 0
+needs_root = pytest.mark.skipif(not AS_ROOT, reason="nécessite root (bac à sable, runuser)")
 
 
 def outil(nom):
@@ -46,7 +46,7 @@ def video(tmp_path_factory):
     d = tmp_path_factory.mktemp("video")
     srt = d / "st.srt"
     srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nBonjour\n")
-    sortie = d / "film.mkv"
+    output = d / "film.mkv"
     subprocess.run(
         [
             "ffmpeg",
@@ -78,9 +78,9 @@ def video(tmp_path_factory):
             "aac",
             "-c:s",
             "srt",
-            str(sortie),
+            str(output),
         ],
         check=True,
     )
     os.chmod(d, 0o755)
-    return str(sortie)
+    return str(output)
