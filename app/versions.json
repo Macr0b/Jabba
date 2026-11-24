@@ -10,7 +10,9 @@
       "Accès depuis Internet : une étape de plus dans la liste, « Nextcloud freine les essais de mots de passe ». Chaque heure, Jabba vérifie que Nextcloud voit la vraie adresse de chaque visiteur (Caddy parmi ses relais de confiance, remis s'il manque) et que sa protection n'est pas coupée ; sinon, une alerte.",
       "Établi : les outils en pause passent après ceux qui tournent (chacun garde l'ordre rangé), et les titres de section ne touchent plus la carte qui les suit (styles Atelier et Salle des machines).",
       "Nextcloud comme Dropbox : menu … de Nextcloud → « Connecter un ordinateur ou un téléphone ». Jabba reconnaît l'appareil, donne le bon téléchargement (version « standard » sur Mac : le dossier synchronisé dans les deux sens, à l'endroit choisi) et l'adresse à coller : celle du domaine si l'accès depuis Internet marche (la même pour tes proches), sinon celle de Tailscale. La connexion se valide dans le navigateur.",
-      "Corbeille de Nextcloud : un fichier supprimé (depuis un ordinateur synchronisé, ou ailleurs) y reste au moins 30 jours, 60 au plus. Réglé à l'installation et vérifié chaque heure ; une durée choisie à la main dans Nextcloud n'est jamais écrasée."
+      "Corbeille de Nextcloud : un fichier supprimé (depuis un ordinateur synchronisé, ou ailleurs) y reste au moins 30 jours, 60 au plus. Réglé à l'installation et vérifié chaque heure ; une durée choisie à la main dans Nextcloud n'est jamais écrasée.",
+      "Mes codes : « Fiche à imprimer ». Les codes à garder, chacun avec à quoi il sert et une ligne vide à remplir à la main, plus l'adresse de Jabba et le compte Tailscale ; à ranger dans une enveloppe, loin du serveur. Jabba n'y écrit jamais un code.",
+      "Revue du code, sans rien changer à l'écran : les scripts lancés sur le serveur sont sortis du Python dans des fichiers à part, relus par shellcheck à chaque essai (comme le script d'installation) ; plus aucune fonction Python de plus de 50 lignes ; la feuille de style principale est séparée en neuf feuilles, une par usage."
     ]
   },
   {
