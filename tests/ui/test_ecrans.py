@@ -578,3 +578,21 @@ def test_connecter_un_appareil_a_nextcloud(page):
     expect(panneau.get_by_role("link", name="Nextcloud sur l'App Store")).to_have_attribute(
         "href", "https://apps.apple.com/app/id1125420102"
     )
+
+
+def test_fiche_des_codes_a_imprimer(page):
+    """Mes codes → « Fiche à imprimer » : les codes à garder, une ligne vide chacun, et rien d'autre à l'impression."""
+    aller(page, "systeme")
+    page.evaluate("window.print = () => { window.imprime = true; }")
+    carte = page.locator("#mes-codes")
+    carte.get_by_role("button", name="Fiche à imprimer").click()
+    assert page.evaluate("window.imprime") is True
+    fiche = page.locator("#fiche-codes")
+    expect(fiche).to_be_hidden()  # à l'écran : rien ne change
+    page.emulate_media(media="print")
+    expect(fiche).to_be_visible()
+    expect(fiche).to_contain_text("Mot de passe du serveur")
+    expect(fiche).to_contain_text("Compte Tailscale")
+    assert fiche.locator(".ligne-a-remplir").count() >= 3
+    expect(page.locator("main")).to_be_hidden()  # seule la fiche s'imprime
+    page.emulate_media(media="screen")

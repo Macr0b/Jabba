@@ -10,3 +10,31 @@
   display: grid;
   gap: 8px;
 }
+
+/* La fiche à imprimer : invisible à l'écran ; à l'impression, elle seule, en noir sur blanc. */
+#fiche-codes {
+  display: none;
+}
+@media print {
+  body.impression-codes > *:not(#fiche-codes) {
+    display: none !important;
+  }
+  body.impression-codes #fiche-codes {
+    display: block;
+    color: #000;
+    background: #fff;
+    font-size: 12pt;
+    padding: 0;
+  }
+  #fiche-codes h1 {
+    font-size: 18pt;
+  }
+  #fiche-codes li {
+    margin: 0 0 14pt;
+    break-inside: avoid;
+  }
+  #fiche-codes .ligne-a-remplir {
+    border-bottom: 1px solid #000;
+    height: 26pt;
+  }
+}
