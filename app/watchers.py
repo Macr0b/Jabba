@@ -22,7 +22,10 @@ Sommaire :
   domain_access.watch_protection : Nextcloud ouvert sur Internet freine bien les essais en rafale (chaque heure)
   nextcloud_settings.keep_deleted_files : corbeille de Nextcloud gardée 30 jours au moins (chaque heure, sauf choix de l'admin)
   tool_addresses.watch : adresses à part qui manquent, créées si la clé Tailscale est là (chaque heure)
-  watch_forever : la boucle (voir le détail des fréquences dedans)
+  SCHEDULE : ce qui tourne, et à quelle fréquence
+  steps_for : ce qui tourne à un tour donné
+  watch_forever : la boucle, un tour toutes les 15 secondes
+  interne : _follow_app_update, _watch_inactive_accounts
 """
 
 import time
@@ -191,56 +194,71 @@ def watch_system_updates():
             )
 
 
+def _follow_app_update():
+    """La mise à jour de l'appli en cours : son résultat, signalé une fois."""
+    current = app_update.CURRENT_UPDATE
+    if current["unite"] and not current["signale"]:
+        app_update.update_state()
+
+
+def _watch_inactive_accounts():
+    public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts)
+
+
+# Ce qui tourne, et tous les combien de tours (un tour = 15 secondes) : 1 = à chaque tour,
+# 4 = chaque minute, 8 = toutes les 2 minutes, 40 = toutes les 10 minutes, 240 = chaque heure.
+SCHEDULE = {
+    1: [auto_disks.scan_disks],
+    4: [
+        backups.watch_backups,
+        video_player.clean_up,
+        _follow_app_update,
+        watch_power,
+        watch_space,
+        watch_tools,
+        heat_watch.watch,
+        heartbeat.watch,
+        antivirus.watch_deposits,
+        antivirus_disks.watch,
+        guest_network.sync_guest_tools,
+        guest_network.apply_firewall,
+    ],
+    8: [nextcloud_accounts.watch_signups],
+    40: [
+        auto_disks.link_disks_to_nextcloud,
+        disk_health.watch_disk_health,
+        antivirus.install_by_default,
+        workshop.watch_reminders,
+        dns_update.watch,
+        disk_maintenance.watch_fragmentation,
+        mass_deletion.watch_mass_deletion,
+        tool_updates.watch_tool_updates,
+        _watch_inactive_accounts,
+    ],
+    240: [
+        watch_system_updates,
+        tool_addresses.watch,
+        domain_access.watch_protection,
+        nextcloud_settings.keep_deleted_files,
+    ],
+}
+
+
+def steps_for(tick, now):
+    """Ce qui tourne à ce tour-ci (le premier tour fait tout), plus la purge des corbeilles une fois par jour."""
+    steps = [step for every, todo in SCHEDULE.items() if tick % every == 0 for step in todo]
+    if now - WATCH_STATE["derniere_purge"] > 86400:
+        WATCH_STATE["derniere_purge"] = now
+        steps.append(disk_browser.purge_old_trash)
+    return steps
+
+
 def watch_forever():
     if config.DEMO:
         return
     tick = 0
     while True:
-        steps = [auto_disks.scan_disks]
-        if tick % 4 == 0:  # toutes les minutes
-            steps += [
-                backups.watch_backups,
-                video_player.clean_up,
-                lambda: (
-                    app_update.CURRENT_UPDATE["unite"]
-                    and not app_update.CURRENT_UPDATE["signale"]
-                    and app_update.update_state()
-                ),
-                watch_power,
-                watch_space,
-                watch_tools,
-                heat_watch.watch,
-                heartbeat.watch,
-                antivirus.watch_deposits,
-                antivirus_disks.watch,
-                guest_network.sync_guest_tools,
-                guest_network.apply_firewall,
-            ]
-        if tick % 8 == 0:  # toutes les 2 minutes
-            steps += [nextcloud_accounts.watch_signups]
-        if tick % 40 == 0:  # toutes les 10 minutes
-            steps += [
-                auto_disks.link_disks_to_nextcloud,
-                disk_health.watch_disk_health,
-                antivirus.install_by_default,
-                workshop.watch_reminders,
-                dns_update.watch,
-                disk_maintenance.watch_fragmentation,
-                mass_deletion.watch_mass_deletion,
-                tool_updates.watch_tool_updates,
-                lambda: public_mode.watch_inactive_accounts(commands.occ, nextcloud_accounts.accounts),
-            ]
-        if tick % 240 == 0:  # toutes les heures
-            steps += [
-                watch_system_updates,
-                tool_addresses.watch,
-                domain_access.watch_protection,
-                nextcloud_settings.keep_deleted_files,
-            ]
-        if time.time() - WATCH_STATE["derniere_purge"] > 86400:
-            WATCH_STATE["derniere_purge"] = time.time()
-            steps += [disk_browser.purge_old_trash]
-        for step in steps:
+        for step in steps_for(tick, time.time()):
             try:
                 step()
             except Exception as error:  # noqa: BLE001 — la surveillance ne s'arrête jamais

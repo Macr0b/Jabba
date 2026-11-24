@@ -167,3 +167,15 @@ def test_arret_par_l_onduleur_annulable():
     commande, _ = actions.build("arret_onduleur", {})
     assert commande[-3:] == ["upsmon", "-c", "fsd"] and "--unit=jabba-arret" in commande
     assert actions.build("annuler_arret_batterie", {})[0] == ["systemctl", "stop", "jabba-arret.timer"]
+
+
+def test_calendrier_de_la_surveillance():
+    import watchers
+
+    tout = watchers.steps_for(0, 0)  # premier tour : tout, sauf la purge (pas encore de jour écoulé)
+    assert watchers.disk_browser.purge_old_trash not in tout
+    assert len(tout) == sum(len(etapes) for etapes in watchers.SCHEDULE.values())
+    assert watchers.steps_for(1, 0) == [watchers.auto_disks.scan_disks]  # 15 s plus tard : les disques seuls
+    assert watchers.watch_power in watchers.steps_for(4, 0) and watchers.dns_update.watch not in watchers.steps_for(
+        4, 0
+    )

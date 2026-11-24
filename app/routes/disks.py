@@ -8,7 +8,6 @@ Sommaire :
   POST /api/disques/reprendre       resume_disk
 """
 
-import json
 import re
 import threading
 import time
@@ -18,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 import config
 from host import actions, commands
 from security import guard
-from services import activity_log, auto_disks, disk_names, files_source, measurements
+from services import activity_log, auto_disks, disk_inventory, files_source
 
 router = APIRouter()
 
@@ -26,85 +25,7 @@ router = APIRouter()
 # ---------------------------------------------------------------- disques
 @router.get("/api/disques")
 def list_disks():
-    if config.DEMO:
-        from services.demo_data import DISKS
-
-        return DISKS
-    files_source.wake_disks()
-    code, output, error_output = commands.run_action("arbre_disques")
-    if code != 0:
-        raise HTTPException(500, error_output[:200])
-    tree = json.loads(output)["blockdevices"]
-    mounted = []
-    for device in tree:
-        for partition in device.get("children") or []:
-            if partition.get("mountpoint"):
-                mounted.append(partition["mountpoint"])
-    usage = measurements.disk_space([mount for mount in mounted if mount.startswith("/")]) if mounted else {}
-    roles = {"/": "Système", "/boot/efi": "Démarrage", "/srv/data": "Données"}
-    known = {path: name for name, path in files_source.known_disks().items()}
-    # Un disque de Jabba garde ses réglages même pendant qu'il se rouvre (juste après « Écriture autorisée »).
-    by_uuid = {(files_source.disk_uuid(path) or "").lower(): path for path in known}
-    by_uuid.pop("", None)
-    auto = {disk["chemin"] for disk in auto_disks.read()["disques"]}
-    forgotten = set(auto_disks.read()["oublies"])
-    result = []
-    for device in tree:
-        if device.get("type") != "disk" or device["name"].startswith(("loop", "zram", "sr")):
-            continue
-        shares = []
-        for partition in device.get("children") or []:
-            if partition.get("fstype") in (None, "swap") and not partition.get("mountpoint"):
-                continue
-            if (
-                partition.get("mountpoint")
-                and partition["mountpoint"].startswith("/boot/")
-                and partition["mountpoint"] != "/boot/efi"
-            ):
-                continue
-            mountpoint = partition.get("mountpoint")
-            jabba_path = mountpoint if mountpoint in known else by_uuid.get((partition.get("uuid") or "").lower())
-            shares.append(
-                {
-                    "nom": partition["name"],
-                    "taille": partition["size"],
-                    "type": partition.get("fstype"),
-                    "etiquette": partition.get("label"),
-                    "montage": mountpoint,
-                    "role": (
-                        "Disque externe"
-                        if mountpoint in known
-                        else "Disque externe (en cours d'ouverture)"
-                        if jabba_path
-                        else roles.get(mountpoint, "Non utilisé" if not mountpoint else mountpoint)
-                    ),
-                    "usage": usage.get(mountpoint),
-                    "disque_jabba": {
-                        "nom": known[jabba_path],
-                        "ecriture": files_source.is_writable(jabba_path),
-                        "auto": jabba_path in auto,
-                    }
-                    if jabba_path
-                    else None,
-                    "oublie": (partition.get("uuid") or "").lower()
-                    if (partition.get("uuid") or "").lower() in forgotten and not mountpoint
-                    else None,
-                    "illisible": auto_disks.UNREADABLE.get((partition.get("fstype") or "").lower()),
-                    "technique": disk_names.is_technical(partition),
-                }
-            )
-        result.append(
-            {
-                "nom": device["name"],
-                "titre": disk_names.title(device),
-                "genre": disk_names.kind(device),
-                "modele": (device.get("model") or "").strip(),
-                "taille": device["size"],
-                "externe": disk_names.is_external(device),
-                "partitions": shares,
-            }
-        )
-    return result
+    return disk_inventory.list_disks()
 
 
 @router.post("/api/disques/{nom}/mode")

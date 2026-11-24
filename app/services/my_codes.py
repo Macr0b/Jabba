@@ -8,7 +8,7 @@ Trois rangements :
 
 Sommaire :
   inventory(installed, identifier) : la liste, dans l'ordre d'affichage
-  interne : _tool_entries, _entry
+  interne : _to_keep, _tools_to_keep, _tool_entries, _service_keys, _to_delete, _entry
 """
 
 import config
@@ -44,10 +44,9 @@ def _tool_entries(installed):
     return entries
 
 
-def inventory(installed, identifier):
-    installed = set(installed)
+def _to_keep(installed, identifier):
+    """« trousseau » : ce que toi seul peux garder."""
     passkey = second_factor.summary(identifier)
-    backup_settings = backups.read()
     codes = [
         _entry(
             "Mot de passe du serveur",
@@ -70,6 +69,12 @@ def inventory(installed, identifier):
             note=f"{passkey['codes_restants']} codes de secours restants." if passkey["active"] else "Pas activée.",
         ),
     ]
+    return codes + _tools_to_keep(installed)
+
+
+def _tools_to_keep(installed):
+    """« trousseau » aussi : Nextcloud, la phrase des sauvegardes, Time Machine."""
+    codes = []
     if "nextcloud" in installed:
         codes.append(
             _entry(
@@ -78,7 +83,7 @@ def inventory(installed, identifier):
                 "trousseau",
             )
         )
-    if backup_settings.get("chemin"):
+    if backups.read().get("chemin"):
         codes.append(
             _entry(
                 "Phrase de passe des sauvegardes",
@@ -98,7 +103,12 @@ def inventory(installed, identifier):
                 note="Ne le supprime pas du Mac. L'original est dans Jabba : carte Time Machine → … → Identifiants.",
             )
         )
-    codes += _tool_entries(installed)
+    return codes
+
+
+def _service_keys():
+    """« jabba » : les clés des services (Nextcloud, healthchecks.io, DNS, Tailscale), gardées par Jabba."""
+    codes = []
     if config.NC_APP_PASSWORD:
         codes.append(
             _entry(
@@ -145,6 +155,12 @@ def inventory(installed, identifier):
                 "console Tailscale → Settings → Keys.",
             )
         )
+    return codes
+
+
+def _to_delete():
+    """« supprimer » : les codes de passage, qui ne servent plus une fois utilisés."""
+    codes = []
     if cloudflare_dns.is_ready():
         codes.append(
             _entry(
@@ -174,3 +190,9 @@ def inventory(installed, identifier):
         ),
     ]
     return codes
+
+
+def inventory(installed, identifier):
+    """La liste, dans l'ordre d'affichage : à garder, gardés par Jabba, à supprimer."""
+    installed = set(installed)
+    return _to_keep(installed, identifier) + _tool_entries(installed) + _service_keys() + _to_delete()

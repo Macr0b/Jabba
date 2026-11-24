@@ -111,3 +111,13 @@ def test_plus_de_long_shell_dans_le_python():
                 if re.search(r"^\s*(set -e|if \[|for \w+ in|fi$|done$)", texte, re.M):
                     ecarts.append(f"{os.path.relpath(chemin, APP)}:{noeud.lineno}")
     assert not ecarts, "shell à sortir dans host/scripts : " + ", ".join(ecarts)
+
+
+def test_aucune_fonction_python_de_plus_de_50_lignes():
+    """Au-delà, une fonction se découpe en morceaux nommés : plus facile à lire et à essayer."""
+    longues = []
+    for chemin in modules_python():
+        for noeud in ast.walk(ast.parse(open(chemin).read())):
+            if isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)) and noeud.end_lineno - noeud.lineno >= 50:
+                longues.append(f"{os.path.relpath(chemin, APP)}:{noeud.lineno} {noeud.name}")
+    assert not longues, ", ".join(longues)

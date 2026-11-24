@@ -5,7 +5,7 @@ Sommaire :
   list_tools : les outils installés, avec leur état
   find_tool : un outil par son identifiant
   find_icon : l'icône d'un outil (site de l'outil, sinon icône de secours)
-  interne : _in_app
+  interne : _in_app, _projects, _state, _tool
 """
 
 import json
@@ -75,6 +75,54 @@ def _in_app(pid):
     return True
 
 
+def _projects(output):
+    """Les conteneurs Docker (une ligne JSON chacun), rangés par pile : {nom: {id, dossier, conteneurs}}."""
+    projects = {}
+    for line in output.splitlines():
+        container = json.loads(line)
+        labels = dict(label.split("=", 1) for label in container.get("Labels", "").split(",") if "=" in label)
+        project_name = labels.get("com.docker.compose.project", container["Names"])
+        folder = labels.get("com.docker.compose.project.working_dir", "")
+        project = projects.setdefault(project_name, {"id": project_name, "dossier": folder, "conteneurs": []})
+        project["conteneurs"].append(
+            {"nom": container["Names"], "etat": container["State"], "statut": container["Status"]}
+        )
+    return projects
+
+
+def _state(containers):
+    """« actif », « partiel », « arrêté » ou « en panne » (un conteneur qui redémarre en boucle)."""
+    if any("restarting" in container["etat"] for container in containers):
+        return "en panne"
+    states = {container["etat"] for container in containers}
+    if states == {"running"}:
+        return "actif"
+    return "partiel" if "running" in states else "arrêté"
+
+
+def _tool(pid, project):
+    name, role = NAMES.get(pid, (pid, ""))
+    return {
+        "id": pid,
+        "nom": name,
+        "role": role,
+        "etat": _state(project["conteneurs"]),
+        "lien": tool_addresses.address(pid) or config.LINKS.get(pid),
+        "dossier": project["dossier"],
+        "conteneurs": project["conteneurs"],
+        "modifiable": pid != "jabba-app" and bool(project["dossier"]),
+        "systeme": pid in SYSTEM_TOOLS,
+        "icone": pid in PORTS,
+        "dans_appli": _in_app(pid),
+        # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
+        "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
+        "en_option": pid in catalog.OPTIONAL_TOOLS,
+        # Menu « Identifiants » : le compte créé par Jabba, ou celui que tu y notes (tool_credentials.py).
+        "identifiants": pid in tool_credentials.STORABLE,
+        "identifiants_jabba": tool_credentials.created_by_jabba(pid),
+    }
+
+
 def list_tools():
     if config.DEMO:
         from services.demo_data import TOOLS
@@ -91,52 +139,11 @@ def list_tools():
     code, output, error_output = commands.run_action("liste_conteneurs")
     if code != 0:
         raise ServiceError(500, "Docker ne répond pas : " + error_output[:200])
-    projects = {}
-    for line in output.splitlines():
-        container = json.loads(line)
-        labels = dict(label.split("=", 1) for label in container.get("Labels", "").split(",") if "=" in label)
-        project_name = labels.get("com.docker.compose.project", container["Names"])
-        folder = labels.get("com.docker.compose.project.working_dir", "")
-        project = projects.setdefault(project_name, {"id": project_name, "dossier": folder, "conteneurs": []})
-        project["conteneurs"].append(
-            {"nom": container["Names"], "etat": container["State"], "statut": container["Status"]}
-        )
-    result = []
-    for pid, project in sorted(projects.items()):
-        if pid.startswith("adresse-"):  # l'adresse à part d'un outil : fait partie de l'outil
-            continue
-        name, role = NAMES.get(pid, (pid, ""))
-        states = {container["etat"] for container in project["conteneurs"]}
-        if states == {"running"}:
-            state = "actif"
-        elif "running" in states:
-            state = "partiel"
-        else:
-            state = "arrêté"
-        if any("restarting" in container["etat"] for container in project["conteneurs"]):
-            state = "en panne"
-        result.append(
-            {
-                "id": pid,
-                "nom": name,
-                "role": role,
-                "etat": state,
-                "lien": tool_addresses.address(pid) or config.LINKS.get(pid),
-                "dossier": project["dossier"],
-                "conteneurs": project["conteneurs"],
-                "modifiable": pid != "jabba-app" and bool(project["dossier"]),
-                "systeme": pid in SYSTEM_TOOLS,
-                "icone": pid in PORTS,
-                "dans_appli": _in_app(pid),
-                # Outil en option publié sur Tailscale : l'écran en déduit son adresse (même serveur, ce port).
-                "port_https": (catalog.OPTIONAL_TOOLS.get(pid) or {}).get("port_https"),
-                "en_option": pid in catalog.OPTIONAL_TOOLS,
-                # Menu « Identifiants » : le compte créé par Jabba, ou celui que tu y notes (tool_credentials.py).
-                "identifiants": pid in tool_credentials.STORABLE,
-                "identifiants_jabba": tool_credentials.created_by_jabba(pid),
-            }
-        )
-    return result
+    return [
+        _tool(pid, project)
+        for pid, project in sorted(_projects(output).items())
+        if not pid.startswith("adresse-")  # l'adresse à part d'un outil : fait partie de l'outil
+    ]
 
 
 def find_tool(pid):

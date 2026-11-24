@@ -24,7 +24,8 @@ Sommaire :
   clean_up        : arrête les lectures abandonnées (onglet fermé, téléphone en veille…)
   shift_vtt       : recale les sous-titres sur le moment où la lecture a commencé (la vidéo, elle, repart de 0)
   subtitles       : une piste de sous-titres texte en WebVTT, calée sur le moment où la lecture a commencé
-  interne : _hardware_options, _video, _seconds, _timestamp
+  HLS_OPTIONS     : les réglages du flux découpé en morceaux (HLS)
+  interne : _run_ffprobe, _track_label, _tracks, _video_track, _hardware_options, _video, _ffmpeg_command, _seconds, _timestamp
 """
 
 import json
@@ -53,7 +54,8 @@ _HARDWARE = {"teste": False, "options": None}
 PROBE_SECONDS = 90  # analyse d'un fichier avant lecture
 
 
-def probe(source):
+def _run_ffprobe(source):
+    """Ce que ffprobe dit du fichier (dans le bac à sable), ou une erreur en clair."""
     args = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
     try:
         with sandbox.open_input(source) as (input_path, file_descriptors):
@@ -75,57 +77,62 @@ def probe(source):
         raise RuntimeError(f"Fichier impossible à ouvrir : {error.strerror or error}")
     if completed.returncode != 0:
         raise RuntimeError("Fichier illisible : " + (completed.stderr.strip()[:200] or "format inconnu"))
-    probe_data = json.loads(completed.stdout or "{}")
+    return json.loads(completed.stdout or "{}")
+
+
+def _track_label(stream, number):
+    """« Titre · FR », ou « Piste 2 » s'il n'y a ni titre ni langue."""
+    tags = stream.get("tags") or {}
+    language = tags.get("language")
+    parts = [tags.get("title"), language.upper() if language not in (None, "und") else None]
+    return " · ".join(part for part in parts if part) or f"Piste {number}"
+
+
+def _tracks(streams, kind):
+    return [stream for stream in streams if stream.get("codec_type") == kind]
+
+
+def _video_track(streams):
+    """La piste vidéo (pas une pochette), ou None pour un fichier audio."""
+    for stream in _tracks(streams, "video"):
+        if not (stream.get("disposition") or {}).get("attached_pic"):
+            return {
+                "codec": stream.get("codec_name"),
+                "largeur": stream.get("width"),
+                "hauteur": stream.get("height"),
+                "pix_fmt": stream.get("pix_fmt"),
+                "index": stream["index"],
+            }
+    return None
+
+
+def probe(source):
+    probe_data = _run_ffprobe(source)
     streams = probe_data.get("streams", [])
-    video_stream = next(
-        (
-            stream
-            for stream in streams
-            if stream.get("codec_type") == "video" and not (stream.get("disposition") or {}).get("attached_pic")
-        ),
-        None,
-    )
-
-    def etiquette(stream, count):
-        tags = stream.get("tags") or {}
-        shares = [
-            tags.get("title"),
-            (tags.get("language") or "").upper() if tags.get("language") not in (None, "und") else None,
-        ]
-        return " · ".join(minutes for minutes in shares if minutes) or f"Piste {count}"
-
     audio_tracks = [
         {
             "index": stream["index"],
             "codec": stream.get("codec_name"),
             "canaux": stream.get("channels"),
-            "nom": etiquette(stream, index + 1),
+            "nom": _track_label(stream, number),
             "defaut": bool((stream.get("disposition") or {}).get("default")),
         }
-        for index, stream in enumerate(value for value in streams if value.get("codec_type") == "audio")
+        for number, stream in enumerate(_tracks(streams, "audio"), start=1)
     ]
     subtitle_tracks = [
         {
             "index": stream["index"],
             "codec": stream.get("codec_name"),
-            "nom": etiquette(stream, index + 1),
+            "nom": _track_label(stream, number),
             "texte": stream.get("codec_name") in TEXT_SUBTITLE_CODECS,
         }
-        for index, stream in enumerate(value for value in streams if value.get("codec_type") == "subtitle")
+        for number, stream in enumerate(_tracks(streams, "subtitle"), start=1)
     ]
-    format_name = probe_data.get("format", {})
+    container = probe_data.get("format", {})
     return {
-        "duree": float(format_name.get("duration") or 0),
-        "conteneur": format_name.get("format_name", ""),
-        "video": {
-            "codec": video_stream.get("codec_name"),
-            "largeur": video_stream.get("width"),
-            "hauteur": video_stream.get("height"),
-            "pix_fmt": video_stream.get("pix_fmt"),
-            "index": video_stream["index"],
-        }
-        if video_stream
-        else None,
+        "duree": float(container.get("duration") or 0),
+        "conteneur": container.get("format_name", ""),
+        "video": _video_track(streams),
         "audios": audio_tracks,
         "soustitres": subtitle_tracks,
     }
@@ -282,6 +289,29 @@ def keyframe(source, media, start_time):
     return max(previous_value) if previous_value else start_time
 
 
+# Le flux HLS : des morceaux de SEGMENT_SECONDS, horodatés à partir de 0 (la vidéo et les sous-titres
+# partent du même instant, sur tous les navigateurs).
+HLS_OPTIONS = ["-muxdelay", "0", "-muxpreload", "0", "-max_muxing_queue_size", "4096", "-f", "hls"]
+HLS_OPTIONS += ["-hls_init_time", "1", "-hls_time", str(SEGMENT_SECONDS), "-hls_list_size", "0"]
+HLS_OPTIONS += ["-hls_playlist_type", "event"]
+
+
+def _ffmpeg_command(media, start_time, audio, folder):
+    """La conversion : « ENTREE » marque la place du fichier (ouvert ensuite dans le bac à sable)."""
+    video_options, extra_env = _video(media)
+    tracks = [track for track in media["audios"] if audio is None or track["index"] == audio] or media["audios"]
+    audio_options = ["-map", f"0:{tracks[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if tracks else []
+    # Le décodage par la puce graphique (VAAPI) se règle avant le fichier d'entrée, le reste après.
+    before_input = video_options[:2] if video_options[:1] == ["-vaapi_device"] else []
+    after_input = video_options[len(before_input) :]
+    copying = video_options[-2:] == ["-c:v", "copy"] or "copy" in video_options
+    keyframes = [] if copying else ["-force_key_frames", "expr:gte(t,n_forced*2)"]
+    command = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{start_time:.3f}"]
+    command += before_input + ["ENTREE"] + after_input + audio_options + keyframes + HLS_OPTIONS
+    command += ["-hls_segment_filename", os.path.join(folder, "m%05d.ts"), os.path.join(folder, "index.m3u8")]
+    return command, extra_env
+
+
 def start(source, media, start_time=0.0, audio=None):
     """Lance la conversion à partir de `debut` (secondes). Renvoie (identifiant, moment réel du départ)."""
     start_time = keyframe(source, media, max(0.0, float(start_time)))
@@ -292,41 +322,7 @@ def start(source, media, start_time=0.0, audio=None):
     folder = os.path.join(WORK_DIR, session_id)
     os.makedirs(WORK_DIR, exist_ok=True)
     sandbox.writable_dir(folder)
-    video_stream, extra_env = _video(media)
-    tracks = [first for first in media["audios"] if audio is None or first["index"] == audio] or media["audios"]
-    audio_stream = ["-map", f"0:{tracks[0]['index']}", "-c:a", "aac", "-b:a", "192k", "-ac", "2"] if tracks else []
-    command = (
-        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-ss", f"{max(0.0, float(start_time)):.3f}"]
-        + ([first for first in video_stream[:2]] if video_stream[:1] == ["-vaapi_device"] else [])
-        + ["ENTREE"]
-        + (video_stream[2:] if video_stream[:1] == ["-vaapi_device"] else video_stream)
-        + audio_stream
-        + (
-            ["-force_key_frames", "expr:gte(t,n_forced*2)"]
-            if video_stream[-2:] != ["-c:v", "copy"] and "copy" not in video_stream
-            else []
-        )
-        # horodatages à partir de 0 : la vidéo et les sous-titres partent du même instant, sur tous les navigateurs
-        + ["-muxdelay", "0", "-muxpreload", "0"]
-        + [
-            "-max_muxing_queue_size",
-            "4096",
-            "-f",
-            "hls",
-            "-hls_init_time",
-            "1",
-            "-hls_time",
-            str(SEGMENT_SECONDS),
-            "-hls_list_size",
-            "0",
-            "-hls_playlist_type",
-            "event",
-            "-hls_segment_filename",
-            os.path.join(folder, "m%05d.ts"),
-            os.path.join(folder, "index.m3u8"),
-        ]
-    )
-    env = dict(os.environ, **extra_env)
+    command, extra_env = _ffmpeg_command(media, max(0.0, float(start_time)), audio, folder)
     with (
         sandbox.open_input(source) as (input_path, file_descriptors),
         open(os.path.join(folder, "erreurs.txt"), "w") as error_output,
@@ -340,7 +336,7 @@ def start(source, media, start_time=0.0, audio=None):
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=error_output,
-            env=env,
+            env=dict(os.environ, **extra_env),
         )
     with _LOCK:
         _SESSIONS[session_id] = {

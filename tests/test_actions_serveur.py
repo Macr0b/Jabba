@@ -500,7 +500,9 @@ def test_restic_restaure_toujours_a_cote():
             "horodatage": "2026-11-17 01h30",
         },
     )
-    assert commande[4:7] == ["sh", "-c", actions_system.script("restore")] and commande[7] == actions_system.RESTORE_ROOT
+    assert (
+        commande[4:7] == ["sh", "-c", actions_system.script("restore")] and commande[7] == actions_system.RESTORE_ROOT
+    )
     assert commande[8:] == [
         "--no-lock",
         "restore",

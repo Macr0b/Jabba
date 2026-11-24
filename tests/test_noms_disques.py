@@ -41,7 +41,6 @@ def test_l_ecran_garde_le_reglage_pendant_que_le_disque_se_rouvre(monkeypatch):
     """Juste après « Écriture autorisée », le disque est démonté puis rouvert : l'interrupteur ne disparaît pas."""
     import json
 
-    from routes import disks
     from services import files_source
 
     arbre = {
@@ -65,16 +64,18 @@ def test_l_ecran_garde_le_reglage_pendant_que_le_disque_se_rouvre(monkeypatch):
             }
         ]
     }
-    monkeypatch.setattr(disks.config, "DEMO", False)
+    from services import disk_inventory
+
+    monkeypatch.setattr(disk_inventory.config, "DEMO", False)
     monkeypatch.setattr(files_source, "wake_disks", lambda: None)
     monkeypatch.setattr(files_source, "known_disks", lambda: {"R2-D2": "/srv/disques/R2-D2"})
     monkeypatch.setattr(files_source, "disk_uuid", lambda path: "ab12-cd34")
     monkeypatch.setattr(files_source, "is_writable", lambda path: True)
     monkeypatch.setattr(
-        disks.auto_disks, "read", lambda: {"disques": [{"chemin": "/srv/disques/R2-D2"}], "oublies": []}
+        disk_inventory.auto_disks, "read", lambda: {"disques": [{"chemin": "/srv/disques/R2-D2"}], "oublies": []}
     )
-    monkeypatch.setattr(disks.commands, "run_action", lambda nom, **a: (0, json.dumps(arbre), ""))
-    disque = disks.list_disks()[0]
+    monkeypatch.setattr(disk_inventory.commands, "run_action", lambda nom, **a: (0, json.dumps(arbre), ""))
+    disque = disk_inventory.list_disks()[0]
     assert disque["titre"] == "R2-D2" and disque["genre"] == "Disque externe USB"
     partie = disque["partitions"][0]
     assert partie["disque_jabba"] == {"nom": "R2-D2", "ecriture": True, "auto": True}

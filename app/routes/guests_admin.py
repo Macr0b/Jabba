@@ -3,7 +3,8 @@
 Sommaire :
   GET  /api/invites             guest_settings
   GET  /api/invites/qr.svg      guest_qr_code
-  POST /api/invites             update_guest_settings
+  POST /api/invites             update_guest_settings (un geste de GUEST_ACTIONS)
+  interne : _switch, _new_code, _wifi, _mode_text, _add_folder, _change_folder
   GET  /api/invites/parcourir   browse_shareable_folders
 """
 
@@ -54,72 +55,94 @@ def guest_qr_code(request: Request):
     return Response(buffer.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
+# ---------------------------------------------------------------- un réglage de l'accès invités
+# Chaque geste : (body) -> texte du Journal.
+def _switch(body):
+    active = bool(body.get("actif"))
+    guests.update(lambda state: state.update(actif=active))
+    if active:
+        guests.prepare_guest_folder()
+    return f"Accès invités {'ouvert' if active else 'fermé'}"
+
+
+def _new_code(body):
+    guests.new_code()
+    return "Nouveau code invités (les invités déjà entrés devront le ressaisir)"
+
+
+def _wifi(body):
+    pid, opened = body.get("outil"), bool(body.get("wifi"))
+    if pid not in tools.PORTS:
+        raise HTTPException(400, "Outil inconnu.")
+    if pid in tools.NEVER_ON_WIFI and opened:
+        raise HTTPException(403, "Cet outil donne la main sur le serveur : il reste réservé à Tailscale.")
+    guests.update(lambda state: state["wifi"].update({pid: opened}))
+    if not guest_network.apply_firewall():
+        raise HTTPException(500, "Le réglage est noté, mais le filtre réseau n'a pas pu être appliqué.")
+    return f"{tools.NAMES.get(pid, (pid,))[0]} {'joignable' if opened else 'plus joignable'} depuis le Wi-Fi"
+
+
+def _mode_text(mode):
+    return "dépôt autorisé" if mode == "depot" else "lecture seule"
+
+
+def _add_folder(body):
+    virtual_path, mode = nextcloud_files.clean_path(body.get("chemin", "")), body.get("mode", "lecture")
+    real_path, _ = files_source.run_disk_action(
+        lambda: disk_browser.resolve(virtual_path, guest_network.shareable_roots(), set())
+    )
+    if not real_path or not os.path.isdir(real_path):
+        raise HTTPException(404, "Dossier introuvable.")
+    if mode not in ("lecture", "depot"):
+        raise HTTPException(400, "Mode inconnu.")
+    name = virtual_path.rstrip("/").rsplit("/", 1)[-1]
+
+    def add(state):
+        if any(folder["chemin"] == real_path for folder in state["dossiers"]):
+            raise HTTPException(409, "Ce dossier est déjà partagé.")
+        state["dossiers"].append({"id": uuid.uuid4().hex[:8], "nom": name, "chemin": real_path, "mode": mode})
+
+    guests.update(add)
+    return f"Dossier « {name} » partagé avec les invités ({_mode_text(mode)})"
+
+
+def _change_folder(body, remove):
+    folder_id, mode = body.get("id"), body.get("mode")
+
+    def change(state):
+        folder = next((folder for folder in state["dossiers"] if folder["id"] == folder_id), None)
+        if not folder:
+            raise HTTPException(404, "Dossier introuvable.")
+        if remove:
+            state["dossiers"] = [other for other in state["dossiers"] if other["id"] != folder_id]
+        elif mode in ("lecture", "depot"):
+            folder["mode"] = mode
+        return folder["nom"]
+
+    name = guests.update(change)
+    if remove:
+        return f"Dossier « {name} » retiré des invités"
+    return f"Dossier « {name} » en {_mode_text(mode)} pour les invités"
+
+
+GUEST_ACTIONS = {
+    "actif": _switch,
+    "code": _new_code,
+    "wifi": _wifi,
+    "ajouter_dossier": _add_folder,
+    "retirer_dossier": lambda body: _change_folder(body, remove=True),
+    "mode_dossier": lambda body: _change_folder(body, remove=False),
+}
+
+
 @router.post("/api/invites")
 async def update_guest_settings(request: Request):
     session = guard.require_admin(request)
     body = await request.json()
     action = body.get("action")
-    if action == "actif":
-        active = bool(body.get("actif"))
-        guests.update(lambda state: state.update(actif=active))
-        if active:
-            guests.prepare_guest_folder()
-        text = f"Accès invités {'ouvert' if active else 'fermé'}"
-    elif action == "code":
-        guests.new_code()
-        text = "Nouveau code invités (les invités déjà entrés devront le ressaisir)"
-    elif action == "wifi":
-        pid, opened = body.get("outil"), bool(body.get("wifi"))
-        if pid not in tools.PORTS:
-            raise HTTPException(400, "Outil inconnu.")
-        if pid in tools.NEVER_ON_WIFI and opened:
-            raise HTTPException(403, "Cet outil donne la main sur le serveur : il reste réservé à Tailscale.")
-        guests.update(lambda state: state["wifi"].update({pid: opened}))
-        if not guest_network.apply_firewall():
-            raise HTTPException(500, "Le réglage est noté, mais le filtre réseau n'a pas pu être appliqué.")
-        text = f"{tools.NAMES.get(pid, (pid,))[0]} {'joignable' if opened else 'plus joignable'} depuis le Wi-Fi"
-    elif action == "ajouter_dossier":
-        virtual_path, mode = nextcloud_files.clean_path(body.get("chemin", "")), body.get("mode", "lecture")
-        real_path, _ = files_source.run_disk_action(
-            lambda: disk_browser.resolve(virtual_path, guest_network.shareable_roots(), set())
-        )
-        if not real_path or not os.path.isdir(real_path):
-            raise HTTPException(404, "Dossier introuvable.")
-        if mode not in ("lecture", "depot"):
-            raise HTTPException(400, "Mode inconnu.")
-        name = virtual_path.rstrip("/").rsplit("/", 1)[-1]
-
-        def f(state):
-            if any(folder["chemin"] == real_path for folder in state["dossiers"]):
-                raise HTTPException(409, "Ce dossier est déjà partagé.")
-            state["dossiers"].append({"id": uuid.uuid4().hex[:8], "nom": name, "chemin": real_path, "mode": mode})
-
-        guests.update(f)
-        text = (
-            f"Dossier « {name} » partagé avec les invités ({'dépôt autorisé' if mode == 'depot' else 'lecture seule'})"
-        )
-    elif action in ("retirer_dossier", "mode_dossier"):
-        did = body.get("id")
-        mode = body.get("mode")
-
-        def f(state):
-            folder = next((folder for folder in state["dossiers"] if folder["id"] == did), None)
-            if not folder:
-                raise HTTPException(404, "Dossier introuvable.")
-            if action == "retirer_dossier":
-                state["dossiers"] = [other for other in state["dossiers"] if other["id"] != did]
-            elif mode in ("lecture", "depot"):
-                folder["mode"] = mode
-            return folder["nom"]
-
-        name = guests.update(f)
-        text = f"Dossier « {name} » " + (
-            "retiré des invités"
-            if action == "retirer_dossier"
-            else f"en {'dépôt autorisé' if mode == 'depot' else 'lecture seule'} pour les invités"
-        )
-    else:
+    if action not in GUEST_ACTIONS:
         raise HTTPException(400, "Action inconnue.")
+    text = GUEST_ACTIONS[action](body)
     activity_log.record("invite", f"{text}, par {session['identifiant']}", request.state.nom)
     return {"ok": True}
 

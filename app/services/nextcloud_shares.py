@@ -16,7 +16,7 @@ Sommaire :
   stop_sharing : retirer un partage
   list_shares : les partages notés
   nextcloud_ocs : l'API de partage de Nextcloud (partages ordinaires)
-  interne : _clean_parts, _check_group, _free_mount_point
+  interne : _clean_parts, _check_group, _free_mount_point, _share_disk_folder
 """
 
 import json
@@ -69,6 +69,32 @@ def _free_mount_point(mounts, wanted):
     return name
 
 
+def _share_disk_folder(occ, mounts, disk, parts, group, mode):
+    """Un dossier d'un disque : un stockage externe qui ne montre que lui. Renvoie (mount_id, nom)."""
+    datadir = str((disk.get("configuration") or {}).get("datadir", "")).rstrip("/")
+    if not datadir.startswith("/"):
+        raise nextcloud_accounts.CloudError("Ce disque ne se partage pas depuis Jabba.")
+    folder = "/".join([datadir] + parts[1:])
+    name = _free_mount_point(mounts, parts[-1])
+    if not NAME_PATTERN.match(name):
+        raise nextcloud_accounts.CloudError("Nom de dossier invalide.")
+    output = nextcloud_accounts.occ_or_fail(
+        occ, ["files_external:create", name, "local", "null::null", "-c", f"datadir={folder}"]
+    )
+    match = re.search(r"(\d+)\s*$", output.strip())
+    if not match:
+        raise nextcloud_accounts.CloudError("Nextcloud n'a pas créé le partage.")
+    mount_id = match.group(1)
+    try:
+        nextcloud_accounts.occ_or_fail(occ, ["files_external:applicable", f"--add-group={group}", mount_id])
+        nextcloud_accounts.occ_or_fail(occ, ["files_external:option", mount_id, "readonly", MODES[mode]["readonly"]])
+        nextcloud_accounts.occ_or_fail(occ, ["files_external:option", mount_id, "enable_sharing", "false"])
+    except nextcloud_accounts.CloudError:
+        occ(["files_external:delete", "-y", mount_id])  # jamais un partage à moitié fait (ouvert à tous)
+        raise
+    return int(mount_id), name
+
+
 def share_folder(occ, ocs, state, path, group, mode):
     """Partage le dossier `path` (chemin de l'écran Fichiers) avec `group`. Renvoie le partage noté.
 
@@ -81,44 +107,15 @@ def share_folder(occ, ocs, state, path, group, mode):
     _check_group(occ, group)
     mounts = external_mounts(occ)
     disk = next((mount for mount in mounts if str(mount.get("mount_point", "")).strip("/") == parts[0]), None)
-    share = {
-        "id": secrets.token_hex(4),
-        "chemin": "/" + "/".join(parts),
-        "groupe": group,
-        "mode": mode,
-    }
+    share = {"id": secrets.token_hex(4), "chemin": "/" + "/".join(parts), "groupe": group, "mode": mode}
     if disk:
-        # Un dossier d'un disque : un stockage externe qui ne montre que lui.
-        datadir = str((disk.get("configuration") or {}).get("datadir", "")).rstrip("/")
-        if not datadir.startswith("/"):
-            raise nextcloud_accounts.CloudError("Ce disque ne se partage pas depuis Jabba.")
-        folder = "/".join([datadir] + parts[1:])
-        name = _free_mount_point(mounts, parts[-1])
-        if not NAME_PATTERN.match(name):
-            raise nextcloud_accounts.CloudError("Nom de dossier invalide.")
-        output = nextcloud_accounts.occ_or_fail(
-            occ, ["files_external:create", name, "local", "null::null", "-c", f"datadir={folder}"]
-        )
-        match = re.search(r"(\d+)\s*$", output.strip())
-        if not match:
-            raise nextcloud_accounts.CloudError("Nextcloud n'a pas créé le partage.")
-        mount_id = match.group(1)
-        try:
-            nextcloud_accounts.occ_or_fail(occ, ["files_external:applicable", f"--add-group={group}", mount_id])
-            nextcloud_accounts.occ_or_fail(
-                occ, ["files_external:option", mount_id, "readonly", MODES[mode]["readonly"]]
-            )
-            nextcloud_accounts.occ_or_fail(occ, ["files_external:option", mount_id, "enable_sharing", "false"])
-        except nextcloud_accounts.CloudError:
-            occ(["files_external:delete", "-y", mount_id])  # jamais un partage à moitié fait (ouvert à tous)
-            raise
-        share.update(type="stockage", mount_id=int(mount_id), nom=name)
+        mount_id, name = _share_disk_folder(occ, mounts, disk, parts, group, mode)
+        share.update(type="stockage", mount_id=mount_id, nom=name)
     else:
         # Un dossier des fichiers Nextcloud : partage ordinaire avec le groupe.
+        permissions = MODES[mode]["permissions"]
         data = ocs(
-            "POST",
-            "",
-            {"path": share["chemin"], "shareType": 1, "shareWith": group, "permissions": MODES[mode]["permissions"]},
+            "POST", "", {"path": share["chemin"], "shareType": 1, "shareWith": group, "permissions": permissions}
         )
         share.update(type="partage", share_id=str(data.get("id")), nom=parts[-1])
     state.setdefault("partages", []).append(share)
