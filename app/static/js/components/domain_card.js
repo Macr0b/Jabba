@@ -3,7 +3,7 @@
 //
 // Sommaire :
 //   partagé : domainCardHtml, bindDomain
-//   interne : formHtml, checklistHtml, stepHtml, dnsHtml
+//   interne : formHtml, checklistHtml, stepHtml, dnsHtml, cloudflareFormHtml, ovhFormHtml
 import { api } from "../core/api.js";
 import { $, escapeHtml } from "../core/dom.js";
 import { t } from "../core/i18n.js";
@@ -92,15 +92,23 @@ function checklistHtml(settings, isSuper) {
 
 /** L'entrée DNS réglée par Jabba chez Cloudflare ou OVH : un jeton (ou une clé) donné une fois, puis plus rien à faire. */
 function dnsHtml(settings) {
+  if (!settings.dns_auto) return t`<div class="bloc-ovh">${cloudflareFormHtml(settings)}${ovhFormHtml(settings)}</div>`;
+  const prefix = escapeHtml(settings.prefix || "cloud");
+  const name = settings.dns_auto === "cloudflare" ? t("Cloudflare") : "OVH";
+  // Domaine passé d'OVH à Cloudflare : le jeton se colle ici, la clé OVH est alors oubliée (et révoquée).
+  const moved =
+    settings.dns_auto === "ovh"
+      ? t`<details><summary>Le domaine est passé chez Cloudflare ?</summary>${cloudflareFormHtml(settings)}</details>`
+      : "";
+  return t`<div class="bloc-ovh"><h3>DNS réglé par Jabba (${name})</h3>
+    <p class="note">Jabba ne touche qu'à l'entrée ${prefix} : il la crée chez ${name} si elle manque et corrige son adresse si celle de ta box change (vérifié chaque heure). Le reste du domaine n'est jamais modifié.</p>
+    <div class="actions"><button class="btn" type="button" id="dns-regler">Régler maintenant</button><button class="lien" type="button" id="${settings.dns_auto}-oublier">${settings.dns_auto === "cloudflare" ? t("Oublier le jeton") : t("Oublier la clé")}</button></div>${moved}</div>`;
+}
+
+function cloudflareFormHtml(settings) {
   const prefix = escapeHtml(settings.prefix || "cloud");
   const domain = escapeHtml(settings.domain);
-  if (settings.dns_auto) {
-    const name = settings.dns_auto === "cloudflare" ? t("Cloudflare") : "OVH";
-    return t`<div class="bloc-ovh"><h3>DNS réglé par Jabba (${name})</h3>
-      <p class="note">Jabba ne touche qu'à l'entrée ${prefix} : il la crée chez ${name} si elle manque et corrige son adresse si celle de ta box change (vérifié chaque heure). Le reste du domaine n'est jamais modifié.</p>
-      <div class="actions"><button class="btn" type="button" id="dns-regler">Régler maintenant</button><button class="lien" type="button" id="${settings.dns_auto}-oublier">${settings.dns_auto === "cloudflare" ? t("Oublier le jeton") : t("Oublier la clé")}</button></div></div>`;
-  }
-  return t`<div class="bloc-ovh"><h3>Laisser Jabba régler le DNS (domaine chez Cloudflare)</h3>
+  return t`<h3>Laisser Jabba régler le DNS (domaine chez Cloudflare)</h3>
     <ol class="note">
       <li>Ouvre la page de Cloudflare ci-dessous → <strong>Créer un jeton</strong> → modèle <strong>Modifier la zone DNS</strong>.</li>
       <li>Ressources de zone : <strong>Inclure → Zone spécifique → ${domain}</strong>. Ne change rien d'autre, et jamais la « clé API globale ».</li>
@@ -109,8 +117,12 @@ function dnsHtml(settings) {
     <p class="note">Garde l'entrée ${prefix} en « DNS uniquement » (nuage gris) : le certificat HTTPS se fait sur le serveur.</p>
     <p><a class="btn" href="${escapeHtml(settings.cloudflare_link)}" target="_blank" rel="noopener">Créer le jeton chez Cloudflare</a></p>
     <label class="champ"><span>Jeton Cloudflare</span><input type="password" id="cf-jeton" autocomplete="off"></label>
-    <div class="actions"><button class="btn btn-p" type="button" id="cf-enregistrer">Enregistrer et régler le DNS</button></div>
-    <details><summary>Domaine chez OVH ?</summary>
+    <div class="actions"><button class="btn btn-p" type="button" id="cf-enregistrer">Enregistrer et régler le DNS</button></div>`;
+}
+
+function ovhFormHtml(settings) {
+  const domain = escapeHtml(settings.domain);
+  return t`<details><summary>Domaine chez OVH ?</summary>
     <ol class="note">
       <li>Ouvre la page d'OVH ci-dessous et connecte-toi : les droits sont déjà remplis, limités à la zone DNS de ${domain}. Dans « Validity », choisis <strong>Unlimited</strong>, puis <strong>Create keys</strong>.</li>
       <li>Recopie ici les trois codes affichés par OVH.</li>
@@ -119,7 +131,7 @@ function dnsHtml(settings) {
     <label class="champ"><span>Application key</span><input type="text" id="ovh-ak" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <label class="champ"><span>Application secret</span><input type="password" id="ovh-as" autocomplete="off"></label>
     <label class="champ"><span>Consumer key</span><input type="password" id="ovh-ck" autocomplete="off"></label>
-    <div class="actions"><button class="btn" type="button" id="ovh-enregistrer">Enregistrer et régler le DNS</button></div></details></div>`;
+    <div class="actions"><button class="btn" type="button" id="ovh-enregistrer">Enregistrer et régler le DNS</button></div></details>`;
 }
 
 export function bindDomain() {
@@ -149,8 +161,9 @@ export function bindDomain() {
     const dnsCall = async (button, path, json, done) => {
       button.disabled = true;
       try {
-        render(await api(path, { method: "POST", json }));
-        toast(done);
+        const result = await api(path, { method: "POST", json });
+        render(result);
+        toast(typeof done === "function" ? done(result) : done);
       } catch (error) {
         toast(error.message, true);
         button.disabled = false;
@@ -185,7 +198,13 @@ export function bindDomain() {
       forgetToken.onclick = () =>
         dnsCall(forgetToken, "/api/domaine/cloudflare/oublier", {}, t("Jeton Cloudflare oublié."));
     const forgetKey = $("#ovh-oublier");
-    if (forgetKey) forgetKey.onclick = () => dnsCall(forgetKey, "/api/domaine/ovh/oublier", {}, t("Clé OVH oubliée."));
+    if (forgetKey)
+      forgetKey.onclick = () =>
+        dnsCall(forgetKey, "/api/domaine/ovh/oublier", {}, (result) =>
+          result.ovh_revoked
+            ? t("Clé OVH oubliée et révoquée chez OVH.")
+            : t("Clé OVH oubliée. Révoque-la aussi chez OVH (Mes codes)."),
+        );
     const remove = $("#domaine-retirer");
     if (remove)
       remove.onclick = async () => {

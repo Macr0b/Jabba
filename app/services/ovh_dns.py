@@ -10,7 +10,7 @@ Sommaire :
   token_link(zone)                 : la page OVH qui crée la clé, droits déjà remplis
   is_ready()                       : une clé est enregistrée
   save_keys(zone, ak, as_, ck)     : vérifie la clé sur la zone, puis l'enregistre
-  forget()                         : oublie la clé
+  forget()                         : oublie la clé, après l'avoir révoquée chez OVH ; True si OVH l'a révoquée
   sync(zone, prefix, ip)           : crée ou corrige l'entrée A ; "cree" | "corrige" | "deja"
   interne : _call, _signature, _records
   OvhError : le refus d'OVH, avec sa phrase
@@ -41,8 +41,9 @@ class OvhError(Exception):
 
 
 def token_link(zone):
+    """« /auth/logout » : Jabba révoque lui-même la clé le jour où on l'oublie."""
     rights = f"/domain/zone/{zone}/*"
-    query = urllib.parse.urlencode({"GET": rights, "POST": rights, "PUT": rights})
+    query = urllib.parse.urlencode({"GET": rights, "POST": [rights, "/auth/logout"], "PUT": rights}, doseq=True)
     return f"{TOKEN_PAGE}?{query}"
 
 
@@ -101,7 +102,16 @@ def save_keys(zone, application_key, application_secret, consumer_key):
 
 
 def forget():
+    """Une clé d'avant la 0.17 n'a pas le droit de se révoquer : False, à révoquer chez OVH à la main."""
+    revoked = False
+    if is_ready():
+        try:
+            _call("POST", "/auth/logout")
+            revoked = True
+        except OvhError:
+            pass
     json_files.save(KEYS_FILE, {}, private=True)
+    return revoked
 
 
 def sync(zone, prefix, ip):

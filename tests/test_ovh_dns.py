@@ -65,7 +65,7 @@ def test_creation_link_limited_to_the_zone():
     assert link.startswith("https://eu.api.ovh.com/createToken/")
     assert rights == {
         "GET": ["/domain/zone/exemple.fr/*"],
-        "POST": ["/domain/zone/exemple.fr/*"],
+        "POST": ["/domain/zone/exemple.fr/*", "/auth/logout"],
         "PUT": ["/domain/zone/exemple.fr/*"],
     }
     # pas de DELETE : Jabba n'efface jamais rien chez OVH
@@ -169,8 +169,19 @@ def test_no_key_or_inactive_domain_nothing(ovh, watcher, monkeypatch):
 
 
 def test_forget(ovh):
+    """Oublier la clé la révoque aussi chez OVH (droit « /auth/logout » donné par le lien de Jabba)."""
     ovh_dns.save_keys("exemple.fr", *KEYS)
-    ovh_dns.forget()
+    assert ovh_dns.forget() is True
+    assert ovh.calls[-1][:2] == ("POST", "/auth/logout")
     assert not ovh_dns.is_ready()
     with pytest.raises(ovh_dns.OvhError):
         ovh_dns.sync("exemple.fr", "cloud", "203.0.113.7")
+
+
+def test_forget_an_old_key_without_the_right(ovh):
+    """Une clé d'avant la 0.17 n'a pas le droit de se révoquer : oubliée quand même, à révoquer chez OVH."""
+    ovh_dns.save_keys("exemple.fr", *KEYS)
+    ovh.refused = True
+    assert ovh_dns.forget() is False
+    assert not ovh_dns.is_ready()
+    assert ovh_dns.forget() is False  # plus de clé : rien à demander à OVH

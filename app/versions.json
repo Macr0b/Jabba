@@ -4,7 +4,8 @@
     "date": "2026-11-24",
     "changes": [
       "Le code de Jabba passe en anglais (étape 2 sur 3) : les noms des données qu'il garde et qu'il échange avec le serveur. Au premier démarrage, Jabba convertit lui-même ses fichiers et garde une copie des anciens dans donnees/copie-avant-0.17. Rien ne change à l'écran.",
-      "Établi : un outil retiré de Jabba mais resté sur le serveur (comme ntfy) se désinstalle depuis son menu « ••• ». Il part en entier : conteneurs, données, dossier et adresse."
+      "Établi : un outil retiré de Jabba mais resté sur le serveur (comme ntfy) se désinstalle depuis son menu « ••• ». Il part en entier : conteneurs, données, dossier et adresse.",
+      "Domaine : quand le domaine passe d'OVH à Cloudflare, la carte propose de coller le jeton Cloudflare directement. Oublier une clé OVH la révoque aussi chez OVH (pour les clés créées à partir de maintenant)."
     ]
   },
   {

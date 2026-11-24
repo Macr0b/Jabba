@@ -9,8 +9,8 @@ Sommaire :
   POST /api/domaine/cloudflare/oublier  cloudflare_forget (super admin)
   POST /api/domaine/ovh      ovh_keys (super admin) : enregistre la clé OVH puis règle l'entrée DNS
   POST /api/domaine/ovh/regler   ovh_sync (super admin) : règle l'entrée DNS maintenant (chez Cloudflare ou OVH)
-  POST /api/domaine/ovh/oublier  ovh_forget (super admin)
-  interne : _sync_now
+  POST /api/domaine/ovh/oublier  ovh_forget (super admin) : oublie la clé et la révoque chez OVH si elle le permet
+  interne : _sync_now, _ovh_forgotten
 """
 
 import asyncio
@@ -71,9 +71,9 @@ async def cloudflare_token(request: Request):
         raise HTTPException(400, str(error))
     activity_log.record("securite", "Jeton Cloudflare enregistré pour le DNS du domaine", request.state.nom)
     if ovh_dns.is_ready():  # le DNS a déménagé : l'ancienne mise à jour s'arrête
-        await asyncio.to_thread(ovh_dns.forget)
+        revoked = await asyncio.to_thread(ovh_dns.forget)
         activity_log.record(
-            "securite", "Clé OVH oubliée : le DNS est chez Cloudflare (révoque-la chez OVH)", request.state.nom
+            "securite", _ovh_forgotten("Clé OVH oubliée (DNS chez Cloudflare)", revoked), request.state.nom
         )
     try:
         return await asyncio.to_thread(_sync_now)
@@ -120,6 +120,10 @@ async def ovh_sync(request: Request):
 @router.post("/api/domaine/ovh/oublier")
 async def ovh_forget(request: Request):
     guard.require_super_admin(request)
-    await asyncio.to_thread(ovh_dns.forget)
-    activity_log.record("securite", "Clé OVH oubliée", request.state.nom)
-    return await asyncio.to_thread(domain_access.status)
+    revoked = await asyncio.to_thread(ovh_dns.forget)
+    activity_log.record("securite", _ovh_forgotten("Clé OVH oubliée", revoked), request.state.nom)
+    return {**await asyncio.to_thread(domain_access.status), "ovh_revoked": revoked}
+
+
+def _ovh_forgotten(text, revoked):
+    return text + (" et révoquée chez OVH" if revoked else " (à révoquer chez OVH : elle n'a pas ce droit)")
