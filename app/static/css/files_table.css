@@ -1,0 +1,138 @@
+/* Les listes de fichiers : barre de navigation, fil d'Ariane, tableau, icônes, zone de dépôt. */
+.ligne-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 4px 0 14px;
+}
+.ligne-nav .fil {
+  margin: 0;
+}
+.nav-fichiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nav-fichiers .btn[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+#nav-prec,
+#nav-suiv {
+  min-width: 40px;
+  font-size: 18px;
+  line-height: 1;
+}
+.fil {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 15px;
+}
+.fil a {
+  font-weight: 500;
+  display: inline-block;
+  padding: 3px 0; /* cible d'au moins 24 px (WCAG 2.5.8) */
+}
+.fil span.sep {
+  color: var(--texte-4);
+}
+.tableau .ligne {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 130px 44px;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--bord-doux);
+}
+.tableau .ligne.titres {
+  font-size: 13px;
+  color: var(--texte-3);
+  font-weight: 500;
+  border-bottom-color: var(--bord);
+}
+.tableau .ligne:not(.titres):hover {
+  background: var(--survol);
+}
+.tableau .nom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  min-width: 0;
+}
+.tableau .nom > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tableau .nom a {
+  color: var(--texte);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  padding: 3px 0; /* cible d'au moins 24 px (WCAG 2.5.8) */
+}
+.tableau .gris {
+  color: var(--texte-3);
+  font-size: 14px;
+}
+.ic-dossier {
+  width: 22px;
+  height: 17px;
+  border-radius: 3px;
+  background: var(--dossier);
+  flex-shrink: 0;
+  position: relative;
+}
+.ic-dossier.ext::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--texte-4);
+  border: 2px solid var(--carte);
+}
+.ic-fichier {
+  width: 17px;
+  height: 21px;
+  border-radius: 3px;
+  border: 2px solid var(--texte-4);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+.btn-menu {
+  border: 0;
+  background: none;
+  color: var(--texte-3);
+  cursor: pointer;
+  border-radius: 8px;
+  height: 34px;
+  width: 38px;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+.btn-menu:hover {
+  background: var(--bord-doux);
+}
+.depot {
+  margin: 16px 20px 20px;
+  border: 2px dashed var(--bord);
+  border-radius: 12px;
+  padding: 22px;
+  text-align: center;
+  color: var(--texte-3);
+  font-size: 14px;
+}
+.depot.survol {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  color: var(--accent-fonce);
+}

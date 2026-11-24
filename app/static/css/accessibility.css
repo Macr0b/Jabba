@@ -1,0 +1,19 @@
+/* Accessibilité : liens repérables sans la couleur, focus jamais caché sous les onglets. */
+/* Un lien dans un paragraphe se repère sans la couleur (WCAG 1.4.1). */
+p a:not(.btn),
+.note a:not(.btn),
+dd a:not(.btn),
+li a:not(.btn) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Ce qui reçoit le focus au clavier n'est jamais caché sous la barre d'onglets (WCAG 2.4.11). */
+html {
+  scroll-padding-bottom: 24px;
+}
+@media (max-width: 760px) {
+  html {
+    scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}

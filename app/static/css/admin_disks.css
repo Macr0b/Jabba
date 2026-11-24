@@ -1,4 +1,21 @@
 /* Connexion admin, disques et dépôts. */
+.disque .parts {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.disque .part {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--bord-doux);
+}
+.disque .part .jauge {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
 .champ {
   display: flex;
   flex-direction: column;

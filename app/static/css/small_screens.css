@@ -1,0 +1,82 @@
+/* Téléphone (760 px et moins) : onglets en bas, une colonne, tableau resserré. */
+@media (max-width: 760px) {
+  .barre-laterale {
+    display: none;
+  }
+  main {
+    padding: calc(env(safe-area-inset-top) + 24px) 16px calc(env(safe-area-inset-bottom) + 96px);
+    gap: 16px;
+  }
+  .onglets {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--carte);
+    border-top: 1px solid var(--bord);
+    padding: 8px 6px calc(env(safe-area-inset-bottom) + 8px);
+    z-index: 10;
+  }
+  .onglets a {
+    text-align: center;
+    padding: 10px 0;
+    font-size: 13px;
+    color: var(--texte-3);
+    border-radius: 10px;
+  }
+  .onglets a.actif {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .g4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .g2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mesure .val {
+    font-size: 22px;
+  }
+  .tableau .ligne {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    padding: 12px 14px;
+  }
+  .tableau .ligne .col-l {
+    display: none;
+  }
+  .tableau .ligne.titres {
+    display: none;
+  }
+  .tableau .nom {
+    align-items: center;
+  }
+  .tableau .mobile-detail {
+    display: block;
+    font-size: 12px;
+    color: var(--texte-3);
+    font-weight: 400;
+  }
+  .depot {
+    display: none;
+  }
+  .cles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .cles dd {
+    margin-bottom: 10px;
+  }
+  .entete .actions {
+    width: 100%;
+  }
+  .entete .actions .btn {
+    flex: 1;
+  }
+}
+@media (min-width: 761px) {
+  .mobile-detail {
+    display: none;
+  }
+}

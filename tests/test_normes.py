@@ -121,3 +121,14 @@ def test_aucune_fonction_python_de_plus_de_50_lignes():
             if isinstance(noeud, (ast.FunctionDef, ast.AsyncFunctionDef)) and noeud.end_lineno - noeud.lineno >= 50:
                 longues.append(f"{os.path.relpath(chemin, APP)}:{noeud.lineno} {noeud.name}")
     assert not longues, ", ".join(longues)
+
+
+def test_feuilles_de_style_une_responsabilite_chacune():
+    """Chaque feuille commence par dire ce qu'elle habille, reste courte, et est chargée par la page."""
+    dossier = os.path.join(APP, "static", "css")
+    page = open(os.path.join(APP, "static", "index.html")).read()
+    for nom in sorted(os.listdir(dossier)):
+        texte = open(os.path.join(dossier, nom)).read()
+        assert texte.startswith("/*"), f"{nom} : pas de phrase d'en-tête"
+        assert texte.count("\n") <= 450, f"{nom} : plus de 450 lignes, à séparer"
+        assert f'href="/static/css/{nom}"' in page, f"{nom} n'est pas chargée"

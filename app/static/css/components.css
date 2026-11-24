@@ -1,0 +1,217 @@
+/* Les briques de chaque écran : cartes, grilles, mesures, jauges, pastilles, bandeaux, boutons,
+   raccourcis, notes, listes clé-valeur, chargement et erreurs. */
+.carte {
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  border-radius: 14px;
+}
+.pad {
+  padding: 18px 20px;
+}
+.grille {
+  display: grid;
+  gap: 14px;
+}
+.g4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.g2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.mesure .etiq {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.mesure .val {
+  font-size: 26px;
+  font-weight: 700;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.mesure .detail {
+  font-size: 13px;
+  color: var(--texte-3);
+  margin-top: 2px;
+}
+.jauge {
+  height: 6px;
+  background: var(--bord-doux);
+  border-radius: 99px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.jauge > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+}
+
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.pastille::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.p-ok {
+  background: var(--vert-doux);
+  color: var(--vert-texte);
+}
+.p-alerte {
+  background: var(--alerte-doux);
+  color: var(--alerte-texte);
+}
+.p-rouge {
+  background: var(--rouge-doux);
+  color: var(--rouge);
+}
+.p-gris {
+  background: var(--bord-doux);
+  color: var(--texte-3);
+}
+
+.bandeau {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--alerte-doux);
+  border: 1px solid var(--alerte-bord);
+  color: var(--alerte-texte);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--bord);
+  background: var(--carte);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--texte);
+  white-space: nowrap;
+  min-height: 40px;
+}
+.btn:hover {
+  background: var(--survol);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.btn-p {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--sur-accent);
+  font-weight: 600;
+}
+.btn-p:hover {
+  background: var(--accent-fonce);
+  border-color: var(--accent-fonce);
+}
+.btn-danger {
+  color: var(--rouge);
+}
+.btn-petit {
+  padding: 6px 10px;
+  min-height: 32px;
+  font-size: 13px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.liste-raccourcis a {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--bord-doux);
+  color: var(--texte);
+  font-weight: 500;
+}
+.liste-raccourcis a:last-child {
+  border-bottom: 0;
+}
+.liste-raccourcis a span:last-child {
+  color: var(--texte-4);
+  font-weight: 400;
+}
+.liste-raccourcis a:hover {
+  background: var(--survol);
+}
+
+.vide {
+  padding: 30px 20px;
+  text-align: center;
+  color: var(--texte-3);
+}
+.note {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+.lecture-seule {
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: var(--bord-doux);
+  color: var(--texte-3);
+  margin-left: 8px;
+  vertical-align: 3px;
+  font-weight: 500;
+}
+
+.cles {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px 16px;
+}
+.cles dt {
+  color: var(--texte-3);
+}
+.cles dd {
+  margin: 0;
+  font-weight: 500;
+}
+.appareil {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--bord-doux);
+}
+
+.squelette {
+  height: 18px;
+  background: var(--bord-doux);
+  border-radius: 6px;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+.erreur {
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--rouge-doux);
+  color: var(--rouge);
+}

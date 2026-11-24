@@ -1,4 +1,25 @@
 /* Établi : les outils, leurs icônes et leur ouverture dans l'appli. */
+.outil {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.outil .haut {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.outil .role {
+  color: var(--texte-3);
+  font-size: 14px;
+  margin-top: 2px;
+}
+.outil .conteneurs {
+  font-size: 13px;
+  color: var(--texte-3);
+}
+
 .titre-outil {
   display: flex;
   align-items: center;

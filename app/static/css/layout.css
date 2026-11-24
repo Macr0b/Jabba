@@ -1,0 +1,82 @@
+/* La charpente de l'appli : barre latérale, zone principale, onglets, en-tête d'écran. */
+.appli {
+  display: flex;
+  min-height: 100vh;
+}
+.barre-laterale {
+  width: 232px;
+  flex-shrink: 0;
+  background: var(--carte);
+  border-right: 1px solid var(--bord);
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.marque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 24px;
+  font-weight: 700;
+  font-size: 18px;
+}
+.logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+.barre-laterale a {
+  padding: 11px 12px;
+  border-radius: 8px;
+  color: var(--texte-2);
+}
+.barre-laterale a:hover {
+  background: var(--survol);
+}
+.barre-laterale a.actif {
+  background: var(--accent-doux);
+  color: var(--accent-fonce);
+  font-weight: 600;
+}
+.espace {
+  flex: 1;
+}
+.qui {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--texte-3);
+}
+main {
+  flex: 1;
+  min-width: 0;
+  padding: 36px 44px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  outline: none;
+  max-width: 1200px;
+}
+.onglets {
+  display: none;
+}
+
+.entete {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.sous-titre {
+  margin: 6px 0 0;
+  color: var(--texte-3);
+}
