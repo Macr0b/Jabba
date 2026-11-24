@@ -156,6 +156,8 @@ def test_saving_the_token_drops_the_ovh_key(cloudflare, monkeypatch):
     from security import guard
 
     ovh_dns.json_files.save(ovh_dns.KEYS_FILE, {"ak": "a", "as": "b", "ck": "c"}, private=True)
+    revoked = []
+    monkeypatch.setattr(ovh_dns, "_call", lambda method, path, *a, **k: revoked.append((method, path)))
     log = []
     monkeypatch.setattr(route.activity_log, "record", lambda famille, texte, *a: log.append(texte))
     monkeypatch.setattr(guard, "require_super_admin", lambda request: {"username": "serveur-test"})
@@ -172,5 +174,6 @@ def test_saving_the_token_drops_the_ovh_key(cloudflare, monkeypatch):
         )
         answer = client.post("/api/domaine/cloudflare", json={"token": TOKEN}, headers={"X-Jabba": "1"})
     assert answer.status_code == 200 and answer.json() == {"dns_auto": "cloudflare"}
-    assert not ovh_dns.is_ready() and any("Clé OVH oubliée" in line for line in log)
+    assert not ovh_dns.is_ready() and any("Clé OVH oubliée" in line and "révoquée" in line for line in log)
+    assert revoked == [("POST", "/auth/logout")]
     assert cloudflare.entries["1"]["name"] == "cloud.exemple.fr"
