@@ -144,3 +144,10 @@ def test_onduleur_pret_avant_d_etre_branche():
     assert "Restart=always" in bloc  # branché plus tard : reconnu sans rien faire
     assert "grep -q '^\\[jabba\\]' /etc/nut/upsd.users" in bloc  # relancé : le mot de passe ne change pas
     assert "chmod 640" in bloc and "unset NUT_MDP" in bloc
+
+
+def test_le_script_d_installation_passe_shellcheck():
+    resultat = subprocess.run(
+        ["shellcheck", "-s", "bash", os.path.join(RACINE, "installer.sh")], capture_output=True, text=True
+    )
+    assert resultat.returncode == 0, resultat.stdout

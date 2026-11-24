@@ -11,7 +11,7 @@ from services import domain_access
 
 def test_caddy_ne_sert_que_l_adresse_de_nextcloud():
     commande, _ = actions.build("acces_domaine", {"adresse": "Cloud.Exemple.fr", "port": 8081})
-    assert commande[:3] == ["sh", "-c", actions_tools.DOMAIN_INSTALL] and commande[3] == actions_tools.DOMAIN_FOLDER
+    assert commande[:3] == ["sh", "-c", actions_tools.script("domain_install")] and commande[3] == actions_tools.DOMAIN_FOLDER
     caddyfile = commande[5]
     assert "cloud.exemple.fr {" in caddyfile and "reverse_proxy 127.0.0.1:8081" in caddyfile
     assert caddyfile.count(" {\n") == 1 + 1 + 1  # réglages généraux, l'adresse, son certificat : un seul site

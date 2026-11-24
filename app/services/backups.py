@@ -24,7 +24,7 @@ Sommaire :
   passphrase        : la clé de sauvegarde, ou None si elle n'est pas encore créée
   set_passphrase    : enregistre la clé de sauvegarde (lisible par l'appli seule)
   repository        : le dossier des copies sur le disque de sauvegarde
-  backup_script     : le script shell qui fait une sauvegarde complète, sur le serveur
+  backup_script     : le script de la sauvegarde (host/scripts/backup.sh), précédé de ses valeurs
   read_state        : le résultat de la dernière sauvegarde
   result            : le dernier résultat, en clair
   is_due            : faut-il lancer la sauvegarde de cette nuit ? (manquée : dès que possible)
@@ -42,13 +42,11 @@ Sommaire :
   follow_backup     : quand la sauvegarde en cours est finie : on note le résultat, et on prévient si ça a raté
   watch_backups     : chaque minute : suit la copie en cours, lance celle de l'heure, prévient si le disque manque
   require_readable  : refuse clairement si les copies ne peuvent pas être lues (pas en route, disque absent)
-  interne : _database_dump_script
 """
 
 import json
 import os
 import secrets
-import shlex
 import subprocess
 import threading
 import time
@@ -132,63 +130,26 @@ def repository(settings):
 
 # ---------------------------------------------------------------- la copie
 def backup_script(settings, host_dir, demo=False):
-    """Le script shell qui fait une sauvegarde complète, sur le serveur."""
+    """Le script de la sauvegarde (host/scripts/backup.sh), précédé de ses valeurs."""
+    from host.action_common import script, with_values
+
     sources = [PATHS[key] for key, value in settings["sources"].items() if value and key in PATHS]
     if demo:
         sources = [os.environ.get("JABBA_DEMO_SAUVER", "/tmp")]
-    excluded = " ".join(f"--exclude {shlex.quote(share)}" for share in EXCLUDE)
-    quote = shlex.quote
-    return f"""set -uo pipefail
-ETAT={quote(os.path.join(host_dir, "sauvegarde-etat.json"))}
-DISQUE={quote(settings["chemin"])}
-export RESTIC_REPOSITORY={quote(repository(settings))}
-export RESTIC_PASSWORD_FILE={quote(os.path.join(host_dir, "sauvegardes.cle"))}
-export RESTIC_CACHE_DIR={quote("/tmp/restic-jabba-cache" if demo else "/var/cache/restic-jabba")}
-DEBUT=$(date +%s); ETAPE=disque; REMONTER=0; AVERT=""; RESUME=null
-TMP=$(mktemp)
-fin() {{
-  code=$?
-  [ "$REMONTER" = 1 ] && mount -o remount,ro "$DISQUE" 2>/dev/null
-  rm -f "$TMP"
-  printf '{{"debut":%s,"fin":%s,"code":%s,"etape":"%s","avert":"%s","resume":%s}}\\n' "$DEBUT" "$(date +%s)" "$code" "$ETAPE" "$AVERT" "$RESUME" > "$ETAT"
-}}
-trap fin EXIT
-ls "$DISQUE" >/dev/null 2>&1
-{"" if demo else 'mountpoint -q "$DISQUE" || exit 10'}
-{"" if demo else 'case ",$(findmnt -no OPTIONS "$DISQUE")," in *,ro,*) mount -o remount,rw "$DISQUE" || exit 11; REMONTER=1;; esac'}
-mkdir -p "$RESTIC_REPOSITORY" || exit 12
-ETAPE=base
-{"" if demo else _database_dump_script()}
-ETAPE=init
-restic cat config >/dev/null 2>&1 || restic init >/dev/null || exit 13
-restic unlock >/dev/null 2>&1
-ETAPE=copie
-restic backup --tag jabba --exclude-caches {excluded} {" ".join(quote(source_list) for source_list in sources)} --json > "$TMP"
-c=$?
-RESUME=$(grep '"message_type":"summary"' "$TMP" | tail -1)
-[ -n "$RESUME" ] || RESUME=null
-if [ $c = 3 ]; then AVERT="${{AVERT}}Quelques fichiers illisibles n'ont pas été copiés. "; elif [ $c != 0 ]; then exit 14; fi
-ETAPE=menage
-restic forget --tag jabba --keep-daily {KEEP["jours"]} --keep-weekly {KEEP["semaines"]} --keep-monthly {KEEP["mois"]} --prune >/dev/null || AVERT="${{AVERT}}Le tri des anciennes copies a échoué. "
-ETAPE=fini
-exit 0
-"""
-
-
-def _database_dump_script():
-    """Copie propre des bases de données (conteneurs *-db) avant la sauvegarde, dans le dossier de leur outil."""
-    return r"""for c in $(docker ps --format '{{.Names}}' | grep -- '-db$'); do
-  dir=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$c")
-  [ -d "$dir" ] || continue
-  img=$(docker inspect -f '{{.Config.Image}}' "$c")
-  case "$img" in
-    *postgres*) docker exec "$c" sh -c 'pg_dumpall -U "${POSTGRES_USER:-postgres}"' > "$dir/sauvegarde-base.sql.tmp" ;;
-    *mariadb*|*mysql*) docker exec "$c" sh -c 'p="${MARIADB_ROOT_PASSWORD:-${MYSQL_ROOT_PASSWORD:-}}"; (command -v mariadb-dump >/dev/null && exec mariadb-dump --all-databases --single-transaction -uroot -p"$p") || exec mysqldump --all-databases --single-transaction -uroot -p"$p"' > "$dir/sauvegarde-base.sql.tmp" ;;
-    *) continue ;;
-  esac
-  if [ -s "$dir/sauvegarde-base.sql.tmp" ]; then mv "$dir/sauvegarde-base.sql.tmp" "$dir/sauvegarde-base.sql"; chmod 600 "$dir/sauvegarde-base.sql"
-  else rm -f "$dir/sauvegarde-base.sql.tmp"; AVERT="${AVERT}Base de $c non copiée. "; fi
-done"""
+    values = {
+        "state_file": os.path.join(host_dir, "sauvegarde-etat.json"),
+        "disk": settings["chemin"],
+        "demo": 1 if demo else 0,
+        "sources": sources,
+        "excludes": EXCLUDE,
+        "keep_daily": KEEP["jours"],
+        "keep_weekly": KEEP["semaines"],
+        "keep_monthly": KEEP["mois"],
+        "RESTIC_REPOSITORY": repository(settings),
+        "RESTIC_PASSWORD_FILE": os.path.join(host_dir, "sauvegardes.cle"),
+        "RESTIC_CACHE_DIR": "/tmp/restic-jabba-cache" if demo else "/var/cache/restic-jabba",
+    }
+    return with_values(script("backup"), **values)
 
 
 def read_state():

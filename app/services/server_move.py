@@ -16,7 +16,7 @@ seul les adresses à part des outils (services/tool_addresses.py).
 Sommaire :
   FOLDER         : le dossier du déménagement sur le disque choisi
   choices        : les disques où copier, et si les fichiers y sont copiés aussi
-  move_script    : le script shell du déménagement, écrit ici à partir du disque choisi
+  move_script    : le script du déménagement (host/scripts/server_move.sh), précédé de ses valeurs
   state          : où en est le déménagement (en cours, réussi, raté et pourquoi)
   start          : lance la copie (refus clair si impossible)
   cancel         : changement d'avis : les outils repartent, la copie est effacée
@@ -26,7 +26,6 @@ Sommaire :
 
 import json
 import os
-import shlex
 import time
 
 import config
@@ -70,60 +69,17 @@ def choices():
 
 
 def move_script(path, with_files, data_dir):
-    """Arrête les outils, copie tout dans <disque>/.demenagement-jabba, et relance les outils si ça rate."""
-    quote = shlex.quote
-    folder = quote(os.path.join(path, FOLDER))
-    return f"""set -uo pipefail
-DISQUE={quote(path)}; DOSSIER={folder}; ETAT={quote(os.path.join(data_dir, "demenagement-etat.json"))}
-DEBUT=$(date +%s); ETAPE=disque; REMONTER=0; BESOIN=0; LIBRE=0
-fin() {{
-  code=$?
-  if [ "$code" != 0 ] && [ -f "$DOSSIER.tmp/outils-arretes" ]; then
-    while read -r d; do docker compose --project-directory "$d" start >/dev/null 2>&1; done < "$DOSSIER.tmp/outils-arretes"
-  fi
-  [ "$code" = 0 ] || rm -rf "$DOSSIER.tmp"
-  [ "$REMONTER" = 1 ] && mount -o remount,ro "$DISQUE" 2>/dev/null
-  printf '{{"debut":%s,"fin":%s,"code":%s,"etape":"%s","besoin":%s,"libre":%s}}\\n' \\
-    "$DEBUT" "$(date +%s)" "$code" "$ETAPE" "$BESOIN" "$LIBRE" > "$ETAT"
-}}
-trap fin EXIT
-mountpoint -q "$DISQUE" || exit 10
-[ "$(findmnt -no FSTYPE "$DISQUE")" = vfat ] && exit 16
-case ",$(findmnt -no OPTIONS "$DISQUE")," in *,ro,*) mount -o remount,rw "$DISQUE" || exit 11; REMONTER=1;; esac
-ETAPE=place
-rm -rf "$DOSSIER" "$DOSSIER.tmp"
-BESOIN=$(du -sbx --exclude='adresse-*' --exclude=adresses /opt/stacks /opt/dockge/data 2>/dev/null | awk '{{s+=$1}} END {{print s+0}}')
-{"" if not with_files else "BESOIN=$((BESOIN + $(du -sbx --exclude=Restaurations /srv/data | cut -f1)))"}
-LIBRE=$(df -B1 --output=avail "$DISQUE" | tail -1 | tr -d ' ')
-[ "$BESOIN" -lt "$LIBRE" ] || exit 12
-mkdir -p "$DOSSIER.tmp" || exit 11
-ETAPE=arret
-for d in $(docker ps --format '{{{{.Label "com.docker.compose.project.working_dir"}}}}' | sort -u); do
-  case "$d" in /opt/stacks/jabba-app|/opt/dockge|"") continue;; esac
-  echo "$d" >> "$DOSSIER.tmp/outils-arretes"
-  docker compose --project-directory "$d" stop >/dev/null 2>&1 || exit 13
-done
-ETAPE=outils
-QUOI=stacks; [ -d /opt/dockge/data ] && QUOI="$QUOI dockge/data"
-tar -C /opt --numeric-owner --xattrs --acls --one-file-system \\
-  --exclude='stacks/adresse-*' --exclude=stacks/adresses -cpf "$DOSSIER.tmp/outils.tar" $QUOI
-[ $? -le 1 ] || exit 14
-crontab -l > "$DOSSIER.tmp/crontab" 2>/dev/null || true
-tailscale serve status --json > "$DOSSIER.tmp/tailscale-serve.json" 2>/dev/null || true
-{
-        ""
-        if not with_files
-        else '''ETAPE=fichiers
-tar -C /srv --numeric-owner --xattrs --acls --one-file-system --exclude='data/.demenagement-jabba*' \\
-  --exclude=data/dossiers/Restaurations -cpf "$DOSSIER.tmp/fichiers.tar" data
-[ $? -le 1 ] || exit 15'''
-    }
-printf '{{"version":"%s","date":%s,"serveur":"%s","compte":"%s","fichiers":%s}}\\n' \\
-  {quote(VERSION)} "$DEBUT" "$(hostname)" "$(getent passwd 1000 | cut -d: -f1)" {"true" if with_files else "false"} \\
-  > "$DOSSIER.tmp/manifeste.json"
-mv "$DOSSIER.tmp" "$DOSSIER" && sync
-ETAPE=fini
-"""
+    """Le script du déménagement (host/scripts/server_move.sh), précédé de ses valeurs."""
+    from host.action_common import script, with_values
+
+    return with_values(
+        script("server_move"),
+        disk=path,
+        copy=os.path.join(path, FOLDER),
+        state_file=os.path.join(data_dir, "demenagement-etat.json"),
+        with_files=1 if with_files else 0,
+        version=VERSION,
+    )
 
 
 def state():

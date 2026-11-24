@@ -24,7 +24,7 @@ def test_le_script_passe_par_un_fichier():
     assert commande[3:6] == ["tache", action_common.TASKS_DIR, "jabba-test-1"]
     assert commande[6] == 'rm -f "$0"\n' + script  # le script arrive en argument, intact
     assert commande[7:] == ["-p", "Nice=10", "bash"]
-    assert 'systemd-run --unit="$U" --collect "$@" "$D/$U.sh"' in commande[2]
+    assert 'exec systemd-run --unit="$unit" --collect "$@" "$tasks_dir/$unit.sh"' in commande[2]
 
 
 def test_nom_de_tache_verifie():

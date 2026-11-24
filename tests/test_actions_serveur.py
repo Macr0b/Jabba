@@ -267,7 +267,7 @@ def test_actions_systeme_sans_parametre():
 
 def test_regle_de_redemarrage():
     commande, _ = actions.build("regle_redemarrage", {"mode": "auto"})
-    assert commande[:2] == ["sh", "-c"] and "echo auto >" in commande[2]
+    assert commande[:2] == ["sh", "-c"] and commande[4] == "auto" and 'echo "$1" > "$2"' in commande[2]
     with pytest.raises(actions.ActionError):
         actions.build("regle_redemarrage", {"mode": "auto; reboot"})
 
@@ -300,7 +300,7 @@ def test_tache_de_fond_ecrit_puis_lance_le_script(tmp_path):
     import subprocess
 
     commande, _ = action_common.background("jabba-test-1", 'echo "${HOME:+ok}"')
-    texte = commande[2].replace(' --unit="$U" --collect "$@"', "").replace("exec systemd-run", "cat")
+    texte = commande[2].replace(' --unit="$unit" --collect "$@"', "").replace("exec systemd-run", "cat")
     sortie = subprocess.run(
         ["sh", "-c", texte, "tache", str(tmp_path), "jabba-test-1", commande[6]], capture_output=True, text=True
     )
@@ -500,7 +500,7 @@ def test_restic_restaure_toujours_a_cote():
             "horodatage": "2026-11-17 01h30",
         },
     )
-    assert commande[4:7] == ["sh", "-c", actions_system.RESTORE] and commande[7] == actions_system.RESTORE_ROOT
+    assert commande[4:7] == ["sh", "-c", actions_system.script("restore")] and commande[7] == actions_system.RESTORE_ROOT
     assert commande[8:] == [
         "--no-lock",
         "restore",
@@ -530,9 +530,9 @@ def test_lancer_une_sauvegarde_script_ecrit_par_le_service():
     )
     script = commande[6]
     assert (
-        "DISQUE=/srv/disques/Gros" in script
+        "\ndisk=/srv/disques/Gros\n" in script
         and "restic backup" in script
-        and "/etc" not in script.split("restic backup")[1].split("\n")[0]
+        and "sources=(/srv/data /opt/stacks)" in script  # /etc pas demandé : pas copié
     )
     assert commande[7:] == ["-p", "Nice=10", "-p", "IOSchedulingClass=idle", "bash"]
     for args in ({"sources": ["fichiers", "/root"]}, {"sources": []}, {"sources": "fichiers"}, {"unite": "sshd"}):

@@ -73,3 +73,41 @@ def test_le_controle_de_l_interface_voit_les_ecarts(tmp_path):
     assert "sans.js : pas de « Sommaire » en tête" in resultat.stdout
     assert "charge.js:2 plusieurs déclarations d'un coup" in resultat.stdout
     assert "charge.js:2 deux instructions sur la ligne" in resultat.stdout
+
+
+SCRIPTS = os.path.join(APP, "host", "scripts")
+
+
+def test_les_scripts_du_serveur_passent_shellcheck():
+    """Les scripts lancés sur le serveur (avec tous les droits) : des fichiers à part, relus par shellcheck."""
+    ecarts = []
+    for nom in sorted(os.listdir(SCRIPTS)):
+        chemin = os.path.join(SCRIPTS, nom)
+        premiere = open(chemin).readline().strip()
+        assert nom.endswith(".sh") and premiere in ("#!/bin/sh", "#!/bin/bash"), f"{nom} : en-tête {premiere!r}"
+        dialecte = "bash" if premiere.endswith("bash") else "sh"
+        resultat = subprocess.run(["shellcheck", "-s", dialecte, chemin], capture_output=True, text=True)
+        if resultat.returncode:
+            ecarts.append(resultat.stdout)
+    assert not ecarts, "\n".join(ecarts)
+
+
+def test_chaque_script_sert_et_existe():
+    """Pas de script oublié dans host/scripts, ni d'appel à un script qui n'existe pas."""
+    appels = set()
+    for chemin in modules_python():
+        appels |= set(re.findall(r'script\("([a-z_]+)"\)', open(chemin).read()))
+    fichiers = {nom.removesuffix(".sh") for nom in os.listdir(SCRIPTS)}
+    assert appels - fichiers == set() and fichiers - appels == set()
+
+
+def test_plus_de_long_shell_dans_le_python():
+    """Un texte de shell de plus de 3 lignes dans le Python : il va dans host/scripts."""
+    ecarts = []
+    for chemin in modules_python():
+        for noeud in ast.walk(ast.parse(open(chemin).read())):
+            if isinstance(noeud, ast.Constant) and isinstance(noeud.value, str) and noeud.value.count("\n") > 3:
+                texte = noeud.value
+                if re.search(r"^\s*(set -e|if \[|for \w+ in|fi$|done$)", texte, re.M):
+                    ecarts.append(f"{os.path.relpath(chemin, APP)}:{noeud.lineno}")
+    assert not ecarts, "shell à sortir dans host/scripts : " + ", ".join(ecarts)

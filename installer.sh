@@ -38,6 +38,7 @@ if [ -z "$MOI" ] || [ "$MOI" = root ]; then
   echo "Lance-le depuis ton compte (pas depuis root) : sudo bash installer.sh"; exit 1
 fi
 MAISON=$(getent passwd "$MOI" | cut -d: -f6)
+# shellcheck source=/dev/null
 . /etc/os-release
 [ "${ID:-}" = debian ] || { echo "Ce script est prévu pour Debian."; exit 1; }
 [ "${VERSION_ID:-}" = 13 ] || echo "${jaune}Attention : prévu pour Debian 13, tu as Debian ${VERSION_ID:-?}.${fin}"
@@ -260,7 +261,8 @@ else
 fi
 ok "Un disque absent ne bloque jamais le démarrage"
 
-CONSERVATION=$(ls /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 2>/dev/null | head -1)
+CONSERVATION=""
+for f in /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode; do [ -e "$f" ] && CONSERVATION="$f" && break; done
 if [ -n "$CONSERVATION" ]; then
   echo 1 > "$CONSERVATION" 2>/dev/null || true
   echo "w $CONSERVATION - - - - 1" > /etc/tmpfiles.d/batterie.conf
@@ -495,7 +497,11 @@ if [ -f /var/lib/jabba/reprise-outils ]; then
   while read -r d; do
     case "$d" in /opt/stacks/*) ;; *) continue ;; esac
     [ -f "$d/compose.yaml" ] || [ -f "$d/docker-compose.yml" ] || continue
-    (cd "$d" && lancer docker compose up -d) && ok "Repris : $(basename "$d")" || note "$(basename "$d") n'a pas redémarré : ouvre-le dans l'Établi."
+    if (cd "$d" && lancer docker compose up -d); then
+      ok "Repris : $(basename "$d")"
+    else
+      note "$(basename "$d") n'a pas redémarré : ouvre-le dans l'Établi."
+    fi
   done < /var/lib/jabba/reprise-outils
   if [ -s /var/lib/jabba/reprise-serve.json ]; then
     jq -r '(.Web // {}) | to_entries[] | "\(.key | split(":") | last) \(.value.Handlers["/"].Proxy // "")"' \
@@ -559,7 +565,11 @@ fi
 # ------------------------------------------------------------ 12. fin
 etape "Vérification"
 sleep 5
-docker ps --format '{{.Names}}' | grep -q jabba-app && ok "L'appli tourne" || note "L'appli ne tourne pas : docker logs jabba-app"
+if docker ps --format '{{.Names}}' | grep -q jabba-app; then
+  ok "L'appli tourne"
+else
+  note "L'appli ne tourne pas : docker logs jabba-app"
+fi
 findmnt -n /srv/data >/dev/null && ok "Données : $(df -h --output=avail /srv/data | tail -1 | xargs) libres sur /srv/data"
 etckeeper commit "Installation Jabba" >/dev/null 2>&1 || true
 

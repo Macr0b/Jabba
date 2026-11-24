@@ -10,7 +10,7 @@ les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
 
 import re
 
-from host.action_common import ActionError, device, df_path, folder_path
+from host.action_common import ActionError, device, df_path, folder_path, script
 
 
 # ---------------------------------------------------------------- la liste
@@ -83,6 +83,7 @@ def _defragment(args):
 # Le service modifie lui-même /etc/fstab, ligne par ligne : l'appli ne lui envoie jamais le fichier
 # entier (ce qui lui permettrait d'y écrire n'importe quoi). Les chemins et noms passent par des
 # variables (ENVIRON pour awk, $1… pour le shell), jamais dans le texte des scripts.
+# Scripts : host/scripts/declare_disk.sh, disk_mode.sh, forget_disk.sh et rearm_disk.sh.
 AUTO_DISKS_ROOT = "/srv/disques"
 # exFAT, FAT et NTFS n'ont pas de droits par fichier : ils sont donnés au montage. Le compte du
 # serveur (1000) en est propriétaire, et le groupe www-data (33, Nextcloud) peut aussi écrire ;
@@ -97,76 +98,7 @@ DISK_FORMATS = {  # format reconnu -> (type pour fstab, options)
 UUID = re.compile(r"[0-9A-Fa-f][0-9A-Fa-f-]{3,35}")
 DISK_FOLDER = re.compile(r"[\w.-]{1,60}")
 DISK_NAME = re.compile(r"[\w .-]{1,60}")
-FSTAB = "F=/etc/fstab\n"
 DISK_TREE_COLUMNS = "NAME,PATH,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,RM,TRAN,TYPE,MODEL,SERIAL,HOTPLUG,PARTTYPE"
-DECLARE_DISK = (
-    FSTAB
-    + """set -e
-if P="$1" awk '!/^[[:space:]]*#/ && $2==ENVIRON["P"] {f=1} END {exit !f}' "$F"; then
-  echo "Ce dossier est déjà déclaré." >&2; exit 3
-fi
-mkdir -p "$1"
-cp "$F" "$F.jabba-bak"
-[ -z "$(tail -c1 "$F")" ] || echo >> "$F"
-printf '%s\\n%s\\n' "$2" "$3" >> "$F"
-systemctl daemon-reload
-U=$(systemd-escape --path --suffix=automount "$1")
-systemctl start "$U"
-ls "$1" >/dev/null 2>&1 || true
-"""
-)
-DISK_MODE = (
-    FSTAB
-    + """set -e
-T=$(mktemp)
-if ! P="$1" M="$2" R="$3" awk '!/^[[:space:]]*#/ && NF>=4 && $2==ENVIRON["P"] {
-  shared = ($3 == "exfat" || $3 == "vfat" || $3 == "ntfs3")
-  n = split($4, o, ","); s = ENVIRON["M"]
-  for (i = 1; i <= n; i++) {
-    if (o[i] == "ro" || o[i] == "rw") continue
-    if (shared && o[i] ~ /^(uid|gid|umask|fmask|dmask)=/) continue
-    s = s "," o[i]
-  }
-  if (shared) s = s "," ENVIRON["R"]
-  $4 = s; f = 1 }
-  {print} END {exit !f}' "$F" > "$T"; then
-  rm -f "$T"; echo "Ce disque n'est pas déclaré sur le serveur." >&2; exit 4
-fi
-cp "$F" "$F.jabba-bak"
-cat "$T" > "$F"
-rm -f "$T"
-systemctl daemon-reload
-umount "$1" 2>/dev/null || true
-U=$(systemd-escape --path --suffix=automount "$1")
-systemctl restart "$U" || true
-ls "$1" >/dev/null 2>&1 || true
-"""
-)
-FORGET_DISK = (
-    FSTAB
-    + """U=$(systemd-escape --path --suffix=automount "$1")
-systemctl stop "$U" 2>/dev/null
-umount "$1" 2>/dev/null
-set -e
-T=$(mktemp)
-P="$1" C="$2" awk '!/^[[:space:]]*#/ && NF>=2 && $2==ENVIRON["P"] {next}
-  {l = $0; gsub(/^[ \\t]+|[ \\t]+$/, "", l); if (l == ENVIRON["C"]) next}
-  {print}' "$F" > "$T"
-cp "$F" "$F.jabba-bak"
-cat "$T" > "$F"
-rm -f "$T"
-systemctl daemon-reload
-rmdir "$1" 2>/dev/null || true
-"""
-)
-REARM_DISK = """ls "$1" >/dev/null 2>&1
-U=$(systemd-escape --path --suffix=automount "$1")
-systemctl daemon-reload
-systemctl reset-failed "${U%.automount}.mount" 2>/dev/null
-systemctl restart "$U"
-ls "$1" >/dev/null 2>&1
-true
-"""
 
 
 def _uuid(value):
@@ -220,7 +152,7 @@ def _wake_disk(args):
 
 
 def _rearm_disk(args):
-    return ["sh", "-c", REARM_DISK, "rearmer", folder_path(args.get("chemin"))], 30
+    return ["sh", "-c", script("rearm_disk"), "rearmer", folder_path(args.get("chemin"))], 30
 
 
 def _declare_disk(args):
@@ -230,7 +162,7 @@ def _declare_disk(args):
     path = _auto_disk_path(f"{AUTO_DISKS_ROOT}/{args.get('dossier')}")
     line = fstab_line(_uuid(args.get("uuid")), disk_format, path)
     comment = comment_line(_disk_name(args.get("nom")))
-    return ["sh", "-c", DECLARE_DISK, "declarer", path, comment, line], 30
+    return ["sh", "-c", script("declare_disk"), "declarer", path, comment, line], 30
 
 
 def _disk_mode(args):
@@ -240,12 +172,12 @@ def _disk_mode(args):
     mode = "rw" if args.get("ecriture") is True else "ro"
     # Les droits partagés sont remis à chaque réglage : un disque déclaré avant la 0.15.1 (gid=1000)
     # devient inscriptible par Nextcloud la prochaine fois qu'on le règle.
-    return ["sh", "-c", DISK_MODE, "mode", path, mode, SHARED_RIGHTS], 30
+    return ["sh", "-c", script("disk_mode"), "mode", path, mode, SHARED_RIGHTS], 30
 
 
 def _forget_disk(args):
     path = _auto_disk_path(args.get("chemin"))
-    return ["sh", "-c", FORGET_DISK, "oublier", path, comment_line(_disk_name(args.get("nom")))], 60
+    return ["sh", "-c", script("forget_disk"), "oublier", path, comment_line(_disk_name(args.get("nom")))], 60
 
 
 def _install_smartmontools(args):

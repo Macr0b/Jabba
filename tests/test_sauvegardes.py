@@ -41,8 +41,8 @@ def test_script_exclut_et_remet_en_lecture_seule():
     s = backups.backup_script(reglages(), "/opt/stacks/jabba-app/donnees")
     for x in ("/srv/data/downloads", "/srv/data/media", "**/transcodes", "Restaurations"):
         assert x in s
-    assert "mount -o remount,ro" in s and "trap fin EXIT" in s
-    assert "--keep-daily 7" in s and "--keep-weekly 4" in s and "--keep-monthly 6" in s
+    assert "mount -o remount,ro" in s and "trap finish EXIT" in s
+    assert "\nkeep_daily=7\nkeep_weekly=4\nkeep_monthly=6\n" in s
     assert "/etc" in s and "/opt/stacks" in s
 
 

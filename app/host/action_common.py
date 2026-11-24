@@ -9,9 +9,16 @@ Sommaire :
   host_name(value)      : un nom de domaine vérifié, en minuscules
   background(unit, script, interpreter, properties) : une tâche qui va au bout même si l'appli redémarre
   task_unit(value)      : le nom d'une tâche de fond (jabba-…-123)
+  script(name)          : le texte d'un script shell de host/scripts/ (relu par shellcheck à chaque essai)
+  with_values(text, **values) : un script précédé de ses valeurs (« nom='valeur' », entre apostrophes sûres)
 """
 
+import functools
+import os
 import re
+import shlex
+
+SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "scripts")
 
 MOUNT_ROOTS = ("/srv/", "/mnt/", "/media/")
 DEVICE = re.compile(r"/dev/(sd[a-z]{1,2}|nvme\d{1,2}n\d{1,2}|mmcblk\d{1,2}|hd[a-z])")
@@ -61,16 +68,22 @@ TASK_UNIT = re.compile(r"jabba-[a-z]{2,20}-\d{1,12}")
 # Une tâche de fond va au bout même si l'appli redémarre. Son script est posé dans un fichier (pas
 # en ligne de commande : systemd y remplacerait ${…}), passé ici comme argument ($3), jamais
 # collé dans le texte. Le fichier s'efface dès que le script démarre.
-BACKGROUND = (
-    'umask 077 && mkdir -p "$1" && printf "%s" "$3" > "$1/$2.sh" && D="$1" && U="$2" && shift 3'
-    ' && exec systemd-run --unit="$U" --collect "$@" "$D/$U.sh"'
-)
 
 
-def background(unit, script, interpreter="sh", properties=()):
+def background(unit, text, interpreter="sh", properties=()):
     """Les propriétés (Nice=10…) et l'interpréteur suivent le script, en arguments de systemd-run."""
     options = [part for prop in properties for part in ("-p", prop)]
-    return ["sh", "-c", BACKGROUND, "tache", TASKS_DIR, unit, 'rm -f "$0"\n' + script, *options, interpreter], 30
+    return [
+        "sh",
+        "-c",
+        script("background"),
+        "tache",
+        TASKS_DIR,
+        unit,
+        'rm -f "$0"\n' + text,
+        *options,
+        interpreter,
+    ], 30
 
 
 def task_unit(value):
@@ -78,3 +91,22 @@ def task_unit(value):
     if not TASK_UNIT.fullmatch(unit):
         raise ActionError(f"Tâche refusée : {unit!r}")
     return unit
+
+
+@functools.cache
+def script(name):
+    """Le texte d'un script de host/scripts/ : des fichiers à part, lisibles et relus par shellcheck."""
+    with open(os.path.join(SCRIPTS_DIR, f"{name}.sh")) as file:
+        return file.read()
+
+
+def with_values(text, **values):
+    """Le script précédé de ses valeurs : « nom='valeur' » (ou un tableau bash pour une liste)."""
+    lines = []
+    for name, value in values.items():
+        if isinstance(value, (list, tuple)):
+            lines.append(f"{name}=({' '.join(shlex.quote(str(item)) for item in value)})")
+        else:
+            lines.append(f"{name}={shlex.quote(str(value))}")
+    head, _, body = text.partition("\n")  # la ligne #! reste en tête
+    return head + "\n" + "\n".join(lines) + "\n" + body

@@ -10,10 +10,15 @@ si ce fichier dit « auto » (ExecCondition) : changer d'avis ne demande que ce 
 
 Sommaire :
   interpret     : le mode en vigueur. Sans choix enregistré (installation d'avant 0.13), le minuteur décide
-  apply_script  : script root : enregistre le choix et remet le minuteur à jour (il ne redémarre que si « auto »)
+  apply_command : la commande root qui enregistre le choix et remet le minuteur à jour (host/scripts/restart_policy.sh)
   message       : texte de la notification quand une mise à jour attend un redémarrage
   current_mode  : {"mode": "auto"|"manuel", "choisi": bool} : redémarrage seul à 4 h, ou à la main
 """
+
+import os
+
+import config
+from host import commands
 
 CHOICE_FILE = "/etc/jabba/redemarrage"
 MODES = ("auto", "manuel")
@@ -54,26 +59,14 @@ def interpret(content, timer_enabled):
     return {"mode": "auto" if timer_enabled else "manuel", "choisi": False}
 
 
-def apply_script(mode):
-    """Script root : enregistre le choix et remet le minuteur à jour (il ne redémarre que si « auto »).
+def apply_command(mode):
+    """La commande root qui enregistre le choix et remet le minuteur à jour (il ne redémarre que si « auto »).
     Remplace aussi un ancien service sans condition (installations d'avant 0.13)."""
     if mode not in MODES:
         raise ValueError("mode inconnu")
-    return f"""set -e
-mkdir -p /etc/jabba
-echo {mode} > {CHOICE_FILE}
-if [ ! -x /usr/local/sbin/redemarrer ]; then
-cat > /usr/local/sbin/redemarrer <<'FIN'
-{RESTART_SCRIPT}FIN
-chmod 755 /usr/local/sbin/redemarrer
-fi
-cat > /etc/systemd/system/{UNIT}.service <<'FIN'
-{SERVICE}FIN
-cat > /etc/systemd/system/{UNIT}.timer <<'FIN'
-{TIMER}FIN
-systemctl daemon-reload
-systemctl enable --now {UNIT}.timer
-"""
+    from host.action_common import script
+
+    return ["sh", "-c", script("restart_policy"), "regle", mode, CHOICE_FILE, UNIT, SERVICE, TIMER, RESTART_SCRIPT]
 
 
 def message(auto):
@@ -83,13 +76,7 @@ def message(auto):
     return "Une mise à jour du système le demande. Redémarre le serveur quand tu es devant (Système)."
 
 
-# ---- ajouté au découpage de main.py
-import os
-
-import config
-from host import commands
-
-# ---------------------------------------------------------------- redémarrage après une mise à jour
+# ---------------------------------------------------------------- le mode en vigueur
 DEMO_FILE = os.path.join(os.environ.get("JABBA_DATA", "/data"), "redemarrage-demo.txt")
 
 

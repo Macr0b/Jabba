@@ -14,8 +14,10 @@ def test_actions_de_l_antivirus():
     )
     assert commande[:8] == ["docker", "exec", "antivirus", "clamdscan", "--no-summary", "--infected", "--fdpass", "--"]
     assert commande[8:] == ["/srv/data/invites/a.pdf", "/srv/data/invites/b c.zip"]
-    script = actions.build("installer_antivirus")[0][2]
-    assert "image: clamav/clamav:stable" in script and "/srv:/srv:ro" in script and "ports" not in script
+    commande = actions.build("installer_antivirus")[0]
+    assert commande[3] == "/opt/stacks/antivirus" and 'printf "%s" "$1" > compose.yaml' in commande[2]
+    compose = commande[4]
+    assert "image: clamav/clamav:stable" in compose and "/srv:/srv:ro" in compose and "ports" not in compose
     for chemins in ([], ["/etc/passwd"], ["/mnt/x"], ["/srv/../etc"], ["/srv/x"] * 201, "/srv/x"):
         with pytest.raises(actions.ActionError):
             actions.build("analyser_fichiers", {"chemins": chemins})

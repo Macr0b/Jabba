@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Outils
-        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg openssh-client util-linux
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg openssh-client util-linux shellcheck
       - name: Dépendances
         run: pip install -r app/requirements.txt -r tests/requirements.txt
       - name: Outils de vérification de l'interface

@@ -104,7 +104,8 @@ def test_actions_du_demenagement():
     script = fin[6]
     assert script.index("tailscale logout") < script.index("systemctl poweroff") and "sleep 30" in script
     annuler = actions.build("annuler_demenagement", {"disque": "/srv/disques/R2"})[0]
-    assert annuler[-1] == "/srv/disques/R2" and "compose start" in annuler[2] and 'rm -rf "$D"' in annuler[2]
+    assert annuler[-1] == "/srv/disques/R2" and "compose --project-directory" in annuler[2]
+    assert 'rm -rf "$copy" "$copy.tmp"' in annuler[2]
     with pytest.raises(actions.ActionError):
         actions.build("annuler_demenagement", {"disque": "/"})
 

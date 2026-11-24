@@ -10,20 +10,10 @@ les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
 import re
 import time
 
-from host.action_common import ActionError, background, folder_path, task_unit
+from host.action_common import ActionError, background, folder_path, script, task_unit
 
 # ---------------------------------------------------------------- système
 APP_FOLDER = re.compile(r"/[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}")
-POWER_SCRIPT = (
-    'for f in /sys/class/power_supply/*; do [ -e "$f/type" ] || continue; '
-    'echo "$(cat $f/type)|$(cat $f/online 2>/dev/null)|$(cat $f/capacity 2>/dev/null)|$(cat $f/status 2>/dev/null)'
-    '|$(cat $f/power_now 2>/dev/null)|$(cat $f/current_now 2>/dev/null)|$(cat $f/voltage_now 2>/dev/null)"; done; '
-    # L'onduleur, s'il y en a un (NUT : services/power.py) : état, charge, puissance, charge en %, puissance nominale.
-    "if command -v upsc >/dev/null 2>&1 && s=$(upsc onduleur@localhost ups.status 2>/dev/null); then "
-    'u() { upsc onduleur@localhost "$1" 2>/dev/null; }; '
-    'echo "UPS|$s|$(u battery.charge)|$(u ups.realpower)|$(u ups.load)|$(u ups.realpower.nominal)"; fi'
-)
-REBOOT = "[ -x /usr/local/sbin/redemarrer ] && exec /usr/local/sbin/redemarrer; exec systemctl reboot"
 
 
 def _app_folder(value):
@@ -54,11 +44,11 @@ def _tailscale_devices(args):
 
 
 def _power(args):
-    return ["sh", "-c", POWER_SCRIPT], 10
+    return ["sh", "-c", script("power")], 10
 
 
 def _reboot(args):
-    return ["systemd-run", "--on-active=3", "sh", "-c", REBOOT], 10
+    return ["systemd-run", "--on-active=3", "sh", "-c", script("reboot")], 10
 
 
 def _restart_policy_read(args):
@@ -79,7 +69,7 @@ def _restart_policy_apply(args):
     mode = args.get("mode")
     if mode not in restart_policy.MODES:
         raise ActionError(f"Mode refusé : {mode!r}")
-    return ["sh", "-c", restart_policy.apply_script(mode)], 60
+    return restart_policy.apply_command(mode), 60
 
 
 def _app_folder_action(args):
@@ -114,25 +104,9 @@ def _task_log(args):
 
 # ---------------------------------------------------------------- réseau invités (pare-feu)
 INTERFACE = re.compile(r"[A-Za-z0-9_.-]{1,15}")
-# Une règle par port fermé au Wi-Fi ; la chaîne n'est refaite que si elle a changé.
-FIREWALL = """I="$1"; shift
-status=0
-for T in iptables ip6tables; do
-  "$T" -S DOCKER-USER >/dev/null 2>&1 || continue
-  want=$(for p in "$@"; do echo "-A JABBA-WIFI -i $I -p tcp -m conntrack --ctorigdstport $p --ctdir ORIGINAL -j DROP"; done)
-  have=$("$T" -S JABBA-WIFI 2>/dev/null | grep '^-A ')
-  if [ "$want" = "$have" ] && "$T" -C DOCKER-USER -j JABBA-WIFI 2>/dev/null; then continue; fi
-  "$T" -N JABBA-WIFI 2>/dev/null
-  "$T" -F JABBA-WIFI || { status=1; continue; }
-  for p in "$@"; do
-    "$T" -A JABBA-WIFI -i "$I" -p tcp -m conntrack --ctorigdstport "$p" --ctdir ORIGINAL -j DROP || status=1
-  done
-  "$T" -C DOCKER-USER -j JABBA-WIFI 2>/dev/null || "$T" -I DOCKER-USER -j JABBA-WIFI || status=1
-done
-exit $status
-"""
 
 
+# Script : host/scripts/wifi_firewall.sh (une règle par port fermé au Wi-Fi ; refaite seulement si elle change).
 def _network_route(args):
     return ["ip", "-o", "-4", "route", "get", "1.1.1.1"], 10
 
@@ -147,14 +121,13 @@ def _wifi_firewall(args):
     for port in ports:
         if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
             raise ActionError(f"Port refusé : {port!r}")
-    return ["sh", "-c", FIREWALL, "pare-feu", interface, *(str(port) for port in sorted(ports))], 60
+    return ["sh", "-c", script("wifi_firewall"), "pare-feu", interface, *(str(port) for port in sorted(ports))], 60
 
 
 # ---------------------------------------------------------------- sauvegardes (restic)
 SNAPSHOT_ID = re.compile(r"[0-9a-f]{8,64}")
 RESTORE_STAMP = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}h\d{2}")
 RESTORE_ROOT = "/srv/data/dossiers/Restaurations"
-RESTORE = 'restic "$@" && chown -R 1000:1000 "$0"'
 BACKUP_PROPERTIES = ("Nice=10", "IOSchedulingClass=idle")
 
 
@@ -213,7 +186,7 @@ def _restic(args):
     parent, name = path.rsplit("/", 1)
     target = f"{RESTORE_ROOT}/{stamp} ({snapshot})"
     restic_args = ["--no-lock", "restore", f"{snapshot}:{parent or '/'}", "--target", target, "--include", "/" + name]
-    return [*env, "sh", "-c", RESTORE, RESTORE_ROOT, *restic_args], 3600
+    return [*env, "sh", "-c", script("restore"), RESTORE_ROOT, *restic_args], 3600
 
 
 def _start_backup(args):
@@ -229,15 +202,8 @@ def _start_backup(args):
 
 
 # ---------------------------------------------------------------- déménagement (services/server_move.py)
-# 30 secondes pour que l'appli réponde, puis les adresses des outils et le serveur quittent Tailscale
-# (le nouveau serveur reprend leurs noms), et le serveur s'éteint.
-MOVE_END = """sleep 30
-for c in $(docker ps --format '{{.Names}}' | grep '^adresse-'); do docker exec "$c" tailscale logout; done
-tailscale logout
-systemctl poweroff
-"""
-
-
+# Scripts : host/scripts/server_move.sh (la copie), move_cancel.sh (changement d'avis) et move_end.sh
+# (l'ancien serveur libère ses noms Tailscale, puis s'éteint).
 def _move(args):
     """Le script est écrit ICI (services/server_move.py), à partir du disque choisi."""
     from services import server_move
@@ -249,32 +215,19 @@ def _move(args):
     return background(task_unit(args.get("unite")), script, "bash", BACKUP_PROPERTIES)
 
 
-# Changement d'avis : les outils arrêtés repartent, et la copie est effacée (le nouveau serveur ne
-# doit pas reprendre une copie dépassée). Le disque est rouvert en écriture le temps de l'effacer.
-MOVE_CANCEL = (
-    'D="$1/.demenagement-jabba"; [ -f "$D/outils-arretes" ] && while read -r d; do'
-    ' case "$d" in /opt/stacks/*) (cd "$d" && docker compose start >/dev/null 2>&1);; esac; done < "$D/outils-arretes";'
-    ' R=0; case ",$(findmnt -no OPTIONS "$1")," in *,ro,*) mount -o remount,rw "$1" && R=1;; esac;'
-    ' rm -rf "$D" "$D.tmp"; [ "$R" = 1 ] && mount -o remount,ro "$1"; true'
-)
-
-
 def _move_cancel(args):
-    return ["sh", "-c", MOVE_CANCEL, "annuler", folder_path(args.get("disque"))], 300
+    return ["sh", "-c", script("move_cancel"), "annuler", folder_path(args.get("disque"))], 300
 
 
 def _move_end(args):
-    return background(f"jabba-demenagement-{int(time.time())}", MOVE_END)
+    return background(f"jabba-demenagement-{int(time.time())}", script("move_end"))
 
 
 # ---------------------------------------------------------------- compte du serveur
 SERVER_USER = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
-# Seulement un compte de personne (numéro 1000 à 59999) : jamais root ni un compte de service.
-HUMAN_ACCOUNT = (
-    'u=$(id -u "$1" 2>/dev/null) && [ "$u" -ge 1000 ] && [ "$u" -lt 60000 ] || { echo "Compte refusé" >&2; exit 5; }\n'
-)
 
 
+# Script : host/scripts/human_account.sh (seulement un compte de personne, jamais root ni un compte de service).
 def _server_user(value):
     user = str(value or "")
     if not SERVER_USER.fullmatch(user):
@@ -290,14 +243,15 @@ def _check_server_password(args):
     return [
         "sh",
         "-c",
-        HUMAN_ACCOUNT + 'exec getent shadow "$1"',
-        "verifier",
+        script("human_account"),
+        "compte",
+        "lire",
         _server_user(args.get("utilisateur")),
     ], 10
 
 
 def _change_server_password(args):
-    return ["sh", "-c", HUMAN_ACCOUNT + "exec chpasswd", "changer", _server_user(args.get("utilisateur"))], 30
+    return ["sh", "-c", script("human_account"), "compte", "changer", _server_user(args.get("utilisateur"))], 30
 
 
 ACTIONS = {

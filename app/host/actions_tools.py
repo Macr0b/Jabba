@@ -12,7 +12,7 @@ les rassemble). Sommaire : ACTIONS, le nom de chaque action et sa fonction.
 import re
 import shlex
 
-from host.action_common import ActionError, background, folder_path, host_name, task_unit
+from host.action_common import ActionError, background, folder_path, host_name, script, task_unit
 
 # ---------------------------------------------------------------- antivirus (ClamAV), un outil de l'Établi
 ANTIVIRUS_FOLDER = "/opt/stacks/antivirus"
@@ -36,16 +36,11 @@ MAX_SCAN_FILES = 200
 
 
 def _install_antivirus(args):
-    script = (
-        f"mkdir -p {ANTIVIRUS_FOLDER} && cat > {ANTIVIRUS_FOLDER}/compose.yaml <<'FIN'\n"
-        + ANTIVIRUS_COMPOSE
-        + f"FIN\ncd {ANTIVIRUS_FOLDER} && docker compose up -d"
-    )
-    return ["sh", "-c", script], 1800
+    return ["sh", "-c", script("stack_install"), ANTIVIRUS_FOLDER, ANTIVIRUS_COMPOSE], 1800
 
 
 def _remove_antivirus(args):
-    return ["sh", "-c", f"cd {ANTIVIRUS_FOLDER} && docker compose down -v && rm -rf {ANTIVIRUS_FOLDER}"], 300
+    return ["sh", "-c", script("stack_remove"), ANTIVIRUS_FOLDER], 300
 
 
 def _scan_files(args):
@@ -66,8 +61,8 @@ def _scan_disk(args):
     path = folder_path(args.get("chemin"))
     if not path.startswith("/srv/"):
         raise ActionError("L'antivirus ne voit que /srv")
-    script = "exec docker exec antivirus clamdscan --no-summary --infected --fdpass -- " + shlex.quote(path) + "\n"
-    return background(task_unit(args.get("unite")), script, "sh", ("Nice=19", "IOSchedulingClass=idle"))
+    text = "exec docker exec antivirus clamdscan --no-summary --infected --fdpass -- " + shlex.quote(path) + "\n"
+    return background(task_unit(args.get("unite")), text, "sh", ("Nice=19", "IOSchedulingClass=idle"))
 
 
 # ---------------------------------------------------------------- accès par le domaine (Caddy)
@@ -105,13 +100,9 @@ CADDYFILE = """{
 \treverse_proxy 127.0.0.1:%(target)d
 }
 """
-# Le dossier et les deux fichiers ($1 et $2 : leur contenu, jamais collé dans le texte du script).
-DOMAIN_INSTALL = (
-    'set -e; mkdir -p "$0"; cd "$0"; printf "%s" "$1" > compose.yaml; printf "%s" "$2" > Caddyfile; '
-    "docker compose up -d; docker compose exec -T acces-domaine caddy reload --config /etc/caddy/Caddyfile || true"
-)
 
 
+# Script : host/scripts/domain_install.sh (le dossier, puis le contenu des deux fichiers en arguments).
 def caddyfile(address, target_port):
     return CADDYFILE % {"port": DOMAIN_PORT, "http_port": DOMAIN_PORT - 1, "address": address, "target": target_port}
 
@@ -121,67 +112,16 @@ def _domain_access(args):
     if not isinstance(target, int) or isinstance(target, bool) or not 1024 <= target <= 65535 or target == DOMAIN_PORT:
         raise ActionError(f"Port refusé : {target!r}")
     content = caddyfile(host_name(args.get("adresse")), target)
-    return ["sh", "-c", DOMAIN_INSTALL, DOMAIN_FOLDER, DOMAIN_COMPOSE, content], 600
+    return ["sh", "-c", script("domain_install"), DOMAIN_FOLDER, DOMAIN_COMPOSE, content], 600
 
 
 def _remove_domain_access(args):
-    return ["sh", "-c", f"cd {DOMAIN_FOLDER} && docker compose down; rm -rf {DOMAIN_FOLDER}"], 120
+    return ["sh", "-c", script("stack_remove"), DOMAIN_FOLDER], 120
 
 
 # ---------------------------------------------------------------- outils en option (host/catalog.py)
-# $0 dossier, $1 compose.yaml, $2 .env (modèle), $3 préparation, $4 port https, $5 port local ;
-# le mot de passe de l'admin arrive sur l'entrée standard. Un .env déjà là est gardé (avec ses secrets
-# et ses comptes : réinstaller un outil retrouve ses données), et le script le dit (« REGLAGES_GARDES ») :
-# le mot de passe tiré pour cette fois ne sert alors pas.
-OPTIONAL_INSTALL = """set -e
-umask 077
-mkdir -p "$0"
-cd "$0"
-printf "%s" "$1" > compose.yaml
-pass=$(cat)
-if [ -n "$2" ] && [ -f .env ]; then
-  echo "REGLAGES_GARDES"  # réinstallation : comptes et secrets de la fois d'avant
-fi
-if [ -n "$2" ] && [ ! -f .env ]; then
-  secret=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
-  secret2=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
-  name=$(tailscale status --json --peers=false 2>/dev/null | sed -n 's/^ *"DNSName": "\\(.*\\)\\.",*$/\\1/p' | head -1)
-  lan=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \\([0-9.]*\\).*/\\1/p' | head -1)
-  tsip=$(tailscale ip -4 2>/dev/null | head -1)
-  user=$(getent passwd 1000 | cut -d: -f1)
-  gid=$(getent passwd 1000 | cut -d: -f4)
-  render=$(getent group render | cut -d: -f3)
-  printf "%s\n" "$2" | S="$secret" S2="$secret2" P="$pass" T="$name" L="${lan:-127.0.0.1}" I="${tsip:-127.0.0.2}" \\
-    U="${user:-root}" G="${gid:-1000}" R="${render:-0}" H="$(hostname)" N="${name#*.}" awk 'BEGIN {
-      marks[1] = "@SECRET_TIRE_AU_SORT@"; values[1] = ENVIRON["S"]
-      marks[2] = "@MOT_DE_PASSE_ADMIN@"; values[2] = ENVIRON["P"]
-      marks[3] = "@ADRESSE_TAILSCALE@"; values[3] = ENVIRON["T"]
-      marks[4] = "@IP_LOCALE@"; values[4] = ENVIRON["L"]
-      marks[5] = "@IP_TAILSCALE@"; values[5] = ENVIRON["I"]
-      marks[6] = "@AUTRE_SECRET@"; values[6] = ENVIRON["S2"]
-      marks[7] = "@COMPTE_SERVEUR@"; values[7] = ENVIRON["U"]
-      marks[8] = "@UID_SERVEUR@"; values[8] = "1000"
-      marks[9] = "@GID_SERVEUR@"; values[9] = ENVIRON["G"]
-      marks[10] = "@GID_RENDER@"; values[10] = ENVIRON["R"]
-      marks[11] = "@NOM_SERVEUR@"; values[11] = ENVIRON["H"]
-      marks[12] = "@SUFFIXE_TAILSCALE@"; values[12] = ENVIRON["N"] }
-    { for (n = 1; n <= 12; n++) {
-        done = ""; rest = $0
-        while ((i = index(rest, marks[n])) > 0) {
-          done = done substr(rest, 1, i - 1) values[n]; rest = substr(rest, i + length(marks[n]))
-        }
-        $0 = done rest
-      }
-      print }' > .env
-fi
-[ -z "$3" ] || sh -c "$3"
-docker compose up -d
-[ -z "$4" ] || tailscale serve --bg --https="$4" "http://127.0.0.1:$5" || echo "Adresse https : active HTTPS Certificates dans la console Tailscale." >&2
-"""
-OPTIONAL_REMOVE = (
-    'cd "$0" && docker compose down; [ -z "$1" ] || tailscale serve --https="$1" off || true; '
-    'docker stop "adresse-$(basename "$0")" 2>/dev/null || true; [ -z "$2" ] || sh -c "$2"'
-)
+# Scripts : host/scripts/optional_install.sh (un .env déjà là est gardé, et le script le dit :
+# « REGLAGES_GARDES ») et host/scripts/optional_remove.sh (les données restent).
 # Écrit entre apostrophes dans le .env : tout caractère visible ou espace, sauf l'apostrophe elle-même.
 ADMIN_PASSWORD = re.compile(r"[^\x00-\x1f\x7f']{15,128}")
 
@@ -200,62 +140,29 @@ def _install_optional(args):
     files = tool["fichiers"]
     https = str(tool["port_https"] or "")
     local = str(tool["port_local"] or "")
-    command = ["sh", "-c", OPTIONAL_INSTALL, f"/opt/stacks/{name}", files["compose.yaml"], files.get(".env", "")]
+    command = [
+        "sh",
+        "-c",
+        script("optional_install"),
+        f"/opt/stacks/{name}",
+        files["compose.yaml"],
+        files.get(".env", ""),
+    ]
     return [*command, tool["preparer"], https, local], 1800
 
 
 def _remove_optional(args):
     name, tool = optional_tool(args)
     cleanup = tool.get("nettoyer", "")
-    return ["sh", "-c", OPTIONAL_REMOVE, f"/opt/stacks/{name}", str(tool["port_https"] or ""), cleanup], 300
+    return ["sh", "-c", script("optional_remove"), f"/opt/stacks/{name}", str(tool["port_https"] or ""), cleanup], 300
 
 
 # ---------------------------------------------------------------- adresse à part d'un outil (services/tool_addresses.py)
 # Un conteneur Tailscale par outil, sur le réseau du serveur (les outils n'écoutent que 127.0.0.1) :
 # https://<outil>.tailxxxx.ts.net renvoie vers 127.0.0.1:<port>. Mode « userspace », sans toucher au
 # Tailscale du serveur ; inscription une seule fois (TS_AUTH_ONCE), l'état est gardé dans ./etat.
-# Si un conteneur « adresse-<outil> » existe déjà dans une autre pile, il est gardé (réponse « DEJA »).
-# $0 l'outil, $1 son port ; la clé d'inscription (usage unique, 1 heure) arrive sur l'entrée standard.
-TOOL_ADDRESS = """set -e
-# Déjà une adresse d'une autre installation (ancienne pile « adresses » du guide) : on la garde et on la rallume.
-projet=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "adresse-$0" 2>/dev/null || true)
-if [ -n "$projet" ] && [ "$projet" != "adresse-$0" ]; then
-  docker start "adresse-$0" >/dev/null
-  echo DEJA
-  exit 0
-fi
-umask 077
-mkdir -p "/opt/stacks/adresse-$0/etat"
-cd "/opt/stacks/adresse-$0"
-printf 'TS_AUTHKEY=%s\\n' "$(cat)" > .env
-printf '{"TCP":{"443":{"HTTPS":true}},"Web":{"${TS_CERT_DOMAIN}:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:%s"}}}}}\\n' "$1" > serve.json
-cat > compose.yaml <<FIN
-services:
-  adresse:
-    image: tailscale/tailscale:latest
-    container_name: adresse-$0
-    network_mode: host
-    env_file: .env
-    environment:
-      - TS_HOSTNAME=$0
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_SERVE_CONFIG=/config/serve.json
-      - TS_USERSPACE=true
-      - TS_AUTH_ONCE=true
-      - TS_TAILSCALED_EXTRA_ARGS=--port=0
-    volumes:
-      - ./etat:/var/lib/tailscale
-      - ./serve.json:/config/serve.json:ro
-    restart: unless-stopped
-FIN
-docker compose up -d
-"""
-# L'outil apprend sa nouvelle adresse (liens, protection des formulaires) : une ligne de son .env, puis relance.
-# $0 l'outil, $1 le nom de la variable (fixé dans host/catalog.py), $2 l'adresse (nom vérifié).
-ADDRESS_IN_TOOL = (
-    'cd "/opt/stacks/$0" && [ -f .env ] && grep -q "^$1=" .env && '
-    'sed -i "s#^$1=.*#$1=https://$2#" .env && docker compose up -d'
-)
+# Scripts : host/scripts/tool_address.sh (l'adresse), puis host/scripts/address_in_tool.sh (l'outil
+# apprend sa nouvelle adresse : une ligne de son .env, puis relance).
 AUTH_KEY = re.compile(r"tskey-auth-[A-Za-z0-9-]{10,200}")
 
 
@@ -270,7 +177,7 @@ def _address_target(args):
 
 def _tool_address(args):
     name, port = _address_target(args)
-    return ["sh", "-c", TOOL_ADDRESS, name, str(port)], 300
+    return ["sh", "-c", script("tool_address"), name, str(port)], 300
 
 
 def _address_in_tool(args):
@@ -283,7 +190,7 @@ def _address_in_tool(args):
     host = host_name(args.get("adresse"))
     if not host.endswith(".ts.net"):
         raise ActionError(f"Adresse refusée : {host!r}")
-    return ["sh", "-c", ADDRESS_IN_TOOL, name, variable, host], 300
+    return ["sh", "-c", script("address_in_tool"), name, variable, host], 300
 
 
 def optional_password(name, text):
