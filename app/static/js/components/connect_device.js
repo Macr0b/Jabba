@@ -101,7 +101,7 @@ export async function renderConnectDevice(panel, item) {
       everywhere
         ? t("Cette adresse marche partout, sans Tailscale : la même pour tes proches.")
         : t(
-            "Cette adresse ne marche qu'avec Tailscale allumé. Pour une adresse qui marche partout : Réglages du serveur → Accès depuis Internet.",
+            "Cette adresse ne marche qu'avec Tailscale allumé. Pour une adresse qui marche partout : Réglages → Internet → Accès par le domaine.",
           )
     }</p>
     ${others

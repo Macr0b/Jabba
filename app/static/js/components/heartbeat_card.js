@@ -1,4 +1,4 @@
-// « Si le serveur ne répond plus », dans Système (super admin) : un service extérieur (healthchecks.io)
+// « Si le serveur ne répond plus », dans Réglages → Alertes (super admin) : un service extérieur (healthchecks.io)
 // reçoit un signal de vie toutes les 5 minutes et prévient quand il n'en reçoit plus (services/heartbeat.py).
 // Les alertes de Jabba partent du serveur : s'il est éteint ou figé, seul ce service peut le dire.
 //

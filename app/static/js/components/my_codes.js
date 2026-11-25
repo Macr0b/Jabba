@@ -1,4 +1,4 @@
-// « Mes codes », dans Système (super admin) : tous les codes qui existent autour du serveur, à quoi
+// « Mes codes », dans Réglages → Sécurité (super admin) : tous les codes qui existent autour du serveur, à quoi
 // ils servent et où ils sont rangés. Jabba ne montre jamais un code ici : seulement quoi en faire.
 // « Fiche à imprimer » : les codes à garder, avec une ligne vide pour chacun, à remplir à la main et à
 // ranger chez soi (une copie qui ne dépend ni du serveur, ni du trousseau).

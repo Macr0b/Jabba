@@ -52,7 +52,7 @@ def localhost_page(browser, jabba_app):
 
 
 def log_in(p):
-    p.goto(f"{p.root}/?r={time.time()}#/systeme")  # vraie recharge, même après une déconnexion
+    p.goto(f"{p.root}/?r={time.time()}#/reglages?r=moi")  # vraie recharge, même après une déconnexion
     p.wait_for_selector("#connexion", state="attached")
     p.evaluate("document.querySelector('#connexion').click()")
     window = p.locator("dialog[open]")
@@ -71,7 +71,7 @@ def test_face_id_and_app(localhost_page):
     p = localhost_page
     log_in(p)
     wait_until(p, "!document.querySelector('dialog[open]')")
-    p.goto(p.root + "/#/systeme")
+    p.goto(p.root + "/#/reglages?r=moi")
     expect(p.locator("#double h2")).to_have_text("Double vérification")
 
     # Face ID
@@ -109,7 +109,7 @@ def test_face_id_and_app(localhost_page):
     p.click("#avec-cle")
     wait_until(p, "!document.querySelector('dialog[open]')")
     p.wait_for_timeout(500)
-    p.goto(p.root + "/#/systeme")
+    p.goto(p.root + "/#/reglages?r=moi")
     expect(p.locator("#qui")).to_contain_text("serveur-demo")
 
     # puis avec l'appli : le code du créneau suivant (celui d'avant a servi)
@@ -121,5 +121,5 @@ def test_face_id_and_app(localhost_page):
     p.click("dialog[open] button[value=oui]")
     wait_until(p, "!document.querySelector('dialog[open]')")
     p.wait_for_timeout(500)
-    p.goto(p.root + "/#/systeme")
+    p.goto(p.root + "/#/reglages?r=moi")
     expect(p.locator("#double")).to_contain_text("Active")

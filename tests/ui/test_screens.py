@@ -61,9 +61,23 @@ def test_player(page):
 
 def test_system(page):
     go_to(page, "systeme")
+    expect(page.locator("#maj h2")).to_have_text("Appli Jabba")
+    expect(page.locator("#redem")).to_have_count(0)  # les réglages sont dans Réglages
+
+
+def test_settings_sections(page):
+    """Réglages : une rubrique à la fois, gardée dans l'adresse ; chaque carte à sa place."""
+    go_to(page, "reglages?r=serveur")
     expect(page.locator("#redem h2")).to_have_text("Redémarrage après une mise à jour")
     expect(page.locator("#redem .pastille")).to_be_visible()
-    expect(page.locator("#maj h2")).to_have_text("Appli Jabba")
+    expect(page.locator("#apparence")).to_be_hidden()
+    expect(page.locator("#outils-serveur .outil").first).to_be_visible()
+    expect(page.locator("#outils-serveur [role=switch]")).to_have_count(0)  # pas de curseur sur le système
+    page.get_by_role("tab", name="Moi").click()
+    expect(page.locator("#apparence")).to_be_visible()
+    expect(page).to_have_url(page.root + "/#/reglages?r=moi")
+    page.get_by_role("tab", name="Internet").click()
+    expect(page.locator("#carte-domaine")).to_be_visible()
 
 
 def test_backups(page):
@@ -103,6 +117,7 @@ SCREENS_ = [
     "invites",
     "nuage",
     "systeme",
+    "reglages",
     "journal",
     "utilisateurs",
     "sauvegardes",
@@ -154,9 +169,9 @@ def test_antivirus_offered_in_the_workbench(page):
     expect(offer.locator("#installer-antivirus")).to_have_text("Installer")
 
 
-def test_domain_access_in_the_workbench(page):
+def test_domain_access_in_settings(page):
     """On saisit son domaine, Jabba met Caddy en place et montre les étapes ; on peut refermer."""
-    go_to(page, "outils")
+    go_to(page, "reglages?r=internet")
     card = page.locator("#carte-domaine")
     expect(card).to_contain_text("Jabba reste privé")
     card.locator("#domaine-nom").fill("exemple.fr")
@@ -221,7 +236,7 @@ def test_tools_to_enable_and_memory(page):
     jellyfin = page.locator('#grille-etabli [data-bascule="jellyfin"]')
     expect(jellyfin).to_have_attribute("aria-label", "Mettre Jellyfin en pause")
     expect(page.locator('#grille-etabli [data-carte="jellyfin"]')).to_contain_text("En marche")
-    expect(page.locator("#reglages-serveur [role=switch]")).to_have_count(0)  # pas de curseur sur le système
+    expect(page.get_by_role("link", name="Réglages").last).to_have_attribute("href", "#/reglages?r=serveur")
 
 
 def test_workshop_log(page):
@@ -496,7 +511,7 @@ def test_hide_a_card_and_arrange_home(page):
 def test_tool_addresses(page):
     """Une adresse à part par outil : on colle une clé Tailscale, Jabba crée les adresses puis l'oublie.
     (En dernier : les liens des outils changent ensuite pour la suite de la démo.)"""
-    go_to(page, "outils")
+    go_to(page, "reglages?r=internet")
     card = page.locator("#carte-adresses")
     expect(card).to_contain_text("AdGuard Home")
     if page.viewport_size["width"] < 700:  # même serveur de démo pour les deux écrans : déjà créées au 1er passage
@@ -514,13 +529,14 @@ def test_tool_addresses(page):
     card.get_by_role("button", name="Créer les adresses").click()
     expect(page.locator("#carte-adresses")).to_contain_text("adguard-home.exemple.ts.net", timeout=15000)
     expect(page.locator("#carte-adresses #adresses-cle")).to_have_count(0)  # tout est créé : plus rien à coller
+    go_to(page, "outils")
     outil = page.locator("article.outil", has=page.locator('[data-menu="adguard-home"]'))
     expect(outil.get_by_role("link", name="Ouvrir")).to_have_attribute("href", "https://adguard-home.exemple.ts.net")
 
 
 def test_my_codes(page):
     """Système → Mes codes : trois groupes, ce que fait chaque code, jamais sa valeur."""
-    go_to(page, "systeme")
+    go_to(page, "reglages?r=securite")
     card = page.locator("#mes-codes")
     expect(card).to_contain_text("À garder dans ton trousseau")
     expect(card).to_contain_text("Gardés par Jabba")
@@ -574,7 +590,7 @@ def test_connect_a_device_to_nextcloud(page):
 
 def test_printable_codes_sheet(page):
     """Mes codes → « Fiche à imprimer » : les codes à garder, une ligne vide chacun, et rien d'autre à l'impression."""
-    go_to(page, "systeme")
+    go_to(page, "reglages?r=securite")
     page.evaluate("window.print = () => { window.imprime = true; }")
     card = page.locator("#mes-codes")
     card.get_by_role("button", name="Fiche à imprimer").click()

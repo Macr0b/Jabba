@@ -124,7 +124,7 @@ def readiness(own_second_factor, backups_active, settings, nextcloud_ready):
         {
             "id": "double",
             "ok": own_second_factor,
-            "text": "Double vérification activée sur ton compte admin (Système).",
+            "text": "Double vérification activée sur ton compte admin (Réglages → Moi).",
         },
         {"id": "sauvegardes", "ok": backups_active, "text": "Sauvegardes en route (Sauvegardes)."},
         {

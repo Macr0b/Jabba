@@ -2,7 +2,7 @@
 
 Une alerte quand il reste au-dessus de HOT (85 °C) pendant LASTING (10 minutes) d'affilée, puis une
 autre quand il est redescendu sous COOL (75 °C). Un pic de quelques minutes (une analyse de photos,
-une mise à jour) ne prévient pas. Interrupteur : Système → Alertes → « Température ».
+une mise à jour) ne prévient pas. Interrupteur : Réglages → Alertes → « Température ».
 
 Sommaire :
   watch(now, degrees) : à appeler chaque minute ; renvoie "chaud", "revenu" ou None (rien à dire)

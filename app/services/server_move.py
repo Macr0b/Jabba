@@ -1,6 +1,6 @@
 """Déménager le serveur vers un nouvel ordinateur, sans rien perdre.
 
-Sur l'ancien serveur (Système → Déménager, super admin) :
+Sur l'ancien serveur (Réglages → Serveur → Déménager, super admin) :
   1. Jabba arrête les outils (rien ne change plus après la copie), puis copie sur un disque, dans
      `.demenagement-jabba/`, les réglages et les données de tous les outils (/opt/stacks : comptes,
      bases de Nextcloud, Jellyfin, Jabba lui-même…), le compte de Dockge, les tâches planifiées et les

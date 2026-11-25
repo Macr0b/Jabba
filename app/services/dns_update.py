@@ -1,7 +1,7 @@
 """L'entrée DNS du domaine tenue à jour par Jabba, chez le fournisseur du DNS : Cloudflare ou OVH.
 
 Un seul fournisseur à la fois : enregistrer un jeton Cloudflare fait oublier la clé OVH (le DNS a
-déménagé ; la clé reste à révoquer chez OVH, Système → Mes codes le rappelle). Chaque heure, si l'adresse
+déménagé ; la clé reste à révoquer chez OVH, Réglages → Sécurité → Mes codes le rappelle). Chaque heure, si l'adresse
 de la box a changé, l'entrée suit et une alerte le dit.
 
 Sommaire :

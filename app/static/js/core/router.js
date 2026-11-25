@@ -37,7 +37,9 @@ export async function router() {
       (element.dataset.page === "outils" && ["ouvrir", "atelier"].includes(page)) ||
       (element.dataset.page === "comptes" && ["nuage", "utilisateurs"].includes(page)) ||
       (element.dataset.page === "plus" &&
-        ["disques", "systeme", "journal", "corbeille", "utilisateurs", "invites", "sauvegardes"].includes(page)) ||
+        ["disques", "systeme", "reglages", "journal", "corbeille", "utilisateurs", "invites", "sauvegardes"].includes(
+          page,
+        )) ||
       (element.dataset.page === "fichiers" && page === "corbeille") ||
       (element.dataset.page === "systeme" && ["journal", "sauvegardes"].includes(page));
     element.classList.toggle("actif", active);

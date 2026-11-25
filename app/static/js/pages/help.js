@@ -200,7 +200,7 @@ const HELP_TOPICS = [
       t(
         "Sur iPhone, Jabba doit être installée sur l'écran d'accueil (Partager → Sur l'écran d'accueil) pour recevoir des alertes.",
       ),
-      t("Système → Alertes : active les alertes sur cet appareil et vérifie les interrupteurs par type."),
+      t("Réglages → Alertes : active les alertes sur cet appareil et vérifie les interrupteurs par type."),
       t("Réglages de l'appareil → Notifications → Jabba : elles doivent être autorisées."),
     ],
   ],
@@ -225,7 +225,7 @@ const HELP_TOPICS = [
         "Réglages du BIOS conseillés pour un portable serveur (touche F2 ou bouton Novo → BIOS Setup) : démarrage USB désactivé, Fast Boot désactivé, démarrage réseau (PXE) désactivé, disque interne en premier. F10 pour enregistrer.",
       ),
       t(
-        "Si la machine bloque parfois au démarrage : Système → Redémarrage après une mise à jour → « À la main ». Le serveur ne redémarrera plus seul la nuit ; Jabba te prévient et tu redémarres quand tu es devant.",
+        "Si la machine bloque parfois au démarrage : Réglages → Serveur → Redémarrage après une mise à jour → « À la main ». Le serveur ne redémarrera plus seul la nuit ; Jabba te prévient et tu redémarres quand tu es devant.",
       ),
       t("Si les blocages continuent malgré tout : mise à jour du BIOS (site du fabricant), ou changer de machine."),
     ],

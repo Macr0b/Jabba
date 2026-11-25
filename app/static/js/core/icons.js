@@ -33,7 +33,8 @@ const SCREENS = {
   disques: "database",
   invites: "wifi",
   comptes: "users",
-  systeme: "settings",
+  systeme: "server",
+  reglages: "settings",
   aide: "help-circle",
   plus: "dots",
 };

@@ -1,22 +1,15 @@
-// Écrans Système et Plus : état du serveur, redémarrage, mises à jour, sécurité.
+// Écrans Système et Plus : l'état du serveur (allumé depuis, courant, journal, appareils), sa mise à jour
+// et son redémarrage. Ce qui se règle est dans l'écran Réglages (pages/settings.js).
 //
 // Sommaire :
 //   partagé : pages.systeme (écran), pages.plus (écran)
-//   interne : powerText, consumptionText, restartPolicyCard, appUpdateCard (cartes Mes codes, Double vérification et Serveur ouvert au public : components/)
-import { alertsCard } from "../components/alerts.js";
+//   interne : powerText, consumptionText, appUpdateCard
 import { confirmAction, toast } from "../components/dialogs.js";
-import { appearanceCard } from "../components/appearance_card.js";
-import { publicModeCard } from "../components/public_mode_card.js";
-import { myCodesCard } from "../components/my_codes.js";
-import { serverMoveCard } from "../components/server_move_card.js";
-import { heartbeatCard } from "../components/heartbeat_card.js";
-import { secondFactorCard } from "../components/second_factor.js";
-import { chooseMyPassword, logOut, showRecoveryCode } from "../core/admin_session.js";
-import { api, formBody } from "../core/api.js";
+import { logOut } from "../core/admin_session.js";
+import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { formatDuration, timeAgo } from "../core/format.js";
 import { pages } from "../core/pages.js";
-import { showError } from "../core/router.js";
 import { state } from "../core/state.js";
 import { loadingHtml } from "../core/tasks.js";
 import { activityLine } from "./activity.js";
@@ -24,7 +17,7 @@ import { t } from "../core/i18n.js";
 
 pages.systeme = async () => {
   content.innerHTML = t`<div class="entete"><div><h1>Système</h1></div></div>${loadingHtml()}`;
-  const [item, entry] = await Promise.all([api("/api/systeme"), api("/api/admin/etat")]);
+  const item = await api("/api/systeme");
   content.innerHTML = t`
     <div class="entete"><div><h1>Système</h1><p class="sous-titre">${escapeHtml(item.name)} · ${escapeHtml(item.os)}</p></div>
       <div class="actions"><a class="btn" href="#/sauvegardes">Sauvegardes</a><button class="btn btn-danger" id="reboot">Redémarrer le serveur</button></div></div>
@@ -40,21 +33,6 @@ pages.systeme = async () => {
         ${item.power && item.power.battery != null ? t`<dt>Consommation</dt><dd>${consumptionText(item.power, item.consumption)}</dd>` : ""}
       </dl></section>
       <section class="carte pad" id="maj"><h2>Appli Jabba</h2><div class="squelette" style="margin-top:10px"></div></section>
-      <section class="carte pad"><div class="entete-carte"><h2>Sécurité</h2><a class="btn btn-petit" href="#/utilisateurs">Admins de Jabba</a></div>
-        <p class="note" id="connecte-admin">${entry.connected ? t`Connecté en admin : <strong>${escapeHtml(entry.connected.username)}</strong> · ${entry.connected.rank === "super" ? t("super admin") : "admin"}` : t("Pas connecté en admin.")}</p>
-        <p class="note" style="margin:8px 0 14px">Le mot de passe du serveur protège les actions sensibles : activer un outil, mettre à jour, redémarrer, régler ou oublier un disque, supprimer un dossier entier, effacer la corbeille.</p>
-        ${entry.code_exists ? "" : t`<div class="bandeau" style="margin-bottom:12px"><span>Aucun code de secours : crée-le maintenant, il sert si tu oublies le mot de passe.</span></div>`}
-        <div class="actions"><button class="btn" id="changer-mdp">${entry.connected && entry.connected.username !== entry.server ? t("Changer mon mot de passe") : t("Changer le mot de passe du serveur")}</button>
-        <button class="btn" id="code-secours">${entry.code_exists ? t("Nouveau code de secours") : t("Créer le code de secours")}</button></div>
-      </section>
-      ${state.admin && state.admin.rank === "super" ? t`<section class="carte pad" id="mes-codes"><h2>Mes codes</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
-      ${state.admin && state.admin.rank === "super" ? t`<section class="carte pad" id="demenagement"><h2>Déménager vers un nouvel ordinateur</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
-      <section class="carte pad" id="apparence"><h2>Apparence</h2></section>
-      <section class="carte pad" id="double"><h2>Double vérification</h2><div class="squelette" style="margin-top:10px"></div></section>
-      <section class="carte pad" id="public"><h2>Serveur ouvert au public</h2><div class="squelette" style="margin-top:10px"></div></section>
-      <section class="carte pad" id="alertes"><h2>Alertes</h2><div class="squelette" style="margin-top:10px"></div></section>
-      ${state.admin && state.admin.rank === "super" ? t`<section class="carte pad" id="surveillance"><h2>Si le serveur ne répond plus</h2><div class="squelette" style="margin-top:10px"></div></section>` : ""}
-      <section class="carte pad" id="redem"><h2>Redémarrage après une mise à jour</h2><div class="squelette" style="margin-top:10px"></div></section>
       <section class="carte pad"><div class="entete-carte"><h2>Journal</h2><a class="btn btn-petit" href="#/journal">Tout voir</a></div>
         <div class="journal" id="journal-court"><div class="squelette"></div></div></section>
       <section class="carte pad"><h2>Appareils Tailscale</h2>
@@ -70,39 +48,6 @@ pages.systeme = async () => {
         }</div>
       </section>
     </div>`;
-  appearanceCard();
-  myCodesCard().catch((entry) => {
-    const element = $("#mes-codes");
-    if (element) element.innerHTML = t`<h2>Mes codes</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
-  heartbeatCard().catch((entry) => {
-    const element = $("#surveillance");
-    if (element)
-      element.innerHTML = t`<h2>Si le serveur ne répond plus</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
-  serverMoveCard().catch((entry) => {
-    const element = $("#demenagement");
-    if (element)
-      element.innerHTML = t`<h2>Déménager vers un nouvel ordinateur</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
-  secondFactorCard().catch((entry) => {
-    const element = $("#double");
-    if (element) element.innerHTML = t`<h2>Double vérification</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
-  publicModeCard().catch((entry) => {
-    const element = $("#public");
-    if (element)
-      element.innerHTML = t`<h2>Serveur ouvert au public</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
-  alertsCard().catch((entry) => {
-    const element = $("#alertes");
-    if (element) element.innerHTML = t`<h2>Alertes</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
-  restartPolicyCard().catch((entry) => {
-    const element = $("#redem");
-    if (element)
-      element.innerHTML = t`<h2>Redémarrage après une mise à jour</h2><p class="note">${escapeHtml(entry.message)}</p>`;
-  });
   appUpdateCard().catch((entry) => {
     const element = $("#maj");
     if (element) element.innerHTML = t`<h2>Appli Jabba</h2><p class="note">${escapeHtml(entry.message)}</p>`;
@@ -114,63 +59,6 @@ pages.systeme = async () => {
         element.innerHTML = events.map(activityLine).join("") || t('<p class="note">Rien pour l\'instant.</p>');
     })
     .catch(() => {});
-  $("#changer-mdp").onclick = async () => {
-    if (entry.connected && entry.connected.username !== entry.server) {
-      await chooseMyPassword(false);
-      return;
-    }
-    const answers = await formBody({
-      title: t("Changer le mot de passe du serveur"),
-      text: t("C'est aussi le mot de passe de sudo quand tu te connectes en SSH."),
-      fields: [
-        { name: "username", cache: true, value: state.serverAccount, autocomplete: "username" },
-        { name: "old", type: "password", label: t("Mot de passe actuel"), autocomplete: "current-password" },
-        {
-          name: "new",
-          type: "password",
-          label: t("Nouveau mot de passe (15 caractères minimum, une phrase de quelques mots convient)"),
-          autocomplete: "new-password",
-        },
-        {
-          name: "confirmation",
-          type: "password",
-          label: t("Nouveau mot de passe, encore une fois"),
-          autocomplete: "new-password",
-        },
-      ],
-      confirmLabel: t("Changer"),
-    });
-    if (!answers || answers === "secondary") return;
-    if (answers.new !== answers.confirmation) return toast(t("Les deux mots de passe ne sont pas identiques."), true);
-    try {
-      await api("/api/admin/mot-de-passe", {
-        method: "POST",
-        json: { old: answers.old, new: answers.new },
-      });
-      toast(t("Mot de passe changé : reconnecte-toi"));
-      setTimeout(() => location.reload(), 1500);
-    } catch (error) {
-      toast(error.message, true);
-    }
-  };
-  $("#code-secours").onclick = async () => {
-    if (
-      entry.code_exists &&
-      !(await confirmAction({
-        title: t("Créer un nouveau code de secours ?"),
-        text: t("L'ancien code ne marchera plus."),
-        confirmLabel: t("Créer"),
-      }))
-    )
-      return;
-    try {
-      const result = await api("/api/admin/code", { method: "POST" });
-      await showRecoveryCode(result.code);
-      pages.systeme().catch(showError);
-    } catch (error) {
-      toast(error.message, true);
-    }
-  };
   $("#reboot").onclick = async () => {
     if (
       !(await confirmAction({
@@ -195,7 +83,8 @@ pages.plus = async () => {
     <section class="carte liste-raccourcis">
       <a href="#/disques"><span>Disques</span><span>›</span></a>
       <a href="#/corbeille"><span>Corbeille</span><span>›</span></a>
-      <a href="#/systeme"><span>Système et alertes</span><span>›</span></a>
+      <a href="#/systeme"><span>Système</span><span>›</span></a>
+      <a href="#/reglages"><span>Réglages</span><span>›</span></a>
       <a href="#/sauvegardes"><span>Sauvegardes</span><span>›</span></a>
       <a href="#/nuage"><span>Comptes Nextcloud</span><span>›</span></a>
       <a href="#/utilisateurs"><span>Admins de Jabba</span><span>›</span></a>
@@ -245,49 +134,6 @@ function consumptionText(power, consumption) {
     ? t`<br><span class="note">Mesurée par l'onduleur : tout ce qui y est branché (la box aussi).</span>`
     : "";
   return `${String(consumption.latest.w).replace(".", ",")} W <span class="note">(${when})</span>${lowest}${box}`;
-}
-
-async function restartPolicyCard() {
-  const element = $("#redem");
-  if (!element) return;
-  const data = await api("/api/systeme/redemarrage");
-  const superAdmin = state.admin && state.admin.rank === "super";
-  const automatic = data.mode === "auto";
-  element.innerHTML = t`<h2>Redémarrage après une mise à jour</h2>
-    <p class="note" style="margin:8px 0">Certaines mises à jour du système ne prennent effet qu'au redémarrage. Le serveur peut le faire seul la nuit, ou te laisser le faire quand tu es devant : conseillé si la machine a déjà bloqué au démarrage.</p>
-    <p style="margin:10px 0"><span class="pastille ${automatic ? "p-ok" : "p-gris"}">${automatic ? t("Seul, à 4 h") : t("À la main")}</span>
-      <span class="note">${automatic ? t("Le serveur redémarre seul à 4 h quand une mise à jour le demande.") : t("Jabba te prévient ; tu redémarres avec le bouton « Redémarrer le serveur ».")}${data.chosen ? "" : t(" (réglage d'origine, pas encore choisi)")}</span></p>
-    ${superAdmin ? `<div class="actions"><button class="btn" id="redem-changer">${automatic ? t("Passer à la main") : t("Redémarrer seul à 4 h")}</button></div>` : ""}`;
-  const button = $("#redem-changer");
-  if (button)
-    button.onclick = async () => {
-      const to = automatic ? "manuel" : "auto";
-      const ok = await confirmAction(
-        to === "auto"
-          ? {
-              title: t("Redémarrer seul à 4 h ?"),
-              text: t(
-                "Quand une mise à jour le demande, le serveur redémarrera seul à 4 h du matin. À éviter si la machine a déjà bloqué au démarrage : personne ne serait là pour la relancer.",
-              ),
-              confirmLabel: t("Redémarrer seul"),
-            }
-          : {
-              title: t("Redémarrer à la main ?"),
-              text: t(
-                "Le serveur ne redémarrera plus seul. Jabba te préviendra quand une mise à jour attend : redémarre alors quand tu es devant. Les correctifs déjà installés restent actifs, sauf ceux du noyau qui attendent le redémarrage.",
-              ),
-              confirmLabel: t("À la main"),
-            },
-      );
-      if (!ok) return;
-      try {
-        await api("/api/systeme/redemarrage", { method: "POST", json: { mode: to } });
-        toast(to === "auto" ? t("Redémarrage automatique à 4 h") : t("Redémarrage à la main"));
-      } catch (error) {
-        toast(error.message, true);
-      }
-      restartPolicyCard().catch(() => {});
-    };
 }
 
 // ------------------------------------------------------------ mise à jour de l'appli

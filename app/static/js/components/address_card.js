@@ -1,4 +1,4 @@
-// Adresses des outils, dans l'Établi : la carte de réparation. Normalement, chaque outil qui a un compte
+// Adresses des outils, dans Réglages → Internet : la carte de réparation. Normalement, chaque outil qui a un compte
 // reçoit son adresse à part (paperless.tailxxxx.ts.net…) pendant son activation, avec la clé Tailscale
 // donnée au script d'installation (services/tool_addresses.py). La carte ne s'affiche que s'il en manque
 // une : serveur installé avant la 0.16.4, clé expirée, ou création ratée. Réservé au super admin.

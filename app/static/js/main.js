@@ -3,7 +3,7 @@
 // Rangement des fichiers :
 //   core/        les outils communs (appels au serveur, navigation, session admin, mise en forme)
 //   components/  les morceaux d'écran réutilisés (fenêtres de dialogue, visionneuse, lecteur vidéo, alertes)
-//   pages/       un fichier par écran (Accueil, Établi, Fichiers, Disques, Invités, Comptes, Système…)
+//   pages/       un fichier par écran (Accueil, Établi, Fichiers, Disques, Invités, Comptes, Système, Réglages…)
 //
 // Sommaire : la session (qui est connecté, mode invité, code d'entrée d'un QR code invité), puis le premier écran.
 import "./pages/activity.js";
@@ -16,6 +16,7 @@ import "./pages/guest.js";
 import "./pages/guests_admin.js";
 import "./pages/help.js";
 import "./pages/home.js";
+import "./pages/settings.js";
 import "./pages/system.js";
 import "./pages/tools.js";
 import "./pages/trash.js";

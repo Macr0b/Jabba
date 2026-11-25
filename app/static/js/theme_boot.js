@@ -1,5 +1,5 @@
 // Thème (clair, sombre) et style (Cube, Salle des machines, Atelier clair) choisis sur cet appareil
-// (Système → Apparence), posés avant l'affichage pour éviter un flash.
+// (Réglages → Moi → Apparence), posés avant l'affichage pour éviter un flash.
 // Script classique (pas un module) chargé dans <head> : la politique de sécurité interdit le script en ligne.
 // « auto » (ou rien) : le thème suit l'appareil.
 //

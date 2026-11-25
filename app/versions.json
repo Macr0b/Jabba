@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.17.1",
+    "date": "2026-11-25",
+    "changes": [
+      "Nouvel écran Réglages, sous Système : tout ce qui se règle, rangé en cinq rubriques (Moi, Sécurité, Alertes, Serveur, Internet). Système ne montre plus que l'état du serveur : allumé depuis, courant, mise à jour, journal, appareils.",
+      "L'Établi ne garde que les outils : Jabba lui-même, l'accès par le domaine et les adresses des outils sont dans Réglages."
+    ]
+  },
+  {
     "version": "0.17.0",
     "date": "2026-11-24",
     "changes": [

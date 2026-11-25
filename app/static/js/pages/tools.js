@@ -1,5 +1,5 @@
-// Écran Établi : « Mes outils » (installés : en marche ou en pause, cartes de tool_card.js), « Ajouter un
-// outil » (tool_catalog.js), et « Réglages du serveur », replié (accès depuis Internet, adresses, Jabba).
+// Écran Établi : « Mes outils » (installés : en marche ou en pause, cartes de tool_card.js) et « Ajouter un
+// outil » (tool_catalog.js). Jabba lui-même, l'accès depuis Internet et les adresses : écran Réglages.
 // Puis l'ouverture d'un outil dans l'appli.
 //
 // Sommaire :
@@ -9,8 +9,6 @@ import { confirmAction, toast } from "../components/dialogs.js";
 import { api } from "../core/api.js";
 import { $, content, escapeHtml } from "../core/dom.js";
 import { antivirusOfferHtml, bindAntivirus } from "../components/antivirus_card.js";
-import { addressCardHtml, bindAddresses } from "../components/address_card.js";
-import { bindDomain, domainCardHtml } from "../components/domain_card.js";
 import { applyArrangement, bindOrdering, loadArrangement } from "../components/card_order.js";
 import { bindCatalog, memoryBannerHtml } from "../components/tool_catalog.js";
 import { toolCardHtml } from "../components/tool_card.js";
@@ -34,7 +32,6 @@ pages.outils = async () => {
     if (!item.link && item.port_https) item.link = `https://${location.hostname}:${item.port_https}`;
   });
   const mine = tools.filter((item) => !item.system);
-  const system = tools.filter((item) => item.system);
   const updateAvailable = (pid) => Boolean(versions.tools[pid] && !versions.tools[pid].up_to_date);
   const lastCheck = versions.read
     ? t` (dernier passage : ${escapeHtml(formatWhen(new Date(versions.read * 1000).toISOString()))})`
@@ -45,13 +42,9 @@ pages.outils = async () => {
     <div class="grille g2" id="grille-etabli">${mine.map((item) => toolCardHtml(item, updateAvailable(item.id))).join("")}</div>
     <h2 class="titre-section">Ajouter un outil</h2>
     <div id="ajouter-outils"></div>
-    <details class="carte pad reglages-serveur" id="reglages-serveur">
-      <summary><strong>Réglages du serveur</strong> <span class="note">Accès depuis Internet, adresses des outils, Jabba lui-même</span></summary>
-      ${domainCardHtml()}
-      <div class="grille g2">${system.map((item) => toolCardHtml(item, updateAvailable(item.id))).join("")}${addressCardHtml()}</div>
-      <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
-        Jabba regarde chaque jour si une version plus récente existe${lastCheck} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>
-    </details>`;
+    <p class="note">« Mettre à jour » télécharge la dernière version de l'outil et le relance (1 à 5 minutes). Tes réglages et tes fichiers sont conservés.
+      Jabba regarde chaque jour si une version plus récente existe${lastCheck} et t'alerte. <button class="lien" type="button" id="verifier-versions">Vérifier maintenant</button></p>
+    <p class="note">Jabba lui-même, l'accès depuis Internet et les adresses des outils : <a href="#/reglages?r=serveur">Réglages</a>.</p>`;
   // Consommation de chaque outil : arrive un peu après (docker stats prend 1 à 2 secondes).
   api("/api/outils-conso")
     .then((usage) => {
@@ -64,9 +57,6 @@ pages.outils = async () => {
     .catch(() => {});
   const reloadPage = () => pages.outils().catch(showError);
   bindAntivirus(reloadPage);
-  bindDomain();
-  // Une adresse manque : la carte de réparation s'affiche, et les réglages s'ouvrent pour qu'on la voie.
-  bindAddresses(reloadPage, () => ($("#reglages-serveur").open = true));
   bindToolMenus(content, tools, versions, reloadPage);
   const grid = $("#grille-etabli");
   applyArrangement(grid, savedOrder, { pausedLast: true }); // en pause : après ceux qui tournent

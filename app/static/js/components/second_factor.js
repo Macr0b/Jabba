@@ -1,4 +1,4 @@
-// Double vérification : la 2e étape de la connexion, et la carte de réglage (Système).
+// Double vérification : la 2e étape de la connexion, et la carte de réglage (Réglages → Moi).
 //
 // Sommaire :
 //   partagé : secondLoginStep, secondFactorCard
@@ -243,7 +243,7 @@ async function clearForOtherAccount() {
   }
 }
 
-// La carte « Double vérification » de l'écran Système.
+// La carte « Double vérification » de Réglages → Moi.
 export async function secondFactorCard() {
   const element = $("#double");
   if (!element) return;

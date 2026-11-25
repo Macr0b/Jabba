@@ -1,4 +1,4 @@
-// Carte « Apparence » de l'écran Système : le style (Cube, Salle des machines, Atelier clair) et le thème
+// Carte « Apparence » de Réglages → Moi : le style (Cube, Salle des machines, Atelier clair) et le thème
 // (clair, sombre, ou comme l'appareil).
 //
 // Sommaire :

@@ -1,4 +1,4 @@
-// Carte « Serveur ouvert au public » de l'écran Système, et la demande de fichiers par lien.
+// Carte « Serveur ouvert au public » de Réglages → Serveur, et la demande de fichiers par lien.
 //
 // Sommaire :
 //   partagé : publicModeCard, requestFiles, publicModeOpen

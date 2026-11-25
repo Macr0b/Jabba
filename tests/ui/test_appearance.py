@@ -13,7 +13,7 @@ def choose(page, theme):
 
 def test_theme_choice(page):
     page.emulate_media(color_scheme="light")
-    page.goto(page.root + "/#/systeme")
+    page.goto(page.root + "/#/reglages?r=moi")
     expect(page.locator("#apparence h2")).to_have_text("Apparence")
     expect(page.locator('#apparence input[value="auto"]')).to_be_checked()
     assert page.evaluate(BACKGROUND) == LIGHT
@@ -40,7 +40,7 @@ def test_theme_choice(page):
 def test_style_choice(page):
     """Trois styles : Cube (de base), Salle des machines, Atelier clair ; gardé sur l'appareil, posé avant l'affichage."""
     page.emulate_media(color_scheme="dark")
-    page.goto(page.root + "/#/systeme")
+    page.goto(page.root + "/#/reglages?r=moi")
     expect(page.locator('#apparence input[name="style"][value="cube"]')).to_be_checked()
     assert page.evaluate("document.documentElement.dataset.style") is None
 

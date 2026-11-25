@@ -59,7 +59,9 @@ def _to_keep(installed, identifier):
             "Choisir un nouveau mot de passe si tu oublies celui du serveur.",
             "trousseau",
             present=server_password.recovery_code_exists(),
-            note="À créer dans Système → Code de secours." if not server_password.recovery_code_exists() else "",
+            note="À créer dans Réglages → Sécurité → Code de secours."
+            if not server_password.recovery_code_exists()
+            else "",
         ),
         _entry(
             "Double vérification de Jabba",

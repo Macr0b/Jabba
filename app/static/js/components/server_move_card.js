@@ -1,4 +1,4 @@
-// « Déménager vers un nouvel ordinateur », dans Système (super admin) : copie tout sur un disque,
+// « Déménager vers un nouvel ordinateur », dans Réglages → Serveur (super admin) : copie tout sur un disque,
 // puis éteint l'ancien serveur ; le script d'installation du nouveau reprend tout (services/server_move.py).
 // Pas de fenêtre : le choix du disque et la confirmation restent dans la carte.
 //

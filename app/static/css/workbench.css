@@ -351,34 +351,6 @@ body.plein-ecran main {
   margin: 14px 0 8px;
 }
 
-/* « Réglages du serveur » : replié, ouvert seulement quand on en a besoin. */
-.reglages-serveur {
-  margin-top: 24px;
-}
-.reglages-serveur > summary {
-  cursor: pointer;
-  min-height: 32px;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
-}
-.reglages-serveur > summary::-webkit-details-marker {
-  display: none;
-}
-.reglages-serveur > summary::after {
-  content: "▾";
-  margin-left: auto;
-  color: var(--texte-2);
-}
-.reglages-serveur[open] > summary::after {
-  content: "▴";
-}
-.reglages-serveur[open] > summary {
-  margin-bottom: 14px;
-}
-
 /* Une offre : ce qu'elle coûte en mémoire, et « Installer » sur la même ligne. */
 .pied-offre {
   display: flex;
